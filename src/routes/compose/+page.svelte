@@ -5,9 +5,10 @@
   import AccountPicker from '$lib/components/AccountPicker.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
-  import { crosspost, getCharLimit, graphemeLength, type PostResult, type ComposeOptions } from '$lib/compose/adapter';
+  import { crosspostThread, graphemeLength, type PostResult, type ComposeOptions } from '$lib/compose/adapter';
+  import { splitForPlatform, planThread, type ThreadPlan } from '$lib/compose/thread';
   import { validateMediaFile, createPreviewUrl, revokePreviewUrl } from '$lib/compose/media';
-  import type { Account } from '$lib/types';
+  import type { Account, Platform } from '$lib/types';
 
   let accounts: Account[] = $state([]);
   let selectedAccountIds: number[] = $state([]);
@@ -98,19 +99,24 @@
         const acct = accounts.find(a => a.id === id);
         const client = clients.get(id);
         if (!acct || !client) return null;
-        return { platform: acct.platform as 'bluesky' | 'mastodon', client };
+        // Split text per platform's char limits
+        const plan = splitForPlatform(text.trim(), acct.platform as Platform);
+        return {
+          platform: acct.platform as 'bluesky' | 'mastodon',
+          client,
+          parts: plan.parts.map(p => p.text),
+        };
       })
       .filter((t): t is NonNullable<typeof t> => t !== null);
 
-    const options: ComposeOptions = {
-      text: text.trim(),
+    const options: Omit<ComposeOptions, 'text'> = {
       visibility,
       contentWarning: showCW ? contentWarning : undefined,
       mediaFiles: mediaFiles.length > 0 ? mediaFiles : undefined,
     };
 
     try {
-      results = await crosspost(targets, options);
+      results = await crosspostThread(targets, options);
 
       // Log to crosspost history
       const bskyResult = results.find(r => r.platform === 'bluesky');
@@ -165,9 +171,9 @@
   const hasMasto = $derived(selectedAccounts.some(a => a.platform === 'mastodon'));
   const bskyLen = $derived(graphemeLength(text));
   const mastoLen = $derived(text.length);
-  const bskyOver = $derived(hasBsky && bskyLen > 300);
-  const mastoOver = $derived(hasMasto && mastoLen > 500);
-  const isOverLimit = $derived(bskyOver || mastoOver);
+  const bskyNeedsThread = $derived(hasBsky && bskyLen > 300);
+  const mastoNeedsThread = $derived(hasMasto && mastoLen > 500);
+  const needsThread = $derived(bskyNeedsThread || mastoNeedsThread);
 </script>
 
 <div class="p-6 max-w-4xl mx-auto">
@@ -231,19 +237,19 @@
             bind:value={text}
             placeholder="What's on your mind?"
             rows="8"
-            class="w-full px-4 py-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-[var(--color-text)] text-sm resize-none focus:outline-none focus:border-[var(--color-primary)] {isOverLimit ? 'border-red-500' : ''}"
+            class="w-full px-4 py-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-[var(--color-text)] text-sm resize-none focus:outline-none focus:border-[var(--color-primary)] {needsThread ? 'border-yellow-500/50' : ''}"
           ></textarea>
 
           <!-- Character counts -->
           <div class="absolute bottom-3 right-3 flex items-center gap-3 text-xs">
             {#if hasBsky}
-              <span class="{bskyOver ? 'text-red-400 font-bold' : 'text-[var(--color-text-muted)]'}">
+              <span class="{bskyNeedsThread ? 'text-yellow-400' : 'text-[var(--color-text-muted)]'}">
                 <span class="inline-block w-2 h-2 rounded-full bg-[var(--color-bluesky)] mr-1"></span>
                 {bskyLen}/300
               </span>
             {/if}
             {#if hasMasto}
-              <span class="{mastoOver ? 'text-red-400 font-bold' : 'text-[var(--color-text-muted)]'}">
+              <span class="{mastoNeedsThread ? 'text-yellow-400' : 'text-[var(--color-text-muted)]'}">
                 <span class="inline-block w-2 h-2 rounded-full bg-[var(--color-mastodon)] mr-1"></span>
                 {mastoLen}/500
               </span>
@@ -305,7 +311,7 @@
             </button>
             <button
               onclick={handlePost}
-              disabled={posting || isOverLimit || (!text.trim() && mediaFiles.length === 0) || selectedAccountIds.length === 0}
+              disabled={posting || (!text.trim() && mediaFiles.length === 0) || selectedAccountIds.length === 0}
               class="flex items-center gap-2 px-5 py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm font-medium rounded-md disabled:opacity-50 transition-colors"
             >
               {#if posting}
@@ -313,7 +319,7 @@
                 Posting...
               {:else}
                 <Send size={14} />
-                Post{selectedAccountIds.length > 1 ? ` to ${selectedAccountIds.length} accounts` : ''}
+                {needsThread ? 'Post Thread' : 'Post'}{selectedAccountIds.length > 1 ? ` to ${selectedAccountIds.length} accounts` : ''}
               {/if}
             </button>
           </div>
@@ -324,32 +330,54 @@
       <div class="space-y-4">
         <AccountPicker {accounts} bind:selected={selectedAccountIds} />
 
-        <!-- Platform preview hints -->
+        <!-- Platform preview with thread splitting -->
         {#if text.trim()}
           <div class="space-y-2">
             <span class="text-xs text-[var(--color-text-muted)] uppercase tracking-wider font-medium">Preview</span>
             {#if hasBsky}
+              {@const bskyPlan = splitForPlatform(text.trim(), 'bluesky')}
               <div class="p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
-                <div class="flex items-center gap-2 mb-2">
-                  <span class="w-2 h-2 rounded-full bg-[var(--color-bluesky)]"></span>
-                  <span class="text-xs font-medium text-[var(--color-text-muted)]">Bluesky</span>
+                <div class="flex items-center justify-between mb-2">
+                  <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-[var(--color-bluesky)]"></span>
+                    <span class="text-xs font-medium text-[var(--color-text-muted)]">Bluesky</span>
+                  </div>
+                  {#if bskyPlan.needsThread}
+                    <span class="text-[10px] px-1.5 py-0.5 bg-blue-900/50 rounded text-blue-300">{bskyPlan.parts.length} posts</span>
+                  {/if}
                 </div>
-                <p class="text-sm text-[var(--color-text)] whitespace-pre-wrap break-words">{text}</p>
+                {#each bskyPlan.parts as part, i}
+                  <div class="text-sm text-[var(--color-text)] whitespace-pre-wrap break-words {i > 0 ? 'mt-2 pt-2 border-t border-[var(--color-border)]' : ''}">
+                    {part.text}
+                    <span class="text-[10px] text-[var(--color-text-muted)] ml-1">{part.charCount}/{part.charLimit}</span>
+                  </div>
+                {/each}
               </div>
             {/if}
             {#if hasMasto}
+              {@const mastoPlan = splitForPlatform(text.trim(), 'mastodon')}
               <div class="p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
-                <div class="flex items-center gap-2 mb-2">
-                  <span class="w-2 h-2 rounded-full bg-[var(--color-mastodon)]"></span>
-                  <span class="text-xs font-medium text-[var(--color-text-muted)]">Mastodon</span>
-                  {#if visibility !== 'public'}
-                    <span class="text-[10px] px-1.5 py-0.5 bg-[var(--color-surface-hover)] rounded text-[var(--color-text-muted)]">{visibility}</span>
+                <div class="flex items-center justify-between mb-2">
+                  <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-[var(--color-mastodon)]"></span>
+                    <span class="text-xs font-medium text-[var(--color-text-muted)]">Mastodon</span>
+                    {#if visibility !== 'public'}
+                      <span class="text-[10px] px-1.5 py-0.5 bg-[var(--color-surface-hover)] rounded text-[var(--color-text-muted)]">{visibility}</span>
+                    {/if}
+                  </div>
+                  {#if mastoPlan.needsThread}
+                    <span class="text-[10px] px-1.5 py-0.5 bg-purple-900/50 rounded text-purple-300">{mastoPlan.parts.length} posts</span>
                   {/if}
                 </div>
                 {#if showCW && contentWarning}
                   <p class="text-xs text-yellow-400 mb-1">⚠ {contentWarning}</p>
                 {/if}
-                <p class="text-sm text-[var(--color-text)] whitespace-pre-wrap break-words">{text}</p>
+                {#each mastoPlan.parts as part, i}
+                  <div class="text-sm text-[var(--color-text)] whitespace-pre-wrap break-words {i > 0 ? 'mt-2 pt-2 border-t border-[var(--color-border)]' : ''}">
+                    {part.text}
+                    <span class="text-[10px] text-[var(--color-text-muted)] ml-1">{part.charCount}/{part.charLimit}</span>
+                  </div>
+                {/each}
               </div>
             {/if}
           </div>
