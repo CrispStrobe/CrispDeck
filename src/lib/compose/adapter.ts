@@ -1,0 +1,189 @@
+import { RichText, BskyAgent } from '@atproto/api';
+import type { BlueskyClient } from '$lib/api/bluesky';
+import type { MastodonClient } from '$lib/api/mastodon';
+
+export interface PostResult {
+  platform: 'bluesky' | 'mastodon';
+  success: boolean;
+  uri?: string;
+  cid?: string;
+  error?: string;
+}
+
+export interface ComposeOptions {
+  text: string;
+  visibility?: 'public' | 'unlisted' | 'private' | 'direct';
+  contentWarning?: string;
+  mediaFiles?: File[];
+}
+
+/** Post to Bluesky using the AT Protocol */
+export async function postToBluesky(
+  client: BlueskyClient,
+  options: ComposeOptions,
+): Promise<PostResult> {
+  try {
+    const agent = client.getAgent();
+
+    // Use RichText to auto-detect facets (mentions, links, tags)
+    const rt = new RichText({ text: options.text });
+    await rt.detectFacets(agent);
+
+    const record: Record<string, unknown> = {
+      $type: 'app.bsky.feed.post',
+      text: rt.text,
+      facets: rt.facets,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Upload media if present
+    if (options.mediaFiles && options.mediaFiles.length > 0) {
+      const images: Array<{
+        alt: string;
+        image: { $type: string; ref: { $link: string }; mimeType: string; size: number };
+      }> = [];
+
+      for (const file of options.mediaFiles.slice(0, 4)) {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const resp = await agent.uploadBlob(bytes, { encoding: file.type });
+        images.push({
+          alt: '',
+          image: resp.data.blob,
+        });
+      }
+
+      record.embed = {
+        $type: 'app.bsky.embed.images',
+        images,
+      };
+    }
+
+    const resp = await agent.api.com.atproto.repo.createRecord({
+      repo: agent.session!.did,
+      collection: 'app.bsky.feed.post',
+      record,
+    });
+
+    return {
+      platform: 'bluesky',
+      success: true,
+      uri: resp.data.uri,
+      cid: resp.data.cid,
+    };
+  } catch (e) {
+    return {
+      platform: 'bluesky',
+      success: false,
+      error: String(e),
+    };
+  }
+}
+
+/** Post to Mastodon via its REST API */
+export async function postToMastodon(
+  client: MastodonClient,
+  options: ComposeOptions,
+): Promise<PostResult> {
+  try {
+    const instanceUrl = client.getInstanceUrl();
+    const token = client.getAccessToken();
+    const authHeaders: Record<string, string> = token
+      ? { Authorization: `Bearer ${token}` }
+      : {};
+
+    // Upload media first if present
+    const mediaIds: string[] = [];
+    if (options.mediaFiles && options.mediaFiles.length > 0) {
+      for (const file of options.mediaFiles.slice(0, 4)) {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const mediaResp = await fetch(`${instanceUrl}/api/v2/media`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: formData,
+        });
+
+        if (!mediaResp.ok) {
+          throw new Error(`Media upload failed: ${mediaResp.statusText}`);
+        }
+
+        const mediaData = await mediaResp.json();
+        mediaIds.push(mediaData.id);
+      }
+    }
+
+    // Create the status
+    const body: Record<string, unknown> = {
+      status: options.text,
+      visibility: options.visibility ?? 'public',
+    };
+
+    if (mediaIds.length > 0) {
+      body.media_ids = mediaIds;
+    }
+
+    if (options.contentWarning) {
+      body.spoiler_text = options.contentWarning;
+    }
+
+    const resp = await fetch(`${instanceUrl}/api/v1/statuses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      body: JSON.stringify(body),
+    });
+
+    if (!resp.ok) {
+      const errData = await resp.json().catch(() => ({}));
+      throw new Error(errData.error || `Status creation failed: ${resp.statusText}`);
+    }
+
+    const status = await resp.json();
+    return {
+      platform: 'mastodon',
+      success: true,
+      uri: status.uri || status.url,
+    };
+  } catch (e) {
+    return {
+      platform: 'mastodon',
+      success: false,
+      error: String(e),
+    };
+  }
+}
+
+/** Crosspost to multiple platforms */
+export async function crosspost(
+  targets: Array<{
+    platform: 'bluesky' | 'mastodon';
+    client: BlueskyClient | MastodonClient;
+  }>,
+  options: ComposeOptions,
+): Promise<PostResult[]> {
+  const results: PostResult[] = [];
+
+  for (const target of targets) {
+    if (target.platform === 'bluesky') {
+      results.push(await postToBluesky(target.client as BlueskyClient, options));
+    } else {
+      results.push(await postToMastodon(target.client as MastodonClient, options));
+    }
+  }
+
+  return results;
+}
+
+/** Get the character limit for a platform */
+export function getCharLimit(platform: 'bluesky' | 'mastodon'): number {
+  return platform === 'bluesky' ? 300 : 500;
+}
+
+/** Count graphemes (what Bluesky uses for character counting) */
+export function graphemeLength(text: string): number {
+  if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+    const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
+    return [...segmenter.segment(text)].length;
+  }
+  return [...text].length;
+}

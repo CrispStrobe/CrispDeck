@@ -75,6 +75,7 @@ export class MastodonClient {
   }
 
   getInstanceUrl() { return this.instanceUrl; }
+  getAccessToken() { return this.accessToken; }
   isAuthenticated() { return !!this.client; }
 }
 
