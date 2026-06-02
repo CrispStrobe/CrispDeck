@@ -1,6 +1,7 @@
 import { RichText, BskyAgent } from '@atproto/api';
 import type { BlueskyClient } from '$lib/api/bluesky';
 import type { MastodonClient } from '$lib/api/mastodon';
+import { resolveMentionsForPlatform } from './mentions';
 
 export interface PostResult {
   platform: 'bluesky' | 'mastodon';
@@ -336,19 +337,25 @@ export async function crosspostThread(
   const results: PostResult[] = [];
 
   for (const target of targets) {
-    if (target.parts.length === 1) {
+    // Resolve @mentions to platform-specific handles
+    const resolvedParts: string[] = [];
+    for (const part of target.parts) {
+      resolvedParts.push(await resolveMentionsForPlatform(part, target.platform));
+    }
+
+    if (resolvedParts.length === 1) {
       // Single post, no thread needed
       if (target.platform === 'bluesky') {
-        results.push(await postToBluesky(target.client as BlueskyClient, { ...options, text: target.parts[0] }));
+        results.push(await postToBluesky(target.client as BlueskyClient, { ...options, text: resolvedParts[0] }));
       } else {
-        results.push(await postToMastodon(target.client as MastodonClient, { ...options, text: target.parts[0] }));
+        results.push(await postToMastodon(target.client as MastodonClient, { ...options, text: resolvedParts[0] }));
       }
     } else {
       // Thread
       if (target.platform === 'bluesky') {
-        results.push(...await postThreadToBluesky(target.client as BlueskyClient, target.parts, options));
+        results.push(...await postThreadToBluesky(target.client as BlueskyClient, resolvedParts, options));
       } else {
-        results.push(...await postThreadToMastodon(target.client as MastodonClient, target.parts, options));
+        results.push(...await postThreadToMastodon(target.client as MastodonClient, resolvedParts, options));
       }
     }
   }

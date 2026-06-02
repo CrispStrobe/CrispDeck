@@ -3,6 +3,7 @@
   import { invoke } from '@tauri-apps/api/core';
   import { PenSquare, Send, Loader2, X, ImagePlus, AlertTriangle, Check } from '@lucide/svelte';
   import AccountPicker from '$lib/components/AccountPicker.svelte';
+  import MentionAutocomplete from '$lib/components/MentionAutocomplete.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import { crosspostThread, graphemeLength, type PostResult, type ComposeOptions } from '$lib/compose/adapter';
@@ -23,6 +24,8 @@
   let contentWarning = $state('');
   let showCW = $state(false);
   let mediaFiles: File[] = $state([]);
+  let textareaEl: HTMLTextAreaElement | undefined = $state();
+  let mentionAutocomplete: MentionAutocomplete | undefined = $state();
   let mediaPreviews: string[] = $state([]);
 
   // Clients
@@ -231,14 +234,21 @@
           </div>
         {/if}
 
-        <!-- Text area -->
+        <!-- Text area with mention autocomplete -->
         <div class="relative">
           <textarea
+            bind:this={textareaEl}
             bind:value={text}
-            placeholder="What's on your mind?"
+            placeholder="What's on your mind? Type @ to mention someone..."
             rows="8"
+            oninput={() => mentionAutocomplete?.handleInput()}
+            onkeydown={(e) => {
+              mentionAutocomplete?.handleKeydown(e);
+              if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handlePost(); }
+            }}
             class="w-full px-4 py-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-[var(--color-text)] text-sm resize-none focus:outline-none focus:border-[var(--color-primary)] {needsThread ? 'border-yellow-500/50' : ''}"
           ></textarea>
+          <MentionAutocomplete bind:this={mentionAutocomplete} textarea={textareaEl} bind:text />
 
           <!-- Character counts -->
           <div class="absolute bottom-3 right-3 flex items-center gap-3 text-xs">
