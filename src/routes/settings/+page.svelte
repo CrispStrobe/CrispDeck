@@ -1,7 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { invoke } from '@tauri-apps/api/core';
-  import { open } from '@tauri-apps/plugin-shell';
+  import {
+    listAccounts, addAccount as dbAddAccount, deleteAccount as dbDeleteAccount,
+    updateAccount as dbUpdateAccount, startMastodonOAuth as dbStartOAuth,
+    completeMastodonOAuth as dbCompleteOAuth
+  } from '$lib/db';
   import { Settings, Plus, Trash2, Star, ExternalLink, Loader2 } from '@lucide/svelte';
   import type { Account } from '$lib/types';
 
@@ -30,7 +33,7 @@
 
   async function loadAccounts() {
     try {
-      accounts = await invoke<Account[]>('db_list_accounts');
+      accounts = await listAccounts();
     } catch (e) {
       error = String(e);
     } finally {
@@ -46,7 +49,7 @@
       const credentials = JSON.stringify({ app_password: bskyAppPassword });
       const handle = bskyHandle.trim().replace(/^@/, '');
 
-      await invoke('db_add_account', {
+      await dbAddAccount({
         platform: 'bluesky',
         handle,
         credentials,
@@ -64,7 +67,7 @@
     }
   }
 
-  async function startMastodonOAuth() {
+  async function handleStartMastodonOAuth() {
     if (!mastoInstance.trim()) return;
     mastoLoading = true;
     error = '';
@@ -72,20 +75,19 @@
       const instance = mastoInstance.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
       const instanceUrl = `https://${instance}`;
 
-      mastoOAuthState = await invoke('auth_start_mastodon_oauth', {
-        instance_url: instanceUrl,
-      });
+      mastoOAuthState = await dbStartOAuth(instanceUrl);
 
       // Open the auth URL in the user's browser
-      await open(mastoOAuthState!.auth_url);
+      window.open(mastoOAuthState!.auth_url);
 
-      // Wait for the callback
-      const code = await invoke<string>('auth_wait_for_callback', {
-        redirect_uri: mastoOAuthState!.redirect_uri,
-      });
+      // The OAuth callback comes via URL redirect in browser mode.
+      // In Tauri, the redirect_uri points to localhost and the app intercepts it.
+      // For now, we need the user to paste the code or handle the redirect.
+      // TODO: implement redirect-based callback handling
+      const code = new URLSearchParams(window.location.search).get('code') ?? '';
 
       // Exchange code for token
-      const result = await invoke<{ access_token: string }>('auth_complete_mastodon_oauth', {
+      const result = await dbCompleteOAuth({
         instance_url: instanceUrl,
         code,
         client_id: mastoOAuthState!.client_id,
@@ -100,7 +102,7 @@
         client_secret: mastoOAuthState!.client_secret,
       });
 
-      await invoke('db_add_account', {
+      await dbAddAccount({
         platform: 'mastodon',
         handle: `@user@${instance}`, // Will be updated when we fetch profile
         instance_url: instanceUrl,
@@ -121,7 +123,7 @@
 
   async function removeAccount(id: number) {
     try {
-      await invoke('db_delete_account', { id });
+      await dbDeleteAccount(id);
       await loadAccounts();
     } catch (e) {
       error = String(e);
@@ -130,7 +132,7 @@
 
   async function setPrimary(id: number) {
     try {
-      await invoke('db_update_account', { id, is_primary: true });
+      await dbUpdateAccount({ id, is_primary: true });
       await loadAccounts();
     } catch (e) {
       error = String(e);
@@ -284,7 +286,7 @@
           </div>
           <div class="flex gap-2">
             <button
-              onclick={startMastodonOAuth}
+              onclick={handleStartMastodonOAuth}
               disabled={mastoLoading}
               class="flex items-center gap-1 px-4 py-2 bg-[var(--color-mastodon)] hover:opacity-90 rounded-md text-sm font-medium transition-opacity disabled:opacity-50"
             >

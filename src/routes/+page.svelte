@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { invoke } from '@tauri-apps/api/core';
+  import { listAccounts } from '$lib/db';
   import { Rss, PenSquare, Users, ScanSearch } from '@lucide/svelte';
   import type { Account } from '$lib/types';
 
@@ -9,7 +9,7 @@
 
   onMount(async () => {
     try {
-      accounts = await invoke<Account[]>('db_list_accounts');
+      accounts = await listAccounts();
     } catch (e) {
       console.error('Failed to load accounts:', e);
     } finally {

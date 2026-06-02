@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { invoke } from '@tauri-apps/api/core';
+  import { listAccounts, getDecryptedCredentials } from '$lib/db';
   import { Rss, Loader2, Inbox, EyeOff } from '@lucide/svelte';
   import Post from '$lib/components/Post.svelte';
   import CrosspostGroup from '$lib/components/CrosspostGroup.svelte';
@@ -35,7 +35,7 @@
 
   onMount(async () => {
     try {
-      accounts = await invoke<Account[]>('db_list_accounts');
+      accounts = await listAccounts();
       if (accounts.length > 0) {
         await initClients();
         await loadInitialFeeds();
@@ -50,7 +50,7 @@
   async function initClients() {
     for (const acct of accounts) {
       try {
-        const credsJson = await invoke<string>('db_get_credentials', { id: acct.id });
+        const credsJson = await getDecryptedCredentials(acct.id);
         const creds = JSON.parse(credsJson);
 
         if (acct.platform === 'bluesky') {

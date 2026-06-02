@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { listIdentities, resolveHandle } from '$lib/db';
 import type { Identity, Platform } from '$lib/types';
 
 export interface MentionSuggestion {
@@ -19,7 +19,7 @@ export async function searchMentions(query: string): Promise<MentionSuggestion[]
   if (clean.length < 2) return [];
 
   try {
-    const identities = await invoke<Identity[]>('db_list_identities', { filter: null });
+    const identities = await listIdentities();
     const results: MentionSuggestion[] = [];
 
     for (const identity of identities) {
@@ -88,16 +88,10 @@ export async function resolveMentionsForPlatform(
     if (handle.includes('.') && platform === 'bluesky') continue;
 
     try {
-      const resolved = await invoke<string | null>('db_resolve_handle', {
-        handle: fullMatch,
-        target_platform: platform,
-      });
+      const resolved = await resolveHandle(fullMatch, platform);
 
       // Also try without the @
-      const resolved2 = resolved ?? await invoke<string | null>('db_resolve_handle', {
-        handle,
-        target_platform: platform,
-      });
+      const resolved2 = resolved ?? await resolveHandle(handle, platform);
 
       if (resolved2) {
         const replacement = resolved2.startsWith('@') ? resolved2 : `@${resolved2}`;

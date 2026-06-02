@@ -1,6 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { invoke } from '@tauri-apps/api/core';
+  import {
+    listAccounts, getDecryptedCredentials, listIdentities,
+    createIdentity as dbCreateIdentity, deleteIdentity as dbDeleteIdentity,
+    linkToIdentity, confirmIdentity, addTag as dbAddTag, removeTag as dbRemoveTag,
+    cacheFollows, detectIdentities
+  } from '$lib/db';
   import { Users, ScanSearch, Loader2, Check, X, Plus, Tag, Trash2, Link2 } from '@lucide/svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
@@ -25,8 +30,8 @@
 
   onMount(async () => {
     try {
-      accounts = await invoke<Account[]>('db_list_accounts');
-      identities = await invoke<Identity[]>('db_list_identities', { filter: null });
+      accounts = await listAccounts();
+      identities = await listIdentities();
       await initClients();
     } catch (e) {
       error = String(e);
@@ -43,7 +48,7 @@
   async function initClients() {
     for (const acct of accounts) {
       try {
-        const credsJson = await invoke<string>('db_get_credentials', { id: acct.id });
+        const credsJson = await getDecryptedCredentials(acct.id);
         const creds = JSON.parse(credsJson);
         if (acct.platform === 'bluesky') {
           const client = new BlueskyClient(acct.handle, creds.app_password);
@@ -98,10 +103,7 @@
           } while (cursor);
 
           // Cache follows
-          await invoke('db_cache_follows', {
-            owner_account_id: acct.id,
-            follows_list: bskyFollows,
-          });
+          await cacheFollows(acct.id, bskyFollows);
         } else {
           scanProgress = `Fetching Mastodon follows for ${acct.handle}...`;
           const masto = client as MastodonClient;
@@ -131,19 +133,13 @@
             console.error(`Failed to fetch Mastodon follows:`, e);
           }
 
-          await invoke('db_cache_follows', {
-            owner_account_id: acct.id,
-            follows_list: mastoFollows,
-          });
+          await cacheFollows(acct.id, mastoFollows);
         }
       }
 
       // Run identity detection in Rust
       scanProgress = `Matching ${bskyFollows.length} Bluesky × ${mastoFollows.length} Mastodon follows...`;
-      candidates = await invoke<IdentityCandidate[]>('db_detect_identities', {
-        bsky_follows: bskyFollows,
-        masto_follows: mastoFollows,
-      });
+      candidates = await detectIdentities(bskyFollows, mastoFollows);
 
       scanProgress = `Found ${candidates.length} potential matches.`;
     } catch (e) {
@@ -156,11 +152,11 @@
   async function confirmCandidate(candidate: IdentityCandidate) {
     try {
       const displayName = candidate.bluesky_display_name || candidate.mastodon_display_name || 'Unknown';
-      const identity = await invoke<Identity>('db_create_identity', {
+      const identity = await dbCreateIdentity({
         display_name: displayName,
       });
 
-      await invoke('db_link_to_identity', {
+      await linkToIdentity({
         identity_id: identity.id,
         platform: 'bluesky',
         handle: candidate.bluesky_handle,
@@ -170,7 +166,7 @@
         bio: candidate.bluesky_bio,
       });
 
-      await invoke('db_link_to_identity', {
+      await linkToIdentity({
         identity_id: identity.id,
         platform: 'mastodon',
         handle: candidate.mastodon_handle,
@@ -181,11 +177,11 @@
         bio: candidate.mastodon_bio,
       });
 
-      await invoke('db_confirm_identity', { id: identity.id });
+      await confirmIdentity(identity.id);
 
       // Remove from candidates, refresh identities
       candidates = candidates.filter(c => c !== candidate);
-      identities = await invoke<Identity[]>('db_list_identities', { filter: null });
+      identities = await listIdentities();
     } catch (e) {
       error = String(e);
     }
@@ -195,31 +191,31 @@
     candidates = candidates.filter(c => c !== candidate);
   }
 
-  async function deleteIdentity(id: number) {
+  async function handleDeleteIdentity(id: number) {
     try {
-      await invoke('db_delete_identity', { id });
+      await dbDeleteIdentity(id);
       identities = identities.filter(i => i.id !== id);
     } catch (e) {
       error = String(e);
     }
   }
 
-  async function addTag(identityId: number) {
+  async function handleAddTag(identityId: number) {
     const tag = tagInput[identityId]?.trim();
     if (!tag) return;
     try {
-      await invoke('db_add_tag', { identity_id: identityId, tag });
+      await dbAddTag(identityId, tag);
       tagInput[identityId] = '';
-      identities = await invoke<Identity[]>('db_list_identities', { filter: null });
+      identities = await listIdentities();
     } catch (e) {
       error = String(e);
     }
   }
 
-  async function removeTag(identityId: number, tag: string) {
+  async function handleRemoveTag(identityId: number, tag: string) {
     try {
-      await invoke('db_remove_tag', { identity_id: identityId, tag });
-      identities = await invoke<Identity[]>('db_list_identities', { filter: null });
+      await dbRemoveTag(identityId, tag);
+      identities = await listIdentities();
     } catch (e) {
       error = String(e);
     }
@@ -228,10 +224,10 @@
   async function createManualIdentity() {
     if (!newIdentityName.trim()) return;
     try {
-      await invoke('db_create_identity', { display_name: newIdentityName.trim() });
+      await dbCreateIdentity({ display_name: newIdentityName.trim() });
       newIdentityName = '';
       showLinkForm = false;
-      identities = await invoke<Identity[]>('db_list_identities', { filter: null });
+      identities = await listIdentities();
     } catch (e) {
       error = String(e);
     }
@@ -414,7 +410,7 @@
               {/if}
             </div>
             <button
-              onclick={() => deleteIdentity(identity.id)}
+              onclick={() => handleDeleteIdentity(identity.id)}
               class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors"
               title="Delete identity"
             >
@@ -447,12 +443,12 @@
             {#each identity.tags as tag}
               <span class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded">
                 {tag}
-                <button onclick={() => removeTag(identity.id, tag)} class="hover:text-[var(--color-danger)]">
+                <button onclick={() => handleRemoveTag(identity.id, tag)} class="hover:text-[var(--color-danger)]">
                   <X size={10} />
                 </button>
               </span>
             {/each}
-            <form onsubmit={(e) => { e.preventDefault(); addTag(identity.id); }} class="inline-flex">
+            <form onsubmit={(e) => { e.preventDefault(); handleAddTag(identity.id); }} class="inline-flex">
               <input
                 type="text"
                 bind:value={tagInput[identity.id]}

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { invoke } from '@tauri-apps/api/core';
+  import { listAccounts, getDecryptedCredentials, logCrosspost, saveDraft as dbSaveDraft } from '$lib/db';
   import { PenSquare, Send, Loader2, X, ImagePlus, AlertTriangle, Check } from '@lucide/svelte';
   import AccountPicker from '$lib/components/AccountPicker.svelte';
   import MentionAutocomplete from '$lib/components/MentionAutocomplete.svelte';
@@ -33,7 +33,7 @@
 
   onMount(async () => {
     try {
-      accounts = await invoke<Account[]>('db_list_accounts');
+      accounts = await listAccounts();
       selectedAccountIds = accounts.map(a => a.id);
       await initClients();
     } catch (e) {
@@ -46,7 +46,7 @@
   async function initClients() {
     for (const acct of accounts) {
       try {
-        const credsJson = await invoke<string>('db_get_credentials', { id: acct.id });
+        const credsJson = await getDecryptedCredentials(acct.id);
         const creds = JSON.parse(credsJson);
         if (acct.platform === 'bluesky') {
           const client = new BlueskyClient(acct.handle, creds.app_password);
@@ -126,7 +126,7 @@
       const mastoResult = results.find(r => r.platform === 'mastodon');
       const allSuccess = results.every(r => r.success);
 
-      await invoke('db_log_crosspost', {
+      await logCrosspost({
         bluesky_uri: bskyResult?.uri ?? null,
         bluesky_cid: bskyResult?.cid ?? null,
         mastodon_uri: mastoResult?.uri ?? null,
@@ -152,10 +152,10 @@
     }
   }
 
-  async function saveDraft() {
+  async function handleSaveDraft() {
     if (!text.trim()) return;
     try {
-      await invoke('db_save_draft', {
+      await dbSaveDraft({
         text: text.trim(),
         target_accounts: selectedAccountIds,
         visibility,
@@ -313,7 +313,7 @@
 
           <div class="flex items-center gap-2">
             <button
-              onclick={saveDraft}
+              onclick={handleSaveDraft}
               disabled={!text.trim()}
               class="px-3 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] disabled:opacity-30"
             >
