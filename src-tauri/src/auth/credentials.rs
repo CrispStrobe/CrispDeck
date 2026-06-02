@@ -35,7 +35,7 @@ pub fn encrypt(plaintext: &str) -> Result<String> {
     rand::thread_rng().fill_bytes(&mut salt);
 
     let key = derive_key(&passphrase, &salt)?;
-    let cipher = Aes256Gcm::new_from_slice(&key)?;
+    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| anyhow!("cipher error: {}", e))?;
 
     let mut nonce_bytes = [0u8; 12];
     rand::thread_rng().fill_bytes(&mut nonce_bytes);
@@ -68,7 +68,7 @@ pub fn decrypt(encoded: &str) -> Result<String> {
     let ciphertext = &packed[28..];
 
     let key = derive_key(&passphrase, salt)?;
-    let cipher = Aes256Gcm::new_from_slice(&key)?;
+    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| anyhow!("cipher error: {}", e))?;
     let nonce = Nonce::from_slice(nonce_bytes);
 
     let plaintext = cipher

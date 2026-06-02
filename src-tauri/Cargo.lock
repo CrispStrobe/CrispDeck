@@ -728,7 +728,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "crispcross"
+name = "crispdeck"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
