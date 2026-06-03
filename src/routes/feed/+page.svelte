@@ -20,6 +20,7 @@
   let progress = $state(0);
   let hideMedia = $state(false);
   let feedMode: FeedMode = $state('timeline');
+  let platformFilter: 'all' | 'bluesky' | 'mastodon' = $state('all');
 
   let cursors: Record<number, string | undefined> = $state({});
   let loadingMore = $state(false);
@@ -256,7 +257,10 @@
     return 'type' in item && item.type === 'crosspost';
   }
 
-  const filtered = $derived(filterPosts(posts, filters));
+  const platformFiltered = $derived(
+    platformFilter === 'all' ? posts : posts.filter(p => p.platform === platformFilter)
+  );
+  const filtered = $derived(filterPosts(platformFiltered, filters));
   const sorted = $derived(sortPosts(filtered, filters.sortBy));
   const finalFeed = $derived(detectCrossposts(sorted));
   const hasMoreContent = $derived(Object.values(cursors).some(c => !!c));
@@ -289,6 +293,22 @@
           <User size={12} />
           My Posts
         </button>
+      </div>
+
+      <!-- Platform filter -->
+      <div class="flex items-center bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-0.5">
+        <button
+          onclick={() => platformFilter = 'all'}
+          class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors {platformFilter === 'all' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)]'}"
+        >All</button>
+        <button
+          onclick={() => platformFilter = 'bluesky'}
+          class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1 {platformFilter === 'bluesky' ? 'bg-[var(--color-bluesky)] text-white' : 'text-[var(--color-text-muted)]'}"
+        ><span class="w-1.5 h-1.5 rounded-full bg-[var(--color-bluesky)]"></span> Bsky</button>
+        <button
+          onclick={() => platformFilter = 'mastodon'}
+          class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1 {platformFilter === 'mastodon' ? 'bg-[var(--color-mastodon)] text-white' : 'text-[var(--color-text-muted)]'}"
+        ><span class="w-1.5 h-1.5 rounded-full bg-[var(--color-mastodon)]"></span> Masto</button>
       </div>
 
       <label class="flex items-center gap-2 text-sm text-[var(--color-text-muted)] cursor-pointer">

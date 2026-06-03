@@ -303,9 +303,11 @@
                 <div class="w-8 h-8 rounded-full bg-[var(--color-mastodon)]/20 flex items-center justify-center text-xs">M</div>
               {/if}
               <div>
-                <span class="text-sm font-medium">{account.handle}</span>
-                {#if account.instance_url}
-                  <span class="text-xs text-[var(--color-text-muted)] ml-1">({account.instance_url})</span>
+                <span class="text-sm font-medium">{account.display_name || account.handle}</span>
+                {#if account.handle.startsWith('@user@') || account.handle === '@user'}
+                  <span class="ml-2 text-xs text-red-400 bg-red-900/30 px-1.5 py-0.5 rounded">setup incomplete — delete and re-add</span>
+                {:else}
+                  <span class="text-xs text-[var(--color-text-muted)] ml-1">{account.handle}</span>
                 {/if}
                 {#if account.is_primary}
                   <span class="ml-2 text-xs text-yellow-400">★ primary</span>
