@@ -190,6 +190,56 @@
     await loadFeed();
   }
 
+  async function handleLike(post: UnifiedPost) {
+    // Find the client for this post's platform
+    for (const [id, client] of clients) {
+      const acct = accounts.find(a => a.id === id);
+      if (acct?.platform !== post.platform) continue;
+      try {
+        if (post.platform === 'bluesky') {
+          const bsky = client as BlueskyClient;
+          const raw = post.raw as any;
+          await bsky.like(raw.post.uri, raw.post.cid);
+        } else {
+          const masto = client as MastodonClient;
+          const raw = post.raw as any;
+          await masto.favourite(raw.id);
+        }
+        return;
+      } catch (e) {
+        console.error('Like failed:', e);
+      }
+    }
+  }
+
+  async function handleBoost(post: UnifiedPost) {
+    for (const [id, client] of clients) {
+      const acct = accounts.find(a => a.id === id);
+      if (acct?.platform !== post.platform) continue;
+      try {
+        if (post.platform === 'bluesky') {
+          const bsky = client as BlueskyClient;
+          const raw = post.raw as any;
+          await bsky.repost(raw.post.uri, raw.post.cid);
+        } else {
+          const masto = client as MastodonClient;
+          const raw = post.raw as any;
+          await masto.reblog(raw.id);
+        }
+        return;
+      } catch (e) {
+        console.error('Boost failed:', e);
+      }
+    }
+  }
+
+  function handleReply(post: UnifiedPost) {
+    // Navigate to compose with reply context
+    const replyTo = encodeURIComponent(post.uri);
+    const author = encodeURIComponent(post.author.handle);
+    window.location.href = `/compose?replyTo=${replyTo}&author=${author}&platform=${post.platform}`;
+  }
+
   function handleFilterChange(newFilters: Partial<Filters>) {
     filters = { ...filters, ...newFilters };
   }
@@ -280,7 +330,7 @@
           {#if isCrosspostGroup(item)}
             <CrosspostGroup group={item} {hideMedia} />
           {:else}
-            <Post post={item} {hideMedia} />
+            <Post post={item} {hideMedia} onlike={handleLike} onboost={handleBoost} onreply={handleReply} />
           {/if}
         {/each}
       </div>

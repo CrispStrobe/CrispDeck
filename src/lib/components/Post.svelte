@@ -1,8 +1,33 @@
 <script lang="ts">
-  import { Heart, Repeat, MessageCircle } from '@lucide/svelte';
+  import { Heart, Repeat, MessageCircle, Reply } from '@lucide/svelte';
   import type { UnifiedPost } from '$lib/types';
 
-  let { post, hideMedia = false }: { post: UnifiedPost; hideMedia?: boolean } = $props();
+  let { post, hideMedia = false, onlike, onboost, onreply }: {
+    post: UnifiedPost;
+    hideMedia?: boolean;
+    onlike?: (post: UnifiedPost) => void;
+    onboost?: (post: UnifiedPost) => void;
+    onreply?: (post: UnifiedPost) => void;
+  } = $props();
+
+  let liked = $state(false);
+  let boosted = $state(false);
+  let localLikeCount = $state(post.likeCount ?? 0);
+  let localBoostCount = $state(post.repostCount ?? 0);
+
+  async function handleLike() {
+    if (!onlike) return;
+    liked = !liked;
+    localLikeCount += liked ? 1 : -1;
+    onlike(post);
+  }
+
+  async function handleBoost() {
+    if (!onboost) return;
+    boosted = !boosted;
+    localBoostCount += boosted ? 1 : -1;
+    onboost(post);
+  }
 
   function formatDate(dateString?: string): string {
     if (!dateString) return '—';
@@ -156,19 +181,38 @@
   {/if}
 
   <div class="flex items-center justify-between mt-3 pl-13">
-    <div class="flex items-center gap-5 text-[var(--color-text-muted)]">
-      <div class="flex items-center gap-1.5">
-        <MessageCircle size={14} />
-        <span class="text-xs">{post.replyCount ?? 0}</span>
-      </div>
-      <div class="flex items-center gap-1.5">
+    <div class="flex items-center gap-4">
+      {#if onreply}
+        <button onclick={() => onreply?.(post)} class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-blue-400 transition-colors" title="Reply">
+          <MessageCircle size={14} />
+          <span class="text-xs">{post.replyCount ?? 0}</span>
+        </button>
+      {:else}
+        <div class="flex items-center gap-1.5 text-[var(--color-text-muted)]">
+          <MessageCircle size={14} />
+          <span class="text-xs">{post.replyCount ?? 0}</span>
+        </div>
+      {/if}
+
+      <button
+        onclick={handleBoost}
+        disabled={!onboost}
+        class="flex items-center gap-1.5 transition-colors {boosted ? 'text-green-400' : 'text-[var(--color-text-muted)]'} {onboost ? 'hover:text-green-400' : ''}"
+        title="Boost"
+      >
         <Repeat size={14} />
-        <span class="text-xs">{post.repostCount ?? 0}</span>
-      </div>
-      <div class="flex items-center gap-1.5">
-        <Heart size={14} />
-        <span class="text-xs">{post.likeCount ?? 0}</span>
-      </div>
+        <span class="text-xs">{localBoostCount}</span>
+      </button>
+
+      <button
+        onclick={handleLike}
+        disabled={!onlike}
+        class="flex items-center gap-1.5 transition-colors {liked ? 'text-red-400' : 'text-[var(--color-text-muted)]'} {onlike ? 'hover:text-red-400' : ''}"
+        title="Like"
+      >
+        <Heart size={14} class={liked ? 'fill-current' : ''} />
+        <span class="text-xs">{localLikeCount}</span>
+      </button>
     </div>
     <a href={getPostUrl(post)} target="_blank" rel="noopener noreferrer" class="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:underline">
       {formatDate(post.createdAt)}

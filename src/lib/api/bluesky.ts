@@ -108,5 +108,31 @@ export class BlueskyClient {
     return { follows: resp.data.follows, cursor: resp.data.cursor };
   }
 
+  // ── Write operations (like, repost, reply) ─────────────────────────────
+
+  async like(uri: string, cid: string) {
+    await this.login();
+    if (!this.authAgent) throw new Error('Auth required');
+    return this.authAgent.like(uri, cid);
+  }
+
+  async unlike(likeUri: string) {
+    await this.login();
+    if (!this.authAgent) throw new Error('Auth required');
+    return this.authAgent.deleteLike(likeUri);
+  }
+
+  async repost(uri: string, cid: string) {
+    await this.login();
+    if (!this.authAgent) throw new Error('Auth required');
+    return this.authAgent.repost(uri, cid);
+  }
+
+  async unrepost(repostUri: string) {
+    await this.login();
+    if (!this.authAgent) throw new Error('Auth required');
+    return this.authAgent.deleteRepost(repostUri);
+  }
+
   getHandle() { return this.handle; }
 }

@@ -102,6 +102,23 @@ export class MastodonClient {
     );
   }
 
+  // ── Write operations (like, boost, reply) ──────────────────────────────
+
+  private async authedPost(endpoint: string): Promise<any> {
+    if (!this.accessToken) throw new Error('Auth required');
+    const resp = await fetch(`${this.instanceUrl}${endpoint}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${this.accessToken}` },
+    });
+    if (!resp.ok) throw new Error(`${resp.status}: ${resp.statusText}`);
+    return resp.json();
+  }
+
+  async favourite(statusId: string) { return this.authedPost(`/api/v1/statuses/${statusId}/favourite`); }
+  async unfavourite(statusId: string) { return this.authedPost(`/api/v1/statuses/${statusId}/unfavourite`); }
+  async reblog(statusId: string) { return this.authedPost(`/api/v1/statuses/${statusId}/reblog`); }
+  async unreblog(statusId: string) { return this.authedPost(`/api/v1/statuses/${statusId}/unreblog`); }
+
   getInstanceUrl() { return this.instanceUrl; }
   getAccessToken() { return this.accessToken; }
   isAuthenticated() { return !!this.client; }
