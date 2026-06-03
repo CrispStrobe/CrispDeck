@@ -78,18 +78,25 @@
         const bsky = client as BlueskyClient;
         try {
           const agent = bsky.getAgent();
-          // Bluesky DMs require a proxy to the chat service
-          const chatAgent = agent.withProxy('atproto_labeler', 'did:web:api.bsky.chat');
-          const resp = await chatAgent.api.chat.bsky.convo.listConvos({ limit: 50 });
-          for (const convo of resp.data.convos) {
-            const other = convo.members.find((m: any) => m.handle !== acct.handle) ?? convo.members[0];
+          if (!agent.session) throw new Error('Not logged in');
+          // Bluesky DMs: direct XRPC call with proxy header
+          const resp = await fetch(`https://bsky.social/xrpc/chat.bsky.convo.listConvos?limit=50`, {
+            headers: {
+              Authorization: `Bearer ${agent.session.accessJwt}`,
+              'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat',
+            },
+          });
+          if (!resp.ok) throw new Error(`DM API: ${resp.status} ${resp.statusText}`);
+          const data = await resp.json();
+          for (const convo of data.convos ?? []) {
+            const other = convo.members?.find((m: any) => m.handle !== acct.handle) ?? convo.members?.[0];
             all.push({
               id: convo.id,
               platform: 'bluesky',
               participant: { handle: other?.handle ?? '?', displayName: other?.displayName, avatar: other?.avatar },
-              lastMessage: (convo.lastMessage as any)?.text,
-              lastDate: (convo.lastMessage as any)?.sentAt,
-              unread: convo.unreadCount > 0,
+              lastMessage: convo.lastMessage?.text,
+              lastDate: convo.lastMessage?.sentAt,
+              unread: (convo.unreadCount ?? 0) > 0,
             });
           }
         } catch (e) {

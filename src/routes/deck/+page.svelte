@@ -113,180 +113,78 @@
     columnLoading[col.id] = true;
     const posts: UnifiedPost[] = [];
 
-    try {
-      for (const [id, client] of clients) {
-        const acct = accounts.find(a => a.id === id);
-        if (!acct) continue;
-        if (col.platform && acct.platform !== col.platform) continue;
+    // Pick ONE client per platform (no need to loop all accounts for each column)
+    const bskyClient = [...clients.entries()].find(([id]) => accounts.find(a => a.id === id)?.platform === 'bluesky')?.[1] as BlueskyClient | undefined;
+    const mastoClient = [...clients.entries()].find(([id]) => accounts.find(a => a.id === id)?.platform === 'mastodon')?.[1] as MastodonClient | undefined;
+    const bskyAcct = accounts.find(a => a.platform === 'bluesky');
+    const mastoAcct = accounts.find(a => a.platform === 'mastodon');
 
-        if (col.type === 'timeline') {
-          if (acct.platform === 'bluesky') {
-            const bsky = client as BlueskyClient;
-            try {
-              const r = await bsky.getTimeline();
-              posts.push(...r.feed.map(p => normalizePost(p, 'bluesky')));
-            } catch { /* auth may fail for timeline */ }
-          } else {
-            const masto = client as MastodonClient;
-            try {
-              const statuses = await masto.getHomeTimeline();
-              posts.push(...statuses.map(s => normalizePost(s, 'mastodon')));
-            } catch { /* auth may fail */ }
+    try {
+      // Direct loading — no loops, one API call per column
+      if (col.type === 'timeline') {
+        if (bskyClient) try { const r = await bskyClient.getTimeline(); posts.push(...r.feed.map(p => normalizePost(p, 'bluesky'))); } catch {}
+        if (mastoClient) try { posts.push(...(await mastoClient.getHomeTimeline()).map(s => normalizePost(s, 'mastodon'))); } catch {}
+      } else if (col.type === 'my-posts') {
+        if (bskyClient && bskyAcct) try { posts.push(...(await bskyClient.getAuthorFeed(bskyAcct.handle)).feed.map(p => normalizePost(p, 'bluesky'))); } catch {}
+        if (mastoClient && mastoAcct) try {
+          const a = await mastoClient.getAccountByHandle(mastoAcct.handle);
+          posts.push(...(await mastoClient.getAccountStatuses(a.id)).map(s => normalizePost(s, 'mastodon')));
+        } catch {}
+      } else if (col.type === 'mentions') {
+        if (bskyClient) try {
+          const { notifications } = await bskyClient.getNotifications();
+          for (const n of notifications.filter(n => n.reason === 'mention' || n.reason === 'reply')) {
+            if ((n.record as any)?.text) posts.push({ uri: n.uri, text: (n.record as any).text, author: { handle: n.author.handle, displayName: n.author.displayName, avatar: n.author.avatar }, createdAt: n.indexedAt, platform: 'bluesky', isRepost: false, raw: n });
           }
-        } else if (col.type === 'my-posts') {
-          if (acct.platform === 'bluesky') {
-            const bsky = client as BlueskyClient;
-            const r = await bsky.getAuthorFeed(acct.handle);
-            posts.push(...r.feed.map(p => normalizePost(p, 'bluesky')));
-          } else {
-            const masto = client as MastodonClient;
-            const account = await masto.getAccountByHandle(acct.handle);
-            const statuses = await masto.getAccountStatuses(account.id);
-            posts.push(...statuses.map(s => normalizePost(s, 'mastodon')));
+        } catch {}
+        if (mastoClient) try {
+          const token = mastoClient.getAccessToken();
+          if (token) {
+            const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/notifications?types[]=mention&limit=40`, { headers: { Authorization: `Bearer ${token}` } });
+            if (resp.ok) for (const n of await resp.json()) { if (n.status) posts.push(normalizePost(n.status, 'mastodon')); }
           }
-        } else if (col.type === 'mentions') {
-          if (acct.platform === 'bluesky') {
-            const bsky = client as BlueskyClient;
-            try {
-              const { notifications } = await bsky.getNotifications();
-              const mentionNotifs = notifications.filter(n => n.reason === 'mention' || n.reason === 'reply');
-              for (const n of mentionNotifs) {
-                if ((n.record as any)?.text) {
-                  posts.push({
-                    uri: n.uri,
-                    text: (n.record as any).text,
-                    author: { handle: n.author.handle, displayName: n.author.displayName, avatar: n.author.avatar },
-                    createdAt: n.indexedAt,
-                    platform: 'bluesky',
-                    isRepost: false,
-                    raw: n,
-                  });
-                }
-              }
-            } catch {}
-          } else {
-            const masto = client as MastodonClient;
-            const token = masto.getAccessToken();
-            if (token) {
-              try {
-                const resp = await fetch(
-                  `${masto.getInstanceUrl()}/api/v1/notifications?types[]=mention&limit=40`,
-                  { headers: { Authorization: `Bearer ${token}` } }
-                );
-                if (resp.ok) {
-                  const raw = await resp.json();
-                  for (const n of raw) {
-                    if (n.status) {
-                      posts.push(normalizePost(n.status, 'mastodon'));
-                    }
-                  }
-                }
-              } catch {}
-            }
+        } catch {}
+      } else if (col.type === 'notifications' && bskyClient) {
+        try {
+          const { notifications } = await bskyClient.getNotifications();
+          for (const n of notifications.slice(0, 20)) {
+            if ((n.record as any)?.text) posts.push({ uri: n.uri, text: `[${n.reason}] ${(n.record as any).text || ''}`, author: { handle: n.author.handle, displayName: n.author.displayName, avatar: n.author.avatar }, createdAt: n.indexedAt, platform: 'bluesky', isRepost: false, raw: n });
           }
-        } else if (col.type === 'notifications') {
-          if (acct.platform === 'bluesky') {
-            const bsky = client as BlueskyClient;
-            try {
-              const { notifications } = await bsky.getNotifications();
-              for (const n of notifications.slice(0, 20)) {
-                if ((n.record as any)?.text) {
-                  posts.push({
-                    uri: n.uri,
-                    text: `[${n.reason}] ${(n.record as any).text || ''}`,
-                    author: { handle: n.author.handle, displayName: n.author.displayName, avatar: n.author.avatar },
-                    createdAt: n.indexedAt,
-                    platform: 'bluesky',
-                    isRepost: false,
-                    raw: n,
-                  });
-                }
-              }
-            } catch {}
-          }
-        } else if (col.type === 'search' && col.query) {
-          if (acct.platform === 'bluesky') {
-            const bsky = client as BlueskyClient;
-            try {
-              const r = await bsky.searchPosts(col.query);
-              for (const p of r.posts) {
-                posts.push({
-                  uri: p.uri,
-                  text: (p.record as any).text ?? '',
-                  author: { handle: p.author.handle, displayName: p.author.displayName, avatar: p.author.avatar },
-                  createdAt: (p.record as any).createdAt ?? p.indexedAt,
-                  platform: 'bluesky',
-                  likeCount: p.likeCount,
-                  repostCount: p.repostCount,
-                  isRepost: false,
-                  raw: p,
-                });
-              }
-            } catch {}
-          }
-        } else if (col.type === 'hashtag' && col.query) {
-          // Search for hashtag across platforms
-          if (acct.platform === 'bluesky') {
-            try {
-              const r = await (client as BlueskyClient).searchPosts(`#${col.query}`);
-              for (const p of r.posts) {
-                posts.push({
-                  uri: p.uri, text: (p.record as any).text ?? '',
-                  author: { handle: p.author.handle, displayName: p.author.displayName, avatar: p.author.avatar },
-                  createdAt: (p.record as any).createdAt ?? p.indexedAt,
-                  platform: 'bluesky', likeCount: p.likeCount, repostCount: p.repostCount, isRepost: false, raw: p,
-                });
-              }
-            } catch {}
-          } else {
-            const masto = client as MastodonClient;
-            const token = masto.getAccessToken();
-            if (token) {
-              try {
-                const resp = await fetch(
-                  `${masto.getInstanceUrl()}/api/v1/timelines/tag/${col.query}?limit=40`,
-                  { headers: { Authorization: `Bearer ${token}` } }
-                );
-                if (resp.ok) {
-                  const raw = await resp.json();
-                  posts.push(...raw.map((s: any) => normalizePost(s, 'mastodon')));
-                }
-              } catch {}
-            }
-          }
-        } else if (col.type === 'user' && col.query) {
-          if (acct.platform === 'bluesky') {
-            try {
-              const r = await (client as BlueskyClient).getAuthorFeed(col.query);
-              posts.push(...r.feed.map(p => normalizePost(p, 'bluesky')));
-            } catch {}
-          } else {
-            try {
-              const masto = client as MastodonClient;
-              const account = await masto.getAccountByHandle(col.query);
-              const statuses = await masto.getAccountStatuses(account.id);
-              posts.push(...statuses.map(s => normalizePost(s, 'mastodon')));
-            } catch {}
-          }
-        } else if (col.type === 'local' && acct.platform === 'mastodon') {
-          const masto = client as MastodonClient;
-          const token = masto.getAccessToken();
-          try {
-            const resp = await fetch(`${masto.getInstanceUrl()}/api/v1/timelines/public?local=true&limit=40`, {
-              headers: token ? { Authorization: `Bearer ${token}` } : {},
-            });
-            if (resp.ok) posts.push(...(await resp.json()).map((s: any) => normalizePost(s, 'mastodon')));
-          } catch {}
-        } else if (col.type === 'federated' && acct.platform === 'mastodon') {
-          const masto = client as MastodonClient;
-          const token = masto.getAccessToken();
-          try {
-            const resp = await fetch(`${masto.getInstanceUrl()}/api/v1/timelines/public?limit=40`, {
-              headers: token ? { Authorization: `Bearer ${token}` } : {},
-            });
-            if (resp.ok) posts.push(...(await resp.json()).map((s: any) => normalizePost(s, 'mastodon')));
-          } catch {}
-        }
+        } catch {}
+      } else if (col.type === 'search' && col.query && bskyClient) {
+        try {
+          const r = await bskyClient.searchPosts(col.query);
+          for (const p of r.posts) posts.push({ uri: p.uri, text: (p.record as any).text ?? '', author: { handle: p.author.handle, displayName: p.author.displayName, avatar: p.author.avatar }, createdAt: (p.record as any).createdAt ?? p.indexedAt, platform: 'bluesky', likeCount: p.likeCount, repostCount: p.repostCount, isRepost: false, raw: p });
+        } catch {}
+      } else if (col.type === 'hashtag' && col.query) {
+        if (bskyClient) try {
+          const r = await bskyClient.searchPosts(`#${col.query}`);
+          for (const p of r.posts) posts.push({ uri: p.uri, text: (p.record as any).text ?? '', author: { handle: p.author.handle, displayName: p.author.displayName, avatar: p.author.avatar }, createdAt: (p.record as any).createdAt ?? p.indexedAt, platform: 'bluesky', likeCount: p.likeCount, repostCount: p.repostCount, isRepost: false, raw: p });
+        } catch {}
+        if (mastoClient) try {
+          const token = mastoClient.getAccessToken();
+          const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/timelines/tag/${col.query}?limit=40`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+          if (resp.ok) posts.push(...(await resp.json()).map((s: any) => normalizePost(s, 'mastodon')));
+        } catch {}
+      } else if (col.type === 'user' && col.query) {
+        // Try Bluesky first (handles with dots), then Mastodon (handles with @)
+        if (bskyClient && (col.query.includes('.') || !col.query.includes('@'))) try { posts.push(...(await bskyClient.getAuthorFeed(col.query)).feed.map(p => normalizePost(p, 'bluesky'))); } catch {}
+        if (mastoClient && col.query.includes('@')) try {
+          const a = await mastoClient.getAccountByHandle(col.query);
+          posts.push(...(await mastoClient.getAccountStatuses(a.id)).map(s => normalizePost(s, 'mastodon')));
+        } catch {}
+      } else if (col.type === 'local' && mastoClient) {
+        try {
+          const token = mastoClient.getAccessToken();
+          const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/timelines/public?local=true&limit=40`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+          if (resp.ok) posts.push(...(await resp.json()).map((s: any) => normalizePost(s, 'mastodon')));
+        } catch {}
+      } else if (col.type === 'federated' && mastoClient) {
+        try {
+          const token = mastoClient.getAccessToken();
+          const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/timelines/public?limit=40`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+          if (resp.ok) posts.push(...(await resp.json()).map((s: any) => normalizePost(s, 'mastodon')));
+        } catch {}
       }
     } catch (e) {
       console.error(`Failed to load column ${col.id}:`, e);
