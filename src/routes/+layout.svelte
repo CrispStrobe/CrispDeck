@@ -2,7 +2,7 @@
   import '../app.css';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import { Home, Rss, Columns3, PenSquare, FileText, Bell, MessageSquare, Users, Search, List, Package, Shield, TrendingUp, BarChart3, Settings, ChevronsLeft, ChevronsRight, Menu, X } from '@lucide/svelte';
+  import { Home, Rss, Columns3, PenSquare, FileText, Bell, MessageSquare, Users, Search, List, Package, Shield, TrendingUp, Archive, BarChart3, Settings, ChevronsLeft, ChevronsRight, Menu, X } from '@lucide/svelte';
   import KeyboardShortcuts from '$lib/components/KeyboardShortcuts.svelte';
 
   let { children } = $props();
@@ -24,7 +24,7 @@
     if (e.key === 'g') { pendingG = true; setTimeout(() => pendingG = false, 1000); return; }
     if (pendingG) {
       pendingG = false;
-      const routes: Record<string, string> = { h: '/', f: '/feed', c: '/compose', n: '/notifications', s: '/search', d: '/deck', m: '/messages' };
+      const routes: Record<string, string> = { h: '/', f: '/feed', c: '/compose', n: '/notifications', s: '/search', d: '/deck', m: '/messages', a: '/archive' };
       if (routes[e.key]) { goto(routes[e.key]); return; }
     }
   }
@@ -42,6 +42,7 @@
     { href: '/identities', icon: Users, label: 'Identities' },
     { href: '/search', icon: Search, label: 'Search' },
     { href: '/trending', icon: TrendingUp, label: 'Trending' },
+    { href: '/archive', icon: Archive, label: 'Archive' },
     { href: '/moderation', icon: Shield, label: 'Moderation' },
     { href: '/analytics', icon: BarChart3, label: 'Analytics' },
     { href: '/settings', icon: Settings, label: 'Settings' },
