@@ -76,7 +76,11 @@
         const bsky = client as BlueskyClient;
         try {
           const agent = bsky.getAgent();
-          const resp = await agent.api.chat.bsky.convo.listConvos({ limit: 50 });
+          // Bluesky DMs require the chat proxy service
+          const resp = await agent.api.chat.bsky.convo.listConvos(
+            { limit: 50 },
+            { headers: { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' } }
+          );
           for (const convo of resp.data.convos) {
             const other = convo.members.find((m: any) => m.handle !== acct.handle) ?? convo.members[0];
             all.push({
@@ -89,8 +93,8 @@
             });
           }
         } catch (e) {
-          // DMs may not be available
-          console.error('Bluesky DMs not available:', e);
+          console.error('Bluesky DMs:', e);
+          error = (error ? error + '\n' : '') + `Bluesky DMs: ${e}`;
         }
       } else {
         const masto = client as MastodonClient;
@@ -117,8 +121,12 @@
                 unread: convo.unread,
               });
             }
+          } else {
+            error = (error ? error + '\n' : '') + `Mastodon DMs: ${resp.status} ${resp.statusText}`;
           }
-        } catch {}
+        } catch (e) {
+          error = (error ? error + '\n' : '') + `Mastodon DMs: ${e}`;
+        }
       }
     }
 

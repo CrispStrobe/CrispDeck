@@ -126,6 +126,7 @@
         }
       } catch (e) {
         console.error(`Failed to load feed for ${acct.handle}:`, e);
+        error = (error ? error + '\n' : '') + `${acct.platform}/${acct.handle}: ${e}`;
       }
     }
 

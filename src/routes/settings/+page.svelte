@@ -77,43 +77,18 @@
 
       mastoOAuthState = await dbStartOAuth(instanceUrl);
 
-      // Open the auth URL in the user's browser
-      window.open(mastoOAuthState!.auth_url);
-
-      // The OAuth callback comes via URL redirect in browser mode.
-      // In Tauri, the redirect_uri points to localhost and the app intercepts it.
-      // For now, we need the user to paste the code or handle the redirect.
-      // TODO: implement redirect-based callback handling
-      const code = new URLSearchParams(window.location.search).get('code') ?? '';
-
-      // Exchange code for token
-      const result = await dbCompleteOAuth({
+      // Store OAuth state so the callback page can complete the flow
+      localStorage.setItem('crispdeck-oauth-state', JSON.stringify({
         instance_url: instanceUrl,
-        code,
         client_id: mastoOAuthState!.client_id,
         client_secret: mastoOAuthState!.client_secret,
         redirect_uri: mastoOAuthState!.redirect_uri,
-      });
+      }));
 
-      // Store the account
-      const credentials = JSON.stringify({
-        access_token: result.access_token,
-        client_id: mastoOAuthState!.client_id,
-        client_secret: mastoOAuthState!.client_secret,
-      });
-
-      await dbAddAccount({
-        platform: 'mastodon',
-        handle: `@user@${instance}`, // Will be updated when we fetch profile
-        instance_url: instanceUrl,
-        credentials,
-        is_primary: accounts.filter(a => a.platform === 'mastodon').length === 0,
-      });
-
-      mastoInstance = '';
-      showMastoForm = false;
-      mastoOAuthState = null;
-      await loadAccounts();
+      // Redirect to the Mastodon authorization page
+      // The callback at /oauth/callback will complete the flow
+      window.location.href = mastoOAuthState!.auth_url;
+      return; // Page will unload
     } catch (e) {
       error = String(e);
     } finally {
