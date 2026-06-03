@@ -1,8 +1,12 @@
 # CrispDeck
 
-Cross-platform desktop client for **Mastodon** and **Bluesky** with crossposting, identity mapping, and smart mentions.
+Cross-platform client for **Mastodon** and **Bluesky** with crossposting, identity mapping, and smart mentions.
 
-Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit](https://svelte.dev/) + [Rust](https://www.rust-lang.org/).
+Works as both a **desktop app** (Tauri 2) and a **web app** (deployed on Vercel).
+
+**Live demo**: https://crispdeck.vercel.app
+
+Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/) + [Svelte 5](https://svelte.dev/) + [Rust](https://www.rust-lang.org/).
 
 ## Features
 
@@ -21,15 +25,16 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit](https://svelte.dev/) +
   - Each platform gets its own optimal split — a 450-char post becomes 1 Mastodon post but 2 Bluesky posts
 - Live per-platform preview showing exactly how threads will split
 - Bluesky RichText facet detection (mentions, URLs, hashtags auto-linked)
+- Reply chain posting (proper `root` + `parent` refs on Bluesky, `in_reply_to_id` on Mastodon)
 - Media upload (up to 4 images) to both platforms
 - Mastodon visibility controls (public/unlisted/private/direct) and content warnings
 - Draft saving
-- Crosspost history logging in SQLite
+- Crosspost history logging
 - Keyboard shortcut: Ctrl+Enter / Cmd+Enter to post
 
 ### Identity Map & Auto-Detection
 - Scan follows from all connected accounts
-- Rust-powered identity matching (O(n*m) Jaro-Winkler on display names + handles + bio cross-references)
+- Identity matching via Jaro-Winkler on display names + handles + bio cross-references
 - Side-by-side candidate review with confidence scores and match reasons
 - Confirm or dismiss detected matches
 - Manual identity creation and account linking
@@ -42,35 +47,47 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit](https://svelte.dev/) +
   - `@alice` becomes `@alice.bsky.social` on Bluesky
   - `@alice` becomes `@alice@mastodon.social` on Mastodon
 
+### Network Search
+- Full-text search across all connected accounts
+- Bluesky: searchPosts API
+- Mastodon: v2/search with authentication
+- Results sorted by engagement
+
+### Analytics & Export
+- Stats: total posts, likes, boosts, averages
+- Platform breakdown (Bluesky vs Mastodon)
+- Posting activity by hour (24-bin bar chart)
+- Top post by likes
+- Export: JSON, CSV, Markdown
+
 ### Security
-- Credentials encrypted at rest with AES-256-GCM (Argon2id key derivation)
-- Mastodon OAuth2 flow with ephemeral localhost redirect server
-- All data stored locally in SQLite — nothing leaves your machine
+- Credentials encrypted at rest:
+  - **Desktop**: AES-256-GCM + Argon2id (machine-bound key)
+  - **Web**: AES-256-GCM + PBKDF2 (browser-local key via Web Crypto)
+- Mastodon OAuth2 flow (localhost redirect on desktop, popup redirect on web)
+- All data stored locally (SQLite on desktop, IndexedDB in browser)
 
 ## Architecture
 
 ```
-+--------------------------------------------------+
-|  SvelteKit Frontend (Svelte 5 runes)             |
-|  +----------+----------+----------+-----------+  |
-|  | Feed     | Compose  |Identities| Settings  |  |
-|  | (read)   | (write)  | (map)    | (accounts)|  |
-|  +----+-----+----+-----+----+-----+-----+-----+  |
-|       |          |          |           |         |
-|  +----v----------v--+  +---v-----------v---+      |
-|  | @atproto/api     |  | Tauri IPC invoke()|     |
-|  | masto (JS libs)  |  | (DB, auth, detect)|     |
-|  +------------------+  +---------+---------+      |
-+----------------------------------|-----------------+
-                                   |
-+----------------------------------v-----------------+
-|  Rust Backend (src-tauri/)                         |
-|  +----------+-----------+---------------------+   |
-|  | SQLite   | Credential| Identity Detection  |   |
-|  | (rusqlite| Encryption| (strsim jaro-winkler|   |
-|  | 7 tables)| (aes-gcm) | on follows lists)   |   |
-|  +----------+-----------+---------------------+   |
-+----------------------------------------------------+
++-----------------------------------------------------------+
+|  SvelteKit Frontend (Svelte 5 runes)                      |
+|  +---------+---------+----------+---------+--------+      |
+|  | Feed    | Compose | Identity | Search  | Analyt.|      |
+|  +---------+---------+----------+---------+--------+      |
+|       |          |          |          |                   |
+|  +----v----------v--+  +---v----------v--------+          |
+|  | @atproto/api     |  | $lib/db.ts dispatcher |          |
+|  | masto (JS libs)  |  +---+---------------+---+          |
+|  +------------------+      |               |              |
++----------------------------|---------------|---------------+
+                             |               |
+              +--------------v--+   +--------v-----------+
+              | Tauri (Desktop) |   | Browser (Web/Vercel)|
+              | SQLite/rusqlite |   | IndexedDB           |
+              | AES-GCM+Argon2 |   | Web Crypto AES-GCM  |
+              | Rust strsim     |   | JS jaro-winkler     |
+              +-----------------+   +--------------------+
 ```
 
 ### Tech Stack
@@ -81,22 +98,21 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit](https://svelte.dev/) +
 | Frontend | SvelteKit 2 + Svelte 5 + Tailwind CSS 4 |
 | Bluesky API | @atproto/api (RichText, facets, blob upload) |
 | Mastodon API | masto + direct REST |
-| Database | SQLite via rusqlite |
-| Encryption | AES-256-GCM + Argon2id |
-| Identity matching | strsim (Jaro-Winkler) in Rust |
+| Database (desktop) | SQLite via rusqlite |
+| Database (web) | IndexedDB |
+| Encryption | AES-256-GCM (Argon2 on desktop, PBKDF2 on web) |
+| Identity matching | strsim (Rust) / JS jaro-winkler (browser) |
 | Icons | @lucide/svelte |
-
-### SQLite Schema
-
-7 tables: `accounts`, `identities`, `identity_links`, `identity_tags`, `crosspost_history`, `draft_posts`, `follows_cache`
+| CI/CD | GitHub Actions (3 platforms) |
+| Hosting | Vercel (static SPA) |
 
 ## Development
 
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) (LTS)
-- [Rust](https://rustup.rs/)
-- Tauri system dependencies:
+- [Rust](https://rustup.rs/) (for desktop builds only)
+- Tauri system dependencies (desktop only):
   - **Linux**: `sudo apt install libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev`
   - **macOS**: Xcode Command Line Tools
   - **Windows**: Visual Studio Build Tools + WebView2
@@ -109,7 +125,15 @@ cd CrispDeck
 npm install
 ```
 
-### Run in development
+### Run web version (no Rust needed)
+
+```bash
+npm run dev
+```
+
+Opens at http://localhost:1420. Uses IndexedDB for storage — fully functional.
+
+### Run desktop version
 
 ```bash
 npm run tauri dev
@@ -118,26 +142,25 @@ npm run tauri dev
 ### Build for production
 
 ```bash
+# Web only (static SPA)
+npm run build
+
+# Desktop (platform-native installers)
 npm run tauri build
 ```
 
-Produces platform-native installers in `src-tauri/target/release/bundle/`.
+### Deploy to Vercel
 
-### Frontend-only (web preview)
+The repo auto-deploys on push via GitHub integration. Manual deploy:
 
 ```bash
-npm run build
-npm run preview
+npx vercel deploy --prod
 ```
 
-The frontend builds as a static SPA. Tauri IPC calls won't work without the desktop shell, but the UI is fully navigable.
-
-### Vercel deployment
-
-The project includes a `vercel.json` for static SPA deployment. Link the GitHub repo in the Vercel dashboard or:
+### Run tests
 
 ```bash
-npx vercel
+npm test
 ```
 
 ## Project Structure
@@ -147,10 +170,13 @@ src/
   routes/           7 pages: dashboard, feed, compose, identities, search, analytics, settings
   lib/
     api/            bluesky.ts, mastodon.ts, unified.ts (normalizePost, crosspost detection)
-    compose/        adapter.ts (post/thread), thread.ts (platform-aware splitting), mentions.ts, media.ts
+    compose/        adapter.ts (post/thread), thread.ts (splitting), mentions.ts, media.ts
     components/     Post, CrosspostGroup, AdvancedFilters, AccountPicker, MentionAutocomplete
+    utils/          export.ts (JSON, CSV, Markdown)
     types.ts        UnifiedPost, Account, Identity, Filters, etc.
-    db.ts           Tauri invoke() wrappers for all Rust commands
+    db.ts           Platform dispatcher (Tauri invoke or browser IndexedDB)
+    browser-db.ts   IndexedDB implementation of all DB operations
+    platform.ts     Tauri vs browser detection
     store.ts        tauri-plugin-store settings wrapper
 
 src-tauri/
