@@ -10,12 +10,17 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 
 ## Features
 
-### Multi-Account Feed Reader
+### Full Social Client
+- **Timeline mode** (default): see posts from everyone you follow — just like the native apps
+  - Bluesky: `getTimeline()` — your full following feed
+  - Mastodon: `/timelines/home` — home timeline
+- **My Posts mode**: toggle to see only your own posts
 - Connect multiple Bluesky and Mastodon accounts simultaneously
-- Unified timeline merging posts from all accounts
+- Unified feed merging posts from all connected accounts
+- **Infinite scroll**: auto-loads more posts as you scroll down
 - Crosspost detection via Jaro-Winkler similarity (groups matching posts across platforms)
 - Advanced filters: search, sort (newest/likes/engagement), hide replies/reposts, min likes, media-only
-- Paginated loading with "Load More" per account and "Load All"
+- Correct date ordering: reposts/reblogs sorted by feed appearance time, not original post time
 
 ### Compose & Crosspost
 - Write once, post to both platforms with one click
@@ -160,8 +165,11 @@ npx vercel deploy --prod
 ### Run tests
 
 ```bash
-npm test
+npm test              # 115 tests (unit + integration)
+npm run test:watch    # watch mode
 ```
+
+Tests hit real Bluesky/Mastodon APIs to verify post reading, normalization, ordering, and crosspost detection work end-to-end.
 
 ## Project Structure
 
@@ -190,7 +198,7 @@ src-tauri/
 
 ## CI/CD
 
-- **CI** (`ci.yml`): Frontend build + Rust check on Linux/macOS/Windows — runs on every push and PR
+- **CI** (`ci.yml`): 115 tests + frontend build + Rust check on Linux/macOS/Windows — runs on every push and PR
 - **Release** (`release.yml`): Cross-platform Tauri builds via `tauri-apps/tauri-action` — triggers on `v*` tags, creates draft GitHub Releases with `.deb`, `.dmg`, `.msi` installers
 
 ### Creating a release
