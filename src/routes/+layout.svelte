@@ -1,12 +1,33 @@
 <script lang="ts">
   import '../app.css';
   import { page } from '$app/state';
+  import { goto } from '$app/navigation';
   import { Home, Rss, Columns3, PenSquare, FileText, Bell, MessageSquare, Users, Search, List, Package, Shield, TrendingUp, BarChart3, Settings, ChevronsLeft, ChevronsRight, Menu, X } from '@lucide/svelte';
+  import KeyboardShortcuts from '$lib/components/KeyboardShortcuts.svelte';
 
   let { children } = $props();
 
   let collapsed = $state(false);
   let mobileMenuOpen = $state(false);
+  let showShortcuts = $state(false);
+  let pendingG = $state(false);
+
+  function handleGlobalKeydown(e: KeyboardEvent) {
+    // Don't capture when typing in inputs
+    const tag = (e.target as HTMLElement)?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+    if (e.key === '?') { showShortcuts = !showShortcuts; return; }
+    if (e.key === 'Escape') { showShortcuts = false; mobileMenuOpen = false; return; }
+
+    // g+key navigation
+    if (e.key === 'g') { pendingG = true; setTimeout(() => pendingG = false, 1000); return; }
+    if (pendingG) {
+      pendingG = false;
+      const routes: Record<string, string> = { h: '/', f: '/feed', c: '/compose', n: '/notifications', s: '/search', d: '/deck', m: '/messages' };
+      if (routes[e.key]) { goto(routes[e.key]); return; }
+    }
+  }
 
   const navItems = [
     { href: '/', icon: Home, label: 'Dashboard' },
@@ -41,6 +62,9 @@
     return path.startsWith(href);
   }
 </script>
+
+<svelte:window onkeydown={handleGlobalKeydown} />
+<KeyboardShortcuts bind:show={showShortcuts} />
 
 <div class="flex h-screen">
   <!-- Desktop sidebar -->
