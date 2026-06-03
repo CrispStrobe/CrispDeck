@@ -49,9 +49,18 @@
       const credentials = JSON.stringify({ app_password: bskyAppPassword });
       const handle = bskyHandle.trim().replace(/^@/, '');
 
+      // Verify credentials + fetch profile
+      const { BlueskyClient } = await import('$lib/api/bluesky');
+      const testClient = new BlueskyClient(handle, bskyAppPassword);
+      await testClient.login();
+      const profile = await testClient.getProfile(handle);
+
       await dbAddAccount({
         platform: 'bluesky',
-        handle,
+        handle: profile.handle ?? handle,
+        display_name: profile.displayName,
+        avatar_url: profile.avatar,
+        did: profile.did,
         credentials,
         is_primary: accounts.filter(a => a.platform === 'bluesky').length === 0,
       });

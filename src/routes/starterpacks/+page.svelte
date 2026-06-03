@@ -50,20 +50,52 @@
     if (!searchQuery.trim() || !client) return;
     searching = true;
     try {
-      // Search actors who might have starter packs
-      const actors = await client.searchActors(searchQuery);
       const agent = client.getAgent();
-
       const allPacks: StarterPack[] = [];
-      for (const actor of actors.slice(0, 5)) {
+      const seen = new Set<string>();
+
+      // Strategy 1: Search actors and fetch their starter packs
+      const actors = await client.searchActors(searchQuery);
+      for (const actor of actors.slice(0, 8)) {
         try {
           const resp = await agent.api.app.bsky.graph.getActorStarterPacks({ actor: actor.handle });
           for (const sp of resp.data.starterPacks ?? []) {
-            allPacks.push(sp as unknown as StarterPack);
+            const pack = sp as unknown as StarterPack;
+            if (!seen.has(pack.uri)) {
+              // Filter: only include packs whose name or description matches the query
+              const q = searchQuery.toLowerCase();
+              const nameMatch = pack.record.name?.toLowerCase().includes(q);
+              const descMatch = pack.record.description?.toLowerCase().includes(q);
+              const creatorMatch = pack.creator.handle.toLowerCase().includes(q) ||
+                pack.creator.displayName?.toLowerCase().includes(q);
+              if (nameMatch || descMatch || creatorMatch) {
+                seen.add(pack.uri);
+                allPacks.push(pack);
+              }
+            }
           }
-        } catch { /* actor may not have packs */ }
+        } catch {}
       }
+
+      // Strategy 2: If query looks like a handle, search that specific actor
+      if (searchQuery.includes('.') || searchQuery.includes('@')) {
+        try {
+          const handle = searchQuery.replace(/^@/, '');
+          const resp = await agent.api.app.bsky.graph.getActorStarterPacks({ actor: handle });
+          for (const sp of resp.data.starterPacks ?? []) {
+            const pack = sp as unknown as StarterPack;
+            if (!seen.has(pack.uri)) {
+              seen.add(pack.uri);
+              allPacks.push(pack);
+            }
+          }
+        } catch {}
+      }
+
       packs = allPacks;
+      if (allPacks.length === 0) {
+        error = `No starter packs found for "${searchQuery}". Try searching by creator handle or pack topic.`;
+      }
     } catch (e) {
       error = String(e);
     } finally {

@@ -76,11 +76,9 @@
         const bsky = client as BlueskyClient;
         try {
           const agent = bsky.getAgent();
-          // Bluesky DMs require the chat proxy service
-          const resp = await agent.api.chat.bsky.convo.listConvos(
-            { limit: 50 },
-            { headers: { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' } }
-          );
+          // Bluesky DMs require a proxy to the chat service
+          const chatAgent = agent.withProxy('atproto_labeler', 'did:web:api.bsky.chat');
+          const resp = await chatAgent.api.chat.bsky.convo.listConvos({ limit: 50 });
           for (const convo of resp.data.convos) {
             const other = convo.members.find((m: any) => m.handle !== acct.handle) ?? convo.members[0];
             all.push({

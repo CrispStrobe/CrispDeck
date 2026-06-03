@@ -74,6 +74,9 @@
     <h1 class="text-2xl font-bold">Trending</h1>
     <span class="text-xs px-2 py-0.5 bg-[var(--color-mastodon)]/20 text-[var(--color-mastodon)] rounded">Mastodon</span>
   </div>
+  <p class="text-xs text-[var(--color-text-muted)] mb-4 -mt-4">
+    Global trends from your Mastodon instance. These are instance-wide, not personalized to your follows.
+  </p>
 
   {#if error}
     <div class="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">{error}</div>
