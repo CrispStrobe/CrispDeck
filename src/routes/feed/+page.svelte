@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onMount } from 'svelte';
   import { listAccounts, getDecryptedCredentials } from '$lib/db';
   import { Rss, Loader2, Inbox, EyeOff, User, Globe } from '@lucide/svelte';
   import Post from '$lib/components/Post.svelte';
@@ -52,18 +52,19 @@
       initialLoading = false;
     }
 
-    // Set up infinite scroll observer
-    await tick();
-    if (scrollSentinel) {
-      observer = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting && !loadingMore && hasMoreContent) {
-          loadMore();
-        }
-      }, { rootMargin: '400px' });
-      observer.observe(scrollSentinel);
-    }
-
     return () => observer?.disconnect();
+  });
+
+  // Reactive infinite scroll — observes sentinel whenever it appears in DOM
+  $effect(() => {
+    if (!scrollSentinel) return;
+    observer?.disconnect();
+    observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && !loadingMore && hasMoreContent) {
+        loadMore();
+      }
+    }, { rootMargin: '600px' });
+    observer.observe(scrollSentinel);
   });
 
   async function initClients() {

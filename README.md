@@ -2,7 +2,7 @@
 
 Cross-platform client for **Mastodon** and **Bluesky** with crossposting, identity mapping, and smart mentions.
 
-Works as both a **desktop app** (Tauri 2) and a **web app** (deployed on Vercel).
+Works as a **web app** (Vercel), **desktop app** (Windows/macOS/Linux via Tauri 2), and **mobile app** (iOS/Android via Tauri 2 mobile).
 
 **Live demo**: https://crispdeck.vercel.app
 
