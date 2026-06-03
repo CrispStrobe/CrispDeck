@@ -4,6 +4,7 @@
   import { PenSquare, Send, Loader2, X, ImagePlus, AlertTriangle, Check, BarChart3, Shield } from '@lucide/svelte';
   import AccountPicker from '$lib/components/AccountPicker.svelte';
   import MentionAutocomplete from '$lib/components/MentionAutocomplete.svelte';
+  import EmojiPicker from '$lib/components/EmojiPicker.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import { crosspostThread, graphemeLength, type PostResult, type ComposeOptions, type ThreadGate, type PollOptions } from '$lib/compose/adapter';
@@ -402,6 +403,19 @@
               <ImagePlus size={18} />
               <input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" multiple class="hidden" onchange={addMedia} />
             </label>
+            <EmojiPicker onselect={(emoji) => {
+              if (textareaEl) {
+                const pos = textareaEl.selectionStart;
+                text = text.substring(0, pos) + emoji + text.substring(pos);
+                requestAnimationFrame(() => {
+                  textareaEl?.focus();
+                  const newPos = pos + emoji.length;
+                  textareaEl?.setSelectionRange(newPos, newPos);
+                });
+              } else {
+                text += emoji;
+              }
+            }} />
             <button
               onclick={() => showCW = !showCW}
               class="px-2 py-1 text-xs font-mono border rounded-md transition-colors {showCW ? 'border-yellow-600 text-yellow-400' : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"

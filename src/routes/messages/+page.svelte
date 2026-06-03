@@ -32,6 +32,8 @@
   let loadingMessages = $state(false);
   let newMessage = $state('');
   let sending = $state(false);
+  let showNewConvo = $state(false);
+  let newConvoHandle = $state('');
 
   let clients: Map<number, BlueskyClient | MastodonClient> = new Map();
 
@@ -224,6 +226,23 @@
     }
   }
 
+  async function startNewConversation() {
+    if (!newConvoHandle.trim()) return;
+    const handle = newConvoHandle.trim();
+    // Create a new conversation entry and select it
+    const convo: Conversation = {
+      id: `new-${Date.now()}`,
+      platform: handle.includes('@') ? 'mastodon' : 'bluesky',
+      participant: { handle },
+      unread: false,
+    };
+    conversations = [convo, ...conversations];
+    selectedConvo = convo;
+    messages = [];
+    showNewConvo = false;
+    newConvoHandle = '';
+  }
+
   function formatTime(dateStr: string): string {
     const d = new Date(dateStr);
     const now = Date.now();
@@ -250,6 +269,20 @@
     <div class="flex-1 flex overflow-hidden">
       <!-- Conversation list -->
       <div class="w-80 border-r border-[var(--color-border)] overflow-y-auto flex-shrink-0">
+        <!-- New conversation -->
+        <div class="p-2 border-b border-[var(--color-border)]">
+          {#if showNewConvo}
+            <form onsubmit={(e) => { e.preventDefault(); startNewConversation(); }} class="flex gap-1">
+              <input type="text" bind:value={newConvoHandle} placeholder="@user or handle..." class="flex-1 px-2 py-1 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-[var(--color-text)]" />
+              <button type="submit" class="px-2 py-1 text-xs bg-[var(--color-primary)] text-white rounded">Go</button>
+            </form>
+          {:else}
+            <button onclick={() => showNewConvo = true} class="w-full px-3 py-1.5 text-xs text-[var(--color-primary)] hover:bg-[var(--color-surface-hover)] rounded transition-colors">
+              + New Conversation
+            </button>
+          {/if}
+        </div>
+
         {#if conversations.length === 0}
           <p class="text-center py-8 text-sm text-[var(--color-text-muted)]">No conversations yet.</p>
         {:else}

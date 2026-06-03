@@ -7,10 +7,23 @@
 
   let { children } = $props();
 
+  import { onMount } from 'svelte';
+  import { getBookmarkCount } from '$lib/bookmarks';
+
   let collapsed = $state(false);
   let mobileMenuOpen = $state(false);
   let showShortcuts = $state(false);
   let pendingG = $state(false);
+  let bookmarkCount = $state(0);
+
+  onMount(async () => {
+    bookmarkCount = await getBookmarkCount();
+    // Refresh count periodically
+    const interval = setInterval(async () => {
+      bookmarkCount = await getBookmarkCount();
+    }, 30000);
+    return () => clearInterval(interval);
+  });
 
   function handleGlobalKeydown(e: KeyboardEvent) {
     // Don't capture when typing in inputs
@@ -37,7 +50,7 @@
     { href: '/drafts', icon: FileText, label: 'Drafts' },
     { href: '/notifications', icon: Bell, label: 'Notifications' },
     { href: '/messages', icon: MessageSquare, label: 'Messages' },
-    { href: '/bookmarks', icon: Bookmark, label: 'Bookmarks' },
+    { href: '/bookmarks', icon: Bookmark, label: 'Bookmarks', badge: () => bookmarkCount > 0 ? bookmarkCount : 0 },
     { href: '/lists', icon: List, label: 'Lists & Feeds' },
     { href: '/starterpacks', icon: Package, label: 'Starter Packs' },
     { href: '/identities', icon: Users, label: 'Identities' },
@@ -94,7 +107,12 @@
                 : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'}"
           >
             <item.icon size={16} class="flex-shrink-0" />
-            {#if !collapsed}<span class="truncate">{item.label}</span>{/if}
+            {#if !collapsed}
+              <span class="truncate flex-1">{item.label}</span>
+              {#if item.badge && item.badge() > 0}
+                <span class="ml-auto text-[9px] px-1.5 py-0.5 bg-[var(--color-primary)] text-white rounded-full min-w-[18px] text-center">{item.badge()}</span>
+              {/if}
+            {/if}
           </a>
         </li>
       {/each}

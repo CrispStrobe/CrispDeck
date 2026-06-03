@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Heart, Repeat, MessageCircle, Quote, Bookmark, Share } from '@lucide/svelte';
+  import { Heart, Repeat, MessageCircle, Quote, Bookmark, Share, Flag } from '@lucide/svelte';
   import { addBookmark, removeBookmark, isBookmarked } from '$lib/bookmarks';
   import { onMount } from 'svelte';
   import type { UnifiedPost } from '$lib/types';
@@ -33,6 +33,15 @@
       // Fallback
       window.open(url, '_blank');
     }
+  }
+
+  function handleReport() {
+    const reason = prompt('Report reason (optional):');
+    if (reason === null) return; // Cancelled
+    // Open the post on the platform's web UI where reporting is handled
+    const url = getPostUrl(post);
+    window.open(url, '_blank');
+    alert('To complete the report, use the platform\'s reporting tool on the opened page.');
   }
 
   async function handleBookmark() {
@@ -142,7 +151,7 @@
   const platformColor = $derived(post.platform === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)');
 </script>
 
-<div class="p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+<div class="group p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
   {#if post.isRepost && post.repostAuthor}
     <div class="text-sm text-[var(--color-text-muted)] flex items-center gap-2 mb-2">
       <Repeat size={14} />
@@ -304,6 +313,14 @@
         title={copied ? 'Copied!' : 'Copy link'}
       >
         <Share size={14} />
+      </button>
+
+      <button
+        onclick={handleReport}
+        class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors opacity-0 group-hover:opacity-100"
+        title="Report"
+      >
+        <Flag size={12} />
       </button>
     </div>
     <a href={getPostUrl(post)} target="_blank" rel="noopener noreferrer" class="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:underline">
