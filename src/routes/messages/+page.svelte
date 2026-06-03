@@ -79,14 +79,16 @@
         try {
           const agent = bsky.getAgent();
           if (!agent.session) throw new Error('Not logged in');
-          // Bluesky DMs: direct XRPC call with proxy header
-          const resp = await fetch(`https://bsky.social/xrpc/chat.bsky.convo.listConvos?limit=50`, {
+          // Bluesky DMs: call api.bsky.chat directly with service auth
+          const resp = await fetch(`https://api.bsky.chat/xrpc/chat.bsky.convo.listConvos?limit=50`, {
             headers: {
               Authorization: `Bearer ${agent.session.accessJwt}`,
-              'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat',
             },
           });
-          if (!resp.ok) throw new Error(`DM API: ${resp.status} ${resp.statusText}`);
+          if (!resp.ok) {
+            const errBody = await resp.text().catch(() => '');
+            throw new Error(`DM API ${resp.status}: ${errBody.substring(0, 100)}`);
+          }
           const data = await resp.json();
           for (const convo of data.convos ?? []) {
             const other = convo.members?.find((m: any) => m.handle !== acct.handle) ?? convo.members?.[0];

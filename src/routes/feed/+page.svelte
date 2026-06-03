@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { listAccounts, getDecryptedCredentials } from '$lib/db';
-  import { Rss, Loader2, Inbox, EyeOff, User, Globe } from '@lucide/svelte';
+  import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal } from '@lucide/svelte';
   import Post from '$lib/components/Post.svelte';
   import CrosspostGroup from '$lib/components/CrosspostGroup.svelte';
   import AdvancedFilters from '$lib/components/AdvancedFilters.svelte';
@@ -21,6 +21,7 @@
   let hideMedia = $state(false);
   let feedMode: FeedMode = $state('timeline');
   let platformFilter: 'all' | 'bluesky' | 'mastodon' = $state('all');
+  let showFilters = $state(false);
 
   let cursors: Record<number, string | undefined> = $state({});
   let loadingMore = $state(false);
@@ -311,10 +312,21 @@
         ><span class="w-1.5 h-1.5 rounded-full bg-[var(--color-mastodon)]"></span> Masto</button>
       </div>
 
-      <label class="flex items-center gap-2 text-sm text-[var(--color-text-muted)] cursor-pointer">
-        <input type="checkbox" bind:checked={hideMedia} class="rounded" />
+      <button
+        onclick={() => showFilters = !showFilters}
+        class="p-1.5 rounded-md transition-colors {showFilters ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+        title="Filters & Sort"
+      >
+        <SlidersHorizontal size={16} />
+      </button>
+
+      <button
+        onclick={() => hideMedia = !hideMedia}
+        class="p-1.5 rounded-md transition-colors {hideMedia ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+        title="Hide media"
+      >
         <EyeOff size={14} />
-      </label>
+      </button>
     </div>
   </div>
 
@@ -336,7 +348,9 @@
       <p class="text-sm text-[var(--color-text-muted)]">Add accounts in <a href="/settings" class="text-[var(--color-primary)] underline">Settings</a> first.</p>
     </div>
   {:else}
-    <AdvancedFilters {filters} onchange={handleFilterChange} />
+    {#if showFilters}
+      <AdvancedFilters {filters} onchange={handleFilterChange} startOpen={true} />
+    {/if}
 
     {#if loading && posts.length === 0}
       <div class="text-center py-12">
