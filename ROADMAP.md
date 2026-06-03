@@ -29,11 +29,12 @@
 - [x] Release v0.1.0: .dmg (macOS ARM), .exe + .msi (Windows)
 - [x] 118 unit + integration tests
 - [x] Alt text editing for images
+- [x] Bluesky thread gates (Anyone / Mentioned / Followers / Nobody)
+- [x] Mastodon polls (create with 2-4 options, multiple choice, expiry)
 
 ## Remaining
 
-- [ ] Mastodon polls (create + vote)
-- [ ] Thread gate settings (Bluesky — control who can reply)
+- [ ] Poll voting on existing polls (Mastodon)
 - [ ] Push notifications (Tauri mobile)
 - [ ] Bluesky labeler interaction
 - [ ] Instance info/rules display (Mastodon)
