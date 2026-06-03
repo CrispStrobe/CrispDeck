@@ -34,6 +34,7 @@
   let sending = $state(false);
   let showNewConvo = $state(false);
   let newConvoHandle = $state('');
+  let bskyDmNote = $state(false);
 
   let clients: Map<number, BlueskyClient | MastodonClient> = new Map();
 
@@ -75,38 +76,10 @@
       if (!acct) continue;
 
       if (acct.platform === 'bluesky') {
-        const bsky = client as BlueskyClient;
-        try {
-          const agent = bsky.getAgent();
-          if (!agent.session) throw new Error('Not logged in');
-
-          // Official Bluesky app approach: proxy header on agent methods
-          const proxyHeaders = { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' };
-          const chatResp = await agent.api.chat.bsky.convo.listConvos(
-            { limit: 50 },
-            { headers: proxyHeaders }
-          );
-          const data = chatResp.data;
-          for (const convo of data.convos ?? []) {
-            const other = convo.members?.find((m: any) => m.handle !== acct.handle) ?? convo.members?.[0];
-            all.push({
-              id: convo.id,
-              platform: 'bluesky',
-              participant: { handle: other?.handle ?? '?', displayName: other?.displayName, avatar: other?.avatar },
-              lastMessage: convo.lastMessage?.text,
-              lastDate: convo.lastMessage?.sentAt,
-              unread: (convo.unreadCount ?? 0) > 0,
-            });
-          }
-        } catch (e) {
-          console.error('Bluesky DMs:', e);
-          const msg = String(e);
-          if (msg.includes('insufficient access') || msg.includes('BadToken') || msg.includes('InvalidToken')) {
-            error = 'Bluesky DMs require an app password with chat permissions. Some app passwords may not have DM access — try creating a new one.';
-          } else {
-            error = (error ? error + '\n' : '') + `Bluesky DMs: ${e}`;
-          }
-        }
+        // Bluesky DMs are not available with app passwords.
+        // The chat API requires OAuth (full session), which app passwords don't provide.
+        // Skip silently — Mastodon DMs will still load below.
+        bskyDmNote = true;
       } else {
         const masto = client as MastodonClient;
         const token = masto.getAccessToken();
@@ -153,25 +126,8 @@
 
     try {
       if (convo.platform === 'bluesky') {
-        for (const [id, client] of clients) {
-          const acct = accounts.find(a => a.id === id);
-          if (acct?.platform !== 'bluesky') continue;
-          const agent = (client as BlueskyClient).getAgent();
-          if (!agent.session) break;
-          const proxyHeaders = { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' };
-          const msgResp = await agent.api.chat.bsky.convo.getMessages(
-            { convoId: convo.id, limit: 50 },
-            { headers: proxyHeaders }
-          );
-          messages = (msgResp.data.messages ?? []).map((m: any) => ({
-            id: m.id,
-            text: m.text,
-            sender: { handle: m.sender?.handle ?? '?', displayName: m.sender?.displayName, avatar: m.sender?.avatar },
-            createdAt: m.sentAt,
-            isOurs: m.sender?.handle === acct.handle,
-          })).reverse();
-          break;
-        }
+        // Can't load Bluesky DM messages with app passwords
+        messages = [{ id: 'note', text: 'Bluesky DMs require OAuth. App passwords cannot access chat.', sender: { handle: 'system' }, createdAt: new Date().toISOString(), isOurs: false }];
       } else {
         // Mastodon DMs are just statuses with direct visibility
         // The conversation endpoint gives the last status, we'd need to fetch the context
@@ -197,18 +153,7 @@
     sending = true;
     try {
       if (selectedConvo.platform === 'bluesky') {
-        for (const [id, client] of clients) {
-          const acct = accounts.find(a => a.id === id);
-          if (acct?.platform !== 'bluesky') continue;
-          const agent = (client as BlueskyClient).getAgent();
-          if (!agent.session) throw new Error('Not logged in');
-          const proxyHeaders = { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' };
-          await agent.api.chat.bsky.convo.sendMessage(
-            { convoId: selectedConvo.id, message: { text: newMessage.trim() } },
-            { encoding: 'application/json', headers: proxyHeaders }
-          );
-          break;
-        }
+        throw new Error('Bluesky DMs require OAuth — not available with app passwords');
       } else {
         // Mastodon: create a status with direct visibility mentioning the user
         for (const [id, client] of clients) {
@@ -279,6 +224,11 @@
 
   {#if error}
     <div class="mx-4 mt-2 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">{error}</div>
+  {/if}
+  {#if bskyDmNote}
+    <div class="mx-4 mt-2 p-3 bg-blue-900/30 border border-blue-700/30 rounded-lg text-blue-300 text-xs">
+      Bluesky DMs are not available with app passwords. Bluesky requires OAuth for chat access, which CrispDeck doesn't support yet. Mastodon DMs work normally.
+    </div>
   {/if}
 
   {#if loading}
