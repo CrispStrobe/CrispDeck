@@ -5,6 +5,11 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig(async () => ({
   plugins: [sveltekit(), tailwindcss()],
 
+  test: {
+    include: ['src/**/*.test.ts'],
+    environment: 'node',
+  },
+
   clearScreen: false,
   server: {
     port: 1420,
