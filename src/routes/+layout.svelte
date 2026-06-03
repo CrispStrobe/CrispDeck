@@ -2,7 +2,7 @@
   import '../app.css';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import { Home, Rss, Columns3, PenSquare, FileText, Bell, MessageSquare, Users, Search, List, Package, Shield, TrendingUp, Archive, BarChart3, Settings, ChevronsLeft, ChevronsRight, Menu, X } from '@lucide/svelte';
+  import { Home, Rss, Columns3, PenSquare, FileText, Bell, MessageSquare, Bookmark, Users, Search, List, Package, Shield, TrendingUp, Archive, BarChart3, Settings, ChevronsLeft, ChevronsRight, Menu, X } from '@lucide/svelte';
   import KeyboardShortcuts from '$lib/components/KeyboardShortcuts.svelte';
 
   let { children } = $props();
@@ -37,6 +37,7 @@
     { href: '/drafts', icon: FileText, label: 'Drafts' },
     { href: '/notifications', icon: Bell, label: 'Notifications' },
     { href: '/messages', icon: MessageSquare, label: 'Messages' },
+    { href: '/bookmarks', icon: Bookmark, label: 'Bookmarks' },
     { href: '/lists', icon: List, label: 'Lists & Feeds' },
     { href: '/starterpacks', icon: Package, label: 'Starter Packs' },
     { href: '/identities', icon: Users, label: 'Identities' },

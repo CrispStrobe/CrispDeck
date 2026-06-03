@@ -61,6 +61,14 @@ export class BlueskyClient {
     return { feed: resp.data.feed, cursor: resp.data.cursor };
   }
 
+  /** Get a post thread (parent chain + replies) */
+  async getPostThread(uri: string, depth: number = 6) {
+    const resp = await this.publicAgent.api.app.bsky.feed.getPostThread({
+      uri, depth, parentHeight: 10,
+    });
+    return resp.data.thread;
+  }
+
   /** Get the home timeline (posts from people you follow). Requires auth. */
   async getTimeline(cursor?: string) {
     await this.login();

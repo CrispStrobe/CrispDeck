@@ -75,6 +75,19 @@ export class MastodonClient {
     return snakeToCamel(data) as MastodonPost[];
   }
 
+  /** Get context (ancestors + descendants) of a status */
+  async getStatusContext(statusId: string): Promise<{ ancestors: MastodonPost[]; descendants: MastodonPost[] }> {
+    const resp = await this.fetchPublic<{ ancestors: MastodonPost[]; descendants: MastodonPost[] }>(
+      `/api/v1/statuses/${statusId}/context`
+    );
+    return resp;
+  }
+
+  /** Get a single status by ID */
+  async getStatus(statusId: string): Promise<MastodonPost> {
+    return this.fetchPublic<MastodonPost>(`/api/v1/statuses/${statusId}`);
+  }
+
   async verifyCredentials(): Promise<mastodon.v1.Account> {
     if (!this.client) throw new Error('Not authenticated');
     return this.client.v1.accounts.verifyCredentials();

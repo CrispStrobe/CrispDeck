@@ -144,6 +144,44 @@
     }
   }
 
+  async function blockUser() {
+    const client = getClient();
+    if (!client) return;
+    try {
+      if (platform === 'bluesky' && profile.did) {
+        await (client as BlueskyClient).getAgent().api.app.bsky.graph.muteActor({ actor: profile.did });
+      } else if (platform === 'mastodon' && profile._mastodonId) {
+        const masto = client as MastodonClient;
+        const token = masto.getAccessToken();
+        if (token) {
+          await fetch(`${masto.getInstanceUrl()}/api/v1/accounts/${profile._mastodonId}/block`, {
+            method: 'POST', headers: { Authorization: `Bearer ${token}` },
+          });
+        }
+      }
+      error = 'User blocked.';
+    } catch (e) { error = String(e); }
+  }
+
+  async function muteUser() {
+    const client = getClient();
+    if (!client) return;
+    try {
+      if (platform === 'bluesky' && profile.did) {
+        await (client as BlueskyClient).getAgent().api.app.bsky.graph.muteActor({ actor: profile.did });
+      } else if (platform === 'mastodon' && profile._mastodonId) {
+        const masto = client as MastodonClient;
+        const token = masto.getAccessToken();
+        if (token) {
+          await fetch(`${masto.getInstanceUrl()}/api/v1/accounts/${profile._mastodonId}/mute`, {
+            method: 'POST', headers: { Authorization: `Bearer ${token}` },
+          });
+        }
+      }
+      error = 'User muted.';
+    } catch (e) { error = String(e); }
+  }
+
   const filteredPosts = $derived(() => {
     switch (activeTab) {
       case 'replies': return posts.filter(p => p.replyParentUri);
@@ -193,6 +231,8 @@
           >
             {#if following}<UserMinus size={14} /> Following{:else}<UserPlus size={14} /> Follow{/if}
           </button>
+          <button onclick={muteUser} class="px-3 py-2 text-xs border border-[var(--color-border)] rounded-md text-[var(--color-text-muted)] hover:text-yellow-400 hover:border-yellow-500 transition-colors" title="Mute">Mute</button>
+          <button onclick={blockUser} class="px-3 py-2 text-xs border border-[var(--color-border)] rounded-md text-[var(--color-text-muted)] hover:text-red-400 hover:border-red-500 transition-colors" title="Block">Block</button>
         </div>
         {#if profile.description}
           <p class="text-sm text-[var(--color-text)] mt-2">{profile.description}</p>

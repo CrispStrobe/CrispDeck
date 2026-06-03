@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { Heart, Repeat, MessageCircle, Quote } from '@lucide/svelte';
+  import { Heart, Repeat, MessageCircle, Quote, Bookmark } from '@lucide/svelte';
+  import { addBookmark, removeBookmark, isBookmarked } from '$lib/bookmarks';
+  import { onMount } from 'svelte';
   import type { UnifiedPost } from '$lib/types';
 
   let { post, hideMedia = false, onlike, onboost, onreply, onquote }: {
@@ -13,6 +15,20 @@
 
   let liked = $state(false);
   let boosted = $state(false);
+  let bookmarked = $state(false);
+
+  onMount(async () => {
+    bookmarked = await isBookmarked(post.uri);
+  });
+
+  async function handleBookmark() {
+    if (bookmarked) {
+      await removeBookmark(post.uri);
+    } else {
+      await addBookmark(post);
+    }
+    bookmarked = !bookmarked;
+  }
   let localLikeCount = $state(post.likeCount ?? 0);
   let localBoostCount = $state(post.repostCount ?? 0);
 
@@ -49,6 +65,15 @@
       return account?.url ?? '#';
     }
     return `https://bsky.app/profile/${p.author.handle}`;
+  }
+
+  function getThreadUrl(p: UnifiedPost): string {
+    if (p.platform === 'mastodon') {
+      const raw = p.raw as any;
+      const id = raw.reblog?.id ?? raw.id ?? '';
+      return `/thread?id=${id}&platform=mastodon`;
+    }
+    return `/thread?uri=${encodeURIComponent(p.uri)}&platform=bluesky`;
   }
 
   function getPostUrl(p: UnifiedPost): string {
@@ -129,7 +154,7 @@
         <span class="text-[var(--color-text-muted)] text-xs truncate">{post.author.handle}</span>
         <span class="w-2 h-2 rounded-full flex-shrink-0" style="background: {platformColor}"></span>
       </a>
-      <div class="min-w-0">
+      <a href={getThreadUrl(post)} class="block min-w-0 hover:bg-[var(--color-surface-hover)]/30 rounded -mx-1 px-1 transition-colors">
         {#if post.platform === 'mastodon' && mastodonHtml}
           <div class="text-sm text-[var(--color-text)] break-words prose-invert [&_a]:text-blue-400 [&_a]:hover:underline">
             {@html mastodonHtml}
@@ -137,7 +162,7 @@
         {:else}
           <p class="text-sm text-[var(--color-text)] whitespace-pre-wrap break-words">{post.text}</p>
         {/if}
-      </div>
+      </a>
     </div>
   </div>
 
@@ -249,6 +274,14 @@
       >
         <Heart size={14} class={liked ? 'fill-current' : ''} />
         <span class="text-xs">{localLikeCount}</span>
+      </button>
+
+      <button
+        onclick={handleBookmark}
+        class="flex items-center gap-1.5 transition-colors {bookmarked ? 'text-yellow-400' : 'text-[var(--color-text-muted)]'} hover:text-yellow-400"
+        title={bookmarked ? 'Remove bookmark' : 'Bookmark'}
+      >
+        <Bookmark size={14} class={bookmarked ? 'fill-current' : ''} />
       </button>
     </div>
     <a href={getPostUrl(post)} target="_blank" rel="noopener noreferrer" class="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:underline">
