@@ -48,7 +48,9 @@ export function normalizePost(post: PlatformPost, platform: 'bluesky' | 'mastodo
       uri: target.uri,
       text: target.content.replace(/<[^>]*>?/gm, ''),
       author: {
-        handle: `@${target.account.acct}@${new URL(target.account.url).hostname}`,
+        handle: target.account.acct.includes('@')
+          ? `@${target.account.acct}`
+          : `@${target.account.acct}@${new URL(target.account.url).hostname}`,
         displayName: target.account.displayName,
         avatar: target.account.avatar,
       },
@@ -61,7 +63,9 @@ export function normalizePost(post: PlatformPost, platform: 'bluesky' | 'mastodo
       isRepost: !!item.reblog,
       repostAuthor: item.reblog
         ? {
-            handle: `@${item.account.acct}@${new URL(item.account.url).hostname}`,
+            handle: item.account.acct.includes('@')
+              ? `@${item.account.acct}`
+              : `@${item.account.acct}@${new URL(item.account.url).hostname}`,
             displayName: item.account.displayName,
           }
         : undefined,
