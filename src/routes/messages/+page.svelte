@@ -90,10 +90,17 @@
             );
             for (const convo of chatResp.data.convos ?? []) {
               const other = convo.members?.find((m: any) => m.handle !== acct.handle) ?? convo.members?.[0];
+              const handle = other?.handle ?? '?';
+              const isDeleted = handle === 'missing.invalid' || handle === 'handle.invalid';
+              const isBlocked = convo.muted || false;
               all.push({
                 id: convo.id,
                 platform: 'bluesky',
-                participant: { handle: other?.handle ?? '?', displayName: other?.displayName, avatar: other?.avatar },
+                participant: {
+                  handle: isDeleted ? 'Deleted account' : handle,
+                  displayName: isDeleted ? 'Deleted account' : isBlocked ? `${other?.displayName ?? handle} (blocked)` : other?.displayName,
+                  avatar: isDeleted ? undefined : other?.avatar,
+                },
                 lastMessage: (convo.lastMessage as any)?.text,
                 lastDate: (convo.lastMessage as any)?.sentAt,
                 unread: (convo.unreadCount ?? 0) > 0,
