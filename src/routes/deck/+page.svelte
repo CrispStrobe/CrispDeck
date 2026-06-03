@@ -69,18 +69,20 @@
       const layouts = localStorage.getItem('crispdeck-deck-layouts');
       if (layouts) savedLayouts = JSON.parse(layouts);
 
-      // Load all columns
-      await Promise.all(columns.map(col => loadColumn(col)));
+      // Load columns one by one (show as they load, don't block all)
+      loading = false;
+      for (const col of columns) {
+        loadColumn(col); // fire and forget — each shows its own spinner
+      }
     } catch (e) {
       console.error('Deck init failed:', e);
-    } finally {
       loading = false;
     }
 
-    // Auto-refresh every 2 minutes
+    // Auto-refresh every 3 minutes (not 2 — less aggressive)
     const interval = setInterval(() => {
       columns.forEach(col => loadColumn(col));
-    }, 120000);
+    }, 180000);
     return () => clearInterval(interval);
   });
 
