@@ -16,6 +16,9 @@ export interface ComposeOptions {
   visibility?: 'public' | 'unlisted' | 'private' | 'direct';
   contentWarning?: string;
   mediaFiles?: File[];
+  quoteUri?: string;   // AT Protocol URI of quoted post
+  quoteCid?: string;   // CID of quoted post
+  quoteUrl?: string;   // Web URL for Mastodon (appended to text)
 }
 
 /** Post to Bluesky using the AT Protocol */
@@ -53,9 +56,30 @@ export async function postToBluesky(
         });
       }
 
+      if (options.quoteUri && options.quoteCid) {
+        // Images + quote: use recordWithMedia embed
+        record.embed = {
+          $type: 'app.bsky.embed.recordWithMedia',
+          record: {
+            $type: 'app.bsky.embed.record',
+            record: { uri: options.quoteUri, cid: options.quoteCid },
+          },
+          media: {
+            $type: 'app.bsky.embed.images',
+            images,
+          },
+        };
+      } else {
+        record.embed = {
+          $type: 'app.bsky.embed.images',
+          images,
+        };
+      }
+    } else if (options.quoteUri && options.quoteCid) {
+      // Quote without images
       record.embed = {
-        $type: 'app.bsky.embed.images',
-        images,
+        $type: 'app.bsky.embed.record',
+        record: { uri: options.quoteUri, cid: options.quoteCid },
       };
     }
 
@@ -116,7 +140,7 @@ export async function postToMastodon(
 
     // Create the status
     const body: Record<string, unknown> = {
-      status: options.text,
+      status: options.quoteUrl ? `${options.text}\n\n${options.quoteUrl}` : options.text,
       visibility: options.visibility ?? 'public',
     };
 

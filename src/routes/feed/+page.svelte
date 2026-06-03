@@ -234,10 +234,17 @@
   }
 
   function handleReply(post: UnifiedPost) {
-    // Navigate to compose with reply context
     const replyTo = encodeURIComponent(post.uri);
     const author = encodeURIComponent(post.author.handle);
     window.location.href = `/compose?replyTo=${replyTo}&author=${author}&platform=${post.platform}`;
+  }
+
+  function handleQuote(post: UnifiedPost) {
+    const quoteUri = encodeURIComponent(post.uri);
+    const quoteCid = encodeURIComponent((post.raw as any)?.post?.cid ?? '');
+    const author = encodeURIComponent(post.author.handle);
+    const text = encodeURIComponent(post.text.substring(0, 100));
+    window.location.href = `/compose?quoteUri=${quoteUri}&quoteCid=${quoteCid}&quoteAuthor=${author}&quoteText=${text}&platform=${post.platform}`;
   }
 
   function handleFilterChange(newFilters: Partial<Filters>) {
@@ -330,7 +337,7 @@
           {#if isCrosspostGroup(item)}
             <CrosspostGroup group={item} {hideMedia} />
           {:else}
-            <Post post={item} {hideMedia} onlike={handleLike} onboost={handleBoost} onreply={handleReply} />
+            <Post post={item} {hideMedia} onlike={handleLike} onboost={handleBoost} onreply={handleReply} onquote={handleQuote} />
           {/if}
         {/each}
       </div>

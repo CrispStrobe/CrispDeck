@@ -1,13 +1,14 @@
 <script lang="ts">
-  import { Heart, Repeat, MessageCircle, Reply } from '@lucide/svelte';
+  import { Heart, Repeat, MessageCircle, Quote } from '@lucide/svelte';
   import type { UnifiedPost } from '$lib/types';
 
-  let { post, hideMedia = false, onlike, onboost, onreply }: {
+  let { post, hideMedia = false, onlike, onboost, onreply, onquote }: {
     post: UnifiedPost;
     hideMedia?: boolean;
     onlike?: (post: UnifiedPost) => void;
     onboost?: (post: UnifiedPost) => void;
     onreply?: (post: UnifiedPost) => void;
+    onquote?: (post: UnifiedPost) => void;
   } = $props();
 
   let liked = $state(false);
@@ -208,6 +209,16 @@
         <Repeat size={14} />
         <span class="text-xs">{localBoostCount}</span>
       </button>
+
+      {#if onquote}
+        <button
+          onclick={() => onquote?.(post)}
+          class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-purple-400 transition-colors"
+          title="Quote"
+        >
+          <Quote size={14} />
+        </button>
+      {/if}
 
       <button
         onclick={handleLike}

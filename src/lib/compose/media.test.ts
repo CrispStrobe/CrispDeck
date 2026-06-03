@@ -29,8 +29,21 @@ describe('validateMediaFile', () => {
     expect(result).toContain('Unsupported file type');
   });
 
-  it('rejects video files', () => {
-    const result = validateMediaFile(makeFile('video.mp4', 'video/mp4', 1024));
+  it('accepts MP4 video', () => {
+    expect(validateMediaFile(makeFile('video.mp4', 'video/mp4', 1024))).toBeNull();
+  });
+
+  it('accepts WebM video', () => {
+    expect(validateMediaFile(makeFile('video.webm', 'video/webm', 1024))).toBeNull();
+  });
+
+  it('rejects video over 100MB', () => {
+    const result = validateMediaFile(makeFile('huge.mp4', 'video/mp4', 101 * 1024 * 1024));
+    expect(result).toContain('too large');
+  });
+
+  it('rejects unsupported video format', () => {
+    const result = validateMediaFile(makeFile('video.avi', 'video/x-msvideo', 1024));
     expect(result).toContain('Unsupported file type');
   });
 

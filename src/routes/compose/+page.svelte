@@ -30,6 +30,12 @@
   let replyAuthor = $state('');
   let replyPlatform = $state('');
   let editingDraftId: number | null = $state(null);
+
+  // Quote context
+  let quoteUri = $state('');
+  let quoteCid = $state('');
+  let quoteAuthor = $state('');
+  let quoteText = $state('');
   let textareaEl: HTMLTextAreaElement | undefined = $state();
   let mentionAutocomplete: MentionAutocomplete | undefined = $state();
   let mediaPreviews: string[] = $state([]);
@@ -71,6 +77,12 @@
       if (replyAuthor && !text) {
         text = `@${replyAuthor} `;
       }
+
+      // Quote context
+      quoteUri = params.get('quoteUri') ?? '';
+      quoteCid = params.get('quoteCid') ?? '';
+      quoteAuthor = params.get('quoteAuthor') ?? '';
+      quoteText = params.get('quoteText') ?? '';
     } catch (e) {
       error = String(e);
     } finally {
@@ -147,10 +159,21 @@
       })
       .filter((t): t is NonNullable<typeof t> => t !== null);
 
+    // Build quote URL for Mastodon (Bluesky uses embed record)
+    let quoteUrl: string | undefined;
+    if (quoteUri && quoteAuthor) {
+      // Construct a bsky.app URL for the quoted post
+      const rkey = quoteUri.split('/').pop();
+      quoteUrl = `https://bsky.app/profile/${quoteAuthor}/post/${rkey}`;
+    }
+
     const options: Omit<ComposeOptions, 'text'> = {
       visibility,
       contentWarning: showCW ? contentWarning : undefined,
       mediaFiles: mediaFiles.length > 0 ? mediaFiles : undefined,
+      quoteUri: quoteUri || undefined,
+      quoteCid: quoteCid || undefined,
+      quoteUrl,
     };
 
     try {
@@ -259,6 +282,17 @@
           <div class="p-3 bg-blue-950/30 border-l-4 border-blue-500 rounded-r-lg text-sm">
             <span class="text-blue-300">Replying to</span>
             <a href="/profile?handle={encodeURIComponent(replyAuthor)}&platform={replyPlatform}" class="font-medium text-blue-400 hover:underline ml-1">@{replyAuthor}</a>
+          </div>
+        {/if}
+
+        <!-- Quote context -->
+        {#if quoteUri}
+          <div class="p-3 bg-purple-950/30 border-l-4 border-purple-500 rounded-r-lg text-sm">
+            <span class="text-purple-300">Quoting</span>
+            <span class="font-medium text-purple-400 ml-1">@{quoteAuthor}</span>
+            {#if quoteText}
+              <p class="text-xs text-[var(--color-text-muted)] mt-1 line-clamp-2">{quoteText}</p>
+            {/if}
           </div>
         {/if}
 
