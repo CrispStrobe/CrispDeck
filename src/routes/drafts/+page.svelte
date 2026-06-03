@@ -256,6 +256,13 @@
                 </div>
               </div>
               <div class="flex items-center gap-1 flex-shrink-0">
+                <a
+                  href="/compose?draft={draft.id}"
+                  class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors"
+                  title="Edit"
+                >
+                  <Edit3 size={14} />
+                </a>
                 <button
                   onclick={() => postDraft(draft)}
                   disabled={posting === draft.id}

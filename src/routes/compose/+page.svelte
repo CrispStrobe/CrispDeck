@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { listAccounts, getDecryptedCredentials, logCrosspost, saveDraft as dbSaveDraft } from '$lib/db';
+  import { listAccounts, getDecryptedCredentials, logCrosspost, saveDraft as dbSaveDraft, listDrafts, deleteDraft as dbDeleteDraft } from '$lib/db';
   import { PenSquare, Send, Loader2, X, ImagePlus, AlertTriangle, Check } from '@lucide/svelte';
   import AccountPicker from '$lib/components/AccountPicker.svelte';
   import MentionAutocomplete from '$lib/components/MentionAutocomplete.svelte';
@@ -24,6 +24,12 @@
   let contentWarning = $state('');
   let showCW = $state(false);
   let mediaFiles: File[] = $state([]);
+
+  // Reply context
+  let replyTo = $state('');
+  let replyAuthor = $state('');
+  let replyPlatform = $state('');
+  let editingDraftId: number | null = $state(null);
   let textareaEl: HTMLTextAreaElement | undefined = $state();
   let mentionAutocomplete: MentionAutocomplete | undefined = $state();
   let mediaPreviews: string[] = $state([]);
@@ -36,6 +42,35 @@
       accounts = await listAccounts();
       selectedAccountIds = accounts.map(a => a.id);
       await initClients();
+
+      // Handle URL params: ?replyTo=...&author=...&platform=... or ?draft=ID
+      const params = new URLSearchParams(window.location.search);
+
+      // Resume editing a draft
+      const draftId = params.get('draft');
+      if (draftId) {
+        const drafts = await listDrafts();
+        const draft = drafts.find(d => d.id === Number(draftId));
+        if (draft) {
+          text = draft.text;
+          visibility = (draft.visibility as typeof visibility) ?? 'public';
+          contentWarning = draft.content_warning ?? '';
+          showCW = !!draft.content_warning;
+          const ids = Array.isArray(draft.target_accounts)
+            ? draft.target_accounts
+            : JSON.parse(draft.target_accounts as unknown as string);
+          selectedAccountIds = ids;
+          editingDraftId = draft.id;
+        }
+      }
+
+      // Reply context
+      replyTo = params.get('replyTo') ?? '';
+      replyAuthor = params.get('author') ?? '';
+      replyPlatform = params.get('platform') ?? '';
+      if (replyAuthor && !text) {
+        text = `@${replyAuthor} `;
+      }
     } catch (e) {
       error = String(e);
     } finally {
@@ -219,6 +254,22 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <!-- Main editor -->
       <div class="lg:col-span-2 space-y-4">
+        <!-- Reply context -->
+        {#if replyTo}
+          <div class="p-3 bg-blue-950/30 border-l-4 border-blue-500 rounded-r-lg text-sm">
+            <span class="text-blue-300">Replying to</span>
+            <a href="/profile?handle={encodeURIComponent(replyAuthor)}&platform={replyPlatform}" class="font-medium text-blue-400 hover:underline ml-1">@{replyAuthor}</a>
+          </div>
+        {/if}
+
+        <!-- Editing draft indicator -->
+        {#if editingDraftId}
+          <div class="p-2 bg-yellow-950/30 border border-yellow-700/30 rounded-lg text-xs text-yellow-300 flex items-center justify-between">
+            <span>Editing draft #{editingDraftId}</span>
+            <button onclick={async () => { await dbDeleteDraft(editingDraftId!); editingDraftId = null; }} class="text-yellow-400 hover:text-yellow-200 underline">Discard draft</button>
+          </div>
+        {/if}
+
         <!-- Content warning -->
         {#if showCW}
           <div class="flex items-center gap-2">
