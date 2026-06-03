@@ -4,6 +4,8 @@
   import { MessageSquare, Loader2, Send, ArrowLeft } from '@lucide/svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
+  import { resumeBlueskyOAuthSession } from '$lib/api/bluesky-oauth';
+  import { Agent } from '@atproto/api';
   import type { Account } from '$lib/types';
 
   interface Conversation {
@@ -76,10 +78,35 @@
       if (!acct) continue;
 
       if (acct.platform === 'bluesky') {
-        // Bluesky DMs are not available with app passwords.
-        // The chat API requires OAuth (full session), which app passwords don't provide.
-        // Skip silently — Mastodon DMs will still load below.
-        bskyDmNote = true;
+        // Try OAuth session first (enables DMs)
+        const oauthSession = await resumeBlueskyOAuthSession();
+        if (oauthSession) {
+          try {
+            const proxyHeaders = { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' };
+            const agent = oauthSession.agent as any;
+            const chatResp = await agent.api.chat.bsky.convo.listConvos(
+              { limit: 50 },
+              { headers: proxyHeaders }
+            );
+            for (const convo of chatResp.data.convos ?? []) {
+              const other = convo.members?.find((m: any) => m.handle !== acct.handle) ?? convo.members?.[0];
+              all.push({
+                id: convo.id,
+                platform: 'bluesky',
+                participant: { handle: other?.handle ?? '?', displayName: other?.displayName, avatar: other?.avatar },
+                lastMessage: (convo.lastMessage as any)?.text,
+                lastDate: (convo.lastMessage as any)?.sentAt,
+                unread: (convo.unreadCount ?? 0) > 0,
+              });
+            }
+          } catch (e) {
+            console.error('Bluesky OAuth DMs:', e);
+            error = (error ? error + '\n' : '') + `Bluesky DMs: ${e}`;
+          }
+        } else {
+          // App passwords can't access DMs
+          bskyDmNote = true;
+        }
       } else {
         const masto = client as MastodonClient;
         const token = masto.getAccessToken();
@@ -126,8 +153,27 @@
 
     try {
       if (convo.platform === 'bluesky') {
-        // Can't load Bluesky DM messages with app passwords
-        messages = [{ id: 'note', text: 'Bluesky DMs require OAuth. App passwords cannot access chat.', sender: { handle: 'system' }, createdAt: new Date().toISOString(), isOurs: false }];
+        const oauthSession = await resumeBlueskyOAuthSession();
+        if (!oauthSession) {
+          messages = [{ id: 'note', text: 'Bluesky DMs require OAuth. Reconnect your account with OAuth in Settings.', sender: { handle: 'system' }, createdAt: new Date().toISOString(), isOurs: false }];
+        } else {
+          try {
+            const proxyHeaders = { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' };
+            const msgResp = await (oauthSession.agent as any).api.chat.bsky.convo.getMessages(
+              { convoId: convo.id, limit: 50 },
+              { headers: proxyHeaders }
+            );
+            messages = (msgResp.data.messages ?? []).map((m: any) => ({
+              id: m.id,
+              text: m.text,
+              sender: { handle: m.sender?.handle ?? '?', displayName: m.sender?.displayName, avatar: m.sender?.avatar },
+              createdAt: m.sentAt,
+              isOurs: m.sender?.did === oauthSession.did,
+            })).reverse();
+          } catch (e) {
+            messages = [{ id: 'error', text: `Failed to load messages: ${e}`, sender: { handle: 'system' }, createdAt: new Date().toISOString(), isOurs: false }];
+          }
+        }
       } else {
         // Mastodon DMs are just statuses with direct visibility
         // The conversation endpoint gives the last status, we'd need to fetch the context
@@ -153,7 +199,13 @@
     sending = true;
     try {
       if (selectedConvo.platform === 'bluesky') {
-        throw new Error('Bluesky DMs require OAuth — not available with app passwords');
+        const oauthSession = await resumeBlueskyOAuthSession();
+        if (!oauthSession) throw new Error('Bluesky DMs require OAuth — reconnect your account with OAuth in Settings');
+        const proxyHeaders = { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' };
+        await (oauthSession.agent as any).api.chat.bsky.convo.sendMessage(
+          { convoId: selectedConvo.id, message: { text: newMessage.trim() } },
+          { encoding: 'application/json', headers: proxyHeaders }
+        );
       } else {
         // Mastodon: create a status with direct visibility mentioning the user
         for (const [id, client] of clients) {

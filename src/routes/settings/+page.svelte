@@ -5,7 +5,8 @@
     updateAccount as dbUpdateAccount, startMastodonOAuth as dbStartOAuth,
     completeMastodonOAuth as dbCompleteOAuth
   } from '$lib/db';
-  import { Settings, Plus, Trash2, Star, ExternalLink, Loader2 } from '@lucide/svelte';
+  import { Settings, Plus, Trash2, Star, ExternalLink, Loader2, Shield } from '@lucide/svelte';
+  import { startBlueskyOAuth } from '$lib/api/bluesky-oauth';
   import type { Account } from '$lib/types';
 
   let accounts: Account[] = $state([]);
@@ -14,6 +15,7 @@
 
   // Add Bluesky form
   let showBskyForm = $state(false);
+  let bskyAuthMode: 'app-password' | 'oauth' = $state('oauth');
   let bskyHandle = $state('');
   let bskyAppPassword = $state('');
   let bskyLoading = $state(false);
@@ -38,6 +40,20 @@
       error = String(e);
     } finally {
       loading = false;
+    }
+  }
+
+  async function connectBlueskyOAuth() {
+    if (!bskyHandle.trim()) return;
+    bskyLoading = true;
+    error = '';
+    try {
+      const handle = bskyHandle.trim().replace(/^@/, '');
+      await startBlueskyOAuth(handle);
+      // This redirects — execution stops here
+    } catch (e) {
+      error = String(e);
+      bskyLoading = false;
     }
   }
 
@@ -159,6 +175,23 @@
     {#if showBskyForm}
       <div class="mb-4 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
         <div class="space-y-3">
+          <!-- Auth mode toggle -->
+          <div class="flex items-center bg-[var(--color-bg)] rounded-lg border border-[var(--color-border)] p-0.5">
+            <button
+              onclick={() => bskyAuthMode = 'oauth'}
+              class="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {bskyAuthMode === 'oauth' ? 'bg-[var(--color-bluesky)] text-white' : 'text-[var(--color-text-muted)]'}"
+            >
+              <Shield size={12} />
+              OAuth (recommended)
+            </button>
+            <button
+              onclick={() => bskyAuthMode = 'app-password'}
+              class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {bskyAuthMode === 'app-password' ? 'bg-[var(--color-bluesky)] text-white' : 'text-[var(--color-text-muted)]'}"
+            >
+              App Password
+            </button>
+          </div>
+
           <div>
             <label for="bsky-handle" class="block text-sm text-[var(--color-text-muted)] mb-1">Handle</label>
             <input
@@ -169,35 +202,54 @@
               class="w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-bluesky)]"
             />
           </div>
-          <div>
-            <label for="bsky-password" class="block text-sm text-[var(--color-text-muted)] mb-1">App Password</label>
-            <input
-              id="bsky-password"
-              type="password"
-              bind:value={bskyAppPassword}
-              placeholder="xxxx-xxxx-xxxx-xxxx"
-              class="w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-bluesky)]"
-            />
-            <p class="mt-1 text-xs text-[var(--color-text-muted)]">
-              Generate at Settings → App Passwords on bsky.app
+
+          {#if bskyAuthMode === 'oauth'}
+            <p class="text-xs text-[var(--color-text-muted)]">
+              OAuth gives full access including DMs. You'll be redirected to Bluesky to authorize.
             </p>
-          </div>
-          <div class="flex gap-2">
-            <button
-              onclick={addBlueskyAccount}
-              disabled={bskyLoading}
-              class="flex items-center gap-1 px-4 py-2 bg-[var(--color-bluesky)] hover:opacity-90 rounded-md text-sm font-medium transition-opacity disabled:opacity-50"
-            >
-              {#if bskyLoading}<Loader2 size={14} class="animate-spin" />{/if}
-              Add Account
-            </button>
-            <button
-              onclick={() => showBskyForm = false}
-              class="px-4 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
-            >
-              Cancel
-            </button>
-          </div>
+            <div class="flex gap-2">
+              <button
+                onclick={connectBlueskyOAuth}
+                disabled={bskyLoading || !bskyHandle.trim()}
+                class="flex items-center gap-1 px-4 py-2 bg-[var(--color-bluesky)] hover:opacity-90 rounded-md text-sm font-medium transition-opacity disabled:opacity-50"
+              >
+                {#if bskyLoading}<Loader2 size={14} class="animate-spin" />{/if}
+                <Shield size={14} />
+                Connect with OAuth
+              </button>
+              <button onclick={() => showBskyForm = false} class="px-4 py-2 text-sm text-[var(--color-text-muted)]">Cancel</button>
+            </div>
+          {:else}
+            <div>
+              <label for="bsky-password" class="block text-sm text-[var(--color-text-muted)] mb-1">App Password</label>
+              <input
+                id="bsky-password"
+                type="password"
+                bind:value={bskyAppPassword}
+                placeholder="xxxx-xxxx-xxxx-xxxx"
+                class="w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-bluesky)]"
+              />
+              <p class="mt-1 text-xs text-[var(--color-text-muted)]">
+                App passwords don't support DMs. Generate at Settings → App Passwords on bsky.app
+              </p>
+            </div>
+            <div class="flex gap-2">
+              <button
+                onclick={addBlueskyAccount}
+                disabled={bskyLoading}
+                class="flex items-center gap-1 px-4 py-2 bg-[var(--color-bluesky)] hover:opacity-90 rounded-md text-sm font-medium transition-opacity disabled:opacity-50"
+              >
+                {#if bskyLoading}<Loader2 size={14} class="animate-spin" />{/if}
+                Add Account
+              </button>
+              <button
+                onclick={() => showBskyForm = false}
+                class="px-4 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+              >
+                Cancel
+              </button>
+            </div>
+          {/if}
         </div>
       </div>
     {/if}

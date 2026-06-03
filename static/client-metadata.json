@@ -1,0 +1,15 @@
+{
+  "client_id": "https://crispdeck.vercel.app/client-metadata.json",
+  "client_name": "CrispDeck",
+  "client_uri": "https://crispdeck.vercel.app",
+  "logo_uri": "https://crispdeck.vercel.app/favicon.png",
+  "tos_uri": "https://github.com/CrispStrobe/CrispDeck",
+  "policy_uri": "https://github.com/CrispStrobe/CrispDeck",
+  "redirect_uris": ["https://crispdeck.vercel.app/oauth/bsky-callback"],
+  "scope": "atproto transition:generic transition:chat.bsky",
+  "grant_types": ["authorization_code", "refresh_token"],
+  "response_types": ["code"],
+  "application_type": "web",
+  "token_endpoint_auth_method": "none",
+  "dpop_bound_access_tokens": true
+}
