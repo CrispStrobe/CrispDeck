@@ -2,6 +2,20 @@ import { createRestAPIClient, type mastodon } from 'masto';
 
 export type MastodonPost = mastodon.v1.Status;
 
+/** Recursively convert snake_case keys to camelCase (Mastodon API → masto types) */
+function snakeToCamel(obj: unknown): unknown {
+  if (Array.isArray(obj)) return obj.map(snakeToCamel);
+  if (obj !== null && typeof obj === 'object') {
+    return Object.fromEntries(
+      Object.entries(obj as Record<string, unknown>).map(([key, val]) => [
+        key.replace(/_([a-z])/g, (_, c) => c.toUpperCase()),
+        snakeToCamel(val),
+      ])
+    );
+  }
+  return obj;
+}
+
 export class MastodonClient {
   private instanceUrl: string;
   private accessToken: string | null;
@@ -24,7 +38,8 @@ export class MastodonClient {
       if (response.status === 404) throw new Error(`Not found at ${this.instanceUrl}`);
       throw new Error(`Mastodon API error (${response.status}): ${response.statusText}`);
     }
-    return response.json();
+    const data = await response.json();
+    return snakeToCamel(data) as T;
   }
 
   async getAccountByHandle(handle: string): Promise<mastodon.v1.Account> {
