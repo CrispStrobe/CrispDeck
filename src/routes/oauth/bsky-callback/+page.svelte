@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { addAccount } from '$lib/db';
-  import { handleBlueskyOAuthCallback } from '$lib/api/bluesky-oauth';
+  import { initBlueskyOAuth } from '$lib/api/bluesky-oauth';
   import { Loader2, Check, AlertTriangle } from '@lucide/svelte';
 
   let status: 'loading' | 'success' | 'error' = $state('loading');
@@ -10,15 +10,16 @@
 
   onMount(async () => {
     try {
-      const { did, handle, agent } = await handleBlueskyOAuthCallback();
+      // init() processes the OAuth callback params in the URL automatically
+      const result = await initBlueskyOAuth();
+      if (!result) throw new Error('OAuth callback did not return a session. Please try again.');
 
-      // Fetch profile for avatar/display name
+      const { did, agent } = result;
       const profile = await agent.getProfile({ actor: did });
 
-      // Store the account — mark as OAuth (credentials store the auth method)
       await addAccount({
         platform: 'bluesky',
-        handle: profile.data.handle ?? handle,
+        handle: profile.data.handle,
         display_name: profile.data.displayName,
         avatar_url: profile.data.avatar,
         did,

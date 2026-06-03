@@ -9,19 +9,16 @@ import { Agent } from '@atproto/api';
 
 let oauthClient: BrowserOAuthClient | null = null;
 
-const CLIENT_ID = typeof window !== 'undefined'
-  ? `${window.location.origin}/client-metadata.json`
-  : 'https://crispdeck.vercel.app/client-metadata.json';
-
 /** Get or create the OAuth client singleton */
 export function getOAuthClient(): BrowserOAuthClient {
   if (!oauthClient) {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://crispdeck.vercel.app';
     oauthClient = new BrowserOAuthClient({
       clientMetadata: {
-        client_id: CLIENT_ID,
+        client_id: `${origin}/client-metadata.json`,
         client_name: 'CrispDeck',
-        client_uri: typeof window !== 'undefined' ? window.location.origin : 'https://crispdeck.vercel.app',
-        redirect_uris: [`${typeof window !== 'undefined' ? window.location.origin : 'https://crispdeck.vercel.app'}/oauth/bsky-callback`],
+        client_uri: origin,
+        redirect_uris: [`${origin}/oauth/bsky-callback`],
         scope: 'atproto transition:generic transition:chat.bsky',
         grant_types: ['authorization_code', 'refresh_token'],
         response_types: ['code'],
@@ -44,66 +41,39 @@ export async function startBlueskyOAuth(handle: string): Promise<void> {
   // This redirects — execution stops here
 }
 
-/** Handle the OAuth callback — call this on the callback page */
-export async function handleBlueskyOAuthCallback(): Promise<{
-  did: string;
-  handle: string;
-  agent: Agent;
-}> {
-  const client = getOAuthClient();
-  const result = await client.callback(new URLSearchParams(window.location.search));
-
-  // Create an Agent from the OAuth session
-  const agent = new Agent(result.session);
-
-  // Fetch the profile to get the handle
-  const profile = await agent.getProfile({ actor: result.session.did });
-
-  return {
-    did: result.session.did,
-    handle: profile.data.handle,
-    agent,
-  };
-}
-
-/** Resume an existing OAuth session (on page reload) */
-export async function resumeBlueskyOAuthSession(): Promise<{
+/**
+ * Initialize the OAuth client — handles BOTH:
+ * 1. Processing the callback (if current URL has OAuth params)
+ * 2. Resuming an existing session (on subsequent page loads)
+ *
+ * Returns session info if available, null otherwise.
+ */
+export async function initBlueskyOAuth(): Promise<{
   did: string;
   agent: Agent;
 } | null> {
   try {
     const client = getOAuthClient();
     const result = await client.init();
+
     if (result?.session) {
       const agent = new Agent(result.session);
-      return { did: result.session.did, agent };
+      return {
+        did: result.session.did,
+        agent,
+      };
     }
   } catch (e) {
-    console.error('Failed to resume Bluesky OAuth session:', e);
+    console.error('Bluesky OAuth init failed:', e);
   }
   return null;
 }
 
 /** Check if there's an active OAuth session */
 export async function hasBlueskyOAuthSession(): Promise<boolean> {
-  try {
-    const client = getOAuthClient();
-    const result = await client.init();
-    return !!result?.session;
-  } catch {
-    return false;
-  }
+  const result = await initBlueskyOAuth();
+  return result !== null;
 }
 
-/** Sign out from OAuth */
-export async function signOutBlueskyOAuth(): Promise<void> {
-  try {
-    const client = getOAuthClient();
-    // Clear any stored sessions
-    const result = await client.init();
-    if (result?.session) {
-      // The BrowserOAuthClient handles cleanup internally
-    }
-  } catch {}
-  oauthClient = null;
-}
+/** Resume an existing session (alias for init) */
+export const resumeBlueskyOAuthSession = initBlueskyOAuth;
