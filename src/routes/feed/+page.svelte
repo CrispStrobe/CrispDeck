@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { listAccounts, getDecryptedCredentials } from '$lib/db';
   import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal } from '@lucide/svelte';
   import Post from '$lib/components/Post.svelte';
   import CrosspostGroup from '$lib/components/CrosspostGroup.svelte';
   import AdvancedFilters from '$lib/components/AdvancedFilters.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
+  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { normalizePost, filterPosts, sortPosts, detectCrossposts } from '$lib/api/unified';
   import type { UnifiedPost, FeedItem, Filters, Account, CrosspostGroup as CrosspostGroupType } from '$lib/types';
 
@@ -35,7 +35,7 @@
     minLikes: 0,
   });
 
-  let clients: Map<number, BlueskyClient | MastodonClient> = new Map();
+  let clientEntries: Map<number, ClientEntry> = new Map();
 
   // Infinite scroll
   let scrollSentinel: HTMLDivElement | undefined = $state();
@@ -43,9 +43,10 @@
 
   onMount(async () => {
     try {
-      accounts = await listAccounts();
+      const result = await initAllClients();
+      accounts = result.accounts;
+      clientEntries = result.clients;
       if (accounts.length > 0) {
-        await initClients();
         await loadFeed();
       }
     } catch (e) {
@@ -69,28 +70,6 @@
     observer.observe(scrollSentinel);
   });
 
-  async function initClients() {
-    for (const acct of accounts) {
-      try {
-        const credsJson = await getDecryptedCredentials(acct.id);
-        const creds = JSON.parse(credsJson);
-
-        if (acct.platform === 'bluesky') {
-          const client = new BlueskyClient(acct.handle, creds.app_password);
-          await client.login();
-          clients.set(acct.id, client);
-        } else {
-          clients.set(acct.id, new MastodonClient(
-            acct.instance_url ?? `https://${acct.handle.split('@').pop()}`,
-            creds.access_token,
-          ));
-        }
-      } catch (e) {
-        console.error(`Failed to init client for ${acct.handle}:`, e);
-      }
-    }
-  }
-
   async function loadFeed() {
     loading = true;
     posts = [];
@@ -99,22 +78,37 @@
 
     for (const acct of accounts) {
       try {
-        const client = clients.get(acct.id);
-        if (!client) continue;
+        const entry = clientEntries.get(acct.id);
+        if (!entry) continue;
 
         if (acct.platform === 'bluesky') {
-          const bsky = client as BlueskyClient;
           if (feedMode === 'timeline') {
-            const result = await bsky.getTimeline();
-            allPosts.push(...result.feed.map(p => normalizePost(p, 'bluesky')));
-            cursors[acct.id] = result.cursor;
+            // Use OAuth agent for timeline if available (has full access)
+            if (entry.oauthAgent) {
+              const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 50 });
+              allPosts.push(...r.data.feed.map(p => normalizePost(p, 'bluesky')));
+              cursors[acct.id] = r.data.cursor;
+            } else {
+              const bsky = entry.client as BlueskyClient;
+              try {
+                const result = await bsky.getTimeline();
+                allPosts.push(...result.feed.map(p => normalizePost(p, 'bluesky')));
+                cursors[acct.id] = result.cursor;
+              } catch {
+                // Fall back to author feed if timeline auth fails
+                const result = await bsky.getAuthorFeed(acct.handle);
+                allPosts.push(...result.feed.map(p => normalizePost(p, 'bluesky')));
+                cursors[acct.id] = result.cursor;
+              }
+            }
           } else {
+            const bsky = entry.client as BlueskyClient;
             const result = await bsky.getAuthorFeed(acct.handle);
             allPosts.push(...result.feed.map(p => normalizePost(p, 'bluesky')));
             cursors[acct.id] = result.cursor;
           }
         } else {
-          const masto = client as MastodonClient;
+          const masto = entry.client as MastodonClient;
           if (feedMode === 'timeline') {
             const statuses = await masto.getHomeTimeline();
             allPosts.push(...statuses.map(p => normalizePost(p, 'mastodon')));
@@ -147,23 +141,23 @@
       const cursor = cursors[acct.id];
       if (!cursor) continue;
 
-      const client = clients.get(acct.id);
-      if (!client) continue;
+      const entry = clientEntries.get(acct.id);
+      if (!entry) continue;
 
       try {
         if (acct.platform === 'bluesky') {
-          const bsky = client as BlueskyClient;
-          if (feedMode === 'timeline') {
-            const result = await bsky.getTimeline(cursor);
-            newPosts.push(...result.feed.map(p => normalizePost(p, 'bluesky')));
-            cursors[acct.id] = result.cursor;
+          if (feedMode === 'timeline' && entry.oauthAgent) {
+            const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 50, cursor });
+            newPosts.push(...r.data.feed.map(p => normalizePost(p, 'bluesky')));
+            cursors[acct.id] = r.data.cursor;
           } else {
+            const bsky = entry.client as BlueskyClient;
             const result = await bsky.getAuthorFeed(acct.handle, cursor);
             newPosts.push(...result.feed.map(p => normalizePost(p, 'bluesky')));
             cursors[acct.id] = result.cursor;
           }
         } else {
-          const masto = client as MastodonClient;
+          const masto = entry.client as MastodonClient;
           if (feedMode === 'timeline') {
             const statuses = await masto.getHomeTimeline(cursor);
             newPosts.push(...statuses.map(p => normalizePost(p, 'mastodon')));
@@ -194,19 +188,18 @@
   }
 
   async function handleLike(post: UnifiedPost) {
-    // Find the client for this post's platform
-    for (const [id, client] of clients) {
-      const acct = accounts.find(a => a.id === id);
-      if (acct?.platform !== post.platform) continue;
+    for (const [, entry] of clientEntries) {
+      if (entry.platform !== post.platform) continue;
       try {
         if (post.platform === 'bluesky') {
-          const bsky = client as BlueskyClient;
           const raw = post.raw as any;
-          await bsky.like(raw.post.uri, raw.post.cid);
+          if (entry.oauthAgent) {
+            await entry.oauthAgent.like(raw.post.uri, raw.post.cid);
+          } else {
+            await (entry.client as BlueskyClient).like(raw.post.uri, raw.post.cid);
+          }
         } else {
-          const masto = client as MastodonClient;
-          const raw = post.raw as any;
-          await masto.favourite(raw.id);
+          await (entry.client as MastodonClient).favourite((post.raw as any).id);
         }
         return;
       } catch (e) {
@@ -216,18 +209,18 @@
   }
 
   async function handleBoost(post: UnifiedPost) {
-    for (const [id, client] of clients) {
-      const acct = accounts.find(a => a.id === id);
-      if (acct?.platform !== post.platform) continue;
+    for (const [, entry] of clientEntries) {
+      if (entry.platform !== post.platform) continue;
       try {
         if (post.platform === 'bluesky') {
-          const bsky = client as BlueskyClient;
           const raw = post.raw as any;
-          await bsky.repost(raw.post.uri, raw.post.cid);
+          if (entry.oauthAgent) {
+            await entry.oauthAgent.repost(raw.post.uri, raw.post.cid);
+          } else {
+            await (entry.client as BlueskyClient).repost(raw.post.uri, raw.post.cid);
+          }
         } else {
-          const masto = client as MastodonClient;
-          const raw = post.raw as any;
-          await masto.reblog(raw.id);
+          await (entry.client as MastodonClient).reblog((post.raw as any).id);
         }
         return;
       } catch (e) {
