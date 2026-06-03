@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { listAccounts, getDecryptedCredentials, logCrosspost, saveDraft as dbSaveDraft, listDrafts, deleteDraft as dbDeleteDraft } from '$lib/db';
-  import { PenSquare, Send, Loader2, X, ImagePlus, AlertTriangle, Check } from '@lucide/svelte';
+  import { PenSquare, Send, Loader2, X, ImagePlus, AlertTriangle, Check, BarChart3, Shield } from '@lucide/svelte';
   import AccountPicker from '$lib/components/AccountPicker.svelte';
   import MentionAutocomplete from '$lib/components/MentionAutocomplete.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
-  import { crosspostThread, graphemeLength, type PostResult, type ComposeOptions } from '$lib/compose/adapter';
+  import { crosspostThread, graphemeLength, type PostResult, type ComposeOptions, type ThreadGate, type PollOptions } from '$lib/compose/adapter';
   import { splitForPlatform, planThread, type ThreadPlan } from '$lib/compose/thread';
   import { validateMediaFile, createPreviewUrl, revokePreviewUrl } from '$lib/compose/media';
   import type { Account, Platform } from '$lib/types';
@@ -30,6 +30,15 @@
   let replyAuthor = $state('');
   let replyPlatform = $state('');
   let editingDraftId: number | null = $state(null);
+
+  // Thread gate (Bluesky)
+  let threadGate: ThreadGate = $state('everyone');
+
+  // Poll (Mastodon)
+  let showPoll = $state(false);
+  let pollOptions = $state(['', '']);
+  let pollExpiry = $state(86400); // 24h default
+  let pollMultiple = $state(false);
 
   // Quote context
   let quoteUri = $state('');
@@ -178,6 +187,10 @@
       quoteUri: quoteUri || undefined,
       quoteCid: quoteCid || undefined,
       quoteUrl,
+      threadGate: threadGate !== 'everyone' ? threadGate : undefined,
+      poll: showPoll && pollOptions.filter(o => o.trim()).length >= 2
+        ? { options: pollOptions.filter(o => o.trim()), expiresIn: pollExpiry, multiple: pollMultiple }
+        : undefined,
     };
 
     try {
@@ -387,7 +400,7 @@
           <div class="flex items-center gap-2">
             <label class="p-2 text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] rounded-md cursor-pointer transition-colors {mediaFiles.length >= 4 ? 'opacity-50 pointer-events-none' : ''}">
               <ImagePlus size={18} />
-              <input type="file" accept="image/*" multiple class="hidden" onchange={addMedia} />
+              <input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" multiple class="hidden" onchange={addMedia} />
             </label>
             <button
               onclick={() => showCW = !showCW}
@@ -405,6 +418,27 @@
                 <option value="unlisted">Unlisted</option>
                 <option value="private">Followers only</option>
                 <option value="direct">Direct</option>
+              </select>
+
+              <button
+                onclick={() => showPoll = !showPoll}
+                class="p-1.5 rounded-md transition-colors {showPoll ? 'text-[var(--color-mastodon)] bg-[var(--color-mastodon)]/10' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+                title="Add poll (Mastodon)"
+              >
+                <BarChart3 size={14} />
+              </button>
+            {/if}
+
+            {#if hasBsky}
+              <select
+                bind:value={threadGate}
+                class="px-2 py-1 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-[var(--color-text)] focus:outline-none"
+                title="Who can reply (Bluesky)"
+              >
+                <option value="everyone">Anyone can reply</option>
+                <option value="mentioned">Mentioned only</option>
+                <option value="following">Followers only</option>
+                <option value="nobody">No replies</option>
               </select>
             {/if}
           </div>
@@ -432,6 +466,54 @@
             </button>
           </div>
         </div>
+
+        <!-- Poll creator (Mastodon only) -->
+        {#if showPoll && hasMasto}
+          <div class="p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-mastodon)]/30">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs font-medium text-[var(--color-mastodon)] flex items-center gap-1">
+                <BarChart3 size={12} /> Poll (Mastodon)
+              </span>
+              <button onclick={() => showPoll = false} class="text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+                <X size={12} />
+              </button>
+            </div>
+            <div class="space-y-2">
+              {#each pollOptions as _, i}
+                <input
+                  type="text"
+                  bind:value={pollOptions[i]}
+                  placeholder="Option {i + 1}"
+                  class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-mastodon)]"
+                />
+              {/each}
+              {#if pollOptions.length < 4}
+                <button
+                  onclick={() => pollOptions = [...pollOptions, '']}
+                  class="text-xs text-[var(--color-mastodon)] hover:underline"
+                >
+                  + Add option
+                </button>
+              {/if}
+            </div>
+            <div class="flex items-center gap-4 mt-3 text-xs">
+              <label class="flex items-center gap-1.5 text-[var(--color-text-muted)]">
+                <input type="checkbox" bind:checked={pollMultiple} class="rounded" />
+                Multiple choice
+              </label>
+              <select
+                bind:value={pollExpiry}
+                class="px-2 py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-[var(--color-text)]"
+              >
+                <option value={3600}>1 hour</option>
+                <option value={21600}>6 hours</option>
+                <option value={86400}>24 hours</option>
+                <option value={259200}>3 days</option>
+                <option value={604800}>7 days</option>
+              </select>
+            </div>
+          </div>
+        {/if}
       </div>
 
       <!-- Sidebar: Account picker -->

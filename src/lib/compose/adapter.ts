@@ -11,6 +11,8 @@ export interface PostResult {
   error?: string;
 }
 
+export type ThreadGate = 'everyone' | 'mentioned' | 'following' | 'nobody';
+
 export interface ComposeOptions {
   text: string;
   visibility?: 'public' | 'unlisted' | 'private' | 'direct';
@@ -20,6 +22,14 @@ export interface ComposeOptions {
   quoteUri?: string;   // AT Protocol URI of quoted post
   quoteCid?: string;   // CID of quoted post
   quoteUrl?: string;   // Web URL for Mastodon (appended to text)
+  threadGate?: ThreadGate; // Bluesky: who can reply
+  poll?: PollOptions;      // Mastodon: attach a poll
+}
+
+export interface PollOptions {
+  options: string[];        // 2-4 poll choices
+  expiresIn: number;        // seconds (e.g. 86400 for 24h)
+  multiple?: boolean;        // allow multiple selections
 }
 
 /** Post to Bluesky using the AT Protocol */
@@ -91,6 +101,30 @@ export async function postToBluesky(
       record,
     });
 
+    // Create thread gate if specified
+    if (options.threadGate && options.threadGate !== 'everyone') {
+      const rkey = resp.data.uri.split('/').pop()!;
+      const allow: Array<{ $type: string; list?: string }> = [];
+      if (options.threadGate === 'mentioned') {
+        allow.push({ $type: 'app.bsky.feed.threadgate#mentionRule' });
+      } else if (options.threadGate === 'following') {
+        allow.push({ $type: 'app.bsky.feed.threadgate#followingRule' });
+      }
+      // 'nobody' = empty allow array
+
+      await agent.api.com.atproto.repo.createRecord({
+        repo: agent.session!.did,
+        collection: 'app.bsky.feed.threadgate',
+        rkey,
+        record: {
+          $type: 'app.bsky.feed.threadgate',
+          post: resp.data.uri,
+          createdAt: new Date().toISOString(),
+          allow,
+        },
+      });
+    }
+
     return {
       platform: 'bluesky',
       success: true,
@@ -152,6 +186,14 @@ export async function postToMastodon(
 
     if (options.contentWarning) {
       body.spoiler_text = options.contentWarning;
+    }
+
+    if (options.poll && options.poll.options.length >= 2) {
+      body.poll = {
+        options: options.poll.options,
+        expires_in: options.poll.expiresIn,
+        multiple: options.poll.multiple ?? false,
+      };
     }
 
     const resp = await fetch(`${instanceUrl}/api/v1/statuses`, {
