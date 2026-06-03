@@ -134,5 +134,14 @@ export class BlueskyClient {
     return this.authAgent.deleteRepost(repostUri);
   }
 
+  async getNotifications(cursor?: string) {
+    await this.login();
+    if (!this.authAgent) throw new Error('Auth required');
+    const resp = await this.authAgent.api.app.bsky.notification.listNotifications({
+      limit: 50, cursor,
+    });
+    return { notifications: resp.data.notifications, cursor: resp.data.cursor };
+  }
+
   getHandle() { return this.handle; }
 }

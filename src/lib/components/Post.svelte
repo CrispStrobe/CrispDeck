@@ -37,6 +37,11 @@
   }
 
   function getProfileUrl(p: UnifiedPost): string {
+    const h = encodeURIComponent(p.author.handle);
+    return `/profile?handle=${h}&platform=${p.platform}`;
+  }
+
+  function getExternalProfileUrl(p: UnifiedPost): string {
     if (p.platform === 'mastodon') {
       const raw = p.raw as any;
       const account = raw.reblog ? raw.reblog.account : raw.account;
@@ -106,7 +111,7 @@
   {/if}
 
   <div class="flex items-start gap-3">
-    <a href={getProfileUrl(post)} target="_blank" rel="noopener noreferrer">
+    <a href={getProfileUrl(post)}>
       {#if post.author.avatar}
         <img src={post.author.avatar} alt="" class="w-10 h-10 rounded-full bg-[var(--color-surface-hover)]" />
       {:else}
@@ -116,7 +121,7 @@
       {/if}
     </a>
     <div class="flex-1 min-w-0">
-      <a href={getProfileUrl(post)} target="_blank" rel="noopener noreferrer" class="flex items-center gap-2 mb-1 group">
+      <a href={getProfileUrl(post)} class="flex items-center gap-2 mb-1 group">
         <span class="font-semibold text-[var(--color-text)] group-hover:underline truncate text-sm">
           {post.author.displayName || post.author.handle}
         </span>
