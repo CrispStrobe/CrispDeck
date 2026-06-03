@@ -32,12 +32,14 @@
     { id: 'mentions', title: 'Mentions', type: 'mentions' },
   ];
 
-  const availableColumns: { type: ColumnType; label: string; icon: string }[] = [
-    { type: 'timeline', label: 'Timeline', icon: 'globe' },
-    { type: 'my-posts', label: 'My Posts', icon: 'user' },
-    { type: 'mentions', label: 'Mentions', icon: '@' },
-    { type: 'notifications', label: 'Notifications', icon: 'bell' },
-    { type: 'search', label: 'Search', icon: 'search' },
+  const availableColumns: { type: ColumnType; label: string }[] = [
+    { type: 'timeline', label: 'Timeline' },
+    { type: 'my-posts', label: 'My Posts' },
+    { type: 'mentions', label: 'Mentions' },
+    { type: 'notifications', label: 'Notifications' },
+    { type: 'search', label: 'Search...' },
+    { type: 'hashtag', label: 'Hashtag...' },
+    { type: 'user', label: 'User Feed...' },
   ];
 
   onMount(async () => {
@@ -56,6 +58,12 @@
     } finally {
       loading = false;
     }
+
+    // Auto-refresh every 2 minutes
+    const interval = setInterval(() => {
+      columns.forEach(col => loadColumn(col));
+    }, 120000);
+    return () => clearInterval(interval);
   });
 
   async function initClients() {
@@ -198,6 +206,51 @@
               }
             } catch {}
           }
+        } else if (col.type === 'hashtag' && col.query) {
+          // Search for hashtag across platforms
+          if (acct.platform === 'bluesky') {
+            try {
+              const r = await (client as BlueskyClient).searchPosts(`#${col.query}`);
+              for (const p of r.posts) {
+                posts.push({
+                  uri: p.uri, text: (p.record as any).text ?? '',
+                  author: { handle: p.author.handle, displayName: p.author.displayName, avatar: p.author.avatar },
+                  createdAt: (p.record as any).createdAt ?? p.indexedAt,
+                  platform: 'bluesky', likeCount: p.likeCount, repostCount: p.repostCount, isRepost: false, raw: p,
+                });
+              }
+            } catch {}
+          } else {
+            const masto = client as MastodonClient;
+            const token = masto.getAccessToken();
+            if (token) {
+              try {
+                const resp = await fetch(
+                  `${masto.getInstanceUrl()}/api/v1/timelines/tag/${col.query}?limit=40`,
+                  { headers: { Authorization: `Bearer ${token}` } }
+                );
+                if (resp.ok) {
+                  const raw = await resp.json();
+                  posts.push(...raw.map((s: any) => normalizePost(s, 'mastodon')));
+                }
+              } catch {}
+            }
+          }
+        } else if (col.type === 'user' && col.query) {
+          // Fetch a specific user's posts
+          if (acct.platform === 'bluesky') {
+            try {
+              const r = await (client as BlueskyClient).getAuthorFeed(col.query);
+              posts.push(...r.feed.map(p => normalizePost(p, 'bluesky')));
+            } catch {}
+          } else {
+            try {
+              const masto = client as MastodonClient;
+              const account = await masto.getAccountByHandle(col.query);
+              const statuses = await masto.getAccountStatuses(account.id);
+              posts.push(...statuses.map(s => normalizePost(s, 'mastodon')));
+            } catch {}
+          }
         }
       }
     } catch (e) {
@@ -211,15 +264,23 @@
   function addColumn(type: ColumnType) {
     const id = `${type}-${Date.now()}`;
     let title = availableColumns.find(c => c.type === type)?.label ?? type;
+    let query: string | undefined;
 
     if (type === 'search') {
-      const query = prompt('Search query:');
+      query = prompt('Search query:') ?? undefined;
       if (!query) return;
       title = `Search: ${query}`;
-      columns = [...columns, { id, title, type, query }];
-    } else {
-      columns = [...columns, { id, title, type }];
+    } else if (type === 'hashtag') {
+      query = prompt('Hashtag (without #):') ?? undefined;
+      if (!query) return;
+      title = `#${query}`;
+    } else if (type === 'user') {
+      query = prompt('User handle (e.g. alice.bsky.social):') ?? undefined;
+      if (!query) return;
+      title = `@${query}`;
     }
+
+    columns = [...columns, { id, title, type, query }];
 
     saveColumns();
     showAddMenu = false;

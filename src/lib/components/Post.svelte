@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Heart, Repeat, MessageCircle, Quote, Bookmark } from '@lucide/svelte';
+  import { Heart, Repeat, MessageCircle, Quote, Bookmark, Share } from '@lucide/svelte';
   import { addBookmark, removeBookmark, isBookmarked } from '$lib/bookmarks';
   import { onMount } from 'svelte';
   import type { UnifiedPost } from '$lib/types';
@@ -20,6 +20,20 @@
   onMount(async () => {
     bookmarked = await isBookmarked(post.uri);
   });
+
+  let copied = $state(false);
+
+  async function handleShare() {
+    const url = getPostUrl(post);
+    try {
+      await navigator.clipboard.writeText(url);
+      copied = true;
+      setTimeout(() => copied = false, 2000);
+    } catch {
+      // Fallback
+      window.open(url, '_blank');
+    }
+  }
 
   async function handleBookmark() {
     if (bookmarked) {
@@ -282,6 +296,14 @@
         title={bookmarked ? 'Remove bookmark' : 'Bookmark'}
       >
         <Bookmark size={14} class={bookmarked ? 'fill-current' : ''} />
+      </button>
+
+      <button
+        onclick={handleShare}
+        class="flex items-center gap-1.5 transition-colors {copied ? 'text-[var(--color-success)]' : 'text-[var(--color-text-muted)]'} hover:text-[var(--color-text)]"
+        title={copied ? 'Copied!' : 'Copy link'}
+      >
+        <Share size={14} />
       </button>
     </div>
     <a href={getPostUrl(post)} target="_blank" rel="noopener noreferrer" class="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:underline">

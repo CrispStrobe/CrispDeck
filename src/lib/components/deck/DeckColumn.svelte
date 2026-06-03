@@ -4,7 +4,7 @@
   import Post from '$lib/components/Post.svelte';
   import type { UnifiedPost } from '$lib/types';
 
-  export type ColumnType = 'timeline' | 'mentions' | 'notifications' | 'my-posts' | 'search' | 'list' | 'hashtag';
+  export type ColumnType = 'timeline' | 'mentions' | 'notifications' | 'my-posts' | 'search' | 'list' | 'hashtag' | 'user' | 'feed';
 
   let {
     id,

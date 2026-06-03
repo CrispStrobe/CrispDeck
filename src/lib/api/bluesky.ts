@@ -61,6 +61,14 @@ export class BlueskyClient {
     return { feed: resp.data.feed, cursor: resp.data.cursor };
   }
 
+  /** Get followers of an actor (public API) */
+  async getFollowers(actor: string, cursor?: string) {
+    const resp = await this.publicAgent.api.app.bsky.graph.getFollowers({
+      actor, cursor, limit: 50,
+    });
+    return { followers: resp.data.followers, cursor: resp.data.cursor };
+  }
+
   /** Get a post thread (parent chain + replies) */
   async getPostThread(uri: string, depth: number = 6) {
     const resp = await this.publicAgent.api.app.bsky.feed.getPostThread({
