@@ -62,6 +62,19 @@ export class MastodonClient {
     );
   }
 
+  /** Get home timeline (posts from people you follow). Requires auth. */
+  async getHomeTimeline(cursor?: string): Promise<MastodonPost[]> {
+    if (!this.accessToken) throw new Error('Auth required for home timeline');
+    const params = new URLSearchParams({ limit: '40' });
+    if (cursor) params.set('max_id', cursor);
+    const response = await fetch(`${this.instanceUrl}/api/v1/timelines/home?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${this.accessToken}` },
+    });
+    if (!response.ok) throw new Error(`Timeline error: ${response.statusText}`);
+    const data = await response.json();
+    return snakeToCamel(data) as MastodonPost[];
+  }
+
   async verifyCredentials(): Promise<mastodon.v1.Account> {
     if (!this.client) throw new Error('Not authenticated');
     return this.client.v1.accounts.verifyCredentials();

@@ -61,6 +61,16 @@ export class BlueskyClient {
     return { feed: resp.data.feed, cursor: resp.data.cursor };
   }
 
+  /** Get the home timeline (posts from people you follow). Requires auth. */
+  async getTimeline(cursor?: string) {
+    await this.login();
+    if (!this.authAgent) throw new Error('Auth required for timeline');
+    const resp = await this.authAgent.api.app.bsky.feed.getTimeline({
+      limit: 50, cursor,
+    });
+    return { feed: resp.data.feed, cursor: resp.data.cursor };
+  }
+
   async searchPosts(query: string, cursor?: string) {
     // Search requires auth on some endpoints
     await this.login();

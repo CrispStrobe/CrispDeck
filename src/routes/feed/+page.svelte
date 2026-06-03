@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { listAccounts, getDecryptedCredentials } from '$lib/db';
-  import { Rss, Loader2, Inbox, EyeOff } from '@lucide/svelte';
+  import { Rss, Loader2, Inbox, EyeOff, User, Globe } from '@lucide/svelte';
   import Post from '$lib/components/Post.svelte';
   import CrosspostGroup from '$lib/components/CrosspostGroup.svelte';
   import AdvancedFilters from '$lib/components/AdvancedFilters.svelte';
@@ -10,6 +10,8 @@
   import { normalizePost, filterPosts, sortPosts, detectCrossposts } from '$lib/api/unified';
   import type { UnifiedPost, FeedItem, Filters, Account, CrosspostGroup as CrosspostGroupType } from '$lib/types';
 
+  type FeedMode = 'timeline' | 'my-posts';
+
   let accounts: Account[] = $state([]);
   let posts: UnifiedPost[] = $state([]);
   let loading = $state(false);
@@ -17,10 +19,10 @@
   let error = $state('');
   let progress = $state(0);
   let hideMedia = $state(false);
+  let feedMode: FeedMode = $state('timeline');
 
   let cursors: Record<number, string | undefined> = $state({});
-  let loadingMore: Record<number, boolean> = $state({});
-  let loadingAll = $state(false);
+  let loadingMore = $state(false);
 
   let filters: Filters = $state({
     searchTerm: '',
@@ -33,18 +35,35 @@
 
   let clients: Map<number, BlueskyClient | MastodonClient> = new Map();
 
+  // Infinite scroll
+  let scrollSentinel: HTMLDivElement | undefined = $state();
+  let observer: IntersectionObserver | undefined;
+
   onMount(async () => {
     try {
       accounts = await listAccounts();
       if (accounts.length > 0) {
         await initClients();
-        await loadInitialFeeds();
+        await loadFeed();
       }
     } catch (e) {
       error = String(e);
     } finally {
       initialLoading = false;
     }
+
+    // Set up infinite scroll observer
+    await tick();
+    if (scrollSentinel) {
+      observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && !loadingMore && hasMoreContent) {
+          loadMore();
+        }
+      }, { rootMargin: '400px' });
+      observer.observe(scrollSentinel);
+    }
+
+    return () => observer?.disconnect();
   });
 
   async function initClients() {
@@ -54,7 +73,9 @@
         const creds = JSON.parse(credsJson);
 
         if (acct.platform === 'bluesky') {
-          clients.set(acct.id, new BlueskyClient(acct.handle, creds.app_password));
+          const client = new BlueskyClient(acct.handle, creds.app_password);
+          await client.login();
+          clients.set(acct.id, client);
         } else {
           clients.set(acct.id, new MastodonClient(
             acct.instance_url ?? `https://${acct.handle.split('@').pop()}`,
@@ -67,8 +88,10 @@
     }
   }
 
-  async function loadInitialFeeds() {
+  async function loadFeed() {
     loading = true;
+    posts = [];
+    cursors = {};
     const allPosts: UnifiedPost[] = [];
 
     for (const acct of accounts) {
@@ -78,102 +101,92 @@
 
         if (acct.platform === 'bluesky') {
           const bsky = client as BlueskyClient;
-          const result = await bsky.getAuthorFeed(acct.handle);
-          const normalized = result.feed.map(p => normalizePost(p, 'bluesky'));
-          allPosts.push(...normalized);
-          cursors[acct.id] = result.cursor;
+          if (feedMode === 'timeline') {
+            const result = await bsky.getTimeline();
+            allPosts.push(...result.feed.map(p => normalizePost(p, 'bluesky')));
+            cursors[acct.id] = result.cursor;
+          } else {
+            const result = await bsky.getAuthorFeed(acct.handle);
+            allPosts.push(...result.feed.map(p => normalizePost(p, 'bluesky')));
+            cursors[acct.id] = result.cursor;
+          }
         } else {
           const masto = client as MastodonClient;
-          const account = await masto.getAccountByHandle(acct.handle);
-          const statuses = await masto.getAccountStatuses(account.id);
-          const normalized = statuses.map(p => normalizePost(p, 'mastodon'));
-          allPosts.push(...normalized);
-          cursors[acct.id] = statuses.length > 0 ? statuses[statuses.length - 1].id : undefined;
+          if (feedMode === 'timeline') {
+            const statuses = await masto.getHomeTimeline();
+            allPosts.push(...statuses.map(p => normalizePost(p, 'mastodon')));
+            cursors[acct.id] = statuses.length > 0 ? statuses[statuses.length - 1].id : undefined;
+          } else {
+            const account = await masto.getAccountByHandle(acct.handle);
+            const statuses = await masto.getAccountStatuses(account.id);
+            allPosts.push(...statuses.map(p => normalizePost(p, 'mastodon')));
+            cursors[acct.id] = statuses.length > 0 ? statuses[statuses.length - 1].id : undefined;
+          }
         }
       } catch (e) {
         console.error(`Failed to load feed for ${acct.handle}:`, e);
       }
     }
 
-    posts = allPosts.sort((a, b) =>
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
+    posts = sortPosts(allPosts, 'newest');
     progress = posts.length;
     loading = false;
   }
 
-  async function loadMore(accountId: number) {
-    const cursor = cursors[accountId];
-    if (!cursor) return;
+  async function loadMore() {
+    if (loadingMore || !hasMoreContent) return;
+    loadingMore = true;
 
-    const acct = accounts.find(a => a.id === accountId);
-    const client = clients.get(accountId);
-    if (!acct || !client) return;
+    const newPosts: UnifiedPost[] = [];
 
-    loadingMore[accountId] = true;
-    try {
-      let newPosts: UnifiedPost[] = [];
-
-      if (acct.platform === 'bluesky') {
-        const bsky = client as BlueskyClient;
-        const result = await bsky.getAuthorFeed(acct.handle, cursor);
-        newPosts = result.feed.map(p => normalizePost(p, 'bluesky'));
-        cursors[accountId] = result.cursor;
-      } else {
-        const masto = client as MastodonClient;
-        const account = await masto.getAccountByHandle(acct.handle);
-        const statuses = await masto.getAccountStatuses(account.id, cursor);
-        newPosts = statuses.map(p => normalizePost(p, 'mastodon'));
-        cursors[accountId] = statuses.length > 0 ? statuses[statuses.length - 1].id : undefined;
-      }
-
-      posts = [...posts, ...newPosts].sort((a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      progress = posts.length;
-    } catch (e) {
-      error = `Failed to load more from ${acct.handle}: ${e}`;
-    } finally {
-      loadingMore[accountId] = false;
-    }
-  }
-
-  async function loadAll() {
-    loadingAll = true;
     for (const acct of accounts) {
-      let cursor = cursors[acct.id];
+      const cursor = cursors[acct.id];
+      if (!cursor) continue;
+
       const client = clients.get(acct.id);
       if (!client) continue;
 
-      while (cursor) {
-        try {
-          let newPosts: UnifiedPost[] = [];
-
-          if (acct.platform === 'bluesky') {
-            const bsky = client as BlueskyClient;
-            const result = await bsky.getAuthorFeed(acct.handle, cursor);
-            newPosts = result.feed.map(p => normalizePost(p, 'bluesky'));
-            cursor = result.cursor;
-            cursors[acct.id] = cursor;
+      try {
+        if (acct.platform === 'bluesky') {
+          const bsky = client as BlueskyClient;
+          if (feedMode === 'timeline') {
+            const result = await bsky.getTimeline(cursor);
+            newPosts.push(...result.feed.map(p => normalizePost(p, 'bluesky')));
+            cursors[acct.id] = result.cursor;
           } else {
-            const masto = client as MastodonClient;
+            const result = await bsky.getAuthorFeed(acct.handle, cursor);
+            newPosts.push(...result.feed.map(p => normalizePost(p, 'bluesky')));
+            cursors[acct.id] = result.cursor;
+          }
+        } else {
+          const masto = client as MastodonClient;
+          if (feedMode === 'timeline') {
+            const statuses = await masto.getHomeTimeline(cursor);
+            newPosts.push(...statuses.map(p => normalizePost(p, 'mastodon')));
+            cursors[acct.id] = statuses.length > 0 ? statuses[statuses.length - 1].id : undefined;
+          } else {
             const account = await masto.getAccountByHandle(acct.handle);
             const statuses = await masto.getAccountStatuses(account.id, cursor);
-            newPosts = statuses.map(p => normalizePost(p, 'mastodon'));
-            cursor = statuses.length > 0 ? statuses[statuses.length - 1].id : undefined;
-            cursors[acct.id] = cursor;
+            newPosts.push(...statuses.map(p => normalizePost(p, 'mastodon')));
+            cursors[acct.id] = statuses.length > 0 ? statuses[statuses.length - 1].id : undefined;
           }
-
-          posts = [...posts, ...newPosts].sort((a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          );
-          progress = posts.length;
-        } catch {
-          cursor = undefined;
         }
+      } catch (e) {
+        console.error(`Failed to load more from ${acct.handle}:`, e);
       }
     }
-    loadingAll = false;
+
+    if (newPosts.length > 0) {
+      posts = sortPosts([...posts, ...newPosts], 'newest');
+      progress = posts.length;
+    }
+    loadingMore = false;
+  }
+
+  async function switchMode(mode: FeedMode) {
+    if (mode === feedMode) return;
+    feedMode = mode;
+    await loadFeed();
   }
 
   function handleFilterChange(newFilters: Partial<Filters>) {
@@ -188,7 +201,7 @@
   const sorted = $derived(sortPosts(filtered, filters.sortBy));
   const finalFeed = $derived(detectCrossposts(sorted));
   const hasMoreContent = $derived(Object.values(cursors).some(c => !!c));
-  const isLoading = $derived(loading || loadingAll || Object.values(loadingMore).some(v => v));
+  const isLoading = $derived(loading || loadingMore);
 </script>
 
 <div class="p-6">
@@ -197,14 +210,33 @@
       <Rss size={24} />
       <h1 class="text-2xl font-bold">Feed</h1>
       {#if posts.length > 0}
-        <span class="text-sm text-[var(--color-text-muted)] ml-2">({progress} posts loaded)</span>
+        <span class="text-sm text-[var(--color-text-muted)] ml-2">({progress} posts)</span>
       {/if}
     </div>
-    <label class="flex items-center gap-2 text-sm text-[var(--color-text-muted)] cursor-pointer">
-      <input type="checkbox" bind:checked={hideMedia} class="rounded" />
-      <EyeOff size={14} />
-      Hide Media
-    </label>
+    <div class="flex items-center gap-3">
+      <!-- Feed mode toggle -->
+      <div class="flex items-center bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-0.5">
+        <button
+          onclick={() => switchMode('timeline')}
+          class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {feedMode === 'timeline' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+        >
+          <Globe size={12} />
+          Timeline
+        </button>
+        <button
+          onclick={() => switchMode('my-posts')}
+          class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {feedMode === 'my-posts' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+        >
+          <User size={12} />
+          My Posts
+        </button>
+      </div>
+
+      <label class="flex items-center gap-2 text-sm text-[var(--color-text-muted)] cursor-pointer">
+        <input type="checkbox" bind:checked={hideMedia} class="rounded" />
+        <EyeOff size={14} />
+      </label>
+    </div>
   </div>
 
   {#if error}
@@ -227,10 +259,12 @@
   {:else}
     <AdvancedFilters {filters} onchange={handleFilterChange} />
 
-    {#if isLoading && posts.length === 0}
+    {#if loading && posts.length === 0}
       <div class="text-center py-12">
         <Loader2 size={32} class="text-[var(--color-text-muted)] animate-spin mx-auto" />
-        <p class="text-sm text-[var(--color-text-muted)] mt-2">Loading feeds...</p>
+        <p class="text-sm text-[var(--color-text-muted)] mt-2">
+          Loading {feedMode === 'timeline' ? 'timeline' : 'your posts'}...
+        </p>
       </div>
     {:else if finalFeed.length === 0}
       <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
@@ -249,31 +283,17 @@
           {/if}
         {/each}
       </div>
-    {/if}
 
-    {#if hasMoreContent && !initialLoading}
-      <div class="text-center mt-6 flex flex-wrap items-center justify-center gap-3">
-        {#each accounts as acct}
-          {#if cursors[acct.id]}
-            <button
-              onclick={() => loadMore(acct.id)}
-              disabled={loadingMore[acct.id] || loadingAll}
-              class="px-4 py-2 text-sm font-medium text-white rounded-md disabled:opacity-50 flex items-center gap-2"
-              style="background: {acct.platform === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"
-            >
-              {#if loadingMore[acct.id]}<Loader2 size={14} class="animate-spin" />{/if}
-              More ({acct.handle})
-            </button>
-          {/if}
-        {/each}
-        <button
-          onclick={loadAll}
-          disabled={loadingAll || !hasMoreContent}
-          class="px-4 py-2 text-sm font-medium text-white bg-[var(--color-success)] rounded-md disabled:opacity-50 flex items-center gap-2"
-        >
-          {#if loadingAll}<Loader2 size={14} class="animate-spin" />{/if}
-          {loadingAll ? `Loading... (${progress})` : 'Load All Posts'}
-        </button>
+      <!-- Infinite scroll sentinel + loading indicator -->
+      <div bind:this={scrollSentinel} class="py-6 text-center">
+        {#if loadingMore}
+          <Loader2 size={24} class="text-[var(--color-text-muted)] animate-spin mx-auto" />
+          <p class="text-xs text-[var(--color-text-muted)] mt-2">Loading more...</p>
+        {:else if hasMoreContent}
+          <p class="text-xs text-[var(--color-text-muted)]">Scroll for more</p>
+        {:else}
+          <p class="text-xs text-[var(--color-text-muted)]">End of feed</p>
+        {/if}
       </div>
     {/if}
   {/if}
