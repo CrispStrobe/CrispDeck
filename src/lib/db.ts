@@ -209,6 +209,7 @@ export async function saveDraft(params: {
   media_paths?: string[];
   visibility?: string;
   content_warning?: string;
+  scheduled_at?: string;
 }): Promise<number> {
   if (!isTauri()) return browserDb.saveDraft(params);
   return invoke<number>('db_save_draft', params);

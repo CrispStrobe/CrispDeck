@@ -481,9 +481,11 @@ export async function saveDraft(params: {
   media_paths?: string[];
   visibility?: string;
   content_warning?: string;
+  scheduled_at?: string;
 }): Promise<number> {
   return await add('drafts', {
     ...params,
+    scheduled_at: params.scheduled_at ?? null,
     is_sent: false,
     created_at: now(),
     updated_at: now(),

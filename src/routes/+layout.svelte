@@ -1,7 +1,7 @@
 <script lang="ts">
   import '../app.css';
   import { page } from '$app/state';
-  import { Home, Rss, PenSquare, Users, Search, BarChart3, Settings } from '@lucide/svelte';
+  import { Home, Rss, PenSquare, FileText, Users, Search, BarChart3, Settings } from '@lucide/svelte';
 
   let { children } = $props();
 
@@ -9,6 +9,7 @@
     { href: '/', icon: Home, label: 'Dashboard' },
     { href: '/feed', icon: Rss, label: 'Feed' },
     { href: '/compose', icon: PenSquare, label: 'Compose' },
+    { href: '/drafts', icon: FileText, label: 'Drafts' },
     { href: '/identities', icon: Users, label: 'Identities' },
     { href: '/search', icon: Search, label: 'Search' },
     { href: '/analytics', icon: BarChart3, label: 'Analytics' },

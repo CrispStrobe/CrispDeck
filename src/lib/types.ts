@@ -132,6 +132,7 @@ export interface Draft {
   media_paths: string[];
   visibility: string;
   content_warning: string | null;
+  scheduled_at: string | null;
   is_sent: boolean;
   created_at: string;
   updated_at: string;
