@@ -1,18 +1,23 @@
 <script lang="ts">
   import '../app.css';
   import { page } from '$app/state';
-  import { Home, Rss, PenSquare, FileText, Bell, Users, Search, BarChart3, Settings } from '@lucide/svelte';
+  import { Home, Rss, Columns3, PenSquare, FileText, Bell, MessageSquare, Users, Search, List, Package, Shield, BarChart3, Settings } from '@lucide/svelte';
 
   let { children } = $props();
 
   const navItems = [
     { href: '/', icon: Home, label: 'Dashboard' },
     { href: '/feed', icon: Rss, label: 'Feed' },
+    { href: '/deck', icon: Columns3, label: 'Deck' },
     { href: '/compose', icon: PenSquare, label: 'Compose' },
     { href: '/drafts', icon: FileText, label: 'Drafts' },
     { href: '/notifications', icon: Bell, label: 'Notifications' },
+    { href: '/messages', icon: MessageSquare, label: 'Messages' },
+    { href: '/lists', icon: List, label: 'Lists & Feeds' },
+    { href: '/starterpacks', icon: Package, label: 'Starter Packs' },
     { href: '/identities', icon: Users, label: 'Identities' },
     { href: '/search', icon: Search, label: 'Search' },
+    { href: '/moderation', icon: Shield, label: 'Moderation' },
     { href: '/analytics', icon: BarChart3, label: 'Analytics' },
     { href: '/settings', icon: Settings, label: 'Settings' },
   ];
