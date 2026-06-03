@@ -79,11 +79,17 @@
         try {
           const agent = bsky.getAgent();
           if (!agent.session) throw new Error('Not logged in');
-          // Bluesky DMs: call api.bsky.chat directly with service auth
+
+          // Step 1: Get a service auth token scoped for the chat service
+          const authResp = await agent.api.com.atproto.server.getServiceAuth({
+            aud: `did:web:api.bsky.chat#bsky_chat`,
+            lxm: 'chat.bsky.convo.listConvos',
+          });
+          const chatToken = authResp.data.token;
+
+          // Step 2: Call the chat API with the scoped token
           const resp = await fetch(`https://api.bsky.chat/xrpc/chat.bsky.convo.listConvos?limit=50`, {
-            headers: {
-              Authorization: `Bearer ${agent.session.accessJwt}`,
-            },
+            headers: { Authorization: `Bearer ${chatToken}` },
           });
           if (!resp.ok) {
             const errBody = await resp.text().catch(() => '');
@@ -155,14 +161,25 @@
           const acct = accounts.find(a => a.id === id);
           if (acct?.platform !== 'bluesky') continue;
           const agent = (client as BlueskyClient).getAgent();
-          const resp = await agent.api.chat.bsky.convo.getMessages({ convoId: convo.id, limit: 50 });
-          messages = resp.data.messages.map((m: any) => ({
-            id: m.id,
-            text: m.text,
-            sender: { handle: m.sender?.handle ?? '?', displayName: m.sender?.displayName, avatar: m.sender?.avatar },
-            createdAt: m.sentAt,
-            isOurs: m.sender?.handle === acct.handle,
-          })).reverse();
+          if (!agent.session) break;
+          // Get service auth for reading messages
+          const authResp = await agent.api.com.atproto.server.getServiceAuth({
+            aud: 'did:web:api.bsky.chat#bsky_chat',
+            lxm: 'chat.bsky.convo.getMessages',
+          });
+          const resp = await fetch(`https://api.bsky.chat/xrpc/chat.bsky.convo.getMessages?convoId=${convo.id}&limit=50`, {
+            headers: { Authorization: `Bearer ${authResp.data.token}` },
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            messages = (data.messages ?? []).map((m: any) => ({
+              id: m.id,
+              text: m.text,
+              sender: { handle: m.sender?.handle ?? '?', displayName: m.sender?.displayName, avatar: m.sender?.avatar },
+              createdAt: m.sentAt,
+              isOurs: m.sender?.handle === acct.handle,
+            })).reverse();
+          }
           break;
         }
       } else {
@@ -194,9 +211,19 @@
           const acct = accounts.find(a => a.id === id);
           if (acct?.platform !== 'bluesky') continue;
           const agent = (client as BlueskyClient).getAgent();
-          await agent.api.chat.bsky.convo.sendMessage({
-            convoId: selectedConvo.id,
-            message: { text: newMessage.trim() },
+          if (!agent.session) throw new Error('Not logged in');
+          // Get service auth for sending
+          const authResp = await agent.api.com.atproto.server.getServiceAuth({
+            aud: 'did:web:api.bsky.chat#bsky_chat',
+            lxm: 'chat.bsky.convo.sendMessage',
+          });
+          await fetch('https://api.bsky.chat/xrpc/chat.bsky.convo.sendMessage', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${authResp.data.token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ convoId: selectedConvo.id, message: { text: newMessage.trim() } }),
           });
           break;
         }
