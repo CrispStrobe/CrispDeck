@@ -4,7 +4,7 @@
   import Post from '$lib/components/Post.svelte';
   import type { UnifiedPost } from '$lib/types';
 
-  export type ColumnType = 'timeline' | 'mentions' | 'notifications' | 'my-posts' | 'search' | 'list' | 'hashtag' | 'user' | 'feed';
+  export type ColumnType = 'timeline' | 'mentions' | 'notifications' | 'my-posts' | 'search' | 'list' | 'hashtag' | 'user' | 'feed' | 'local' | 'federated';
 
   let {
     id,
@@ -27,6 +27,14 @@
     onlike?: (post: UnifiedPost) => void;
     onboost?: (post: UnifiedPost) => void;
   } = $props();
+
+  let filterText = $state('');
+  const filteredPosts = $derived(
+    filterText
+      ? posts.filter(p => p.text.toLowerCase().includes(filterText.toLowerCase()) ||
+          p.author.handle.toLowerCase().includes(filterText.toLowerCase()))
+      : posts
+  );
 </script>
 
 <div class="flex flex-col h-full min-w-[350px] max-w-[400px] bg-[var(--color-bg)] border-r border-[var(--color-border)]">
@@ -50,16 +58,26 @@
     </div>
   </div>
 
+  <!-- Inline filter -->
+  <div class="px-2 py-1 border-b border-[var(--color-border)]">
+    <input
+      type="text"
+      bind:value={filterText}
+      placeholder="Filter..."
+      class="w-full px-2 py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-[10px] text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]"
+    />
+  </div>
+
   <!-- Column content -->
   <div class="flex-1 overflow-y-auto p-2 space-y-2">
-    {#if loading && posts.length === 0}
+    {#if loading && filteredPosts.length === 0}
       <div class="text-center py-8">
         <Loader2 size={20} class="text-[var(--color-text-muted)] animate-spin mx-auto" />
       </div>
-    {:else if posts.length === 0}
-      <p class="text-center py-8 text-xs text-[var(--color-text-muted)]">No posts</p>
+    {:else if filteredPosts.length === 0}
+      <p class="text-center py-8 text-xs text-[var(--color-text-muted)]">{filterText ? 'No matches' : 'No posts'}</p>
     {:else}
-      {#each posts as post (post.uri)}
+      {#each filteredPosts as post (post.uri)}
         <Post {post} {onlike} {onboost} />
       {/each}
     {/if}

@@ -33,14 +33,28 @@
   ];
 
   const availableColumns: { type: ColumnType; label: string }[] = [
-    { type: 'timeline', label: 'Timeline' },
+    { type: 'timeline', label: 'Home Timeline' },
     { type: 'my-posts', label: 'My Posts' },
     { type: 'mentions', label: 'Mentions' },
     { type: 'notifications', label: 'Notifications' },
+    { type: 'local', label: 'Local (Mastodon)' },
+    { type: 'federated', label: 'Federated (Mastodon)' },
     { type: 'search', label: 'Search...' },
     { type: 'hashtag', label: 'Hashtag...' },
     { type: 'user', label: 'User Feed...' },
   ];
+
+  // Saved layouts
+  let savedLayouts: Record<string, DeckColumnConfig[]> = $state({});
+
+  function loadLayout(name: string) {
+    const layout = savedLayouts[name];
+    if (layout) {
+      columns = [...layout];
+      saveColumns();
+      columns.forEach(col => loadColumn(col));
+    }
+  }
 
   onMount(async () => {
     try {
@@ -50,6 +64,10 @@
       // Load saved column config or use defaults
       const saved = localStorage.getItem('crispdeck-deck-columns');
       columns = saved ? JSON.parse(saved) : defaultColumns;
+
+      // Load saved layouts
+      const layouts = localStorage.getItem('crispdeck-deck-layouts');
+      if (layouts) savedLayouts = JSON.parse(layouts);
 
       // Load all columns
       await Promise.all(columns.map(col => loadColumn(col)));
@@ -237,7 +255,6 @@
             }
           }
         } else if (col.type === 'user' && col.query) {
-          // Fetch a specific user's posts
           if (acct.platform === 'bluesky') {
             try {
               const r = await (client as BlueskyClient).getAuthorFeed(col.query);
@@ -251,6 +268,24 @@
               posts.push(...statuses.map(s => normalizePost(s, 'mastodon')));
             } catch {}
           }
+        } else if (col.type === 'local' && acct.platform === 'mastodon') {
+          const masto = client as MastodonClient;
+          const token = masto.getAccessToken();
+          try {
+            const resp = await fetch(`${masto.getInstanceUrl()}/api/v1/timelines/public?local=true&limit=40`, {
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+            });
+            if (resp.ok) posts.push(...(await resp.json()).map((s: any) => normalizePost(s, 'mastodon')));
+          } catch {}
+        } else if (col.type === 'federated' && acct.platform === 'mastodon') {
+          const masto = client as MastodonClient;
+          const token = masto.getAccessToken();
+          try {
+            const resp = await fetch(`${masto.getInstanceUrl()}/api/v1/timelines/public?limit=40`, {
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+            });
+            if (resp.ok) posts.push(...(await resp.json()).map((s: any) => normalizePost(s, 'mastodon')));
+          } catch {}
         }
       }
     } catch (e) {
@@ -331,10 +366,36 @@
 <div class="h-full flex flex-col">
   <!-- Deck header -->
   <div class="flex items-center justify-between px-4 py-2 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex-shrink-0">
-    <div class="flex items-center gap-2">
-      <Columns3 size={20} />
-      <h1 class="text-lg font-bold">Deck</h1>
-      <span class="text-xs text-[var(--color-text-muted)]">{columns.length} columns</span>
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2">
+        <Columns3 size={20} />
+        <h1 class="text-lg font-bold">Deck</h1>
+        <span class="text-xs text-[var(--color-text-muted)]">{columns.length} col</span>
+      </div>
+      <!-- Saved layouts -->
+      {#if Object.keys(savedLayouts).length > 0}
+        <select
+          onchange={(e) => { const v = (e.target as HTMLSelectElement).value; if (v) loadLayout(v); }}
+          class="px-2 py-1 text-[10px] bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-[var(--color-text)]"
+        >
+          <option value="">Load layout...</option>
+          {#each Object.keys(savedLayouts) as name}
+            <option value={name}>{name}</option>
+          {/each}
+        </select>
+      {/if}
+      <button
+        onclick={() => {
+          const name = prompt('Layout name:');
+          if (name) {
+            savedLayouts[name] = [...columns];
+            localStorage.setItem('crispdeck-deck-layouts', JSON.stringify(savedLayouts));
+          }
+        }}
+        class="px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] rounded"
+      >
+        Save
+      </button>
     </div>
     <div class="relative">
       <button

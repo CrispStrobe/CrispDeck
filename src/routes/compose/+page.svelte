@@ -354,18 +354,20 @@
           ></textarea>
           <MentionAutocomplete bind:this={mentionAutocomplete} textarea={textareaEl} bind:text />
 
-          <!-- Character counts -->
+          <!-- Character counts with warning thresholds -->
           <div class="absolute bottom-3 right-3 flex items-center gap-3 text-xs">
             {#if hasBsky}
-              <span class="{bskyNeedsThread ? 'text-yellow-400' : 'text-[var(--color-text-muted)]'}">
+              {@const pct = bskyLen / 300}
+              <span class="{pct >= 1 ? 'text-yellow-400 font-bold' : pct >= 0.9 ? 'text-red-400' : pct >= 0.8 ? 'text-orange-400' : 'text-[var(--color-text-muted)]'}">
                 <span class="inline-block w-2 h-2 rounded-full bg-[var(--color-bluesky)] mr-1"></span>
-                {bskyLen}/300
+                {bskyLen}/300{bskyNeedsThread ? ' →thread' : ''}
               </span>
             {/if}
             {#if hasMasto}
-              <span class="{mastoNeedsThread ? 'text-yellow-400' : 'text-[var(--color-text-muted)]'}">
+              {@const pct = mastoLen / 500}
+              <span class="{pct >= 1 ? 'text-yellow-400 font-bold' : pct >= 0.9 ? 'text-red-400' : pct >= 0.8 ? 'text-orange-400' : 'text-[var(--color-text-muted)]'}">
                 <span class="inline-block w-2 h-2 rounded-full bg-[var(--color-mastodon)] mr-1"></span>
-                {mastoLen}/500
+                {mastoLen}/500{mastoNeedsThread ? ' →thread' : ''}
               </span>
             {/if}
           </div>
