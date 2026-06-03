@@ -16,6 +16,7 @@ export interface ComposeOptions {
   visibility?: 'public' | 'unlisted' | 'private' | 'direct';
   contentWarning?: string;
   mediaFiles?: File[];
+  altTexts?: string[];  // Alt text per media file
   quoteUri?: string;   // AT Protocol URI of quoted post
   quoteCid?: string;   // CID of quoted post
   quoteUrl?: string;   // Web URL for Mastodon (appended to text)
@@ -47,11 +48,12 @@ export async function postToBluesky(
         image: { $type: string; ref: { $link: string }; mimeType: string; size: number };
       }> = [];
 
-      for (const file of options.mediaFiles.slice(0, 4)) {
+      for (let idx = 0; idx < Math.min(options.mediaFiles.length, 4); idx++) {
+        const file = options.mediaFiles[idx];
         const bytes = new Uint8Array(await file.arrayBuffer());
         const resp = await agent.uploadBlob(bytes, { encoding: file.type });
         images.push({
-          alt: '',
+          alt: options.altTexts?.[idx] ?? '',
           image: resp.data.blob,
         });
       }
@@ -231,10 +233,11 @@ export async function postThreadToBluesky(
           alt: string;
           image: unknown;
         }> = [];
-        for (const file of options.mediaFiles.slice(0, 4)) {
+        for (let idx = 0; idx < Math.min(options.mediaFiles.length, 4); idx++) {
+          const file = options.mediaFiles[idx];
           const bytes = new Uint8Array(await file.arrayBuffer());
           const resp = await agent.uploadBlob(bytes, { encoding: file.type });
-          images.push({ alt: '', image: resp.data.blob });
+          images.push({ alt: options.altTexts?.[idx] ?? '', image: resp.data.blob });
         }
         record.embed = { $type: 'app.bsky.embed.images', images };
       }

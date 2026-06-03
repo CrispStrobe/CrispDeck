@@ -19,8 +19,22 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - Unified feed merging posts from all connected accounts
 - **Infinite scroll**: auto-loads more posts as you scroll down
 - Crosspost detection via Jaro-Winkler similarity (groups matching posts across platforms)
+- **Like, boost, reply, quote** interactions on every post
 - Advanced filters: search, sort (newest/likes/engagement), hide replies/reposts, min likes, media-only
 - Correct date ordering: reposts/reblogs sorted by feed appearance time, not original post time
+- **Multi-column Deck view**: TweetDeck-style with configurable columns (timeline, mentions, notifications, search)
+
+### Profiles, Notifications & Messages
+- **Profile pages**: view any user — avatar, banner, bio, stats, follow/unfollow, posts/replies/media tabs
+- **Notifications**: unified Bluesky + Mastodon notification feed
+- **Direct messages**: Bluesky chat.bsky.convo + Mastodon conversations
+- **Trending**: Mastodon trending tags, links, and posts
+
+### Lists, Feeds & Starter Packs
+- **Mastodon lists**: view, create, browse list timelines
+- **Bluesky custom feeds**: browse and view suggested feeds
+- **Bluesky starter packs**: browse and search by creator
+- **Moderation**: view/manage blocked and muted accounts on both platforms
 
 ### Compose & Crosspost
 - Write once, post to both platforms with one click
@@ -31,9 +45,11 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - Live per-platform preview showing exactly how threads will split
 - Bluesky RichText facet detection (mentions, URLs, hashtags auto-linked)
 - Reply chain posting (proper `root` + `parent` refs on Bluesky, `in_reply_to_id` on Mastodon)
-- Media upload (up to 4 images) to both platforms
+- **Quote posts**: Bluesky embed record + Mastodon URL append with preview
+- Media upload: images (JPEG/PNG/GIF/WebP up to 10MB) + video (MP4/WebM/MOV up to 100MB)
+- **Alt text editing** for uploaded images
 - Mastodon visibility controls (public/unlisted/private/direct) and content warnings
-- Draft saving
+- **Drafts**: save, resume editing, schedule for future posting
 - Crosspost history logging
 - Keyboard shortcut: Ctrl+Enter / Cmd+Enter to post
 
@@ -165,7 +181,7 @@ npx vercel deploy --prod
 ### Run tests
 
 ```bash
-npm test              # 115 tests (unit + integration)
+npm test              # 118 tests (unit + integration)
 npm run test:watch    # watch mode
 ```
 
@@ -198,7 +214,8 @@ src-tauri/
 
 ## CI/CD
 
-- **CI** (`ci.yml`): 115 tests + frontend build + Rust check on Linux/macOS/Windows — runs on every push and PR
+- **CI** (`ci.yml`): 118 tests + frontend build + Rust check on Linux/macOS/Windows — runs on every push and PR
+- **Mobile** (`mobile.yml`): iOS + Android builds via Tauri 2 — triggers on `v*` tags
 - **Release** (`release.yml`): Cross-platform Tauri builds via `tauri-apps/tauri-action` — triggers on `v*` tags, creates draft GitHub Releases with `.deb`, `.dmg`, `.msi` installers
 
 ### Creating a release

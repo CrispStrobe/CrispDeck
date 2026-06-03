@@ -39,6 +39,7 @@
   let textareaEl: HTMLTextAreaElement | undefined = $state();
   let mentionAutocomplete: MentionAutocomplete | undefined = $state();
   let mediaPreviews: string[] = $state([]);
+  let altTexts: string[] = $state([]);
 
   // Clients
   let clients: Map<number, BlueskyClient | MastodonClient> = new Map();
@@ -123,6 +124,7 @@
       }
       mediaFiles = [...mediaFiles, file];
       mediaPreviews = [...mediaPreviews, createPreviewUrl(file)];
+      altTexts = [...altTexts, ''];
     }
     input.value = '';
   }
@@ -131,6 +133,7 @@
     revokePreviewUrl(mediaPreviews[index]);
     mediaFiles = mediaFiles.filter((_, i) => i !== index);
     mediaPreviews = mediaPreviews.filter((_, i) => i !== index);
+    altTexts = altTexts.filter((_, i) => i !== index);
   }
 
   async function handlePost() {
@@ -171,6 +174,7 @@
       visibility,
       contentWarning: showCW ? contentWarning : undefined,
       mediaFiles: mediaFiles.length > 0 ? mediaFiles : undefined,
+      altTexts: altTexts.length > 0 ? altTexts : undefined,
       quoteUri: quoteUri || undefined,
       quoteCid: quoteCid || undefined,
       quoteUrl,
@@ -202,6 +206,7 @@
         mediaPreviews.forEach(revokePreviewUrl);
         mediaFiles = [];
         mediaPreviews = [];
+        altTexts = [];
       }
     } catch (e) {
       error = String(e);
@@ -352,18 +357,26 @@
           </div>
         </div>
 
-        <!-- Media -->
+        <!-- Media with alt text -->
         {#if mediaPreviews.length > 0}
-          <div class="grid grid-cols-4 gap-2">
+          <div class="grid grid-cols-2 gap-3">
             {#each mediaPreviews as preview, i}
-              <div class="relative aspect-square rounded-lg overflow-hidden bg-[var(--color-surface-hover)]">
-                <img src={preview} alt="" class="w-full h-full object-cover" />
-                <button
-                  onclick={() => removeMedia(i)}
-                  class="absolute top-1 right-1 p-1 bg-black/70 rounded-full text-white hover:bg-black"
-                >
-                  <X size={12} />
-                </button>
+              <div class="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
+                <div class="relative aspect-video">
+                  <img src={preview} alt={altTexts[i] || ''} class="w-full h-full object-cover" />
+                  <button
+                    onclick={() => removeMedia(i)}
+                    class="absolute top-1 right-1 p-1 bg-black/70 rounded-full text-white hover:bg-black"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  bind:value={altTexts[i]}
+                  placeholder="Describe this image for accessibility..."
+                  class="w-full px-2 py-1.5 bg-transparent border-t border-[var(--color-border)] text-xs text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
+                />
               </div>
             {/each}
           </div>
