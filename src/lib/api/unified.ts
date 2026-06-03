@@ -13,6 +13,11 @@ export function normalizePost(post: PlatformPost, platform: 'bluesky' | 'mastodo
       createdAt: string;
       reply?: { parent: { uri: string } };
     };
+    // For reposts: use the repost time (when it appeared in feed), not original post time
+    const feedDate = AppBskyFeedDefs.isReasonRepost(item.reason)
+      ? (item.reason.indexedAt ?? record.createdAt)
+      : record.createdAt;
+
     return {
       uri: p.uri,
       text: record.text,
@@ -21,7 +26,7 @@ export function normalizePost(post: PlatformPost, platform: 'bluesky' | 'mastodo
         displayName: p.author.displayName,
         avatar: p.author.avatar,
       },
-      createdAt: record.createdAt,
+      createdAt: feedDate,
       platform: 'bluesky',
       replyCount: p.replyCount,
       repostCount: p.repostCount,
@@ -37,6 +42,8 @@ export function normalizePost(post: PlatformPost, platform: 'bluesky' | 'mastodo
   } else {
     const item = post as mastodon.v1.Status;
     const target = item.reblog ?? item;
+    // For reblogs: use the reblog time (item.createdAt), not original post time (target.createdAt)
+    const feedDate = item.reblog ? item.createdAt : target.createdAt;
     return {
       uri: target.uri,
       text: target.content.replace(/<[^>]*>?/gm, ''),
@@ -45,7 +52,7 @@ export function normalizePost(post: PlatformPost, platform: 'bluesky' | 'mastodo
         displayName: target.account.displayName,
         avatar: target.account.avatar,
       },
-      createdAt: target.createdAt,
+      createdAt: feedDate,
       platform: 'mastodon',
       replyCount: target.repliesCount,
       repostCount: target.reblogsCount,
