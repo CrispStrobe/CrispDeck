@@ -41,7 +41,14 @@
 - [x] 118 unit + integration tests
 - [x] Mastodon instance info/rules display
 
+- [x] GIF picker (Tenor API search/trending in compose)
+- [x] Inline post translation (MyMemory API, IndexedDB cache, configurable target language)
+- [x] Internationalization (i18n): Svelte 5 runes TranslationService, English + German, language selector
+- [x] Share post as image (html2canvas with CrispDeck branding, Web Share API / download)
+- [x] Custom PDS resolution (plc.directory for did:plc, .well-known for did:web — federated PDS support)
+- [x] Alt text enforcement modes (off/warn/require in settings, visual nudge in compose)
+- [x] 256 unit + integration tests (up from 118)
+
 ## Remaining
 
-- [ ] GIF search (Tenor/Giphy API — low priority)
 - [ ] Push notifications (Tauri mobile)

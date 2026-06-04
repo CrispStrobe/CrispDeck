@@ -24,7 +24,8 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - Write once, post to both platforms — **thread auto-splitting** per platform (300 bsky / 500 masto)
 - **Bluesky OAuth** (PKCE + DPoP) for full access including DMs
 - Quote posts, reply chains, Bluesky RichText facets (mentions, URLs, hashtags)
-- Media: images + video (up to 100MB), **alt text editing**, emoji picker
+- Media: images + video (up to 100MB), **alt text editing**, emoji picker, **GIF picker** (Tenor)
+- **Alt text enforcement**: off / warn / require modes in settings
 - **Mastodon polls** (create with 2-4 options + vote on existing)
 - **Bluesky thread gates** (Anyone / Mentioned / Followers / Nobody)
 - Content warnings, visibility controls, **post templates**
@@ -35,6 +36,7 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 ### Identity & Moderation
 - **Identity map**: auto-detect cross-platform accounts via Jaro-Winkler matching
 - **Bluesky labelers**: subscribe, configure hide/warn/show per label, labels shown on posts
+- **Custom PDS resolution**: federated Bluesky PDS instances work out of the box (resolves via plc.directory / did:web)
 - **Moderation**: view/manage blocked + muted accounts (both platforms)
 - Block/mute from any profile
 
@@ -46,6 +48,8 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **Trending**: Mastodon tags/links/posts with Latin script filter
 - **Mastodon instance info**: rules, stats, contact, description
 - **Network search**: full-text across both platforms
+- **Inline translation**: translate any post (MyMemory API, cached in IndexedDB)
+- **Share post as image**: render any post as branded PNG
 
 ### Analytics & Archive
 - **Analytics**: full pagination, date range filter, clickable stats (top 5 by likes/reposts/engagement), hourly chart, platform breakdown
@@ -55,11 +59,12 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 ### Platform & UX
 - **Bluesky OAuth** (recommended) or app passwords
 - **Mastodon OAuth** with redirect callback
+- **Internationalization**: English + German, language selector in settings
 - **Keyboard shortcuts**: ? for help, g+key navigation, Ctrl+Enter to post
 - **Collapsible sidebar** + mobile hamburger menu + bottom tab bar
 - Safe area insets, touch targets, responsive design
-- **Emoji picker** in compose
-- 118 unit + integration tests
+- **Emoji picker** + **GIF picker** (Tenor) in compose
+- 256 unit + integration tests
 
 ## Architecture
 
@@ -212,9 +217,9 @@ git push origin v0.2.0
 
 ## Stats
 
-- 54 commits
-- 61 source files (23 pages, 8 components, 10 test files)
-- 118 unit + integration tests
+- 55 commits
+- 64 source files (23 pages, 9 components, 20 test files)
+- 256 unit + integration tests
 - 22 sidebar navigation items
 - 11 deck column types
 - Bluesky: OAuth + app password auth, public API reading
