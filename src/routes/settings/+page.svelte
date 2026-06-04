@@ -20,7 +20,13 @@
   let openaiBaseUrl = $state(txConfig.openaiBaseUrl ?? 'https://api.openai.com/v1');
   let openaiApiKey = $state(txConfig.openaiApiKey ?? '');
   let openaiModel = $state(txConfig.openaiModel ?? 'gpt-4o-mini');
-  let crispasrModel = $state(txConfig.crispasrModel ?? 'm2m100-418m-q4_k');
+  let crispasrModel = $state(txConfig.crispasrModel ?? 'm2m100');
+
+  // TTS + STT model settings (stored in localStorage)
+  let ttsModel = $state(localStorage.getItem('crispdeck-tts-model') ?? 'kokoro');
+  let sttModel = $state(localStorage.getItem('crispdeck-stt-model') ?? 'whisper');
+  function saveTtsModel() { localStorage.setItem('crispdeck-tts-model', ttsModel); }
+  function saveSttModel() { localStorage.setItem('crispdeck-stt-model', sttModel); }
 
   let altTextMode = $state<'off' | 'warn' | 'require'>(
     (localStorage.getItem('crispdeck-alt-text-mode') as any) ?? 'off'
@@ -525,23 +531,32 @@
       {#if translateProvider === 'crispasr'}
         <div class="space-y-2">
           <p class="text-xs text-[var(--color-text-muted)]">
-            Local translation via CrispASR with M2M-100 GGUF models. Runs natively on CPU/GPU — no API key, fully offline. Model downloaded on first use. Requires desktop app.
+            Local translation via CrispASR GGUF models. Runs natively on CPU/GPU — no API key, fully offline. Model auto-downloaded on first use. Requires desktop app built with <code class="bg-[var(--color-bg)] px-1 rounded text-[10px]">--features crispasr-metal</code>.
           </p>
           <div>
-            <label for="crispasr-model" class="block text-xs text-[var(--color-text-muted)] mb-1">Model</label>
+            <label for="crispasr-model" class="block text-xs text-[var(--color-text-muted)] mb-1">Translation model</label>
             <select
               id="crispasr-model"
               bind:value={crispasrModel}
               onchange={saveTranslateConfig}
               class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
             >
-              <option value="m2m100-418m-q4_k">M2M-100 418M Q4_K · 271 MB · 100 languages</option>
-              <option value="m2m100-418m-q8_0">M2M-100 418M Q8_0 · 502 MB · 100 languages</option>
-              <option value="m2m100-418m-f16">M2M-100 418M F16 · 934 MB · 100 languages</option>
+              <optgroup label="M2M-100 (100 languages, any-to-any)">
+                <option value="m2m100">M2M-100 418M Q8 · ~502 MB</option>
+              </optgroup>
+              <optgroup label="WMT21 Dense (EN ↔ 7 langs, higher quality)">
+                <option value="m2m100-wmt21">WMT21 Dense 24-wide Q4 · ~2.5 GB</option>
+              </optgroup>
+              <optgroup label="MADLAD-400 (419 languages)">
+                <option value="madlad">MADLAD-400 3B Q4 · ~1.9 GB</option>
+              </optgroup>
+              <optgroup label="Gemma4 E2B (140+ langs, dual ASR+MT)">
+                <option value="gemma4-e2b">Gemma4 E2B Q4 · ~2.5 GB</option>
+              </optgroup>
             </select>
           </div>
           <p class="text-[10px] text-[var(--color-text-muted)]">
-            Same models as CrisperWeaver. Coming soon for desktop builds — use BYOK or MyMemory for now.
+            M2M-100 is recommended for most use cases. WMT21 is higher quality for EN↔{zh,de,fr,ja,ru,is,ha}. MADLAD covers 419 languages. All models are commercially licensed (MIT / Apache-2.0).
           </p>
         </div>
       {/if}
@@ -589,6 +604,89 @@
           </div>
         </div>
       {/if}
+    </div>
+  </section>
+
+  <!-- Text-to-Speech -->
+  <section class="mb-8">
+    <h2 class="text-lg font-semibold mb-3">Text-to-Speech (Read Aloud)</h2>
+    <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+      <p class="text-xs text-[var(--color-text-muted)]">
+        Desktop: CrispASR TTS backends (auto-downloaded GGUF models). Web: uses browser's native speech synthesis.
+      </p>
+      <div>
+        <label for="tts-model" class="block text-xs text-[var(--color-text-muted)] mb-1">TTS model (desktop)</label>
+        <select id="tts-model" bind:value={ttsModel} onchange={saveTtsModel} class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none">
+          <optgroup label="Lightweight (fast)">
+            <option value="kokoro">Kokoro 82M Q8 · ~135 MB · English</option>
+            <option value="piper">Piper (Lessac) · ~16 MB · English</option>
+            <option value="pocket-tts">Pocket TTS · ~220 MB · English</option>
+            <option value="fastpitch">FastPitch · ~120 MB · English</option>
+          </optgroup>
+          <optgroup label="High quality">
+            <option value="qwen3-tts">Qwen3 TTS 0.6B Q8 · ~986 MB</option>
+            <option value="qwen3-tts-1.7b-base">Qwen3 TTS 1.7B Q8 · ~1.9 GB</option>
+            <option value="chatterbox">Chatterbox Q8 · ~880 MB</option>
+            <option value="chatterbox-turbo">Chatterbox Turbo Q8 · ~980 MB</option>
+            <option value="vibevoice-tts">VibeVoice 0.5B Q4 · ~636 MB</option>
+            <option value="orpheus">Orpheus 3B Q8 · ~3.5 GB</option>
+          </optgroup>
+          <optgroup label="German voices">
+            <option value="kartoffel-orpheus-de-natural">Kartoffel Orpheus DE (natural) · ~3.5 GB</option>
+            <option value="kartoffel-orpheus-de-synthetic">Kartoffel Orpheus DE (synthetic) · ~3.5 GB</option>
+            <option value="lex-au-orpheus-de">Lex.au Orpheus DE · ~3.5 GB</option>
+          </optgroup>
+          <optgroup label="Multilingual">
+            <option value="cosyvoice3-tts">CosyVoice3 Q4 · ~384 MB</option>
+            <option value="voxcpm2-tts">VoxCPM2 Q4 · ~1.6 GB</option>
+            <option value="f5-tts">F5-TTS F16 · ~953 MB</option>
+            <option value="speecht5">SpeechT5 F16 · ~300 MB</option>
+            <option value="dia">Dia 1.6B F16 · ~3.0 GB</option>
+            <option value="bark">Bark Q8 · ~500 MB</option>
+          </optgroup>
+        </select>
+      </div>
+    </div>
+  </section>
+
+  <!-- Speech-to-Text -->
+  <section class="mb-8">
+    <h2 class="text-lg font-semibold mb-3">Speech-to-Text (Dictation)</h2>
+    <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+      <p class="text-xs text-[var(--color-text-muted)]">
+        Desktop: CrispASR STT backends. Web: uses browser's native speech recognition (Web Speech API).
+      </p>
+      <div>
+        <label for="stt-model" class="block text-xs text-[var(--color-text-muted)] mb-1">STT model (desktop)</label>
+        <select id="stt-model" bind:value={sttModel} onchange={saveSttModel} class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none">
+          <optgroup label="General (multilingual)">
+            <option value="whisper">Whisper Base · ~147 MB · 99 languages</option>
+            <option value="qwen3">Qwen3 ASR 0.6B Q4 · ~500 MB</option>
+            <option value="qwen3-1.7b">Qwen3 ASR 1.7B Q4 · ~1.3 GB</option>
+            <option value="canary">Canary 1B Q4 · ~600 MB · 4 languages</option>
+            <option value="gemma4-e2b">Gemma4 E2B Q4 · ~2.5 GB · 140+ langs</option>
+          </optgroup>
+          <optgroup label="Fast (English)">
+            <option value="moonshine">Moonshine Tiny Q4 · ~20 MB</option>
+            <option value="moonshine-streaming">Moonshine Streaming Q4 · ~31 MB</option>
+            <option value="fastconformer-ctc">FastConformer CTC Q4 · ~83 MB</option>
+            <option value="parakeet">Parakeet TDT 0.6B Q4 · ~467 MB · 25 EU langs</option>
+            <option value="parakeet-tdt-1.1b">Parakeet TDT 1.1B Q4 · ~808 MB</option>
+          </optgroup>
+          <optgroup label="German">
+            <option value="moonshine-de">Moonshine Base DE Q4 · ~39 MB</option>
+            <option value="moonshine-tiny-de">Moonshine Tiny DE Q4 · ~17 MB</option>
+            <option value="wav2vec2-de">Wav2Vec2 DE Q4 · ~222 MB</option>
+          </optgroup>
+          <optgroup label="Specialized">
+            <option value="sensevoice">SenseVoice Q4 · ~129 MB · Chinese/EN/JA/KO</option>
+            <option value="omniasr">OmniASR CTC 1B Q4 · ~658 MB · 1600+ langs</option>
+            <option value="firered-asr">FireRed ASR Q4 · ~918 MB</option>
+            <option value="vibevoice">VibeVoice ASR Q4 · ~4.5 GB</option>
+            <option value="mega-asr">Mega ASR 1.7B Q4 · ~1.3 GB</option>
+          </optgroup>
+        </select>
+      </div>
     </div>
   </section>
 </div>

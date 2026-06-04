@@ -1,0 +1,106 @@
+{
+  "generatedAt": "2026-06-04T08:23:52.997Z",
+  "counts": {
+    "frontend": 12,
+    "backend": 0,
+    "total": 12
+  },
+  "licenses": [
+    {
+      "name": "@atproto/api",
+      "version": "n/a",
+      "license": "n/a",
+      "author": "n/a",
+      "link": "https://www.npmjs.com/package/@atproto/api",
+      "source": "Frontend"
+    },
+    {
+      "name": "@atproto/oauth-client-browser",
+      "version": "n/a",
+      "license": "n/a",
+      "author": "n/a",
+      "link": "https://www.npmjs.com/package/@atproto/oauth-client-browser",
+      "source": "Frontend"
+    },
+    {
+      "name": "@lucide/svelte",
+      "version": "n/a",
+      "license": "n/a",
+      "author": "n/a",
+      "link": "https://www.npmjs.com/package/@lucide/svelte",
+      "source": "Frontend"
+    },
+    {
+      "name": "@tauri-apps/api",
+      "version": "n/a",
+      "license": "n/a",
+      "author": "n/a",
+      "link": "https://www.npmjs.com/package/@tauri-apps/api",
+      "source": "Frontend"
+    },
+    {
+      "name": "@tauri-apps/plugin-dialog",
+      "version": "n/a",
+      "license": "n/a",
+      "author": "n/a",
+      "link": "https://www.npmjs.com/package/@tauri-apps/plugin-dialog",
+      "source": "Frontend"
+    },
+    {
+      "name": "@tauri-apps/plugin-fs",
+      "version": "n/a",
+      "license": "n/a",
+      "author": "n/a",
+      "link": "https://www.npmjs.com/package/@tauri-apps/plugin-fs",
+      "source": "Frontend"
+    },
+    {
+      "name": "@tauri-apps/plugin-http",
+      "version": "n/a",
+      "license": "n/a",
+      "author": "n/a",
+      "link": "https://www.npmjs.com/package/@tauri-apps/plugin-http",
+      "source": "Frontend"
+    },
+    {
+      "name": "@tauri-apps/plugin-opener",
+      "version": "n/a",
+      "license": "n/a",
+      "author": "n/a",
+      "link": "https://www.npmjs.com/package/@tauri-apps/plugin-opener",
+      "source": "Frontend"
+    },
+    {
+      "name": "@tauri-apps/plugin-shell",
+      "version": "n/a",
+      "license": "n/a",
+      "author": "n/a",
+      "link": "https://www.npmjs.com/package/@tauri-apps/plugin-shell",
+      "source": "Frontend"
+    },
+    {
+      "name": "@tauri-apps/plugin-store",
+      "version": "n/a",
+      "license": "n/a",
+      "author": "n/a",
+      "link": "https://www.npmjs.com/package/@tauri-apps/plugin-store",
+      "source": "Frontend"
+    },
+    {
+      "name": "html2canvas",
+      "version": "n/a",
+      "license": "n/a",
+      "author": "n/a",
+      "link": "https://www.npmjs.com/package/html2canvas",
+      "source": "Frontend"
+    },
+    {
+      "name": "masto",
+      "version": "n/a",
+      "license": "n/a",
+      "author": "n/a",
+      "link": "https://www.npmjs.com/package/masto",
+      "source": "Frontend"
+    }
+  ]
+}

@@ -136,9 +136,42 @@ impl AsrHandle {
 
 // ── Tauri commands ────────────────────────────────────────────────────────
 
+#[derive(Debug, Clone, Serialize)]
+pub struct ModelEntry {
+    pub name: String,
+    pub filename: String,
+    pub approx_size: String,
+    pub url: String,
+}
+
 #[tauri::command]
 pub fn asr_available() -> bool {
     cfg!(feature = "crispasr")
+}
+
+/// List all models in the CrispASR registry, grouped by capability.
+#[tauri::command]
+pub fn asr_list_models() -> Result<Vec<ModelEntry>, String> {
+    #[cfg(feature = "crispasr")]
+    {
+        let names = crispasr::list_known_models();
+        let mut seen = std::collections::HashSet::new();
+        let mut entries = Vec::new();
+        for name in names {
+            if !seen.insert(name.clone()) { continue; }
+            if let Ok(Some(entry)) = crispasr::registry_lookup(&name) {
+                entries.push(ModelEntry {
+                    name,
+                    filename: entry.filename,
+                    approx_size: entry.approx_size,
+                    url: entry.url,
+                });
+            }
+        }
+        Ok(entries)
+    }
+    #[cfg(not(feature = "crispasr"))]
+    Err("crispasr feature disabled".into())
 }
 
 #[tauri::command]

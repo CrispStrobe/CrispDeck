@@ -92,6 +92,7 @@ pub fn run() {
             asr::synthesize_speech,
             asr::asr_backend_name,
             asr::asr_available,
+            asr::asr_list_models,
         ])
         .run(tauri::generate_context!())
         .expect("error while running CrispDeck");
