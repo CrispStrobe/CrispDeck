@@ -122,7 +122,7 @@
       {/each}
     </ul>
     {#if !collapsed}
-      <div class="px-3 py-2 border-t border-[var(--color-border)] text-[10px] text-[var(--color-text-muted)]">v0.2.0</div>
+      <div class="px-3 py-2 border-t border-[var(--color-border)] text-[10px] text-[var(--color-text-muted)]">v0.2.1</div>
     {/if}
   </nav>
 

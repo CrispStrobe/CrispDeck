@@ -1,6 +1,6 @@
 [package]
 name = "crispdeck"
-version = "0.2.0"
+version = "0.2.1"
 description = "Cross-platform Mastodon + Bluesky client"
 authors = ["Christian Strobele"]
 edition = "2021"
