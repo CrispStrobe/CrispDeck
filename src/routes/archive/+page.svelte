@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Archive, Search, Loader2, Download, Trash2, Database, RefreshCw } from '@lucide/svelte';
+  import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import { normalizePost } from '$lib/api/unified';
@@ -166,7 +167,7 @@
   <div class="flex items-center justify-between mb-6">
     <div class="flex items-center gap-2">
       <Archive size={24} />
-      <h1 class="text-2xl font-bold">Archive</h1>
+      <h1 class="text-2xl font-bold">{i18n.t.archive.title}</h1>
     </div>
     <div class="flex items-center gap-2">
       <button
@@ -231,7 +232,7 @@
         <input
           type="text"
           bind:value={query}
-          placeholder="Search your archive..."
+          placeholder={i18n.t.archive.searchPlaceholder}
           class="flex-1 px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]"
         />
         <select bind:value={filterType} class="px-2 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-xs text-[var(--color-text)]">
@@ -277,7 +278,7 @@
   {:else if !loading && !building}
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <Archive size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
-      <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">No Archive Yet</h3>
+      <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">{i18n.t.archive.noArchive}</h3>
       <p class="text-sm text-[var(--color-text-muted)] mb-4">Build a local archive of your posts, likes, and reposts for fast searching and export.</p>
       <button
         onclick={buildArchive}

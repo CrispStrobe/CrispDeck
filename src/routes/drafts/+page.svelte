@@ -3,6 +3,7 @@
   import { listDrafts, deleteDraft as dbDeleteDraft, saveDraft as dbSaveDraft } from '$lib/db';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { FileText, Trash2, Clock, Send, Loader2, Edit3, Calendar } from '@lucide/svelte';
+  import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import { crosspostThread, type PostResult } from '$lib/compose/adapter';
@@ -146,7 +147,7 @@
   <div class="flex items-center justify-between mb-6">
     <div class="flex items-center gap-2">
       <FileText size={24} />
-      <h1 class="text-2xl font-bold">Drafts</h1>
+      <h1 class="text-2xl font-bold">{i18n.t.drafts.title}</h1>
       {#if drafts.length > 0}
         <span class="text-sm text-[var(--color-text-muted)] ml-2">({drafts.length})</span>
       {/if}
@@ -180,7 +181,7 @@
   {:else if drafts.length === 0}
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <FileText size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
-      <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">No Drafts</h3>
+      <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">{i18n.t.drafts.noDrafts}</h3>
       <p class="text-sm text-[var(--color-text-muted)]">Saved drafts from the <a href="/compose" class="text-[var(--color-primary)] underline">Compose</a> page appear here.</p>
     </div>
   {:else}

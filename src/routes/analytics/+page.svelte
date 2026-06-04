@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { BarChart3, Heart, Repeat, MessageCircle, Clock, TrendingUp, Download, Loader2, ChevronDown } from '@lucide/svelte';
+  import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import { normalizePost, sortPosts } from '$lib/api/unified';
@@ -114,7 +115,7 @@
   <div class="flex items-center justify-between mb-4">
     <div class="flex items-center gap-2">
       <BarChart3 size={24} />
-      <h1 class="text-2xl font-bold">Analytics</h1>
+      <h1 class="text-2xl font-bold">{i18n.t.analytics.title}</h1>
       {#if originalPosts.length > 0}
         <span class="text-sm text-[var(--color-text-muted)]">({originalPosts.length} posts)</span>
       {/if}
@@ -139,8 +140,8 @@
   {#if posts.length === 0 && !loading}
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <BarChart3 size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
-      <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-3">Load Your Posts for Analytics</h3>
-      <p class="text-sm text-[var(--color-text-muted)] mb-4">This will fetch ALL your posts from both platforms to compute accurate stats.</p>
+      <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-3">{i18n.t.analytics.loadPosts}</h3>
+      <p class="text-sm text-[var(--color-text-muted)] mb-4">{i18n.t.analytics.loadHint}</p>
       <button
         onclick={loadAllPosts}
         disabled={loading || accounts.length === 0}

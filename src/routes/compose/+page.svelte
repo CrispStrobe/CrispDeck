@@ -3,6 +3,7 @@
   import { logCrosspost, saveDraft as dbSaveDraft, listDrafts, deleteDraft as dbDeleteDraft } from '$lib/db';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { PenSquare, Send, Loader2, X, ImagePlus, AlertTriangle, Check, BarChart3, Shield, Mic, MicOff } from '@lucide/svelte';
+  import { i18n } from '$lib/i18n.svelte';
   import AccountPicker from '$lib/components/AccountPicker.svelte';
   import MentionAutocomplete from '$lib/components/MentionAutocomplete.svelte';
   import EmojiPicker from '$lib/components/EmojiPicker.svelte';
@@ -13,6 +14,7 @@
   import { crosspostThread, graphemeLength, type PostResult, type ComposeOptions, type ThreadGate, type PollOptions } from '$lib/compose/adapter';
   import { splitForPlatform, planThread, type ThreadPlan } from '$lib/compose/thread';
   import { validateMediaFile, createPreviewUrl, revokePreviewUrl } from '$lib/compose/media';
+  import { tryVoiceCommand, looksLikeCommand } from '$lib/voice-commands';
   import type { Account, Platform } from '$lib/types';
 
   let accounts: Account[] = $state([]);
@@ -275,6 +277,11 @@
   let audioChunks: Blob[] = [];
 
   function insertAtCursor(transcript: string) {
+    // Check for voice commands first — intercept before inserting as text
+    if (looksLikeCommand(transcript) && tryVoiceCommand(transcript)) {
+      return; // Command was executed, don't insert text
+    }
+
     if (textareaEl) {
       const pos = textareaEl.selectionStart;
       const insert = transcript + ' ';
@@ -411,7 +418,7 @@
 <div class="p-6 max-w-4xl mx-auto">
   <div class="flex items-center gap-2 mb-6">
     <PenSquare size={24} />
-    <h1 class="text-2xl font-bold">Compose</h1>
+    <h1 class="text-2xl font-bold">{i18n.t.compose.title}</h1>
   </div>
 
   {#if error}
@@ -451,7 +458,7 @@
         <!-- Reply context -->
         {#if replyTo}
           <div class="p-3 bg-blue-950/30 border-l-4 border-blue-500 rounded-r-lg text-sm">
-            <span class="text-blue-300">Replying to</span>
+            <span class="text-blue-300">{i18n.t.compose.replyingTo}</span>
             <a href="/profile?handle={encodeURIComponent(replyAuthor)}&platform={replyPlatform}" class="font-medium text-blue-400 hover:underline ml-1">@{replyAuthor}</a>
           </div>
         {/if}
@@ -459,7 +466,7 @@
         <!-- Quote context -->
         {#if quoteUri}
           <div class="p-3 bg-purple-950/30 border-l-4 border-purple-500 rounded-r-lg text-sm">
-            <span class="text-purple-300">Quoting</span>
+            <span class="text-purple-300">{i18n.t.compose.quoting}</span>
             <span class="font-medium text-purple-400 ml-1">@{quoteAuthor}</span>
             {#if quoteText}
               <p class="text-xs text-[var(--color-text-muted)] mt-1 line-clamp-2">{quoteText}</p>
@@ -481,7 +488,7 @@
             <input
               type="text"
               bind:value={contentWarning}
-              placeholder="Content warning..."
+              placeholder={i18n.t.compose.cwPlaceholder}
               class="flex-1 px-3 py-2 bg-[var(--color-bg)] border border-yellow-600 rounded-md text-sm text-[var(--color-text)] focus:outline-none"
             />
             <button onclick={() => { showCW = false; contentWarning = ''; }} class="p-2 text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
@@ -495,7 +502,7 @@
           <textarea
             bind:this={textareaEl}
             bind:value={text}
-            placeholder="What's on your mind? Type @ to mention someone..."
+            placeholder={i18n.t.compose.placeholder}
             rows="8"
             oninput={() => mentionAutocomplete?.handleInput()}
             onkeydown={(e) => {
@@ -542,7 +549,7 @@
                 <input
                   type="text"
                   bind:value={altTexts[i]}
-                  placeholder="Describe this image for accessibility..."
+                  placeholder={i18n.t.compose.altTextPlaceholder}
                   class="w-full px-2 py-1.5 bg-transparent border-t text-xs text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none {altTextEnforced && !altTexts[i]?.trim() ? 'border-yellow-500 bg-yellow-950/20' : 'border-[var(--color-border)]'}"
                 />
               </div>
@@ -673,7 +680,7 @@
             >
               {#if posting}
                 <Loader2 size={14} class="animate-spin" />
-                Posting...
+                {i18n.t.compose.posting}
               {:else}
                 <Send size={14} />
                 {needsThread ? 'Post Thread' : 'Post'}{selectedAccountIds.length > 1 ? ` to ${selectedAccountIds.length} accounts` : ''}

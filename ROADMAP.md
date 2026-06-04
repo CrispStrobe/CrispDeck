@@ -71,9 +71,11 @@
 - [x] Translation preserves newlines from Mastodon HTML
 - [x] Full CrispASR model catalog (106 models: NMT + TTS + STT in Settings)
 
+- [x] CrispASR model download manager in Settings UI (registry browser, 106 models)
+- [x] Voice commands: "go to feed", "new post", "open settings", "scroll up", etc. (EN + DE)
+- [x] Wired all pages to i18n (analytics, drafts, archive, profile, deck, identities, labelers, instance, moderation, compose)
+- [x] TTS/STT engine selector: auto / CrispASR / browser (user choice per feature)
+
 ## Remaining
 
 - [ ] Push notifications (Tauri mobile)
-- [ ] CrispASR model download manager in Settings UI
-- [ ] Voice control: voice commands for navigation
-- [ ] Wire all remaining hardcoded UI strings through i18n.t.*

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Shield, Loader2, Ban, VolumeX, UserX } from '@lucide/svelte';
+  import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import type { Account } from '$lib/types';
@@ -198,7 +199,7 @@
 <div class="p-6 max-w-3xl mx-auto">
   <div class="flex items-center gap-2 mb-6">
     <Shield size={24} />
-    <h1 class="text-2xl font-bold">Moderation</h1>
+    <h1 class="text-2xl font-bold">{i18n.t.moderation.title}</h1>
   </div>
 
   {#if error}
@@ -208,10 +209,10 @@
   <!-- Tabs -->
   <div class="flex items-center gap-1 border-b border-[var(--color-border)] mb-4">
     <button onclick={() => activeTab = 'blocked'} class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors {activeTab === 'blocked' ? 'border-red-500 text-red-400' : 'border-transparent text-[var(--color-text-muted)]'}">
-      <Ban size={14} class="inline mr-1" /> Blocked ({blocked.length})
+      <Ban size={14} class="inline mr-1" /> {i18n.t.moderation.blocked} ({blocked.length})
     </button>
     <button onclick={() => activeTab = 'muted'} class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors {activeTab === 'muted' ? 'border-yellow-500 text-yellow-400' : 'border-transparent text-[var(--color-text-muted)]'}">
-      <VolumeX size={14} class="inline mr-1" /> Muted ({muted.length})
+      <VolumeX size={14} class="inline mr-1" /> {i18n.t.moderation.muted} ({muted.length})
     </button>
     {#if modLists.length > 0}
       <button onclick={() => activeTab = 'lists'} class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors {activeTab === 'lists' ? 'border-[var(--color-bluesky)] text-[var(--color-bluesky)]' : 'border-transparent text-[var(--color-text-muted)]'}">

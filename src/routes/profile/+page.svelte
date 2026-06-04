@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { User, Loader2, UserPlus, UserMinus, Ban, ArrowLeft } from '@lucide/svelte';
+  import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import { normalizePost, sortPosts } from '$lib/api/unified';
@@ -276,8 +277,8 @@
           >
             {#if following}<UserMinus size={14} /> Following{:else}<UserPlus size={14} /> Follow{/if}
           </button>
-          <button onclick={muteUser} class="px-3 py-2 text-xs border border-[var(--color-border)] rounded-md text-[var(--color-text-muted)] hover:text-yellow-400 hover:border-yellow-500 transition-colors" title="Mute">Mute</button>
-          <button onclick={blockUser} class="px-3 py-2 text-xs border border-[var(--color-border)] rounded-md text-[var(--color-text-muted)] hover:text-red-400 hover:border-red-500 transition-colors" title="Block">Block</button>
+          <button onclick={muteUser} class="px-3 py-2 text-xs border border-[var(--color-border)] rounded-md text-[var(--color-text-muted)] hover:text-yellow-400 hover:border-yellow-500 transition-colors" title="Mute">{i18n.t.profile.mute}</button>
+          <button onclick={blockUser} class="px-3 py-2 text-xs border border-[var(--color-border)] rounded-md text-[var(--color-text-muted)] hover:text-red-400 hover:border-red-500 transition-colors" title="Block">{i18n.t.profile.block}</button>
         </div>
         {#if profile.description}
           <p class="text-sm text-[var(--color-text)] mt-2">{profile.description}</p>

@@ -8,6 +8,7 @@
   } from '$lib/db';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Users, ScanSearch, Loader2, Check, X, Plus, Tag, Trash2, Link2 } from '@lucide/svelte';
+  import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import type { Account, Identity, IdentityCandidate, FollowEntry } from '$lib/types';
@@ -222,7 +223,7 @@
   <div class="flex items-center justify-between mb-6">
     <div class="flex items-center gap-2">
       <Users size={24} />
-      <h1 class="text-2xl font-bold">Identities</h1>
+      <h1 class="text-2xl font-bold">{i18n.t.nav.identities}</h1>
       {#if identities.length > 0}
         <span class="text-sm text-[var(--color-text-muted)] ml-2">
           {confirmedCount} confirmed, {pendingCount} pending

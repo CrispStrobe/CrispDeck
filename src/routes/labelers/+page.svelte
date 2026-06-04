@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Tag, Loader2, Plus, X, Shield, Eye, EyeOff, AlertTriangle } from '@lucide/svelte';
+  import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import type { Account } from '$lib/types';
 
@@ -204,7 +205,7 @@
 <div class="p-6 max-w-4xl mx-auto">
   <div class="flex items-center gap-2 mb-6">
     <Tag size={24} />
-    <h1 class="text-2xl font-bold">Labelers</h1>
+    <h1 class="text-2xl font-bold">{i18n.t.nav.labelers}</h1>
     <span class="text-xs px-2 py-0.5 bg-[var(--color-bluesky)]/20 text-[var(--color-bluesky)] rounded">Bluesky</span>
   </div>
 
