@@ -276,8 +276,12 @@ export async function translateText(
     return { translated: cached.translated, sourceLang: cached.sourceLang, provider: `${cached.provider} (cached)` };
   }
 
-  // Strip HTML tags for Mastodon posts
-  const cleanText = text.replace(/<[^>]*>/g, '').trim();
+  // Strip HTML tags for Mastodon posts, preserving line breaks
+  const cleanText = text
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n')
+    .replace(/<[^>]*>/g, '')
+    .trim();
   if (!cleanText) {
     return { translated: '', sourceLang: 'unknown', provider: 'none' };
   }

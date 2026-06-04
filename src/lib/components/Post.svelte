@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Heart, Repeat, MessageCircle, Quote, Bookmark, Share, Flag, Languages, Camera, Loader2 } from '@lucide/svelte';
+  import { Heart, Repeat, MessageCircle, Quote, Bookmark, Share, Flag, Languages, Camera, Loader2, Volume2, VolumeOff } from '@lucide/svelte';
   import { addBookmark, removeBookmark, isBookmarked } from '$lib/bookmarks';
   import { translateText, type TranslationResult } from '$lib/translate';
   import { onMount } from 'svelte';
@@ -23,6 +23,29 @@
   });
 
   let copied = $state(false);
+
+  // Read aloud (TTS)
+  let speaking = $state(false);
+  let utterance: SpeechSynthesisUtterance | null = null;
+
+  function toggleReadAloud() {
+    if (speaking) {
+      speechSynthesis.cancel();
+      speaking = false;
+      return;
+    }
+    const textToSpeak = post.platform === 'mastodon'
+      ? (getMastodonHtml() || post.text).replace(/<[^>]*>/g, '')
+      : post.text;
+    if (!textToSpeak.trim()) return;
+
+    utterance = new SpeechSynthesisUtterance(textToSpeak);
+    utterance.onend = () => { speaking = false; };
+    utterance.onerror = () => { speaking = false; };
+    speechSynthesis.speak(utterance);
+    speaking = true;
+  }
+
   let translating = $state(false);
   let translation: TranslationResult | null = $state(null);
   let translateError = $state('');
@@ -475,6 +498,14 @@
         title={copied ? 'Copied!' : 'Copy link'}
       >
         <Share size={14} />
+      </button>
+
+      <button
+        onclick={toggleReadAloud}
+        class="flex items-center gap-1.5 transition-colors {speaking ? 'text-green-400' : 'text-[var(--color-text-muted)]'} hover:text-green-400 opacity-0 group-hover:opacity-100"
+        title={speaking ? 'Stop reading' : 'Read aloud'}
+      >
+        {#if speaking}<VolumeOff size={12} />{:else}<Volume2 size={12} />{/if}
       </button>
 
       <button

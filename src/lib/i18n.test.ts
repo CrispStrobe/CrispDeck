@@ -77,6 +77,21 @@ describe('i18n translations', () => {
         expect(translations.de.common).toHaveProperty(key);
       }
     });
+
+    it('translation section has all keys in both languages', () => {
+      const requiredKeys = ['provider', 'mymemoryFree', 'crispasrLocal', 'openaiByok', 'targetLang'];
+      for (const key of requiredKeys) {
+        expect(translations.en.translation).toHaveProperty(key);
+        expect(translations.de.translation).toHaveProperty(key);
+      }
+    });
+
+    it('tts/stt/analytics/moderation sections exist in both languages', () => {
+      for (const section of ['tts', 'stt', 'analytics', 'moderation', 'lists', 'trending', 'starterPacks', 'about'] as const) {
+        expect(translations.en).toHaveProperty(section);
+        expect(translations.de).toHaveProperty(section);
+      }
+    });
   });
 
   describe('translation completeness', () => {

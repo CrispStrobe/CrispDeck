@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { logCrosspost, saveDraft as dbSaveDraft, listDrafts, deleteDraft as dbDeleteDraft } from '$lib/db';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { PenSquare, Send, Loader2, X, ImagePlus, AlertTriangle, Check, BarChart3, Shield } from '@lucide/svelte';
+  import { PenSquare, Send, Loader2, X, ImagePlus, AlertTriangle, Check, BarChart3, Shield, Mic, MicOff } from '@lucide/svelte';
   import AccountPicker from '$lib/components/AccountPicker.svelte';
   import MentionAutocomplete from '$lib/components/MentionAutocomplete.svelte';
   import EmojiPicker from '$lib/components/EmojiPicker.svelte';
@@ -267,6 +267,58 @@
 
   const altTextEnforced = typeof localStorage !== 'undefined' && (localStorage.getItem('crispdeck-alt-text-mode') ?? 'off') !== 'off';
 
+  // Dictation (Speech-to-Text)
+  let dictating = $state(false);
+  let recognition: any = null;
+
+  function toggleDictation() {
+    if (dictating) {
+      recognition?.stop();
+      dictating = false;
+      return;
+    }
+
+    const SpeechRecognition = (globalThis as any).SpeechRecognition || (globalThis as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      error = 'Speech recognition not supported in this browser.';
+      return;
+    }
+
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = localStorage.getItem('crispdeck-stt-lang') || 'en-US';
+
+    let finalTranscript = '';
+    recognition.onresult = (event: any) => {
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript + ' ';
+          // Insert at cursor
+          if (textareaEl) {
+            const pos = textareaEl.selectionStart;
+            const insert = event.results[i][0].transcript + ' ';
+            text = text.substring(0, pos) + insert + text.substring(pos);
+            requestAnimationFrame(() => {
+              const newPos = pos + insert.length;
+              textareaEl?.setSelectionRange(newPos, newPos);
+            });
+          } else {
+            text += event.results[i][0].transcript + ' ';
+          }
+        }
+      }
+    };
+    recognition.onerror = (event: any) => {
+      if (event.error !== 'aborted') error = `Dictation error: ${event.error}`;
+      dictating = false;
+    };
+    recognition.onend = () => { dictating = false; };
+    recognition.start();
+    dictating = true;
+  }
+
   const selectedAccounts = $derived(accounts.filter(a => selectedAccountIds.includes(a.id)));
   const hasBsky = $derived(selectedAccounts.some(a => a.platform === 'bluesky'));
   const hasMasto = $derived(selectedAccounts.some(a => a.platform === 'mastodon'));
@@ -445,6 +497,13 @@
               class="px-2 py-1 text-xs font-mono border rounded-md transition-colors {showCW ? 'border-yellow-600 text-yellow-400' : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
             >
               CW
+            </button>
+            <button
+              onclick={toggleDictation}
+              class="p-1.5 rounded-md transition-colors {dictating ? 'text-red-400 bg-red-900/20 animate-pulse' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'}"
+              title={dictating ? 'Stop dictation' : 'Dictate (speech-to-text)'}
+            >
+              {#if dictating}<MicOff size={16} />{:else}<Mic size={16} />{/if}
             </button>
 
             <!-- Templates -->

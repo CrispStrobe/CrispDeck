@@ -51,36 +51,60 @@
   async function search() {
     if (!searchQuery.trim() || !bskyEntry) return;
     searching = true;
+    error = '';
     try {
       const agent = bskyEntry.oauthAgent ?? (bskyEntry.client as BlueskyClient).getAgent();
       const bskyClient = bskyEntry.client as BlueskyClient;
       const allPacks: StarterPack[] = [];
       const seen = new Set<string>();
 
-      // Strategy 1: Search actors and fetch their starter packs
+      // Strategy 1: Search posts mentioning "starter pack" + query
+      // This finds people sharing/discussing starter packs about the topic
+      try {
+        const searchResp = await fetch(
+          `https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=${encodeURIComponent(searchQuery + ' starter pack')}&limit=30`
+        );
+        if (searchResp.ok) {
+          const searchData = await searchResp.json();
+          const handles = new Set<string>();
+          for (const post of searchData.posts ?? []) {
+            handles.add(post.author.handle);
+            // Also extract @mentions from text
+            const mentions = (post.record?.text ?? '').matchAll(/@([\w.-]+)/g);
+            for (const m of mentions) handles.add(m[1]);
+          }
+          // Fetch starter packs from all discovered handles
+          for (const handle of [...handles].slice(0, 15)) {
+            try {
+              const resp = await agent.api.app.bsky.graph.getActorStarterPacks({ actor: handle });
+              for (const sp of resp.data.starterPacks ?? []) {
+                const pack = sp as unknown as StarterPack;
+                if (!seen.has(pack.uri)) {
+                  seen.add(pack.uri);
+                  allPacks.push(pack);
+                }
+              }
+            } catch {}
+          }
+        }
+      } catch {}
+
+      // Strategy 2: Search actors and fetch their starter packs
       const actors = await bskyClient.searchActors(searchQuery);
-      for (const actor of actors.slice(0, 8)) {
+      for (const actor of actors.slice(0, 10)) {
         try {
           const resp = await agent.api.app.bsky.graph.getActorStarterPacks({ actor: actor.handle });
           for (const sp of resp.data.starterPacks ?? []) {
             const pack = sp as unknown as StarterPack;
             if (!seen.has(pack.uri)) {
-              // Filter: only include packs whose name or description matches the query
-              const q = searchQuery.toLowerCase();
-              const nameMatch = pack.record.name?.toLowerCase().includes(q);
-              const descMatch = pack.record.description?.toLowerCase().includes(q);
-              const creatorMatch = pack.creator.handle.toLowerCase().includes(q) ||
-                pack.creator.displayName?.toLowerCase().includes(q);
-              if (nameMatch || descMatch || creatorMatch) {
-                seen.add(pack.uri);
-                allPacks.push(pack);
-              }
+              seen.add(pack.uri);
+              allPacks.push(pack);
             }
           }
         } catch {}
       }
 
-      // Strategy 2: If query looks like a handle, search that specific actor
+      // Strategy 3: Direct handle lookup
       if (searchQuery.includes('.') || searchQuery.includes('@')) {
         try {
           const handle = searchQuery.replace(/^@/, '');
@@ -95,9 +119,20 @@
         } catch {}
       }
 
+      // Sort by relevance: packs whose name/desc matches the query rank first, then by member count
+      const q = searchQuery.toLowerCase();
+      allPacks.sort((a, b) => {
+        const aMatch = (a.record.name?.toLowerCase().includes(q) ? 2 : 0) +
+          (a.record.description?.toLowerCase().includes(q) ? 1 : 0);
+        const bMatch = (b.record.name?.toLowerCase().includes(q) ? 2 : 0) +
+          (b.record.description?.toLowerCase().includes(q) ? 1 : 0);
+        if (aMatch !== bMatch) return bMatch - aMatch;
+        return (b.listItemCount ?? 0) - (a.listItemCount ?? 0);
+      });
+
       packs = allPacks;
       if (allPacks.length === 0) {
-        error = `No starter packs found for "${searchQuery}". Try searching by creator handle or pack topic.`;
+        error = `No starter packs found for "${searchQuery}". Try a different topic or creator handle.`;
       }
     } catch (e) {
       error = String(e);

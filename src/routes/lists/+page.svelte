@@ -10,12 +10,14 @@
 
   interface MastoList { id: string; title: string; repliesPolicy: string }
   interface BskyFeed { uri: string; displayName: string; description?: string; avatar?: string; likeCount?: number; creator: { handle: string } }
+  interface BskyList { uri: string; cid: string; name: string; purpose: string; description?: string; avatar?: string; creator: { handle: string; displayName?: string }; listItemCount?: number }
 
   let accounts: Account[] = $state([]);
   let loading = $state(true);
   let error = $state('');
   let mastoLists: MastoList[] = $state([]);
   let bskyFeeds: BskyFeed[] = $state([]);
+  let bskyLists: BskyList[] = $state([]);
   let selectedList: { type: 'mastodon'; id: string; title: string } | { type: 'bluesky'; uri: string; title: string } | null = $state(null);
   let listPosts: UnifiedPost[] = $state([]);
   let loadingPosts = $state(false);
@@ -25,6 +27,11 @@
   // Create list form
   let showCreateForm = $state(false);
   let newListTitle = $state('');
+
+  // Feed search
+  let feedSearch = $state('');
+  let feedSearchResults: BskyFeed[] = $state([]);
+  let searchingFeeds = $state(false);
 
   onMount(async () => {
     try {
@@ -59,8 +66,12 @@
       } else {
         try {
           const agent = entry.oauthAgent ?? (client as BlueskyClient).getAgent();
-          const resp = await agent.api.app.bsky.feed.getSuggestedFeeds({ limit: 20 });
-          bskyFeeds = (resp.data.feeds ?? []) as unknown as BskyFeed[];
+          // Load suggested feeds
+          const feedResp = await agent.api.app.bsky.feed.getSuggestedFeeds({ limit: 20 });
+          bskyFeeds = (feedResp.data.feeds ?? []) as unknown as BskyFeed[];
+          // Load user's own lists
+          const listResp = await agent.api.app.bsky.graph.getLists({ actor: acct!.handle, limit: 50 });
+          bskyLists = (listResp.data.lists ?? []) as unknown as BskyList[];
         } catch {}
       }
     }
@@ -107,6 +118,38 @@
       break;
     }
     loadingPosts = false;
+  }
+
+  async function selectBskyList(list: BskyList) {
+    selectedList = { type: 'bluesky', uri: list.uri, title: list.name };
+    loadingPosts = true;
+    listPosts = [];
+    for (const [id, entry] of clientEntries) {
+      const acct = accounts.find(a => a.id === id);
+      if (acct?.platform !== 'bluesky') continue;
+      try {
+        const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
+        const resp = await agent.api.app.bsky.feed.getListFeed({ list: list.uri, limit: 50 });
+        listPosts = sortPosts(resp.data.feed.map(p => normalizePost(p, 'bluesky')), 'newest');
+      } catch {}
+      break;
+    }
+    loadingPosts = false;
+  }
+
+  async function searchFeeds() {
+    if (!feedSearch.trim()) { feedSearchResults = []; return; }
+    searchingFeeds = true;
+    try {
+      const resp = await fetch(
+        `https://public.api.bsky.app/xrpc/app.bsky.unspecced.getPopularFeedGenerators?query=${encodeURIComponent(feedSearch)}&limit=20`
+      );
+      if (resp.ok) {
+        const data = await resp.json();
+        feedSearchResults = (data.feeds ?? []) as unknown as BskyFeed[];
+      }
+    } catch {}
+    searchingFeeds = false;
   }
 
   async function createMastoList() {
@@ -174,11 +217,41 @@
             {/each}
           </div>
         {/if}
+        {#if bskyLists.length > 0}
+          <div>
+            <h3 class="text-xs font-semibold text-[var(--color-text-muted)] uppercase mb-2 flex items-center gap-1">
+              <span class="w-2 h-2 rounded-full bg-[var(--color-bluesky)]"></span> Bluesky Lists
+            </h3>
+            {#each bskyLists as list}
+              <button onclick={() => selectBskyList(list)} class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-[var(--color-surface-hover)] transition-colors flex items-center gap-2 {selectedList?.type === 'bluesky' && selectedList?.uri === list.uri ? 'bg-[var(--color-surface)] border border-[var(--color-border)]' : ''}">
+                {#if list.avatar}<img src={list.avatar} alt="" class="w-5 h-5 rounded" />{/if}
+                <div class="truncate">
+                  <span class="truncate">{list.name}</span>
+                  {#if list.listItemCount}<span class="text-[10px] text-[var(--color-text-muted)] ml-1">({list.listItemCount})</span>{/if}
+                </div>
+              </button>
+            {/each}
+          </div>
+        {/if}
         {#if bskyFeeds.length > 0}
           <div>
             <h3 class="text-xs font-semibold text-[var(--color-text-muted)] uppercase mb-2 flex items-center gap-1">
               <span class="w-2 h-2 rounded-full bg-[var(--color-bluesky)]"></span> Bluesky Feeds
             </h3>
+            <!-- Feed search -->
+            <form onsubmit={(e) => { e.preventDefault(); searchFeeds(); }} class="mb-2">
+              <input type="text" bind:value={feedSearch} oninput={() => { if (!feedSearch.trim()) feedSearchResults = []; }} placeholder="Search feeds..." class="w-full px-2 py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-xs text-[var(--color-text)] focus:outline-none" />
+            </form>
+            {#if feedSearchResults.length > 0}
+              <div class="mb-2 border-b border-[var(--color-border)] pb-2">
+                {#each feedSearchResults as feed}
+                  <button onclick={() => selectBskyFeed(feed)} class="w-full text-left px-3 py-1.5 text-xs rounded-md hover:bg-[var(--color-surface-hover)] transition-colors flex items-center gap-2">
+                    {#if feed.avatar}<img src={feed.avatar} alt="" class="w-4 h-4 rounded" />{/if}
+                    <span class="truncate">{feed.displayName}</span>
+                  </button>
+                {/each}
+              </div>
+            {/if}
             {#each bskyFeeds as feed}
               <button onclick={() => selectBskyFeed(feed)} class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-[var(--color-surface-hover)] transition-colors flex items-center gap-2 {selectedList?.type === 'bluesky' && selectedList?.uri === feed.uri ? 'bg-[var(--color-surface)] border border-[var(--color-border)]' : ''}">
                 {#if feed.avatar}<img src={feed.avatar} alt="" class="w-5 h-5 rounded" />{/if}
