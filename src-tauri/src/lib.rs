@@ -1,3 +1,4 @@
+mod asr;
 mod auth;
 mod commands;
 mod db;
@@ -38,6 +39,11 @@ pub fn run() {
             app.manage(AppState {
                 db: Mutex::new(conn),
             });
+
+            // CrispASR handle — lazy-loads model on first translate/transcribe/synthesize call
+            let models_dir = app_dir.join("models");
+            std::fs::create_dir_all(&models_dir).ok();
+            app.manage(asr::AsrHandle::new(models_dir));
 
             log::info!(
                 "CrispDeck v{} started",
@@ -80,6 +86,12 @@ pub fn run() {
             commands::auth_commands::auth_wait_for_callback,
             // Identity detection
             commands::detect_commands::db_detect_identities,
+            // CrispASR (translation, TTS, STT)
+            asr::translate_text,
+            asr::transcribe_audio,
+            asr::synthesize_speech,
+            asr::asr_backend_name,
+            asr::asr_available,
         ])
         .run(tauri::generate_context!())
         .expect("error while running CrispDeck");

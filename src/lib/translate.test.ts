@@ -1,15 +1,10 @@
 /**
- * Tests for the translation service — cache key generation,
- * text cleaning, and target language management.
+ * Tests for the multi-provider translation service.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// We can't test the full translateText (network + IndexedDB) in unit tests,
-// but we can test the pure functions by extracting the logic.
-
 describe('translate utilities', () => {
   beforeEach(() => {
-    // Mock localStorage
     const store: Record<string, string> = {};
     vi.stubGlobal('localStorage', {
       getItem: (key: string) => store[key] ?? null,
@@ -18,32 +13,62 @@ describe('translate utilities', () => {
     });
   });
 
-  describe('getTargetLanguage / setTargetLanguage', () => {
-    it('defaults to "en" when nothing stored', async () => {
+  describe('getTranslateConfig / setTranslateConfig', () => {
+    it('returns defaults when nothing stored', async () => {
+      const { getTranslateConfig } = await import('./translate');
+      const cfg = getTranslateConfig();
+      expect(cfg.provider).toBe('mymemory');
+      expect(cfg.targetLang).toBe('en');
+    });
+
+    it('merges partial updates', async () => {
+      const { setTranslateConfig, getTranslateConfig } = await import('./translate');
+      setTranslateConfig({ targetLang: 'de' });
+      const cfg = getTranslateConfig();
+      expect(cfg.targetLang).toBe('de');
+      expect(cfg.provider).toBe('mymemory'); // unchanged
+    });
+
+    it('saves OpenAI config', async () => {
+      const { setTranslateConfig, getTranslateConfig } = await import('./translate');
+      setTranslateConfig({
+        provider: 'openai',
+        openaiBaseUrl: 'http://localhost:11434/v1',
+        openaiApiKey: '',
+        openaiModel: 'llama3.2',
+      });
+      const cfg = getTranslateConfig();
+      expect(cfg.provider).toBe('openai');
+      expect(cfg.openaiModel).toBe('llama3.2');
+    });
+
+    it('saves CrispASR config', async () => {
+      const { setTranslateConfig, getTranslateConfig } = await import('./translate');
+      setTranslateConfig({ provider: 'crispasr', crispasrModel: 'm2m100-418m-q8_0' });
+      const cfg = getTranslateConfig();
+      expect(cfg.provider).toBe('crispasr');
+      expect(cfg.crispasrModel).toBe('m2m100-418m-q8_0');
+    });
+  });
+
+  describe('getTargetLanguage / setTargetLanguage (backward compat)', () => {
+    it('defaults to "en"', async () => {
       const { getTargetLanguage } = await import('./translate');
       expect(getTargetLanguage()).toBe('en');
     });
 
-    it('returns saved language', async () => {
-      localStorage.setItem('crispdeck-translate-lang', 'de');
-      const { getTargetLanguage } = await import('./translate');
-      expect(getTargetLanguage()).toBe('de');
-    });
-
-    it('setTargetLanguage persists to localStorage', async () => {
-      const { setTargetLanguage, getTargetLanguage } = await import('./translate');
+    it('setTargetLanguage updates config', async () => {
+      const { setTargetLanguage, getTranslateConfig } = await import('./translate');
       setTargetLanguage('ja');
-      expect(localStorage.getItem('crispdeck-translate-lang')).toBe('ja');
+      expect(getTranslateConfig().targetLang).toBe('ja');
     });
   });
 
-  describe('HTML stripping in translation', () => {
+  describe('HTML stripping', () => {
     it('strips HTML tags from Mastodon content', () => {
       const html = '<p>Hello <a href="https://example.com">world</a></p>';
       const stripped = html.replace(/<[^>]*>/g, '').trim();
       expect(stripped).toBe('Hello world');
-      expect(stripped).not.toContain('<');
-      expect(stripped).not.toContain('>');
     });
 
     it('handles nested HTML', () => {
@@ -66,7 +91,7 @@ describe('translate utilities', () => {
   });
 
   describe('cache key hashing', () => {
-    it('produces consistent hashes for same input', () => {
+    it('consistent hashes for same input', () => {
       function hashText(text: string): string {
         let hash = 0;
         for (let i = 0; i < text.length; i++) {
@@ -76,7 +101,6 @@ describe('translate utilities', () => {
         }
         return hash.toString(36);
       }
-
       expect(hashText('hello')).toBe(hashText('hello'));
       expect(hashText('hello')).not.toBe(hashText('world'));
       expect(hashText('')).toBe('0');
@@ -92,11 +116,17 @@ describe('translate utilities', () => {
         }
         return hash.toString(36);
       }
+      expect(hashText('日本語')).toBe(hashText('日本語'));
+    });
+  });
 
-      const h1 = hashText('日本語テスト');
-      const h2 = hashText('日本語テスト');
-      expect(h1).toBe(h2);
-      expect(typeof h1).toBe('string');
+  describe('provider types', () => {
+    it('provider enum covers all backends', async () => {
+      const { getTranslateConfig, setTranslateConfig } = await import('./translate');
+      for (const provider of ['crispasr', 'openai', 'mymemory'] as const) {
+        setTranslateConfig({ provider });
+        expect(getTranslateConfig().provider).toBe(provider);
+      }
     });
   });
 });

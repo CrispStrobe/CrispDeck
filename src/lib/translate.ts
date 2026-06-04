@@ -147,32 +147,41 @@ async function translateWithCrispASR(
   _srcLang: string,
   tgtLang: string,
 ): Promise<TranslationResult> {
-  // Check if running in Tauri with CrispASR available
   const w = globalThis as any;
-  if (w.__TAURI_INTERNALS__) {
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const result = await invoke('translate_text', {
-        text,
-        srcLang: _srcLang || 'auto',
-        tgtLang,
-      });
-      const r = result as { translated: string; srcLang: string };
-      return {
-        translated: r.translated,
-        sourceLang: r.srcLang,
-        provider: 'CrispASR (local)',
-      };
-    } catch (e) {
-      throw new Error(`CrispASR translation failed: ${e}`);
-    }
+  if (!w.__TAURI_INTERNALS__) {
+    throw new Error(
+      'Local translation requires the desktop app with CrispASR. ' +
+      'Use "OpenAI / BYOK" with Ollama or any OpenAI-compatible endpoint, ' +
+      'or "MyMemory" as a free fallback.'
+    );
   }
 
-  throw new Error(
-    'Local translation requires the desktop app with CrispASR. ' +
-    'Use "OpenAI / BYOK" with Ollama or any OpenAI-compatible endpoint, ' +
-    'or "MyMemory" as a free fallback.'
-  );
+  const config = getTranslateConfig();
+  const { invoke } = await import('@tauri-apps/api/core');
+
+  // Check if CrispASR feature is compiled in
+  const available = await invoke('asr_available') as boolean;
+  if (!available) {
+    throw new Error(
+      'CrispASR not compiled in this build. Rebuild with --features crispasr-metal (macOS), ' +
+      'crispasr-vulkan (Windows/Linux), or crispasr-cuda (NVIDIA).'
+    );
+  }
+
+  const result = await invoke('translate_text', {
+    backend: config.crispasrModel?.replace(/-q\d.*$/, '') || 'm2m100',
+    modelPath: null, // auto-download from registry
+    text,
+    srcLang: _srcLang || 'auto',
+    tgtLang,
+    maxTokens: 200,
+  });
+  const r = result as { translated: string; srcLang: string; backend: string };
+  return {
+    translated: r.translated,
+    sourceLang: r.srcLang,
+    provider: `CrispASR (${r.backend})`,
+  };
 }
 
 // ── Provider: BYOK OpenAI-compatible ──────────────────────────────────────

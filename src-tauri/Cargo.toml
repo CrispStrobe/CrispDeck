@@ -49,5 +49,23 @@ hostname = "0.4"
 log = "0.4"
 env_logger = "0.11"
 
+# ── CrispASR (optional — translation, TTS, STT) ──────────────────────────
+# Path dep to sibling CrispASR checkout. Same pattern as crisp-docx and
+# CrispSorter. Enable with:
+#   cargo build --features crispasr-metal    (macOS)
+#   cargo build --features crispasr-vulkan   (Windows / Linux)
+#   cargo build --features crispasr-cuda     (NVIDIA)
+[dependencies.crispasr]
+path = "../../CrispASR/crispasr"
+version = "0.5"
+optional = true
+
+[features]
+default = []
+crispasr        = ["dep:crispasr"]
+crispasr-metal  = ["crispasr", "crispasr/metal"]
+crispasr-vulkan = ["crispasr", "crispasr/vulkan"]
+crispasr-cuda   = ["crispasr", "crispasr/cuda"]
+
 [profile.dev.package."*"]
 debug = 0
