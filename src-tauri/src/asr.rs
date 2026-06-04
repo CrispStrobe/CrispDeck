@@ -59,12 +59,13 @@ struct SessionSlot {
     #[cfg(feature = "crispasr")]
     session: Option<crispasr::Session>,
     #[cfg(not(feature = "crispasr"))]
-    session: Option<()>,
+    _session: Option<()>,
     config: AsrConfig,
 }
 
 pub struct AsrHandle {
-    slot: Arc<Mutex<SessionSlot>>,
+    pub(crate) slot: Arc<Mutex<SessionSlot>>,
+    #[allow(dead_code)]
     cache_dir: PathBuf,
 }
 
@@ -72,7 +73,10 @@ impl AsrHandle {
     pub fn new(cache_dir: PathBuf) -> Self {
         Self {
             slot: Arc::new(Mutex::new(SessionSlot {
+                #[cfg(feature = "crispasr")]
                 session: None,
+                #[cfg(not(feature = "crispasr"))]
+                _session: None,
                 config: AsrConfig::default(),
             })),
             cache_dir,
