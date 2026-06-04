@@ -59,10 +59,21 @@
 - [x] License generator script (scripts/generate-licenses.js — NPM + Cargo deps)
 - [x] 276 tests (260 frontend + 11 Rust unit + 5 Rust live translation)
 
+- [x] Dictation: mic button in compose (Web Speech API, CrispASR upgrade path)
+- [x] Read aloud: speaker button on posts (browser SpeechSynthesis, CrispASR upgrade path)
+- [x] Bluesky trending topics (app.bsky.unspecced.getTrendingTopics, numbered list)
+- [x] Improved starter packs search (post search + actor search + relevance ranking)
+- [x] Bluesky lists (graph lists + feed search via getPopularFeedGenerators)
+- [x] Bluesky moderation lists (subscribe/unsubscribe, mute-all)
+- [x] Feed scroll position preservation (append without re-sort, deduplicate)
+- [x] Feed incremental refresh (prepend new posts, don't reload all)
+- [x] Comprehensive i18n (12 sections: translation, tts, stt, analytics, moderation, lists, trending, starterPacks, about)
+- [x] Translation preserves newlines from Mastodon HTML
+- [x] Full CrispASR model catalog (106 models: NMT + TTS + STT in Settings)
+
 ## Remaining
 
 - [ ] Push notifications (Tauri mobile)
 - [ ] CrispASR model download manager in Settings UI
-- [ ] Dictation: mic button in compose → STT via CrispASR whisper
-- [ ] Read aloud: "Read" button on posts → TTS via CrispASR kokoro
 - [ ] Voice control: voice commands for navigation
+- [ ] Wire all remaining hardcoded UI strings through i18n.t.*
