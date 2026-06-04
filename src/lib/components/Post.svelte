@@ -23,6 +23,29 @@
 
   let copied = $state(false);
 
+  async function votePoll(pollId: string, choiceIndex: number) {
+    try {
+      // Find the Mastodon instance from the post URI
+      const url = new URL(post.uri);
+      // We need a token — this requires the onlike callback pattern
+      // For now, use a direct fetch (the token will come from the parent page)
+      const raw = post.raw as any;
+      const instanceUrl = `${url.protocol}//${url.hostname}`;
+      const resp = await fetch(`${instanceUrl}/api/v1/polls/${pollId}/votes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ choices: [choiceIndex] }),
+      });
+      if (resp.ok) {
+        // Update the poll in-place to show results
+        const updated = await resp.json();
+        (post.raw as any).poll = updated;
+      }
+    } catch (e) {
+      console.error('Vote failed:', e);
+    }
+  }
+
   async function handleShare() {
     const url = getPostUrl(post);
     try {
@@ -235,20 +258,31 @@
       <!-- Mastodon poll -->
       {#if post.platform === 'mastodon' && (post.raw as any)?.poll}
         {@const poll = (post.raw as any).poll}
+        {@const hasVoted = poll.voted || poll.ownVotes?.length > 0}
         <div class="mt-2 space-y-1.5">
           {#each poll.options as option, i}
             {@const total = poll.votesCount || poll.options.reduce((s: number, o: any) => s + (o.votesCount ?? 0), 0) || 1}
             {@const pct = Math.round(((option.votesCount ?? 0) / total) * 100)}
-            <div class="relative overflow-hidden rounded-md border border-[var(--color-border)]">
-              <div class="absolute inset-0 bg-[var(--color-primary)]/15" style="width: {pct}%"></div>
-              <div class="relative flex items-center justify-between px-3 py-1.5">
-                <span class="text-xs">{option.title}</span>
-                <span class="text-[10px] text-[var(--color-text-muted)] font-medium">{pct}%</span>
+            {@const isMyVote = poll.ownVotes?.includes(i)}
+            {#if hasVoted || poll.expired}
+              <div class="relative overflow-hidden rounded-md border border-[var(--color-border)] {isMyVote ? 'border-[var(--color-primary)]' : ''}">
+                <div class="absolute inset-0 bg-[var(--color-primary)]/15" style="width: {pct}%"></div>
+                <div class="relative flex items-center justify-between px-3 py-1.5">
+                  <span class="text-xs">{isMyVote ? '✓ ' : ''}{option.title}</span>
+                  <span class="text-[10px] text-[var(--color-text-muted)] font-medium">{pct}%</span>
+                </div>
               </div>
-            </div>
+            {:else}
+              <button
+                onclick={() => votePoll(poll.id, i)}
+                class="w-full text-left px-3 py-1.5 text-xs rounded-md border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 transition-colors"
+              >
+                {option.title}
+              </button>
+            {/if}
           {/each}
           <p class="text-[10px] text-[var(--color-text-muted)]">
-            {poll.votesCount ?? '?'} votes · {poll.expired ? 'Closed' : 'Open'}
+            {poll.votesCount ?? '?'} votes · {poll.expired ? 'Closed' : hasVoted ? 'Voted' : 'Open'}
           </p>
         </div>
       {/if}

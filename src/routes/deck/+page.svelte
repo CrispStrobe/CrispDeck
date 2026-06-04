@@ -42,6 +42,8 @@
     { type: 'search', label: 'Search...' },
     { type: 'hashtag', label: 'Hashtag...' },
     { type: 'user', label: 'User Feed...' },
+    { type: 'list', label: 'Mastodon List...' },
+    { type: 'feed', label: 'Bluesky Feed...' },
   ];
 
   // Saved layouts
@@ -169,6 +171,20 @@
           const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/timelines/public?limit=40`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
           if (resp.ok) posts.push(...(await resp.json()).map((s: any) => normalizePost(s, 'mastodon')));
         } catch {}
+      } else if (col.type === 'list' && col.query && mastoClient) {
+        try {
+          const token = mastoClient.getAccessToken();
+          if (token) {
+            const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/timelines/list/${col.query}?limit=40`, { headers: { Authorization: `Bearer ${token}` } });
+            if (resp.ok) posts.push(...(await resp.json()).map((s: any) => normalizePost(s, 'mastodon')));
+          }
+        } catch {}
+      } else if (col.type === 'feed' && col.query && bskyEntry) {
+        try {
+          const agent = bskyEntry.oauthAgent ?? (bskyEntry.client as BlueskyClient).getAgent();
+          const resp = await agent.api.app.bsky.feed.getFeed({ feed: col.query, limit: 50 });
+          posts.push(...resp.data.feed.map(p => normalizePost(p, 'bluesky')));
+        } catch {}
       }
     } catch (e) {
       console.error(`Failed to load column ${col.id}:`, e);
@@ -195,6 +211,14 @@
       query = prompt('User handle (e.g. alice.bsky.social):') ?? undefined;
       if (!query) return;
       title = `@${query}`;
+    } else if (type === 'list') {
+      query = prompt('Mastodon list ID (from /lists page):') ?? undefined;
+      if (!query) return;
+      title = `List: ${query}`;
+    } else if (type === 'feed') {
+      query = prompt('Bluesky feed URI (at://...):') ?? undefined;
+      if (!query) return;
+      title = `Feed: ${query.split('/').pop()}`;
     }
 
     columns = [...columns, { id, title, type, query }];

@@ -6,6 +6,7 @@
   import AccountPicker from '$lib/components/AccountPicker.svelte';
   import MentionAutocomplete from '$lib/components/MentionAutocomplete.svelte';
   import EmojiPicker from '$lib/components/EmojiPicker.svelte';
+  import { listTemplates, saveTemplate, deleteTemplate, type PostTemplate } from '$lib/templates';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import { crosspostThread, graphemeLength, type PostResult, type ComposeOptions, type ThreadGate, type PollOptions } from '$lib/compose/adapter';
@@ -32,6 +33,10 @@
   let replyAuthor = $state('');
   let replyPlatform = $state('');
   let editingDraftId: number | null = $state(null);
+
+  // Templates
+  let templates: PostTemplate[] = $state([]);
+  let showTemplates = $state(false);
 
   // Thread gate (Bluesky)
   let threadGate: ThreadGate = $state('everyone');
@@ -100,6 +105,7 @@
       error = String(e);
     } finally {
       loading = false;
+      templates = listTemplates();
     }
   });
 
@@ -405,6 +411,45 @@
             >
               CW
             </button>
+
+            <!-- Templates -->
+            <div class="relative">
+              <button
+                onclick={() => showTemplates = !showTemplates}
+                class="px-2 py-1 text-xs border rounded-md transition-colors {showTemplates ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+              >
+                Tpl
+              </button>
+              {#if showTemplates}
+                <div class="absolute bottom-full left-0 mb-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl z-50 w-56 max-h-48 overflow-y-auto py-1">
+                  <button
+                    onclick={() => { saveTemplate({ name: text.trim().substring(0, 30) || 'Untitled', text: text.trim(), visibility, contentWarning: showCW ? contentWarning : undefined }); templates = listTemplates(); showTemplates = false; }}
+                    disabled={!text.trim()}
+                    class="w-full text-left px-3 py-1.5 text-xs text-[var(--color-primary)] hover:bg-[var(--color-surface-hover)] disabled:opacity-30"
+                  >
+                    + Save current as template
+                  </button>
+                  {#if templates.length > 0}
+                    <div class="border-t border-[var(--color-border)] my-1"></div>
+                    {#each templates as tpl}
+                      <div class="flex items-center justify-between px-3 py-1.5 hover:bg-[var(--color-surface-hover)]">
+                        <button
+                          onclick={() => { text = tpl.text; if (tpl.visibility) visibility = tpl.visibility as any; if (tpl.contentWarning) { contentWarning = tpl.contentWarning; showCW = true; } showTemplates = false; }}
+                          class="flex-1 text-left text-xs truncate"
+                        >
+                          {tpl.name}
+                        </button>
+                        <button onclick={() => { deleteTemplate(tpl.id); templates = listTemplates(); }} class="text-[var(--color-text-muted)] hover:text-[var(--color-danger)] ml-1">
+                          <X size={10} />
+                        </button>
+                      </div>
+                    {/each}
+                  {:else}
+                    <p class="px-3 py-1.5 text-[10px] text-[var(--color-text-muted)]">No templates saved</p>
+                  {/if}
+                </div>
+              {/if}
+            </div>
 
             {#if hasMasto}
               <select
