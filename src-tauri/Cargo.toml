@@ -3,6 +3,7 @@ name = "crispdeck"
 version = "0.2.1"
 description = "Cross-platform Mastodon + Bluesky client"
 authors = ["Christian Strobele"]
+license = "AGPL-3.0-only"
 edition = "2021"
 
 [lib]

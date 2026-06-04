@@ -13,7 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "dependencies": {
     "@atproto/api": "^0.15.23",
     "@atproto/oauth-client-browser": "^0.4.1",

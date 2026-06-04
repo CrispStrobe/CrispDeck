@@ -244,4 +244,4 @@ git push origin v0.2.0
 
 ## License
 
-MIT
+[AGPL-3.0](LICENSE) — free for commercial use, attribution required, derivatives must be open source.
