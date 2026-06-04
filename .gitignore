@@ -10,3 +10,4 @@ src-tauri/gen/
 .env.local
 dist/
 .vercel
+src-tauri/.cargo/config.toml
