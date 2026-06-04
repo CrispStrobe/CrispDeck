@@ -86,10 +86,27 @@ describe('i18n translations', () => {
       }
     });
 
-    it('tts/stt/analytics/moderation sections exist in both languages', () => {
+    it('tts/stt/analytics/moderation sections exist in en and de', () => {
       for (const section of ['tts', 'stt', 'analytics', 'moderation', 'lists', 'trending', 'starterPacks', 'about'] as const) {
         expect(translations.en).toHaveProperty(section);
         expect(translations.de).toHaveProperty(section);
+      }
+    });
+
+    it('fr/es/ja have core nav + compose + post sections', () => {
+      for (const lang of ['fr', 'es', 'ja'] as const) {
+        expect(translations[lang]).toHaveProperty('nav');
+        expect(translations[lang]).toHaveProperty('compose');
+        expect(translations[lang]).toHaveProperty('post');
+        expect(translations[lang]).toHaveProperty('feed');
+        expect(translations[lang]).toHaveProperty('settings');
+        expect(translations[lang]).toHaveProperty('common');
+      }
+    });
+
+    it('all 5 languages have nav.dashboard', () => {
+      for (const lang of ['en', 'de', 'fr', 'es', 'ja'] as const) {
+        expect(translations[lang].nav.dashboard).toBeTruthy();
       }
     });
   });

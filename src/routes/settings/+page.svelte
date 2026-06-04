@@ -28,6 +28,32 @@
   function saveTtsModel() { localStorage.setItem('crispdeck-tts-model', ttsModel); }
   function saveSttModel() { localStorage.setItem('crispdeck-stt-model', sttModel); }
 
+  // Model manager
+  let isTauri = $state(false);
+  let crispasrAvailable = $state(false);
+  let registryModels: Array<{ name: string; filename: string; approx_size: string; url: string }> = $state([]);
+
+  onMount(async () => {
+    // ... existing onMount runs loadAccounts
+    // Check Tauri + CrispASR availability
+    if (typeof (globalThis as any).__TAURI_INTERNALS__ !== 'undefined') {
+      isTauri = true;
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        crispasrAvailable = await invoke('asr_available') as boolean;
+      } catch {}
+    }
+  });
+
+  async function loadRegistry() {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      registryModels = await invoke('asr_list_models') as typeof registryModels;
+    } catch (e) {
+      error = `Failed to load registry: ${e}`;
+    }
+  }
+
   let altTextMode = $state<'off' | 'warn' | 'require'>(
     (localStorage.getItem('crispdeck-alt-text-mode') as any) ?? 'off'
   );
@@ -690,6 +716,44 @@
           </optgroup>
         </select>
       </div>
+    </div>
+  </section>
+
+  <!-- Model Manager (CrispASR desktop only) -->
+  <section class="mb-8">
+    <h2 class="text-lg font-semibold mb-3">Model Manager</h2>
+    <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+      {#if !isTauri}
+        <p class="text-xs text-[var(--color-text-muted)]">
+          Model management is available in the desktop app only. The web version uses BYOK OpenAI or MyMemory for translation, and browser APIs for TTS/STT.
+        </p>
+      {:else if !crispasrAvailable}
+        <p class="text-xs text-[var(--color-text-muted)]">
+          CrispASR not compiled in this build. Rebuild with <code class="bg-[var(--color-bg)] px-1 rounded text-[10px]">--features crispasr-metal</code> (macOS) or <code class="bg-[var(--color-bg)] px-1 rounded text-[10px]">crispasr-vulkan</code> (Linux/Windows).
+        </p>
+      {:else}
+        <p class="text-xs text-[var(--color-text-muted)] mb-2">
+          Models are downloaded on first use from HuggingFace and cached locally. Select a model above, then use it — it will auto-download.
+        </p>
+        {#if registryModels.length > 0}
+          <div class="text-xs text-[var(--color-text-muted)] mb-1">{registryModels.length} models in registry</div>
+          <div class="max-h-64 overflow-y-auto space-y-1 bg-[var(--color-bg)] rounded-md p-2 border border-[var(--color-border)]">
+            {#each registryModels as model}
+              <div class="flex items-center justify-between py-1 px-2 rounded hover:bg-[var(--color-surface-hover)]">
+                <div class="min-w-0">
+                  <span class="text-xs font-medium truncate">{model.name}</span>
+                  <span class="text-[10px] text-[var(--color-text-muted)] ml-1">{model.approx_size}</span>
+                </div>
+                <span class="text-[9px] text-[var(--color-text-muted)] truncate ml-2 max-w-32">{model.filename}</span>
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <button onclick={loadRegistry} class="px-3 py-1.5 text-xs bg-[var(--color-primary)] text-white rounded-md">
+            Load Model Registry
+          </button>
+        {/if}
+      {/if}
     </div>
   </section>
 </div>
