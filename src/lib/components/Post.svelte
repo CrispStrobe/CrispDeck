@@ -25,21 +25,81 @@
   let copied = $state(false);
 
   // Read aloud (TTS)
+  // Tries CrispASR TTS first (desktop), falls back to browser SpeechSynthesis.
   let speaking = $state(false);
-  let utterance: SpeechSynthesisUtterance | null = null;
+  let audioEl: HTMLAudioElement | null = null;
 
-  function toggleReadAloud() {
+  function getPostText(): string {
+    const raw = post.platform === 'mastodon'
+      ? (getMastodonHtml() || post.text).replace(/<[^>]*>/g, '')
+      : post.text;
+    return raw.trim();
+  }
+
+  async function toggleReadAloud() {
     if (speaking) {
-      speechSynthesis.cancel();
+      audioEl?.pause();
+      speechSynthesis?.cancel();
       speaking = false;
       return;
     }
-    const textToSpeak = post.platform === 'mastodon'
-      ? (getMastodonHtml() || post.text).replace(/<[^>]*>/g, '')
-      : post.text;
-    if (!textToSpeak.trim()) return;
 
-    utterance = new SpeechSynthesisUtterance(textToSpeak);
+    const textToSpeak = getPostText();
+    if (!textToSpeak) return;
+
+    // Try CrispASR TTS first
+    const w = globalThis as any;
+    if (w.__TAURI_INTERNALS__) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const available = await invoke('asr_available') as boolean;
+        if (available) {
+          speaking = true;
+          const ttsModel = localStorage.getItem('crispdeck-tts-model') || 'kokoro';
+          const pcm = await invoke('synthesize_speech', {
+            backend: ttsModel,
+            modelPath: null,
+            text: textToSpeak,
+          }) as number[];
+
+          // Play PCM as audio (24kHz mono float32 → WAV blob)
+          const sampleRate = 24000;
+          const buffer = new ArrayBuffer(44 + pcm.length * 2);
+          const view = new DataView(buffer);
+          // WAV header
+          const writeStr = (offset: number, str: string) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
+          writeStr(0, 'RIFF');
+          view.setUint32(4, 36 + pcm.length * 2, true);
+          writeStr(8, 'WAVE');
+          writeStr(12, 'fmt ');
+          view.setUint32(16, 16, true);
+          view.setUint16(20, 1, true); // PCM
+          view.setUint16(22, 1, true); // mono
+          view.setUint32(24, sampleRate, true);
+          view.setUint32(28, sampleRate * 2, true);
+          view.setUint16(32, 2, true);
+          view.setUint16(34, 16, true);
+          writeStr(36, 'data');
+          view.setUint32(40, pcm.length * 2, true);
+          for (let i = 0; i < pcm.length; i++) {
+            const s = Math.max(-1, Math.min(1, pcm[i]));
+            view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+          }
+          const blob = new Blob([buffer], { type: 'audio/wav' });
+          const url = URL.createObjectURL(blob);
+          audioEl = new Audio(url);
+          audioEl.onended = () => { speaking = false; URL.revokeObjectURL(url); };
+          audioEl.onerror = () => { speaking = false; URL.revokeObjectURL(url); };
+          audioEl.play();
+          return;
+        }
+      } catch (e) {
+        console.error('CrispASR TTS failed, falling back to browser:', e);
+      }
+    }
+
+    // Fallback: browser SpeechSynthesis
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
     utterance.onend = () => { speaking = false; };
     utterance.onerror = () => { speaking = false; };
     speechSynthesis.speak(utterance);

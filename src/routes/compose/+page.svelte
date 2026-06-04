@@ -268,16 +268,98 @@
   const altTextEnforced = typeof localStorage !== 'undefined' && (localStorage.getItem('crispdeck-alt-text-mode') ?? 'off') !== 'off';
 
   // Dictation (Speech-to-Text)
+  // Tries CrispASR via Tauri first (desktop), falls back to Web Speech API (browser).
   let dictating = $state(false);
   let recognition: any = null;
+  let mediaRecorder: MediaRecorder | null = null;
+  let audioChunks: Blob[] = [];
 
-  function toggleDictation() {
+  function insertAtCursor(transcript: string) {
+    if (textareaEl) {
+      const pos = textareaEl.selectionStart;
+      const insert = transcript + ' ';
+      text = text.substring(0, pos) + insert + text.substring(pos);
+      requestAnimationFrame(() => {
+        const newPos = pos + insert.length;
+        textareaEl?.setSelectionRange(newPos, newPos);
+      });
+    } else {
+      text += transcript + ' ';
+    }
+  }
+
+  async function toggleDictation() {
     if (dictating) {
+      // Stop recording
       recognition?.stop();
+      mediaRecorder?.stop();
       dictating = false;
       return;
     }
 
+    // Try CrispASR path first (Tauri desktop)
+    const w = globalThis as any;
+    if (w.__TAURI_INTERNALS__) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const available = await invoke('asr_available') as boolean;
+        if (available) {
+          await startCrispASRDictation(invoke);
+          return;
+        }
+      } catch {}
+    }
+
+    // Fallback: Web Speech API
+    startWebSpeechDictation();
+  }
+
+  async function startCrispASRDictation(invoke: any) {
+    // Record audio via browser MediaRecorder, then send PCM to CrispASR
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } });
+      audioChunks = [];
+      mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunks.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        if (audioChunks.length === 0) return;
+
+        // Convert recorded audio to Float32 PCM at 16kHz
+        const blob = new Blob(audioChunks, { type: 'audio/webm' });
+        const arrayBuffer = await blob.arrayBuffer();
+        const audioCtx = new AudioContext({ sampleRate: 16000 });
+        const decoded = await audioCtx.decodeAudioData(arrayBuffer);
+        const pcm = Array.from(decoded.getChannelData(0));
+        audioCtx.close();
+
+        // Send to CrispASR
+        try {
+          const sttModel = localStorage.getItem('crispdeck-stt-model') || 'whisper';
+          const result = await invoke('transcribe_audio', {
+            backend: sttModel,
+            modelPath: null,
+            pcm,
+            language: null,
+          }) as { text: string };
+          if (result.text.trim()) insertAtCursor(result.text.trim());
+        } catch (e) {
+          error = `CrispASR transcription failed: ${e}`;
+        }
+      };
+
+      mediaRecorder.start();
+      dictating = true;
+    } catch (e) {
+      error = `Microphone access denied: ${e}`;
+    }
+  }
+
+  function startWebSpeechDictation() {
     const SpeechRecognition = (globalThis as any).SpeechRecognition || (globalThis as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       error = 'Speech recognition not supported in this browser.';
@@ -289,24 +371,10 @@
     recognition.interimResults = true;
     recognition.lang = localStorage.getItem('crispdeck-stt-lang') || 'en-US';
 
-    let finalTranscript = '';
     recognition.onresult = (event: any) => {
-      let interim = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript + ' ';
-          // Insert at cursor
-          if (textareaEl) {
-            const pos = textareaEl.selectionStart;
-            const insert = event.results[i][0].transcript + ' ';
-            text = text.substring(0, pos) + insert + text.substring(pos);
-            requestAnimationFrame(() => {
-              const newPos = pos + insert.length;
-              textareaEl?.setSelectionRange(newPos, newPos);
-            });
-          } else {
-            text += event.results[i][0].transcript + ' ';
-          }
+          insertAtCursor(event.results[i][0].transcript);
         }
       }
     };
