@@ -67,25 +67,65 @@
     const newestDate = posts[0]?.createdAt;
     if (!newestDate) return;
 
+    let count = 0;
     for (const acct of accounts) {
       const entry = clientEntries.get(acct.id);
       if (!entry) continue;
       try {
         if (acct.platform === 'bluesky' && entry.oauthAgent) {
-          const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 5 });
-          const newer = r.data.feed.filter(p => {
+          const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 10 });
+          count += r.data.feed.filter(p => {
             const record = p.post.record as any;
             return record?.createdAt > newestDate;
-          });
-          if (newer.length > 0) newPostsAvailable += newer.length;
+          }).length;
+        } else if (acct.platform === 'mastodon') {
+          const masto = entry.client as MastodonClient;
+          try {
+            const statuses = await masto.getHomeTimeline();
+            count += statuses.filter((s: any) => s.createdAt > newestDate || s.created_at > newestDate).length;
+          } catch {}
         }
       } catch {}
     }
+    newPostsAvailable = count; // Replace, don't accumulate
   }
 
-  function loadNewPosts() {
+  async function loadNewPosts() {
+    // Prepend new posts instead of reloading everything
     newPostsAvailable = 0;
-    loadFeed();
+    const newestDate = posts[0]?.createdAt;
+    const newPosts: UnifiedPost[] = [];
+
+    for (const acct of accounts) {
+      const entry = clientEntries.get(acct.id);
+      if (!entry) continue;
+      try {
+        if (acct.platform === 'bluesky') {
+          if (entry.oauthAgent) {
+            const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 50 });
+            const newer = r.data.feed
+              .map(p => normalizePost(p, 'bluesky'))
+              .filter(p => !newestDate || p.createdAt > newestDate);
+            newPosts.push(...newer);
+          }
+        } else {
+          const masto = entry.client as MastodonClient;
+          const statuses = await masto.getHomeTimeline();
+          const newer = statuses
+            .map((s: any) => normalizePost(s, 'mastodon'))
+            .filter(p => !newestDate || p.createdAt > newestDate);
+          newPosts.push(...newer);
+        }
+      } catch {}
+    }
+
+    if (newPosts.length > 0) {
+      // Prepend new posts, deduplicating by URI
+      const existingUris = new Set(posts.map(p => p.uri));
+      const unique = newPosts.filter(p => !existingUris.has(p.uri));
+      posts = sortPosts([...unique, ...posts], 'newest');
+      progress = posts.length;
+    }
   }
 
   // Reactive infinite scroll — observes sentinel whenever it appears in DOM
@@ -205,7 +245,11 @@
     }
 
     if (newPosts.length > 0) {
-      posts = sortPosts([...posts, ...newPosts], 'newest');
+      // Append older posts at the end — no re-sort needed since pagination
+      // goes backward. Deduplicate by URI to avoid dupes across accounts.
+      const existingUris = new Set(posts.map(p => p.uri));
+      const unique = sortPosts(newPosts.filter(p => !existingUris.has(p.uri)), 'newest');
+      posts = [...posts, ...unique];
       progress = posts.length;
     }
     loadingMore = false;

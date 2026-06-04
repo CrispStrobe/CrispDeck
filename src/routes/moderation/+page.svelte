@@ -16,12 +16,24 @@
     type: 'block' | 'mute';
   }
 
+  interface ModList {
+    uri: string;
+    name: string;
+    purpose: string;
+    description?: string;
+    avatar?: string;
+    creator: { handle: string; displayName?: string };
+    listItemCount?: number;
+    subscribed: boolean;
+  }
+
   let accounts: Account[] = $state([]);
   let loading = $state(true);
   let error = $state('');
   let blocked: BlockedAccount[] = $state([]);
   let muted: BlockedAccount[] = $state([]);
-  let activeTab: 'blocked' | 'muted' = $state('blocked');
+  let modLists: ModList[] = $state([]);
+  let activeTab: 'blocked' | 'muted' | 'lists' = $state('blocked');
 
   let clientEntries: Map<number, ClientEntry> = new Map();
 
@@ -85,6 +97,31 @@
 
     blocked = allBlocked;
     muted = allMuted;
+
+    // Load Bluesky moderation lists the user has created or subscribed to
+    for (const [id, entry] of clientEntries) {
+      const acct = accounts.find(a => a.id === id);
+      if (acct?.platform !== 'bluesky') continue;
+      try {
+        const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
+        // Get user's own lists
+        const resp = await agent.api.app.bsky.graph.getLists({ actor: acct.handle, limit: 50 });
+        const lists = (resp.data.lists ?? []) as any[];
+        modLists = lists
+          .filter((l: any) => l.purpose === 'app.bsky.graph.defs#modlist')
+          .map((l: any) => ({
+            uri: l.uri,
+            name: l.name,
+            purpose: l.purpose,
+            description: l.description,
+            avatar: l.avatar,
+            creator: { handle: l.creator.handle, displayName: l.creator.displayName },
+            listItemCount: l.listItemCount,
+            subscribed: !!l.viewer?.muted || !!l.viewer?.blocked,
+          }));
+      } catch {}
+      break;
+    }
   }
 
   async function unblock(item: BlockedAccount) {
@@ -110,6 +147,24 @@
           }
         }
         blocked = blocked.filter(b => b !== item);
+      } catch (e) { error = String(e); }
+      break;
+    }
+  }
+
+  async function toggleModListSubscription(list: ModList) {
+    for (const [id, entry] of clientEntries) {
+      const acct = accounts.find(a => a.id === id);
+      if (acct?.platform !== 'bluesky') continue;
+      try {
+        const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
+        if (list.subscribed) {
+          await agent.api.app.bsky.graph.unmuteActorList({ list: list.uri });
+        } else {
+          await agent.api.app.bsky.graph.muteActorList({ list: list.uri });
+        }
+        list.subscribed = !list.subscribed;
+        modLists = [...modLists]; // trigger reactivity
       } catch (e) { error = String(e); }
       break;
     }
@@ -158,11 +213,44 @@
     <button onclick={() => activeTab = 'muted'} class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors {activeTab === 'muted' ? 'border-yellow-500 text-yellow-400' : 'border-transparent text-[var(--color-text-muted)]'}">
       <VolumeX size={14} class="inline mr-1" /> Muted ({muted.length})
     </button>
+    {#if modLists.length > 0}
+      <button onclick={() => activeTab = 'lists'} class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors {activeTab === 'lists' ? 'border-[var(--color-bluesky)] text-[var(--color-bluesky)]' : 'border-transparent text-[var(--color-text-muted)]'}">
+        <Shield size={14} class="inline mr-1" /> Lists ({modLists.length})
+      </button>
+    {/if}
   </div>
 
   {#if loading}
     <div class="text-center py-12"><Loader2 size={32} class="text-[var(--color-text-muted)] animate-spin mx-auto" /></div>
   {:else}
+    {#if activeTab === 'lists'}
+      <div class="space-y-3">
+        {#each modLists as list}
+          <div class="p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+            <div class="flex items-start justify-between">
+              <div class="flex items-center gap-3">
+                {#if list.avatar}
+                  <img src={list.avatar} alt="" class="w-10 h-10 rounded-lg" />
+                {/if}
+                <div>
+                  <h3 class="text-sm font-medium">{list.name}</h3>
+                  <p class="text-xs text-[var(--color-text-muted)]">by @{list.creator.handle} · {list.listItemCount ?? '?'} members</p>
+                  {#if list.description}
+                    <p class="text-xs text-[var(--color-text-muted)] mt-1 line-clamp-2">{list.description}</p>
+                  {/if}
+                </div>
+              </div>
+              <button
+                onclick={() => toggleModListSubscription(list)}
+                class="px-3 py-1 text-xs border rounded-md transition-colors {list.subscribed ? 'border-red-700 text-red-400 hover:bg-red-900/30' : 'border-[var(--color-bluesky)] text-[var(--color-bluesky)] hover:bg-[var(--color-bluesky)]/10'}"
+              >
+                {list.subscribed ? 'Unsubscribe' : 'Mute all'}
+              </button>
+            </div>
+          </div>
+        {/each}
+      </div>
+    {/if}
     {@const items = activeTab === 'blocked' ? blocked : muted}
     {#if items.length === 0}
       <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
