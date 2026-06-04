@@ -67,6 +67,43 @@ mod live {
     }
 
     #[test]
+    fn registry_has_streaming_models() {
+        // These backends support streaming ASR via crispasr_stream_open
+        let streaming_backends = ["whisper", "moonshine-streaming", "voxtral4b", "kyutai-stt"];
+        let all_models = crispasr::list_known_models();
+        for backend in &streaming_backends {
+            assert!(
+                all_models.iter().any(|m| m == backend),
+                "streaming backend `{backend}` should be in the registry"
+            );
+        }
+    }
+
+    #[test]
+    fn registry_has_tts_models() {
+        let tts_backends = ["kokoro", "orpheus", "vibevoice-tts", "chatterbox", "piper"];
+        let all_models = crispasr::list_known_models();
+        for backend in &tts_backends {
+            assert!(
+                all_models.iter().any(|m| m == backend),
+                "TTS backend `{backend}` should be in the registry"
+            );
+        }
+    }
+
+    #[test]
+    fn registry_has_translation_models() {
+        let nmt_backends = ["m2m100", "m2m100-wmt21", "madlad"];
+        let all_models = crispasr::list_known_models();
+        for backend in &nmt_backends {
+            assert!(
+                all_models.iter().any(|m| m == backend),
+                "NMT backend `{backend}` should be in the registry"
+            );
+        }
+    }
+
+    #[test]
     fn registry_lookup_kokoro_tts() {
         let entry = crispasr::registry_lookup("kokoro");
         // kokoro may or may not be in the registry depending on version
