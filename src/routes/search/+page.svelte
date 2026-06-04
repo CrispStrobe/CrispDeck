@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Search, Loader2, Inbox } from '@lucide/svelte';
+  import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import { normalizePost } from '$lib/api/unified';
@@ -101,7 +102,7 @@
 <div class="p-6 max-w-4xl mx-auto">
   <div class="flex items-center gap-2 mb-6">
     <Search size={24} />
-    <h1 class="text-2xl font-bold">Search</h1>
+    <h1 class="text-2xl font-bold">{i18n.t.search.title}</h1>
   </div>
 
   {#if error}
@@ -114,7 +115,7 @@
       <input
         type="text"
         bind:value={query}
-        placeholder="Search posts across all connected accounts..."
+        placeholder={i18n.t.search.placeholder}
         class="flex-1 px-4 py-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-[var(--color-text)] text-sm focus:outline-none focus:border-[var(--color-primary)]"
       />
       <button
@@ -123,7 +124,7 @@
         class="flex items-center gap-2 px-5 py-3 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
       >
         {#if searching}<Loader2 size={14} class="animate-spin" />{:else}<Search size={14} />{/if}
-        Search
+        {i18n.t.search.button}
       </button>
     </div>
     {#if accounts.length > 0}
@@ -140,13 +141,13 @@
   {:else if searching}
     <div class="text-center py-12">
       <Loader2 size={32} class="text-[var(--color-text-muted)] animate-spin mx-auto" />
-      <p class="text-sm text-[var(--color-text-muted)] mt-2">Searching...</p>
+      <p class="text-sm text-[var(--color-text-muted)] mt-2">{i18n.t.search.searching}</p>
     </div>
   {:else if hasSearched && results.length === 0}
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <Inbox size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
-      <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">No Results</h3>
-      <p class="text-sm text-[var(--color-text-muted)]">No posts found for "{query}". Try different keywords.</p>
+      <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">{i18n.t.search.noResults}</h3>
+      <p class="text-sm text-[var(--color-text-muted)]">{i18n.t.search.noPostsFor.replace('{query}', query)}</p>
     </div>
   {:else if results.length > 0}
     <p class="text-sm text-[var(--color-text-muted)] mb-4">{results.length} results (sorted by engagement)</p>
@@ -158,7 +159,7 @@
   {:else if accounts.length === 0}
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <Search size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
-      <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">No Accounts Connected</h3>
+      <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">{i18n.t.search.noAccounts}</h3>
       <p class="text-sm text-[var(--color-text-muted)]">Add accounts in <a href="/settings" class="text-[var(--color-primary)] underline">Settings</a> to search.</p>
     </div>
   {/if}

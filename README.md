@@ -59,7 +59,7 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 ### Platform & UX
 - **Bluesky OAuth** (recommended) or app passwords
 - **Mastodon OAuth** with redirect callback
-- **Internationalization**: English + German, language selector in settings
+- **Internationalization**: 5 languages (English, German, French, Spanish, Japanese) with fallback
 - **Keyboard shortcuts**: ? for help, g+key navigation, Ctrl+Enter to post
 - **Collapsible sidebar** + mobile hamburger menu + bottom tab bar
 - Safe area insets, touch targets, responsive design

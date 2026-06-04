@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Bell, Heart, Repeat, UserPlus, MessageCircle, AtSign, Loader2, Quote } from '@lucide/svelte';
+  import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import type { Account } from '$lib/types';
@@ -135,7 +136,7 @@
 <div class="p-6 max-w-3xl mx-auto">
   <div class="flex items-center gap-2 mb-6">
     <Bell size={24} />
-    <h1 class="text-2xl font-bold">Notifications</h1>
+    <h1 class="text-2xl font-bold">{i18n.t.notifications.title}</h1>
   </div>
 
   {#if error}
@@ -149,9 +150,9 @@
   {:else if notifications.length === 0}
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <Bell size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
-      <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">No Notifications</h3>
+      <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">{i18n.t.notifications.noNotifications}</h3>
       <p class="text-sm text-[var(--color-text-muted)]">
-        {accounts.length === 0 ? 'Add accounts in Settings first.' : 'Nothing new yet.'}
+        {accounts.length === 0 ? i18n.t.notifications.addAccountsFirst : i18n.t.notifications.nothingNew}
       </p>
     </div>
   {:else}
@@ -174,12 +175,12 @@
                   {notif.author.displayName || notif.author.handle}
                 </a>
                 <span class="text-[var(--color-text-muted)]">
-                  {#if notif.type === 'like' || notif.type === 'favourite'}liked your post
-                  {:else if notif.type === 'repost' || notif.type === 'reblog'}boosted your post
-                  {:else if notif.type === 'follow'}followed you
-                  {:else if notif.type === 'mention'}mentioned you
-                  {:else if notif.type === 'reply'}replied
-                  {:else if notif.type === 'quote'}quoted your post
+                  {#if notif.type === 'like' || notif.type === 'favourite'}{i18n.t.notifications.liked}
+                  {:else if notif.type === 'repost' || notif.type === 'reblog'}{i18n.t.notifications.boosted}
+                  {:else if notif.type === 'follow'}{i18n.t.notifications.followed}
+                  {:else if notif.type === 'mention'}{i18n.t.notifications.mentioned}
+                  {:else if notif.type === 'reply'}{i18n.t.notifications.replied}
+                  {:else if notif.type === 'quote'}{i18n.t.notifications.quoted}
                   {:else}{notif.type}
                   {/if}
                 </span>

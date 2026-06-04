@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { MessageSquare, Loader2, Send, ArrowLeft } from '@lucide/svelte';
+  import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import { resumeBlueskyOAuthSession } from '$lib/api/bluesky-oauth';
@@ -297,7 +298,7 @@
 <div class="h-full flex flex-col">
   <div class="flex items-center gap-2 p-4 border-b border-[var(--color-border)]">
     <MessageSquare size={24} />
-    <h1 class="text-xl font-bold">Messages</h1>
+    <h1 class="text-xl font-bold">{i18n.t.messages.title}</h1>
   </div>
 
   {#if error}
@@ -330,7 +331,7 @@
         </div>
 
         {#if conversations.length === 0}
-          <p class="text-center py-8 text-sm text-[var(--color-text-muted)]">No conversations yet.</p>
+          <p class="text-center py-8 text-sm text-[var(--color-text-muted)]">{i18n.t.messages.noConversations}</p>
         {:else}
           {#each conversations as convo}
             <button
@@ -394,7 +395,7 @@
             <input
               type="text"
               bind:value={newMessage}
-              placeholder="Type a message..."
+              placeholder={i18n.t.messages.typePlaceholder}
               class="flex-1 px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]"
             />
             <button type="submit" disabled={sending || !newMessage.trim()} class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg disabled:opacity-50">
@@ -403,7 +404,7 @@
           </form>
         {:else}
           <div class="flex-1 flex items-center justify-center text-[var(--color-text-muted)]">
-            <p class="text-sm">Select a conversation</p>
+            <p class="text-sm">{i18n.t.messages.selectConversation}</p>
           </div>
         {/if}
       </div>
