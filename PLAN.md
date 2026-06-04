@@ -85,6 +85,51 @@
 - Language selector
 - RTL support
 
+## Inspired by GraySky Comparison
+
+Features GraySky does well that CrispDeck should adopt:
+
+### 11. GIF picker (Tenor/Giphy)
+- Search, trending, and featured GIFs in compose
+- Convert GIF preview to JPEG thumbnail for Bluesky external embed format
+- Already on ROADMAP as low-priority — elevate priority
+
+### 12. Inline post translation
+- "Translate" button on any post in feed/thread view
+- Use a free translation API (Google Translate, LibreTranslate, or DeepL free tier)
+- Show translated text inline below original, with source language and provider attribution
+- Cache translations locally (IndexedDB) to avoid repeated API calls
+
+### 13. Internationalization (i18n)
+- Reuse the pattern from CrispSorter (`src/lib/i18n.svelte.ts`):
+  - `TranslationService` class with Svelte 5 runes (`$state` for lang, `$derived` for active dict)
+  - Static translation dictionaries per language, singleton export (`i18n.t.section.key`)
+  - No external dependency needed
+- Extract all UI strings into message catalogs
+- Start with English + German (already done in CrispSorter), then add French, Spanish, Japanese, Portuguese
+- RTL support for Arabic/Hebrew
+- Language selector in settings
+
+### 14. Share post as image
+- Render any post as a styled image (canvas or html2canvas)
+- Include post text, author, avatar, timestamp, CrispDeck branding
+- Copy to clipboard or download as PNG/JPEG
+- Option to share directly (Web Share API / Tauri share)
+
+### 15. Custom PDS resolution
+- On Bluesky login, resolve user's actual PDS URL from their DID document
+  - `did:plc` → query `plc.directory`
+  - `did:web` → fetch `.well-known/did.json`
+- Route API calls to user's actual PDS, not hardcoded `bsky.social`
+- Enables federated / third-party PDS instances to work out of the box
+
+### 16. Alt text enforcement modes
+- Settings toggle with three modes:
+  - **Off**: alt text optional (current behavior)
+  - **Warn**: show warning dialog if posting without alt text, allow override
+  - **Require**: block posting entirely if any attached image lacks alt text
+- Nudge text in compose: "Add alt text for accessibility"
+
 ## Architecture Notes
 
 ### Local Archive (item #2) design

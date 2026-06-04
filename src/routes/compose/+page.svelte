@@ -6,6 +6,7 @@
   import AccountPicker from '$lib/components/AccountPicker.svelte';
   import MentionAutocomplete from '$lib/components/MentionAutocomplete.svelte';
   import EmojiPicker from '$lib/components/EmojiPicker.svelte';
+  import GifPicker from '$lib/components/GifPicker.svelte';
   import { listTemplates, saveTemplate, deleteTemplate, type PostTemplate } from '$lib/templates';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
@@ -133,12 +134,29 @@
     altTexts = altTexts.filter((_, i) => i !== index);
   }
 
+  function checkAltText(): boolean {
+    if (mediaFiles.length === 0) return true;
+    const mode = localStorage.getItem('crispdeck-alt-text-mode') ?? 'off';
+    if (mode === 'off') return true;
+    const missingAlt = altTexts.some((t, i) => i < mediaFiles.length && !t.trim());
+    if (!missingAlt) return true;
+    if (mode === 'require') {
+      error = 'Alt text is required for all images. Add descriptions before posting.';
+      return false;
+    }
+    if (mode === 'warn') {
+      return confirm('Some images are missing alt text. Post anyway?');
+    }
+    return true;
+  }
+
   async function handlePost() {
     if (!text.trim() && mediaFiles.length === 0) return;
     if (selectedAccountIds.length === 0) {
       error = 'Select at least one account to post to.';
       return;
     }
+    if (!checkAltText()) return;
 
     posting = true;
     error = '';
@@ -233,6 +251,22 @@
   }
 
   // Character counts per selected platform
+  async function addGif(gif: { url: string; preview: string; width: number; height: number; title: string }) {
+    if (mediaFiles.length >= 4) return;
+    try {
+      const resp = await fetch(gif.url);
+      const blob = await resp.blob();
+      const file = new File([blob], `gif-${Date.now()}.gif`, { type: 'image/gif' });
+      mediaFiles = [...mediaFiles, file];
+      mediaPreviews = [...mediaPreviews, createPreviewUrl(file)];
+      altTexts = [...altTexts, gif.title];
+    } catch (e) {
+      error = `Failed to load GIF: ${e}`;
+    }
+  }
+
+  const altTextEnforced = typeof localStorage !== 'undefined' && (localStorage.getItem('crispdeck-alt-text-mode') ?? 'off') !== 'off';
+
   const selectedAccounts = $derived(accounts.filter(a => selectedAccountIds.includes(a.id)));
   const hasBsky = $derived(selectedAccounts.some(a => a.platform === 'bluesky'));
   const hasMasto = $derived(selectedAccounts.some(a => a.platform === 'mastodon'));
@@ -378,7 +412,7 @@
                   type="text"
                   bind:value={altTexts[i]}
                   placeholder="Describe this image for accessibility..."
-                  class="w-full px-2 py-1.5 bg-transparent border-t border-[var(--color-border)] text-xs text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
+                  class="w-full px-2 py-1.5 bg-transparent border-t text-xs text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none {altTextEnforced && !altTexts[i]?.trim() ? 'border-yellow-500 bg-yellow-950/20' : 'border-[var(--color-border)]'}"
                 />
               </div>
             {/each}
@@ -392,6 +426,7 @@
               <ImagePlus size={18} />
               <input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" multiple class="hidden" onchange={addMedia} />
             </label>
+            <GifPicker onselect={addGif} />
             <EmojiPicker onselect={(emoji) => {
               if (textareaEl) {
                 const pos = textareaEl.selectionStart;

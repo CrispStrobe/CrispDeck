@@ -4,6 +4,7 @@
   import { goto } from '$app/navigation';
   import { Home, Rss, Columns3, PenSquare, FileText, Bell, MessageSquare, Bookmark, Users, Search, List, Package, Shield, Tag, Server, TrendingUp, Archive, BarChart3, Settings, ChevronsLeft, ChevronsRight, Menu, X } from '@lucide/svelte';
   import KeyboardShortcuts from '$lib/components/KeyboardShortcuts.svelte';
+  import { i18n } from '$lib/i18n.svelte';
 
   let { children } = $props();
 
@@ -42,36 +43,36 @@
     }
   }
 
-  const navItems = [
-    { href: '/', icon: Home, label: 'Dashboard' },
-    { href: '/feed', icon: Rss, label: 'Feed' },
-    { href: '/deck', icon: Columns3, label: 'Deck' },
-    { href: '/compose', icon: PenSquare, label: 'Compose' },
-    { href: '/drafts', icon: FileText, label: 'Drafts' },
-    { href: '/notifications', icon: Bell, label: 'Notifications' },
-    { href: '/messages', icon: MessageSquare, label: 'Messages' },
-    { href: '/bookmarks', icon: Bookmark, label: 'Bookmarks', badge: () => bookmarkCount > 0 ? bookmarkCount : 0 },
-    { href: '/lists', icon: List, label: 'Lists & Feeds' },
-    { href: '/starterpacks', icon: Package, label: 'Starter Packs' },
-    { href: '/identities', icon: Users, label: 'Identities' },
-    { href: '/search', icon: Search, label: 'Search' },
-    { href: '/trending', icon: TrendingUp, label: 'Trending' },
-    { href: '/archive', icon: Archive, label: 'Archive' },
-    { href: '/labelers', icon: Tag, label: 'Labelers' },
-    { href: '/instance', icon: Server, label: 'Instance Info' },
-    { href: '/moderation', icon: Shield, label: 'Moderation' },
-    { href: '/analytics', icon: BarChart3, label: 'Analytics' },
-    { href: '/settings', icon: Settings, label: 'Settings' },
-  ];
+  const navItems = $derived([
+    { href: '/', icon: Home, label: i18n.t.nav.dashboard },
+    { href: '/feed', icon: Rss, label: i18n.t.nav.feed },
+    { href: '/deck', icon: Columns3, label: i18n.t.nav.deck },
+    { href: '/compose', icon: PenSquare, label: i18n.t.nav.compose },
+    { href: '/drafts', icon: FileText, label: i18n.t.nav.drafts },
+    { href: '/notifications', icon: Bell, label: i18n.t.nav.notifications },
+    { href: '/messages', icon: MessageSquare, label: i18n.t.nav.messages },
+    { href: '/bookmarks', icon: Bookmark, label: i18n.t.nav.bookmarks, badge: () => bookmarkCount > 0 ? bookmarkCount : 0 },
+    { href: '/lists', icon: List, label: i18n.t.nav.lists },
+    { href: '/starterpacks', icon: Package, label: i18n.t.nav.starterPacks },
+    { href: '/identities', icon: Users, label: i18n.t.nav.identities },
+    { href: '/search', icon: Search, label: i18n.t.nav.search },
+    { href: '/trending', icon: TrendingUp, label: i18n.t.nav.trending },
+    { href: '/archive', icon: Archive, label: i18n.t.nav.archive },
+    { href: '/labelers', icon: Tag, label: i18n.t.nav.labelers },
+    { href: '/instance', icon: Server, label: i18n.t.nav.instance },
+    { href: '/moderation', icon: Shield, label: i18n.t.nav.moderation },
+    { href: '/analytics', icon: BarChart3, label: i18n.t.nav.analytics },
+    { href: '/settings', icon: Settings, label: i18n.t.nav.settings },
+  ]);
 
   // Key items for mobile bottom tab bar
-  const mobileTabItems = [
-    { href: '/feed', icon: Rss, label: 'Feed' },
-    { href: '/compose', icon: PenSquare, label: 'Post' },
-    { href: '/notifications', icon: Bell, label: 'Alerts' },
-    { href: '/search', icon: Search, label: 'Search' },
-    { href: '/messages', icon: MessageSquare, label: 'DMs' },
-  ];
+  const mobileTabItems = $derived([
+    { href: '/feed', icon: Rss, label: i18n.t.nav.feed },
+    { href: '/compose', icon: PenSquare, label: i18n.t.nav.post },
+    { href: '/notifications', icon: Bell, label: i18n.t.nav.alerts },
+    { href: '/search', icon: Search, label: i18n.t.nav.search },
+    { href: '/messages', icon: MessageSquare, label: i18n.t.nav.dms },
+  ]);
 
   function isActive(href: string): boolean {
     const path = page.url?.pathname ?? '/';

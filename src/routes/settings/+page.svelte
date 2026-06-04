@@ -7,7 +7,27 @@
   } from '$lib/db';
   import { Settings, Plus, Trash2, Star, ExternalLink, Loader2, Shield } from '@lucide/svelte';
   import { startBlueskyOAuth } from '$lib/api/bluesky-oauth';
+  import { i18n, type Language } from '$lib/i18n.svelte';
+  import { getTargetLanguage, setTargetLanguage } from '$lib/translate';
   import type { Account } from '$lib/types';
+
+  let uiLanguage = $state<Language>(i18n.lang);
+  let translateLang = $state(getTargetLanguage());
+  let altTextMode = $state<'off' | 'warn' | 'require'>(
+    (localStorage.getItem('crispdeck-alt-text-mode') as any) ?? 'off'
+  );
+
+  function handleLanguageChange() {
+    i18n.setLanguage(uiLanguage);
+  }
+
+  function handleTranslateLangChange() {
+    setTargetLanguage(translateLang);
+  }
+
+  function handleAltTextModeChange() {
+    localStorage.setItem('crispdeck-alt-text-mode', altTextMode);
+  }
 
   let accounts: Account[] = $state([]);
   let loading = $state(true);
@@ -389,5 +409,62 @@
         {/each}
       </div>
     {/if}
+  </section>
+
+  <!-- Preferences -->
+  <section class="mb-8">
+    <h2 class="text-lg font-semibold mb-3">{i18n.t.settings.preferences}</h2>
+    <div class="space-y-4 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+      <!-- UI Language -->
+      <div class="flex items-center justify-between">
+        <label for="ui-lang" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.language}</label>
+        <select
+          id="ui-lang"
+          bind:value={uiLanguage}
+          onchange={handleLanguageChange}
+          class="px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none"
+        >
+          <option value="en">English</option>
+          <option value="de">Deutsch</option>
+        </select>
+      </div>
+
+      <!-- Translation target language -->
+      <div class="flex items-center justify-between">
+        <label for="translate-lang" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.translateTarget}</label>
+        <select
+          id="translate-lang"
+          bind:value={translateLang}
+          onchange={handleTranslateLangChange}
+          class="px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none"
+        >
+          <option value="en">English</option>
+          <option value="de">Deutsch</option>
+          <option value="fr">Français</option>
+          <option value="es">Español</option>
+          <option value="ja">日本語</option>
+          <option value="pt">Português</option>
+          <option value="zh">中文</option>
+          <option value="ko">한국어</option>
+          <option value="it">Italiano</option>
+          <option value="nl">Nederlands</option>
+        </select>
+      </div>
+
+      <!-- Alt text enforcement -->
+      <div class="flex items-center justify-between">
+        <label for="alt-text-mode" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.altTextMode}</label>
+        <select
+          id="alt-text-mode"
+          bind:value={altTextMode}
+          onchange={handleAltTextModeChange}
+          class="px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none"
+        >
+          <option value="off">{i18n.t.settings.altTextOff}</option>
+          <option value="warn">{i18n.t.settings.altTextWarn}</option>
+          <option value="require">{i18n.t.settings.altTextRequire}</option>
+        </select>
+      </div>
+    </div>
   </section>
 </div>

@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { Heart, Repeat, MessageCircle, Quote, Bookmark, Share, Flag } from '@lucide/svelte';
+  import { Heart, Repeat, MessageCircle, Quote, Bookmark, Share, Flag, Languages, Camera, Loader2 } from '@lucide/svelte';
   import { addBookmark, removeBookmark, isBookmarked } from '$lib/bookmarks';
+  import { translateText, type TranslationResult } from '$lib/translate';
   import { onMount } from 'svelte';
   import type { UnifiedPost } from '$lib/types';
 
@@ -22,6 +23,75 @@
   });
 
   let copied = $state(false);
+  let translating = $state(false);
+  let translation: TranslationResult | null = $state(null);
+  let translateError = $state('');
+
+  async function handleTranslate() {
+    if (translation) { translation = null; return; } // Toggle off
+    translating = true;
+    translateError = '';
+    try {
+      const sourceText = post.platform === 'mastodon' ? getMastodonHtml() || post.text : post.text;
+      translation = await translateText(sourceText);
+    } catch (e) {
+      translateError = String(e);
+    } finally {
+      translating = false;
+    }
+  }
+
+  // Share as image
+  let capturingImage = $state(false);
+  let postEl: HTMLDivElement | undefined = $state();
+
+  async function handleShareAsImage() {
+    if (!postEl) return;
+    capturingImage = true;
+    try {
+      const { default: html2canvas } = await import('html2canvas');
+      const canvas = await html2canvas(postEl, {
+        backgroundColor: '#1a1a2e',
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+      // Add branding bar at bottom
+      const brandCanvas = document.createElement('canvas');
+      const brandHeight = 32;
+      brandCanvas.width = canvas.width;
+      brandCanvas.height = canvas.height + brandHeight;
+      const ctx = brandCanvas.getContext('2d')!;
+      ctx.drawImage(canvas, 0, 0);
+      ctx.fillStyle = '#0f0f1a';
+      ctx.fillRect(0, canvas.height, brandCanvas.width, brandHeight);
+      ctx.fillStyle = '#6b7280';
+      ctx.font = `${12 * 2}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('shared via CrispDeck', brandCanvas.width / 2, canvas.height + brandHeight - 8);
+
+      brandCanvas.toBlob(async (blob) => {
+        if (!blob) return;
+        try {
+          if (navigator.share) {
+            const file = new File([blob], 'post.png', { type: 'image/png' });
+            await navigator.share({ files: [file] });
+          } else {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'post.png';
+            a.click();
+            URL.revokeObjectURL(url);
+          }
+        } catch { /* share cancelled */ }
+      }, 'image/png');
+    } catch (e) {
+      console.error('Share as image failed:', e);
+    } finally {
+      capturingImage = false;
+    }
+  }
 
   async function votePoll(pollId: string, choiceIndex: number) {
     try {
@@ -203,7 +273,7 @@
     <button onclick={() => labelRevealed = true} class="text-xs text-[var(--color-primary)] hover:underline mt-1">Show anyway</button>
   </div>
 {:else}
-<div class="group p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+<div bind:this={postEl} class="group p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
   <!-- Label warnings -->
   {#if warnedLabels.length > 0 && !labelRevealed}
     <div class="mb-2 p-2 bg-yellow-900/20 border border-yellow-700/30 rounded text-xs text-yellow-300 flex items-center justify-between">
@@ -256,6 +326,19 @@
       </a>
     </div>
   </div>
+
+  <!-- Translation -->
+  {#if translation}
+    <div class="mt-2 pl-13 p-2 bg-blue-950/20 border border-blue-900/30 rounded-md">
+      <p class="text-sm text-[var(--color-text)] whitespace-pre-wrap break-words">{translation.translated}</p>
+      <p class="text-[10px] text-[var(--color-text-muted)] mt-1">
+        Translated from {translation.sourceLang} · {translation.provider}
+      </p>
+    </div>
+  {/if}
+  {#if translateError}
+    <p class="mt-1 pl-13 text-[10px] text-red-400">{translateError}</p>
+  {/if}
 
   {#if !hideMedia}
     <div class="mt-2 pl-13">
@@ -392,6 +475,32 @@
         title={copied ? 'Copied!' : 'Copy link'}
       >
         <Share size={14} />
+      </button>
+
+      <button
+        onclick={handleTranslate}
+        disabled={translating}
+        class="flex items-center gap-1.5 transition-colors {translation ? 'text-blue-400' : 'text-[var(--color-text-muted)]'} hover:text-blue-400 opacity-0 group-hover:opacity-100"
+        title={translation ? 'Hide translation' : 'Translate'}
+      >
+        {#if translating}
+          <Loader2 size={12} class="animate-spin" />
+        {:else}
+          <Languages size={12} />
+        {/if}
+      </button>
+
+      <button
+        onclick={handleShareAsImage}
+        disabled={capturingImage}
+        class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors opacity-0 group-hover:opacity-100"
+        title="Share as image"
+      >
+        {#if capturingImage}
+          <Loader2 size={12} class="animate-spin" />
+        {:else}
+          <Camera size={12} />
+        {/if}
       </button>
 
       <button

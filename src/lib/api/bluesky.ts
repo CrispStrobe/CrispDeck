@@ -4,9 +4,56 @@ const PUBLIC_API = 'https://public.api.bsky.app';
 const AUTH_API = 'https://bsky.social';
 
 /**
+ * Resolve a user's actual PDS endpoint from their DID document.
+ * - did:plc → query plc.directory
+ * - did:web → fetch .well-known/did.json
+ * Falls back to bsky.social if resolution fails.
+ */
+export async function resolvePdsEndpoint(handleOrDid: string): Promise<string> {
+  try {
+    let did = handleOrDid;
+
+    // If it's a handle, resolve to DID first via public API
+    if (!did.startsWith('did:')) {
+      const resp = await fetch(`${PUBLIC_API}/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(did)}`);
+      if (!resp.ok) return AUTH_API;
+      const data = await resp.json();
+      did = data.did;
+    }
+
+    // Fetch DID document
+    let didDoc: any;
+    if (did.startsWith('did:plc:')) {
+      const resp = await fetch(`https://plc.directory/${did}`);
+      if (!resp.ok) return AUTH_API;
+      didDoc = await resp.json();
+    } else if (did.startsWith('did:web:')) {
+      const domain = did.replace('did:web:', '');
+      const resp = await fetch(`https://${domain}/.well-known/did.json`);
+      if (!resp.ok) return AUTH_API;
+      didDoc = await resp.json();
+    } else {
+      return AUTH_API;
+    }
+
+    // Extract PDS endpoint from service array
+    const services = didDoc.service ?? [];
+    const pdsSvc = services.find((s: any) =>
+      s.type === 'AtprotoPersonalDataServer' || s.id === '#atproto_pds'
+    );
+    if (pdsSvc?.serviceEndpoint) {
+      return pdsSvc.serviceEndpoint;
+    }
+  } catch {
+    // Resolution failed — fall back
+  }
+  return AUTH_API;
+}
+
+/**
  * Bluesky client with two modes:
  * - Public (no auth): reading profiles, feeds, searching — uses public.api.bsky.app
- * - Authenticated: posting, likes, follows — uses bsky.social with app password
+ * - Authenticated: posting, likes, follows — uses user's resolved PDS (or bsky.social)
  */
 export class BlueskyClient {
   private publicAgent: BskyAgent;
@@ -14,13 +61,16 @@ export class BlueskyClient {
   private loggedIn = false;
   private handle: string;
   private appPassword: string | null;
+  private pdsUrl: string | null = null;
 
-  constructor(handle: string, appPassword?: string) {
+  constructor(handle: string, appPassword?: string, pdsUrl?: string) {
     this.handle = handle;
     this.appPassword = appPassword ?? null;
+    this.pdsUrl = pdsUrl ?? null;
     this.publicAgent = new BskyAgent({ service: PUBLIC_API });
     if (this.appPassword) {
-      this.authAgent = new BskyAgent({ service: AUTH_API });
+      // Auth agent created lazily in login() after PDS resolution
+      this.authAgent = new BskyAgent({ service: pdsUrl ?? AUTH_API });
     }
   }
 
@@ -31,6 +81,14 @@ export class BlueskyClient {
 
   async login(): Promise<void> {
     if (this.loggedIn || !this.authAgent || !this.appPassword) return;
+
+    // Resolve PDS if not already known
+    if (!this.pdsUrl) {
+      this.pdsUrl = await resolvePdsEndpoint(this.handle);
+      // Re-create auth agent with resolved PDS
+      this.authAgent = new BskyAgent({ service: this.pdsUrl });
+    }
+
     await this.authAgent.login({ identifier: this.handle, password: this.appPassword });
     this.loggedIn = true;
   }
