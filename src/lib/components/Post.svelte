@@ -172,9 +172,54 @@
   const bskyExternal = $derived(getBskyExternal());
   const mastodonHtml = $derived(getMastodonHtml());
   const platformColor = $derived(post.platform === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)');
+
+  // Labels on Bluesky posts
+  const postLabels = $derived(() => {
+    if (post.platform !== 'bluesky') return [];
+    const raw = post.raw as any;
+    const labels = raw?.post?.labels ?? raw?.labels ?? [];
+    return labels.filter((l: any) => !l.neg).map((l: any) => l.val);
+  });
+
+  // Check label preferences
+  function shouldWarnLabel(label: string): boolean {
+    const prefs = JSON.parse(localStorage.getItem('crispdeck-label-prefs') ?? '{}');
+    return prefs[label] === 'warn' || (!prefs[label] && ['porn', 'sexual', 'graphic-media', 'nudity'].includes(label));
+  }
+
+  function shouldHideLabel(label: string): boolean {
+    const prefs = JSON.parse(localStorage.getItem('crispdeck-label-prefs') ?? '{}');
+    return prefs[label] === 'hide';
+  }
+
+  const hiddenByLabel = $derived(postLabels().some(shouldHideLabel));
+  const warnedLabels = $derived(postLabels().filter(shouldWarnLabel));
+  let labelRevealed = $state(false);
 </script>
 
+{#if hiddenByLabel && !labelRevealed}
+  <div class="p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] text-center">
+    <p class="text-xs text-[var(--color-text-muted)]">Content hidden: {postLabels().join(', ')}</p>
+    <button onclick={() => labelRevealed = true} class="text-xs text-[var(--color-primary)] hover:underline mt-1">Show anyway</button>
+  </div>
+{:else}
 <div class="group p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+  <!-- Label warnings -->
+  {#if warnedLabels.length > 0 && !labelRevealed}
+    <div class="mb-2 p-2 bg-yellow-900/20 border border-yellow-700/30 rounded text-xs text-yellow-300 flex items-center justify-between">
+      <span>Content warning: {warnedLabels.join(', ')}</span>
+      <button onclick={() => labelRevealed = true} class="text-yellow-400 hover:underline ml-2">Show</button>
+    </div>
+  {/if}
+
+  <!-- Label badges -->
+  {#if postLabels().length > 0}
+    <div class="mb-2 flex items-center gap-1 flex-wrap">
+      {#each postLabels() as label}
+        <span class="text-[9px] px-1.5 py-0.5 bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] rounded">{label}</span>
+      {/each}
+    </div>
+  {/if}
   {#if post.isRepost && post.repostAuthor}
     <div class="text-sm text-[var(--color-text-muted)] flex items-center gap-2 mb-2">
       <Repeat size={14} />
@@ -362,3 +407,4 @@
     </a>
   </div>
 </div>
+{/if}
