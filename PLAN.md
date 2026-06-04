@@ -164,6 +164,22 @@ Features GraySky does well that CrispDeck should adopt:
 - Web fallback: browser SpeechSynthesis API
 - Play/stop toggle, audio output to default device
 
+### 23. Bluesky moderation lists
+- Subscribe to moderation lists (mute all / block all members)
+- Browse/search public moderation lists
+- Manage own moderation lists (create, add/remove members)
+- Show list purpose (curate vs moderation) in Lists page
+
+### 24. Feed scroll position preservation
+- When new posts load at bottom (infinite scroll), maintain current scroll position
+- Don't jump user back to top when "new posts" indicator is dismissed
+- "New posts available" banner stays anchored at top; clicking scrolls up
+
+### 25. Feed refresh performance
+- "New posts" check currently reloads full feed — use cursor-based incremental fetch
+- Only fetch posts newer than the latest currently displayed post
+- Reduce polling interval or use streaming where available
+
 ## Architecture Notes
 
 ### Local Archive (item #2) design
