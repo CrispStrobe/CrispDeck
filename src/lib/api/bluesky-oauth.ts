@@ -2,6 +2,12 @@
  * Bluesky OAuth integration using @atproto/oauth-client-browser.
  * Handles DPoP, PAR, PKCE, token refresh automatically.
  * Enables full access including DMs (chat.bsky.convo).
+ *
+ * Works in both:
+ * - Browser (Vercel): uses window.location.origin as client_id base
+ * - Tauri desktop: uses http://localhost:1420 (dev) — AT Protocol allows
+ *   loopback redirect URIs for native/desktop apps
+ * - Sessions stored in IndexedDB, persist across reloads
  */
 
 import { BrowserOAuthClient } from '@atproto/oauth-client-browser';

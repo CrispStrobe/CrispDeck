@@ -208,6 +208,32 @@
       default: return posts.filter(p => !p.replyParentUri);
     }
   });
+
+  interface MediaItem { url: string; thumb: string; alt?: string; postUri: string; type: 'image' | 'video' }
+
+  const mediaGallery = $derived(() => {
+    const items: MediaItem[] = [];
+    for (const post of posts) {
+      if (post.platform === 'bluesky' && post.embeds) {
+        const embed = post.embeds as any;
+        if (embed.$type === 'app.bsky.embed.images#view' && embed.images) {
+          for (const img of embed.images) {
+            items.push({ url: img.fullsize, thumb: img.thumb, alt: img.alt, postUri: post.uri, type: 'image' });
+          }
+        }
+      } else if (post.platform === 'mastodon' && post.embeds) {
+        const attachments = Array.isArray(post.embeds) ? post.embeds : [];
+        for (const att of attachments as any[]) {
+          if (att.type === 'image') {
+            items.push({ url: att.url || att.remoteUrl, thumb: att.previewUrl || att.url, alt: att.description, postUri: post.uri, type: 'image' });
+          } else if (att.type === 'video') {
+            items.push({ url: att.url, thumb: att.previewUrl || '', alt: att.description, postUri: post.uri, type: 'video' });
+          }
+        }
+      }
+    }
+    return items;
+  });
 </script>
 
 <div class="p-6 max-w-3xl mx-auto">
@@ -314,6 +340,36 @@
                 <p class="text-sm font-medium">{user.displayName || user.handle}</p>
                 <p class="text-xs text-[var(--color-text-muted)]">{user.handle}</p>
               </div>
+            </a>
+          {/each}
+        </div>
+      {/if}
+    {:else if activeTab === 'media'}
+      <!-- Media gallery grid -->
+      {#if mediaGallery().length === 0}
+        <p class="text-center py-8 text-sm text-[var(--color-text-muted)]">No media to show.</p>
+      {:else}
+        <div class="grid grid-cols-3 gap-1">
+          {#each mediaGallery() as item}
+            <a
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="relative aspect-square overflow-hidden rounded bg-[var(--color-surface-hover)] hover:opacity-80 transition-opacity"
+            >
+              <img
+                src={item.thumb || item.url}
+                alt={item.alt || ''}
+                class="w-full h-full object-cover"
+                loading="lazy"
+              />
+              {#if item.type === 'video'}
+                <div class="absolute inset-0 flex items-center justify-center">
+                  <div class="w-10 h-10 bg-black/60 rounded-full flex items-center justify-center">
+                    <span class="text-white text-lg ml-0.5">▶</span>
+                  </div>
+                </div>
+              {/if}
             </a>
           {/each}
         </div>
