@@ -138,6 +138,32 @@ Features GraySky does well that CrispDeck should adopt:
 - Model download manager in Settings (list available, download, delete)
 - Web fallback: BYOK OpenAI-compatible endpoint or MyMemory free API
 
+### 18. Starter Packs search improvement
+- Current: only searches by actor handle, limited results
+- Needed: use Bluesky's search API to find packs by topic/keyword directly
+- Show pack member preview, join count, popularity ranking
+
+### 19. Bluesky lists — browse, search, use
+- Browse public lists by category
+- Search lists by name/topic
+- Subscribe to lists as feed sources
+- Create/manage own Bluesky lists (not just Mastodon)
+- Use lists in Deck columns
+
+### 20. Cargo-license integration for About page
+- Install cargo-license in CI or bundle pre-generated Rust licenses
+- Currently only frontend (NPM) licenses are generated
+
+### 21. Dictation mic button in compose
+- Mic button in compose toolbar → STT via CrispASR whisper/parakeet
+- Web fallback: browser Web Speech API
+- Insert transcribed text at cursor position
+
+### 22. Read-aloud button on posts
+- Speaker icon on posts → TTS via CrispASR kokoro/vibevoice
+- Web fallback: browser SpeechSynthesis API
+- Play/stop toggle, audio output to default device
+
 ## Architecture Notes
 
 ### Local Archive (item #2) design
