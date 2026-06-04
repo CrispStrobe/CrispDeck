@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { listAccounts, getDecryptedCredentials } from '$lib/db';
+  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Columns3, Plus, Loader2 } from '@lucide/svelte';
   import DeckColumn from '$lib/components/deck/DeckColumn.svelte';
   import type { ColumnType } from '$lib/components/deck/DeckColumn.svelte';
@@ -24,7 +24,7 @@
   let columnPosts: Record<string, UnifiedPost[]> = $state({});
   let columnLoading: Record<string, boolean> = $state({});
 
-  let clients: Map<number, BlueskyClient | MastodonClient> = new Map();
+  let clientEntries: Map<number, ClientEntry> = new Map();
 
   const defaultColumns: DeckColumnConfig[] = [
     { id: 'timeline', title: 'Timeline', type: 'timeline' },
@@ -58,8 +58,9 @@
 
   onMount(async () => {
     try {
-      accounts = await listAccounts();
-      await initClients();
+      const result = await initAllClients();
+      accounts = result.accounts;
+      clientEntries = result.clients;
 
       // Load saved column config or use defaults
       const saved = localStorage.getItem('crispdeck-deck-columns');
@@ -86,27 +87,6 @@
     return () => clearInterval(interval);
   });
 
-  async function initClients() {
-    for (const acct of accounts) {
-      try {
-        const credsJson = await getDecryptedCredentials(acct.id);
-        const creds = JSON.parse(credsJson);
-        if (acct.platform === 'bluesky') {
-          const client = new BlueskyClient(acct.handle, creds.app_password);
-          await client.login();
-          clients.set(acct.id, client);
-        } else {
-          clients.set(acct.id, new MastodonClient(
-            acct.instance_url ?? `https://${acct.handle.split('@').pop()}`,
-            creds.access_token,
-          ));
-        }
-      } catch (e) {
-        console.error(`Client init failed for ${acct.handle}:`, e);
-      }
-    }
-  }
-
   function saveColumns() {
     localStorage.setItem('crispdeck-deck-columns', JSON.stringify(columns));
   }
@@ -116,8 +96,10 @@
     const posts: UnifiedPost[] = [];
 
     // Pick ONE client per platform (no need to loop all accounts for each column)
-    const bskyClient = [...clients.entries()].find(([id]) => accounts.find(a => a.id === id)?.platform === 'bluesky')?.[1] as BlueskyClient | undefined;
-    const mastoClient = [...clients.entries()].find(([id]) => accounts.find(a => a.id === id)?.platform === 'mastodon')?.[1] as MastodonClient | undefined;
+    const bskyEntry = [...clientEntries.entries()].find(([id]) => accounts.find(a => a.id === id)?.platform === 'bluesky')?.[1];
+    const mastoEntry = [...clientEntries.entries()].find(([id]) => accounts.find(a => a.id === id)?.platform === 'mastodon')?.[1];
+    const bskyClient = bskyEntry?.client as BlueskyClient | undefined;
+    const mastoClient = mastoEntry?.client as MastodonClient | undefined;
     const bskyAcct = accounts.find(a => a.platform === 'bluesky');
     const mastoAcct = accounts.find(a => a.platform === 'mastodon');
 
@@ -229,16 +211,16 @@
   }
 
   async function handleLike(post: UnifiedPost) {
-    for (const [id, client] of clients) {
+    for (const [id, entry] of clientEntries) {
       const acct = accounts.find(a => a.id === id);
       if (acct?.platform !== post.platform) continue;
       try {
         if (post.platform === 'bluesky') {
           const raw = post.raw as any;
-          await (client as BlueskyClient).like(raw.post?.uri ?? raw.uri, raw.post?.cid ?? raw.cid);
+          await (entry.client as BlueskyClient).like(raw.post?.uri ?? raw.uri, raw.post?.cid ?? raw.cid);
         } else {
           const raw = post.raw as any;
-          await (client as MastodonClient).favourite(raw.id);
+          await (entry.client as MastodonClient).favourite(raw.id);
         }
         return;
       } catch (e) { console.error('Like failed:', e); }
@@ -246,16 +228,16 @@
   }
 
   async function handleBoost(post: UnifiedPost) {
-    for (const [id, client] of clients) {
+    for (const [id, entry] of clientEntries) {
       const acct = accounts.find(a => a.id === id);
       if (acct?.platform !== post.platform) continue;
       try {
         if (post.platform === 'bluesky') {
           const raw = post.raw as any;
-          await (client as BlueskyClient).repost(raw.post?.uri ?? raw.uri, raw.post?.cid ?? raw.cid);
+          await (entry.client as BlueskyClient).repost(raw.post?.uri ?? raw.uri, raw.post?.cid ?? raw.cid);
         } else {
           const raw = post.raw as any;
-          await (client as MastodonClient).reblog(raw.id);
+          await (entry.client as MastodonClient).reblog(raw.id);
         }
         return;
       } catch (e) { console.error('Boost failed:', e); }

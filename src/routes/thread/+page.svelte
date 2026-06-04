@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { listAccounts, getDecryptedCredentials } from '$lib/db';
+  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { MessageCircle, Loader2, ArrowLeft } from '@lucide/svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
@@ -16,7 +16,7 @@
   let platform: Platform = $state('bluesky');
 
   let accounts: Account[] = $state([]);
-  let clients: Map<number, BlueskyClient | MastodonClient> = new Map();
+  let clientEntries: Map<number, ClientEntry> = new Map();
 
   onMount(async () => {
     const params = new URLSearchParams(window.location.search);
@@ -31,8 +31,9 @@
     }
 
     try {
-      accounts = await listAccounts();
-      await initClients();
+      const result = await initAllClients();
+      accounts = result.accounts;
+      clientEntries = result.clients;
 
       if (platform === 'bluesky' && uri) {
         await loadBskyThread(uri);
@@ -46,26 +47,9 @@
     }
   });
 
-  async function initClients() {
-    for (const acct of accounts) {
-      try {
-        const creds = JSON.parse(await getDecryptedCredentials(acct.id));
-        if (acct.platform === 'bluesky') {
-          clients.set(acct.id, new BlueskyClient(acct.handle, creds.app_password));
-        } else {
-          clients.set(acct.id, new MastodonClient(
-            acct.instance_url ?? `https://${acct.handle.split('@').pop()}`,
-            creds.access_token,
-          ));
-        }
-      } catch {}
-    }
-  }
-
   function getBskyClient(): BlueskyClient | null {
-    // Try read-only first
-    for (const [id, c] of clients) {
-      if (accounts.find(a => a.id === id)?.platform === 'bluesky') return c as BlueskyClient;
+    for (const [id, entry] of clientEntries) {
+      if (accounts.find(a => a.id === id)?.platform === 'bluesky') return entry.client as BlueskyClient;
     }
     return BlueskyClient.readOnly('_');
   }
@@ -111,8 +95,8 @@
 
   async function loadMastoThread(idOrUri: string) {
     let mastoClient: MastodonClient | null = null;
-    for (const [id, c] of clients) {
-      if (accounts.find(a => a.id === id)?.platform === 'mastodon') { mastoClient = c as MastodonClient; break; }
+    for (const [id, entry] of clientEntries) {
+      if (accounts.find(a => a.id === id)?.platform === 'mastodon') { mastoClient = entry.client as MastodonClient; break; }
     }
     if (!mastoClient) { error = 'No Mastodon client'; return; }
 

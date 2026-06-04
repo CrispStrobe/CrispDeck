@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { listAccounts, getDecryptedCredentials } from '$lib/db';
+  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Shield, Loader2, Ban, VolumeX, UserX } from '@lucide/svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
@@ -23,12 +23,13 @@
   let muted: BlockedAccount[] = $state([]);
   let activeTab: 'blocked' | 'muted' = $state('blocked');
 
-  let clients: Map<number, BlueskyClient | MastodonClient> = new Map();
+  let clientEntries: Map<number, ClientEntry> = new Map();
 
   onMount(async () => {
     try {
-      accounts = await listAccounts();
-      await initClients();
+      const result = await initAllClients();
+      accounts = result.accounts;
+      clientEntries = result.clients;
       await loadModerationLists();
     } catch (e) {
       error = String(e);
@@ -37,36 +38,17 @@
     }
   });
 
-  async function initClients() {
-    for (const acct of accounts) {
-      try {
-        const creds = JSON.parse(await getDecryptedCredentials(acct.id));
-        if (acct.platform === 'bluesky') {
-          const c = new BlueskyClient(acct.handle, creds.app_password);
-          await c.login();
-          clients.set(acct.id, c);
-        } else {
-          clients.set(acct.id, new MastodonClient(
-            acct.instance_url ?? `https://${acct.handle.split('@').pop()}`,
-            creds.access_token,
-          ));
-        }
-      } catch (e) { console.error(e); }
-    }
-  }
-
   async function loadModerationLists() {
     const allBlocked: BlockedAccount[] = [];
     const allMuted: BlockedAccount[] = [];
 
-    for (const [id, client] of clients) {
+    for (const [id, entry] of clientEntries) {
       const acct = accounts.find(a => a.id === id);
       if (!acct) continue;
 
       if (acct.platform === 'bluesky') {
-        const bsky = client as BlueskyClient;
         try {
-          const agent = bsky.getAgent();
+          const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
           // Blocks
           const blocks = await agent.api.app.bsky.graph.getBlocks({ limit: 100 });
           for (const b of blocks.data.blocks) {
@@ -79,7 +61,7 @@
           }
         } catch {}
       } else {
-        const masto = client as MastodonClient;
+        const masto = entry.client as MastodonClient;
         const token = masto.getAccessToken();
         if (!token) continue;
         const inst = masto.getInstanceUrl();
@@ -106,19 +88,19 @@
   }
 
   async function unblock(item: BlockedAccount) {
-    for (const [id, client] of clients) {
+    for (const [id, entry] of clientEntries) {
       const acct = accounts.find(a => a.id === id);
       if (acct?.platform !== item.platform) continue;
       try {
         if (item.platform === 'bluesky' && item.did) {
-          const agent = (client as BlueskyClient).getAgent();
+          const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
           // Find and delete the block record
           const blocks = await agent.api.app.bsky.graph.getBlocks({ limit: 100 });
           // Unblock by deleting the block relationship
           await agent.api.app.bsky.graph.muteActor({ actor: item.did }); // This is a workaround
           // Actually need to delete the block record from the repo
         } else if (item.platform === 'mastodon' && item.id) {
-          const masto = client as MastodonClient;
+          const masto = entry.client as MastodonClient;
           const token = masto.getAccessToken();
           if (token) {
             await fetch(`${masto.getInstanceUrl()}/api/v1/accounts/${item.id}/unblock`, {
@@ -134,15 +116,15 @@
   }
 
   async function unmute(item: BlockedAccount) {
-    for (const [id, client] of clients) {
+    for (const [id, entry] of clientEntries) {
       const acct = accounts.find(a => a.id === id);
       if (acct?.platform !== item.platform) continue;
       try {
         if (item.platform === 'bluesky' && item.did) {
-          const agent = (client as BlueskyClient).getAgent();
+          const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
           await agent.api.app.bsky.graph.unmuteActor({ actor: item.did });
         } else if (item.platform === 'mastodon' && item.id) {
-          const masto = client as MastodonClient;
+          const masto = entry.client as MastodonClient;
           const token = masto.getAccessToken();
           if (token) {
             await fetch(`${masto.getInstanceUrl()}/api/v1/accounts/${item.id}/unmute`, {

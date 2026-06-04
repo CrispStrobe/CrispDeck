@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { listAccounts, getDecryptedCredentials } from '$lib/db';
+  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { User, Loader2, UserPlus, UserMinus, Ban, ArrowLeft } from '@lucide/svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
@@ -21,7 +21,7 @@
   let following = $state(false);
 
   let accounts: Account[] = $state([]);
-  let clients: Map<number, BlueskyClient | MastodonClient> = new Map();
+  let clientEntries: Map<number, ClientEntry> = new Map();
 
   onMount(async () => {
     const params = new URLSearchParams(window.location.search);
@@ -35,8 +35,9 @@
     }
 
     try {
-      accounts = await listAccounts();
-      await initClients();
+      const result = await initAllClients();
+      accounts = result.accounts;
+      clientEntries = result.clients;
       await loadProfile();
     } catch (e) {
       error = String(e);
@@ -45,33 +46,16 @@
     }
   });
 
-  async function initClients() {
-    for (const acct of accounts) {
-      try {
-        const credsJson = await getDecryptedCredentials(acct.id);
-        const creds = JSON.parse(credsJson);
-        if (acct.platform === 'bluesky') {
-          const client = new BlueskyClient(acct.handle, creds.app_password);
-          await client.login();
-          clients.set(acct.id, client);
-        } else {
-          clients.set(acct.id, new MastodonClient(
-            acct.instance_url ?? `https://${acct.handle.split('@').pop()}`,
-            creds.access_token,
-          ));
-        }
-      } catch (e) {
-        console.error(`Failed to init client for ${acct.handle}:`, e);
-      }
+  function getEntry(): ClientEntry | null {
+    for (const [id, entry] of clientEntries) {
+      const acct = accounts.find(a => a.id === id);
+      if (acct?.platform === platform) return entry;
     }
+    return null;
   }
 
   function getClient(): BlueskyClient | MastodonClient | null {
-    for (const [id, client] of clients) {
-      const acct = accounts.find(a => a.id === id);
-      if (acct?.platform === platform) return client;
-    }
-    return null;
+    return getEntry()?.client ?? null;
   }
 
   async function loadProfile() {
@@ -115,22 +99,22 @@
   }
 
   async function toggleFollow() {
-    const client = getClient();
-    if (!client) return;
+    const entry = getEntry();
+    if (!entry) return;
     try {
       if (platform === 'bluesky') {
         // Bluesky follow/unfollow via agent
-        const bsky = client as BlueskyClient;
+        const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
         if (following) {
           // unfollow — need the follow record URI
           if (profile.viewer?.following) {
-            await bsky.getAgent().deleteFollow(profile.viewer.following);
+            await agent.deleteFollow(profile.viewer.following);
           }
         } else {
-          await bsky.getAgent().follow(profile.did);
+          await agent.follow(profile.did);
         }
       } else {
-        const masto = client as MastodonClient;
+        const masto = entry.client as MastodonClient;
         const token = masto.getAccessToken();
         const instanceUrl = masto.getInstanceUrl();
         if (token && profile._mastodonId) {
@@ -178,13 +162,14 @@
   }
 
   async function blockUser() {
-    const client = getClient();
-    if (!client) return;
+    const entry = getEntry();
+    if (!entry) return;
     try {
       if (platform === 'bluesky' && profile.did) {
-        await (client as BlueskyClient).getAgent().api.app.bsky.graph.muteActor({ actor: profile.did });
+        const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
+        await agent.api.app.bsky.graph.muteActor({ actor: profile.did });
       } else if (platform === 'mastodon' && profile._mastodonId) {
-        const masto = client as MastodonClient;
+        const masto = entry.client as MastodonClient;
         const token = masto.getAccessToken();
         if (token) {
           await fetch(`${masto.getInstanceUrl()}/api/v1/accounts/${profile._mastodonId}/block`, {
@@ -197,13 +182,14 @@
   }
 
   async function muteUser() {
-    const client = getClient();
-    if (!client) return;
+    const entry = getEntry();
+    if (!entry) return;
     try {
       if (platform === 'bluesky' && profile.did) {
-        await (client as BlueskyClient).getAgent().api.app.bsky.graph.muteActor({ actor: profile.did });
+        const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
+        await agent.api.app.bsky.graph.muteActor({ actor: profile.did });
       } else if (platform === 'mastodon' && profile._mastodonId) {
-        const masto = client as MastodonClient;
+        const masto = entry.client as MastodonClient;
         const token = masto.getAccessToken();
         if (token) {
           await fetch(`${masto.getInstanceUrl()}/api/v1/accounts/${profile._mastodonId}/mute`, {

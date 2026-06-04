@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { listAccounts, getDecryptedCredentials } from '$lib/db';
+  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { List, Plus, Loader2, Trash2, Rss } from '@lucide/svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
@@ -20,7 +20,7 @@
   let listPosts: UnifiedPost[] = $state([]);
   let loadingPosts = $state(false);
 
-  let clients: Map<number, BlueskyClient | MastodonClient> = new Map();
+  let clientEntries: Map<number, ClientEntry> = new Map();
 
   // Create list form
   let showCreateForm = $state(false);
@@ -28,8 +28,9 @@
 
   onMount(async () => {
     try {
-      accounts = await listAccounts();
-      await initClients();
+      const result = await initAllClients();
+      accounts = result.accounts;
+      clientEntries = result.clients;
       await loadLists();
     } catch (e) {
       error = String(e);
@@ -38,26 +39,9 @@
     }
   });
 
-  async function initClients() {
-    for (const acct of accounts) {
-      try {
-        const creds = JSON.parse(await getDecryptedCredentials(acct.id));
-        if (acct.platform === 'bluesky') {
-          const c = new BlueskyClient(acct.handle, creds.app_password);
-          await c.login();
-          clients.set(acct.id, c);
-        } else {
-          clients.set(acct.id, new MastodonClient(
-            acct.instance_url ?? `https://${acct.handle.split('@').pop()}`,
-            creds.access_token,
-          ));
-        }
-      } catch (e) { console.error(e); }
-    }
-  }
-
   async function loadLists() {
-    for (const [id, client] of clients) {
+    for (const [id, entry] of clientEntries) {
+      const client = entry.client;
       const acct = accounts.find(a => a.id === id);
       if (!acct) continue;
 
@@ -73,9 +57,8 @@
           } catch {}
         }
       } else {
-        const bsky = client as BlueskyClient;
         try {
-          const agent = bsky.getAgent();
+          const agent = entry.oauthAgent ?? (client as BlueskyClient).getAgent();
           const resp = await agent.api.app.bsky.feed.getSuggestedFeeds({ limit: 20 });
           bskyFeeds = (resp.data.feeds ?? []) as unknown as BskyFeed[];
         } catch {}
@@ -87,10 +70,10 @@
     selectedList = { type: 'mastodon', id: list.id, title: list.title };
     loadingPosts = true;
     listPosts = [];
-    for (const [id, client] of clients) {
+    for (const [id, entry] of clientEntries) {
       const acct = accounts.find(a => a.id === id);
       if (acct?.platform !== 'mastodon') continue;
-      const masto = client as MastodonClient;
+      const masto = entry.client as MastodonClient;
       const token = masto.getAccessToken();
       if (!token) continue;
       try {
@@ -113,12 +96,11 @@
     selectedList = { type: 'bluesky', uri: feed.uri, title: feed.displayName };
     loadingPosts = true;
     listPosts = [];
-    for (const [id, client] of clients) {
+    for (const [id, entry] of clientEntries) {
       const acct = accounts.find(a => a.id === id);
       if (acct?.platform !== 'bluesky') continue;
-      const bsky = client as BlueskyClient;
       try {
-        const agent = bsky.getAgent();
+        const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
         const resp = await agent.api.app.bsky.feed.getFeed({ feed: feed.uri, limit: 50 });
         listPosts = sortPosts(resp.data.feed.map(p => normalizePost(p, 'bluesky')), 'newest');
       } catch {}
@@ -129,10 +111,10 @@
 
   async function createMastoList() {
     if (!newListTitle.trim()) return;
-    for (const [id, client] of clients) {
+    for (const [id, entry] of clientEntries) {
       const acct = accounts.find(a => a.id === id);
       if (acct?.platform !== 'mastodon') continue;
-      const masto = client as MastodonClient;
+      const masto = entry.client as MastodonClient;
       const token = masto.getAccessToken();
       if (!token) continue;
       try {

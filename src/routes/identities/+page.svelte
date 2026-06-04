@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
-    listAccounts, getDecryptedCredentials, listIdentities,
+    listIdentities,
     createIdentity as dbCreateIdentity, deleteIdentity as dbDeleteIdentity,
     linkToIdentity, confirmIdentity, addTag as dbAddTag, removeTag as dbRemoveTag,
     cacheFollows, detectIdentities
   } from '$lib/db';
+  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Users, ScanSearch, Loader2, Check, X, Plus, Tag, Trash2, Link2 } from '@lucide/svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
@@ -26,13 +27,14 @@
   // Tag form
   let tagInput: Record<number, string> = $state({});
 
-  let clients: Map<number, BlueskyClient | MastodonClient> = new Map();
+  let clientEntries: Map<number, ClientEntry> = new Map();
 
   onMount(async () => {
     try {
-      accounts = await listAccounts();
+      const result = await initAllClients();
+      accounts = result.accounts;
+      clientEntries = result.clients;
       identities = await listIdentities();
-      await initClients();
     } catch (e) {
       error = String(e);
     } finally {
@@ -45,27 +47,6 @@
     }
   });
 
-  async function initClients() {
-    for (const acct of accounts) {
-      try {
-        const credsJson = await getDecryptedCredentials(acct.id);
-        const creds = JSON.parse(credsJson);
-        if (acct.platform === 'bluesky') {
-          const client = new BlueskyClient(acct.handle, creds.app_password);
-          await client.login();
-          clients.set(acct.id, client);
-        } else {
-          clients.set(acct.id, new MastodonClient(
-            acct.instance_url ?? `https://${acct.handle.split('@').pop()}`,
-            creds.access_token,
-          ));
-        }
-      } catch (e) {
-        console.error(`Failed to init client for ${acct.handle}:`, e);
-      }
-    }
-  }
-
   async function scanForIdentities() {
     scanning = true;
     error = '';
@@ -77,12 +58,12 @@
 
       // Fetch follows from all accounts
       for (const acct of accounts) {
-        const client = clients.get(acct.id);
-        if (!client) continue;
+        const entry = clientEntries.get(acct.id);
+        if (!entry) continue;
 
         if (acct.platform === 'bluesky') {
           scanProgress = `Fetching Bluesky follows for ${acct.handle}...`;
-          const bsky = client as BlueskyClient;
+          const bsky = entry.client as BlueskyClient;
           let cursor: string | undefined;
           do {
             const result = await bsky.getFollows(acct.handle, cursor);
@@ -106,7 +87,7 @@
           await cacheFollows(acct.id, bskyFollows);
         } else {
           scanProgress = `Fetching Mastodon follows for ${acct.handle}...`;
-          const masto = client as MastodonClient;
+          const masto = entry.client as MastodonClient;
           try {
             const me = await masto.verifyCredentials();
             let page = await masto.getFollowing(me.id);

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { listAccounts, getDecryptedCredentials } from '$lib/db';
+  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Archive, Search, Loader2, Download, Trash2, Database, RefreshCw } from '@lucide/svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
@@ -11,6 +11,7 @@
   import type { Account, UnifiedPost, Platform } from '$lib/types';
 
   let accounts: Account[] = $state([]);
+  let clientEntries: Map<number, ClientEntry> = new Map();
   let loading = $state(true);
   let building = $state(false);
   let buildProgress = $state('');
@@ -28,7 +29,9 @@
 
   onMount(async () => {
     try {
-      accounts = await listAccounts();
+      const result = await initAllClients();
+      accounts = result.accounts;
+      clientEntries = result.clients;
       stats = await getArchiveStats();
     } catch (e) {
       error = String(e);
@@ -43,13 +46,11 @@
     let total = 0;
 
     for (const acct of accounts) {
+      const entry = clientEntries.get(acct.id);
+      if (!entry) continue;
       try {
-        const credsJson = await getDecryptedCredentials(acct.id);
-        const creds = JSON.parse(credsJson);
-
         if (acct.platform === 'bluesky') {
-          const client = new BlueskyClient(acct.handle, creds.app_password);
-          await client.login();
+          const client = entry.client as BlueskyClient;
 
           // Own posts
           let cursor: string | undefined;
@@ -76,10 +77,7 @@
           } while (cursor);
 
         } else {
-          const client = new MastodonClient(
-            acct.instance_url ?? `https://${acct.handle.split('@').pop()}`,
-            creds.access_token,
-          );
+          const client = entry.client as MastodonClient;
           const account = await client.getAccountByHandle(acct.handle);
 
           // Own posts

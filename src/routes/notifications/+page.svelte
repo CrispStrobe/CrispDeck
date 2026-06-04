@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { listAccounts, getDecryptedCredentials } from '$lib/db';
+  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Bell, Heart, Repeat, UserPlus, MessageCircle, AtSign, Loader2, Quote } from '@lucide/svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
@@ -21,12 +21,13 @@
   let loading = $state(true);
   let error = $state('');
 
-  let clients: Map<number, BlueskyClient | MastodonClient> = new Map();
+  let clientEntries: Map<number, ClientEntry> = new Map();
 
   onMount(async () => {
     try {
-      accounts = await listAccounts();
-      await initClients();
+      const result = await initAllClients();
+      accounts = result.accounts;
+      clientEntries = result.clients;
       await loadNotifications();
     } catch (e) {
       error = String(e);
@@ -35,37 +36,16 @@
     }
   });
 
-  async function initClients() {
-    for (const acct of accounts) {
-      try {
-        const credsJson = await getDecryptedCredentials(acct.id);
-        const creds = JSON.parse(credsJson);
-        if (acct.platform === 'bluesky') {
-          const client = new BlueskyClient(acct.handle, creds.app_password);
-          await client.login();
-          clients.set(acct.id, client);
-        } else {
-          clients.set(acct.id, new MastodonClient(
-            acct.instance_url ?? `https://${acct.handle.split('@').pop()}`,
-            creds.access_token,
-          ));
-        }
-      } catch (e) {
-        console.error(`Failed to init client for ${acct.handle}:`, e);
-      }
-    }
-  }
-
   async function loadNotifications() {
     const all: UnifiedNotification[] = [];
 
-    for (const [id, client] of clients) {
+    for (const [id, entry] of clientEntries) {
       const acct = accounts.find(a => a.id === id);
       if (!acct) continue;
 
       try {
         if (acct.platform === 'bluesky') {
-          const bsky = client as BlueskyClient;
+          const bsky = entry.client as BlueskyClient;
           const { notifications: notifs } = await bsky.getNotifications();
           for (const n of notifs) {
             all.push({
@@ -83,7 +63,7 @@
             });
           }
         } else {
-          const masto = client as MastodonClient;
+          const masto = entry.client as MastodonClient;
           const token = masto.getAccessToken();
           if (!token) continue;
           const resp = await fetch(`${masto.getInstanceUrl()}/api/v1/notifications?limit=40`, {

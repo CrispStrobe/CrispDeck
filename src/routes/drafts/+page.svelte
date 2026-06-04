@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { listDrafts, deleteDraft as dbDeleteDraft, listAccounts, getDecryptedCredentials, saveDraft as dbSaveDraft } from '$lib/db';
+  import { listDrafts, deleteDraft as dbDeleteDraft, saveDraft as dbSaveDraft } from '$lib/db';
+  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { FileText, Trash2, Clock, Send, Loader2, Edit3, Calendar } from '@lucide/svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
@@ -15,7 +16,7 @@
   let results: PostResult[] = $state([]);
   let error = $state('');
 
-  let clients: Map<number, BlueskyClient | MastodonClient> = new Map();
+  let clientEntries: Map<number, ClientEntry> = new Map();
 
   // Schedule form
   let schedulingDraftId: number | null = $state(null);
@@ -24,8 +25,10 @@
 
   onMount(async () => {
     try {
-      [drafts, accounts] = await Promise.all([listDrafts(), listAccounts()]);
-      await initClients();
+      const [draftList, result] = await Promise.all([listDrafts(), initAllClients()]);
+      drafts = draftList;
+      accounts = result.accounts;
+      clientEntries = result.clients;
       checkScheduledDrafts();
     } catch (e) {
       error = String(e);
@@ -33,27 +36,6 @@
       loading = false;
     }
   });
-
-  async function initClients() {
-    for (const acct of accounts) {
-      try {
-        const credsJson = await getDecryptedCredentials(acct.id);
-        const creds = JSON.parse(credsJson);
-        if (acct.platform === 'bluesky') {
-          const client = new BlueskyClient(acct.handle, creds.app_password);
-          await client.login();
-          clients.set(acct.id, client);
-        } else {
-          clients.set(acct.id, new MastodonClient(
-            acct.instance_url ?? `https://${acct.handle.split('@').pop()}`,
-            creds.access_token,
-          ));
-        }
-      } catch (e) {
-        console.error(`Failed to init client for ${acct.handle}:`, e);
-      }
-    }
-  }
 
   function checkScheduledDrafts() {
     // Check every 30 seconds for drafts that are past their scheduled time
@@ -80,10 +62,10 @@
     const targets = targetIds
       .map((id: number) => {
         const acct = accounts.find(a => a.id === id);
-        const client = clients.get(id);
-        if (!acct || !client) return null;
+        const entry = clientEntries.get(id);
+        if (!acct || !entry) return null;
         const plan = splitForPlatform(draft.text.trim(), acct.platform as Platform);
-        return { platform: acct.platform as 'bluesky' | 'mastodon', client, parts: plan.parts.map(p => p.text) };
+        return { platform: acct.platform as 'bluesky' | 'mastodon', client: entry.client, parts: plan.parts.map(p => p.text) };
       })
       .filter((t): t is NonNullable<typeof t> => t !== null);
 

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { listAccounts, getDecryptedCredentials, logCrosspost, saveDraft as dbSaveDraft, listDrafts, deleteDraft as dbDeleteDraft } from '$lib/db';
+  import { logCrosspost, saveDraft as dbSaveDraft, listDrafts, deleteDraft as dbDeleteDraft } from '$lib/db';
+  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { PenSquare, Send, Loader2, X, ImagePlus, AlertTriangle, Check, BarChart3, Shield } from '@lucide/svelte';
   import AccountPicker from '$lib/components/AccountPicker.svelte';
   import MentionAutocomplete from '$lib/components/MentionAutocomplete.svelte';
@@ -52,13 +53,14 @@
   let altTexts: string[] = $state([]);
 
   // Clients
-  let clients: Map<number, BlueskyClient | MastodonClient> = new Map();
+  let clientEntries: Map<number, ClientEntry> = new Map();
 
   onMount(async () => {
     try {
-      accounts = await listAccounts();
+      const result = await initAllClients();
+      accounts = result.accounts;
+      clientEntries = result.clients;
       selectedAccountIds = accounts.map(a => a.id);
-      await initClients();
 
       // Handle URL params: ?replyTo=...&author=...&platform=... or ?draft=ID
       const params = new URLSearchParams(window.location.search);
@@ -101,27 +103,6 @@
     }
   });
 
-  async function initClients() {
-    for (const acct of accounts) {
-      try {
-        const credsJson = await getDecryptedCredentials(acct.id);
-        const creds = JSON.parse(credsJson);
-        if (acct.platform === 'bluesky') {
-          const client = new BlueskyClient(acct.handle, creds.app_password);
-          await client.login();
-          clients.set(acct.id, client);
-        } else {
-          clients.set(acct.id, new MastodonClient(
-            acct.instance_url ?? `https://${acct.handle.split('@').pop()}`,
-            creds.access_token,
-          ));
-        }
-      } catch (e) {
-        console.error(`Failed to init client for ${acct.handle}:`, e);
-      }
-    }
-  }
-
   function addMedia(event: Event) {
     const input = event.target as HTMLInputElement;
     if (!input.files) return;
@@ -160,13 +141,13 @@
     const targets = selectedAccountIds
       .map(id => {
         const acct = accounts.find(a => a.id === id);
-        const client = clients.get(id);
-        if (!acct || !client) return null;
+        const entry = clientEntries.get(id);
+        if (!acct || !entry) return null;
         // Split text per platform's char limits
         const plan = splitForPlatform(text.trim(), acct.platform as Platform);
         return {
           platform: acct.platform as 'bluesky' | 'mastodon',
-          client,
+          client: entry.client,
           parts: plan.parts.map(p => p.text),
         };
       })

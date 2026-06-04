@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { listAccounts, getDecryptedCredentials } from '$lib/db';
+  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Package, Loader2, UserPlus, Users, ExternalLink } from '@lucide/svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import type { Account } from '$lib/types';
@@ -23,21 +23,23 @@
   let searching = $state(false);
   let packs: StarterPack[] = $state([]);
   let myPacks: StarterPack[] = $state([]);
-  let client: BlueskyClient | null = $state(null);
+  let clientEntries: Map<number, ClientEntry> = new Map();
+  let bskyEntry: ClientEntry | null = $state(null);
 
   onMount(async () => {
     try {
-      accounts = await listAccounts();
+      const result = await initAllClients();
+      accounts = result.accounts;
+      clientEntries = result.clients;
       const bskyAcct = accounts.find(a => a.platform === 'bluesky');
       if (bskyAcct) {
-        const creds = JSON.parse(await getDecryptedCredentials(bskyAcct.id));
-        client = new BlueskyClient(bskyAcct.handle, creds.app_password);
-        await client.login();
-
-        // Load user's own starter packs
-        const agent = client.getAgent();
-        const resp = await agent.api.app.bsky.graph.getActorStarterPacks({ actor: bskyAcct.handle });
-        myPacks = (resp.data.starterPacks ?? []) as unknown as StarterPack[];
+        bskyEntry = clientEntries.get(bskyAcct.id) ?? null;
+        if (bskyEntry) {
+          // Load user's own starter packs
+          const agent = bskyEntry.oauthAgent ?? (bskyEntry.client as BlueskyClient).getAgent();
+          const resp = await agent.api.app.bsky.graph.getActorStarterPacks({ actor: bskyAcct.handle });
+          myPacks = (resp.data.starterPacks ?? []) as unknown as StarterPack[];
+        }
       }
     } catch (e) {
       error = String(e);
@@ -47,15 +49,16 @@
   });
 
   async function search() {
-    if (!searchQuery.trim() || !client) return;
+    if (!searchQuery.trim() || !bskyEntry) return;
     searching = true;
     try {
-      const agent = client.getAgent();
+      const agent = bskyEntry.oauthAgent ?? (bskyEntry.client as BlueskyClient).getAgent();
+      const bskyClient = bskyEntry.client as BlueskyClient;
       const allPacks: StarterPack[] = [];
       const seen = new Set<string>();
 
       // Strategy 1: Search actors and fetch their starter packs
-      const actors = await client.searchActors(searchQuery);
+      const actors = await bskyClient.searchActors(searchQuery);
       for (const actor of actors.slice(0, 8)) {
         try {
           const resp = await agent.api.app.bsky.graph.getActorStarterPacks({ actor: actor.handle });
@@ -130,7 +133,7 @@
         placeholder="Search for starter packs by creator..."
         class="flex-1 px-4 py-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-bluesky)]"
       />
-      <button type="submit" disabled={searching || !client} class="px-5 py-3 bg-[var(--color-bluesky)] text-white text-sm font-medium rounded-lg disabled:opacity-50">
+      <button type="submit" disabled={searching || !bskyEntry} class="px-5 py-3 bg-[var(--color-bluesky)] text-white text-sm font-medium rounded-lg disabled:opacity-50">
         {#if searching}<Loader2 size={14} class="animate-spin" />{:else}Search{/if}
       </button>
     </div>
@@ -190,7 +193,7 @@
       </div>
     {/if}
 
-    {#if !loading && !client}
+    {#if !loading && !bskyEntry}
       <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
         <Package size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
         <p class="text-sm text-[var(--color-text-muted)]">Add a Bluesky account in <a href="/settings" class="text-[var(--color-primary)] underline">Settings</a> to browse starter packs.</p>
