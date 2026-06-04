@@ -7,7 +7,7 @@ Works as a **web app** (Vercel), **desktop app** (Windows/macOS/Linux via Tauri 
 **Live**: https://crispdeck.vercel.app
 **Repo**: https://github.com/CrispStrobe/CrispDeck
 
-Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/) + [Svelte 5](https://svelte.dev/) + [Rust](https://www.rust-lang.org/).
+Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/) + [Svelte 5](https://svelte.dev/) + [Rust](https://www.rust-lang.org/) + [CrispASR](https://github.com/CrispStrobe/CrispASR) (optional, for local translation/TTS/STT).
 
 ## Features
 
@@ -64,7 +64,8 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **Collapsible sidebar** + mobile hamburger menu + bottom tab bar
 - Safe area insets, touch targets, responsive design
 - **Emoji picker** + **GIF picker** (Tenor) in compose
-- 256 unit + integration tests
+- **About page** with legal info + searchable open-source license list
+- 276 tests (260 frontend + 11 Rust unit + 5 Rust live translation)
 
 ## Architecture
 
@@ -87,6 +88,8 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
               | SQLite/rusqlite |   | IndexedDB           |
               | AES-GCM+Argon2 |   | Web Crypto AES-GCM  |
               | Rust strsim     |   | JS jaro-winkler     |
+              | CrispASR (opt.) |   | BYOK OpenAI / MyMem.|
+              |  NMT/TTS/STT   |   |  (translation only) |
               +-----------------+   +--------------------+
 ```
 
@@ -102,6 +105,10 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 | Database (web) | IndexedDB |
 | Encryption | AES-256-GCM (Argon2 on desktop, PBKDF2 on web) |
 | Identity matching | strsim (Rust) / JS jaro-winkler (browser) |
+| Translation (desktop) | CrispASR M2M-100 GGUF (optional `--features crispasr`) |
+| Translation (web) | BYOK OpenAI-compatible / MyMemory free API |
+| TTS (desktop) | CrispASR kokoro/vibevoice/qwen3-tts backends |
+| STT (desktop) | CrispASR whisper/parakeet/qwen3-asr backends |
 | Icons | @lucide/svelte |
 | CI/CD | GitHub Actions (3 platforms) |
 | Hosting | Vercel (static SPA) |
@@ -160,11 +167,17 @@ npx vercel deploy --prod
 ### Run tests
 
 ```bash
-npm test              # 118 tests (unit + integration)
+npm test              # 260 frontend tests (unit + integration)
 npm run test:watch    # watch mode
+
+# Rust tests (requires CrispASR sibling checkout for --features crispasr)
+cd src-tauri
+cargo test                              # 5 unit tests (no CrispASR needed)
+cargo test --features crispasr          # 11 tests (registry, cache, config)
+cargo test --features crispasr -- --ignored  # 5 live translation tests (downloads m2m100 model)
 ```
 
-Tests hit real Bluesky/Mastodon APIs to verify post reading, normalization, ordering, and crosspost detection.
+Frontend tests hit real Bluesky/Mastodon APIs. Rust live tests download and run M2M-100 translation models via CrispASR.
 
 ## Project Structure
 
@@ -178,7 +191,7 @@ src/
     api/               bluesky.ts, mastodon.ts, unified.ts, bluesky-oauth.ts, client-factory.ts
     compose/           adapter.ts, thread.ts, mentions.ts, media.ts
     components/        Post, CrosspostGroup, AdvancedFilters, AccountPicker,
-                       MentionAutocomplete, EmojiPicker, KeyboardShortcuts, DeckColumn
+                       MentionAutocomplete, EmojiPicker, GifPicker, KeyboardShortcuts, DeckColumn
     utils/             export.ts (JSON, CSV, Markdown)
     types.ts           UnifiedPost, Account, Identity, Filters, etc.
     db.ts              Platform dispatcher (Tauri invoke or browser IndexedDB)
@@ -187,14 +200,18 @@ src/
     archive.ts         Local post archive (IndexedDB)
     bookmarks.ts       Cross-platform bookmarks (IndexedDB)
     templates.ts       Post templates (localStorage)
+    translate.ts       Multi-provider translation (CrispASR / BYOK OpenAI / MyMemory)
+    i18n.svelte.ts     TranslationService (Svelte 5 runes, en + de)
     store.ts           tauri-plugin-store settings wrapper
 
 src-tauri/
   src/
-    lib.rs             AppState, plugin registration, 25+ command handlers
+    lib.rs             AppState, plugin registration, 30+ command handlers
+    asr.rs             CrispASR integration (translate, transcribe, synthesize)
     db/                accounts, identities, crossposts, drafts, follows (SQLite CRUD)
     auth/              credentials (AES-GCM), mastodon_oauth (ephemeral localhost server)
     commands/          db_commands, auth_commands, detect_commands (identity matching)
+  tests/               crispasr_integration.rs (registry + live translation tests)
   migrations/          001_initial.sql (7-table schema)
 
 static/
@@ -203,7 +220,7 @@ static/
 
 ## CI/CD
 
-- **CI** (`ci.yml`): 118 tests + frontend build + Rust check on Linux/macOS/Windows — every push and PR
+- **CI** (`ci.yml`): 260 frontend tests + frontend build + Rust check on Linux/macOS/Windows — every push and PR
 - **Mobile** (`mobile.yml`): iOS + Android builds via Tauri 2 — triggers on `v*` tags
 - **Release** (`release.yml`): Cross-platform Tauri builds — triggers on `v*` tags, creates GitHub Releases with `.deb`, `.dmg`, `.msi`
 
@@ -217,10 +234,10 @@ git push origin v0.2.0
 
 ## Stats
 
-- 55 commits
-- 64 source files (23 pages, 9 components, 20 test files)
-- 256 unit + integration tests
-- 22 sidebar navigation items
+- 61 commits
+- 74 source files (25 pages, 9 components, 20 frontend + 1 Rust test files)
+- 276 tests (260 frontend + 11 Rust unit + 5 Rust live translation)
+- 23 sidebar navigation items
 - 11 deck column types
 - Bluesky: OAuth + app password auth, public API reading
 - Mastodon: OAuth, full REST API

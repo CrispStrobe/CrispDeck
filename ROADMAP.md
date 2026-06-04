@@ -48,7 +48,21 @@
 - [x] Custom PDS resolution (plc.directory for did:plc, .well-known for did:web — federated PDS support)
 - [x] Alt text enforcement modes (off/warn/require in settings, visual nudge in compose)
 - [x] 256 unit + integration tests (up from 118)
+- [x] CrispASR integration (optional `--features crispasr-metal / -vulkan / -cuda`):
+  - Translation: M2M-100 GGUF (100 languages, any-to-any, on-demand download)
+  - TTS: kokoro/vibevoice/qwen3-tts/orpheus backends
+  - STT: whisper/parakeet/qwen3-asr + 20 more backends (106 models in registry)
+  - Lazy-load session with registry auto-download
+  - Live-tested: EN↔DE, EN→FR/ES/JA, long text, edge cases
+- [x] Multi-provider translation: CrispASR (desktop) + BYOK OpenAI-compatible + MyMemory (free)
+- [x] About page with legal info + searchable open-source license list
+- [x] License generator script (scripts/generate-licenses.js — NPM + Cargo deps)
+- [x] 276 tests (260 frontend + 11 Rust unit + 5 Rust live translation)
 
 ## Remaining
 
 - [ ] Push notifications (Tauri mobile)
+- [ ] CrispASR model download manager in Settings UI
+- [ ] Dictation: mic button in compose → STT via CrispASR whisper
+- [ ] Read aloud: "Read" button on posts → TTS via CrispASR kokoro
+- [ ] Voice control: voice commands for navigation
