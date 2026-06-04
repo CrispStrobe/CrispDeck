@@ -35,6 +35,8 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **Bluesky custom feeds**: browse and view suggested feeds
 - **Bluesky starter packs**: browse and search by creator
 - **Moderation**: view/manage blocked and muted accounts on both platforms
+- **Bluesky labelers**: subscribe, configure hide/warn/show per label, labels displayed on posts
+- **Mastodon instance info**: view instance rules, description, stats, contact
 
 ### Compose & Crosspost
 - Write once, post to both platforms with one click
