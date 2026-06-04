@@ -22,11 +22,19 @@
   let openaiModel = $state(txConfig.openaiModel ?? 'gpt-4o-mini');
   let crispasrModel = $state(txConfig.crispasrModel ?? 'm2m100');
 
-  // TTS + STT model settings (stored in localStorage)
+  // TTS + STT model + engine settings (stored in localStorage)
   let ttsModel = $state(localStorage.getItem('crispdeck-tts-model') ?? 'kokoro');
   let sttModel = $state(localStorage.getItem('crispdeck-stt-model') ?? 'whisper');
+  let ttsEngine = $state<'auto' | 'crispasr' | 'browser'>(
+    (localStorage.getItem('crispdeck-tts-engine') as any) ?? 'auto'
+  );
+  let sttEngine = $state<'auto' | 'crispasr' | 'browser'>(
+    (localStorage.getItem('crispdeck-stt-engine') as any) ?? 'auto'
+  );
   function saveTtsModel() { localStorage.setItem('crispdeck-tts-model', ttsModel); }
   function saveSttModel() { localStorage.setItem('crispdeck-stt-model', sttModel); }
+  function saveTtsEngine() { localStorage.setItem('crispdeck-tts-engine', ttsEngine); }
+  function saveSttEngine() { localStorage.setItem('crispdeck-stt-engine', sttEngine); }
 
   // Model manager
   let isTauri = $state(false);
@@ -640,11 +648,17 @@
   <section class="mb-8">
     <h2 class="text-lg font-semibold mb-3">Text-to-Speech (Read Aloud)</h2>
     <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
-      <p class="text-xs text-[var(--color-text-muted)]">
-        Desktop: CrispASR TTS backends (auto-downloaded GGUF models). Web: uses browser's native speech synthesis.
-      </p>
+      <div class="flex items-center justify-between">
+        <label for="tts-engine" class="text-xs text-[var(--color-text-muted)]">{i18n.t.tts.engine}</label>
+        <select id="tts-engine" bind:value={ttsEngine} onchange={saveTtsEngine} class="px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none">
+          <option value="auto">{i18n.t.tts.engineAuto}</option>
+          <option value="crispasr">{i18n.t.tts.engineCrispasr}</option>
+          <option value="browser">{i18n.t.tts.engineBrowser}</option>
+        </select>
+      </div>
+      {#if ttsEngine !== 'browser'}
       <div>
-        <label for="tts-model" class="block text-xs text-[var(--color-text-muted)] mb-1">TTS model (desktop)</label>
+        <label for="tts-model" class="block text-xs text-[var(--color-text-muted)] mb-1">{i18n.t.tts.model}</label>
         <select id="tts-model" bind:value={ttsModel} onchange={saveTtsModel} class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none">
           <optgroup label="Lightweight (fast)">
             <option value="kokoro">Kokoro 82M Q8 · ~135 MB · English</option>
@@ -675,6 +689,7 @@
           </optgroup>
         </select>
       </div>
+      {/if}
     </div>
   </section>
 
@@ -682,11 +697,17 @@
   <section class="mb-8">
     <h2 class="text-lg font-semibold mb-3">Speech-to-Text (Dictation)</h2>
     <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
-      <p class="text-xs text-[var(--color-text-muted)]">
-        Desktop: CrispASR STT backends. Web: uses browser's native speech recognition (Web Speech API).
-      </p>
+      <div class="flex items-center justify-between">
+        <label for="stt-engine" class="text-xs text-[var(--color-text-muted)]">{i18n.t.stt.engine}</label>
+        <select id="stt-engine" bind:value={sttEngine} onchange={saveSttEngine} class="px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none">
+          <option value="auto">{i18n.t.stt.engineAuto}</option>
+          <option value="crispasr">{i18n.t.stt.engineCrispasr}</option>
+          <option value="browser">{i18n.t.stt.engineBrowser}</option>
+        </select>
+      </div>
+      {#if sttEngine !== 'browser'}
       <div>
-        <label for="stt-model" class="block text-xs text-[var(--color-text-muted)] mb-1">STT model (desktop)</label>
+        <label for="stt-model" class="block text-xs text-[var(--color-text-muted)] mb-1">{i18n.t.stt.model}</label>
         <select id="stt-model" bind:value={sttModel} onchange={saveSttModel} class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none">
           <optgroup label="General (multilingual)">
             <option value="whisper">Whisper Base · ~147 MB · 99 languages</option>
@@ -716,6 +737,7 @@
           </optgroup>
         </select>
       </div>
+      {/if}
     </div>
   </section>
 

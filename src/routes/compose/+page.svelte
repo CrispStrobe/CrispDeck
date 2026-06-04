@@ -297,20 +297,31 @@
       return;
     }
 
-    // Try CrispASR path first (Tauri desktop)
-    const w = globalThis as any;
-    if (w.__TAURI_INTERNALS__) {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const available = await invoke('asr_available') as boolean;
-        if (available) {
-          await startCrispASRDictation(invoke);
-          return;
-        }
-      } catch {}
+    const engine = localStorage.getItem('crispdeck-stt-engine') ?? 'auto';
+
+    // CrispASR path (desktop/mobile with Tauri)
+    if (engine !== 'browser') {
+      const w = globalThis as any;
+      if (w.__TAURI_INTERNALS__) {
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          const available = await invoke('asr_available') as boolean;
+          if (available) {
+            await startCrispASRDictation(invoke);
+            return;
+          }
+          if (engine === 'crispasr') {
+            error = 'CrispASR not available in this build. Switch to "Browser" engine in Settings.';
+            return;
+          }
+        } catch {}
+      } else if (engine === 'crispasr') {
+        error = 'CrispASR requires the desktop app. Switch to "Browser" engine in Settings.';
+        return;
+      }
     }
 
-    // Fallback: Web Speech API
+    // Browser Web Speech API
     startWebSpeechDictation();
   }
 

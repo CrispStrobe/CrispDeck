@@ -47,9 +47,11 @@
     const textToSpeak = getPostText();
     if (!textToSpeak) return;
 
-    // Try CrispASR TTS first
+    const engine = localStorage.getItem('crispdeck-tts-engine') ?? 'auto';
+
+    // CrispASR TTS path (desktop/mobile with Tauri)
     const w = globalThis as any;
-    if (w.__TAURI_INTERNALS__) {
+    if (engine !== 'browser' && w.__TAURI_INTERNALS__) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         const available = await invoke('asr_available') as boolean;
@@ -94,8 +96,18 @@
           return;
         }
       } catch (e) {
+        if (engine === 'crispasr') {
+          speaking = false;
+          console.error('CrispASR TTS failed:', e);
+          return;
+        }
         console.error('CrispASR TTS failed, falling back to browser:', e);
       }
+    }
+
+    if (engine === 'crispasr') {
+      // User explicitly chose CrispASR but it's not available
+      return;
     }
 
     // Fallback: browser SpeechSynthesis

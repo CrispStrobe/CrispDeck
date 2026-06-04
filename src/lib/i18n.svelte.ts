@@ -151,6 +151,10 @@ export const translations = {
       title: 'Text-to-Speech (Read Aloud)',
       hint: 'Desktop: CrispASR TTS backends (auto-downloaded GGUF models). Web: uses browser\'s native speech synthesis.',
       model: 'TTS model (desktop)',
+      engine: 'TTS engine',
+      engineAuto: 'Auto (CrispASR if available, else browser)',
+      engineCrispasr: 'CrispASR (local model)',
+      engineBrowser: 'Browser (native speech synthesis)',
     },
     stt: {
       title: 'Speech-to-Text (Dictation)',
@@ -158,6 +162,10 @@ export const translations = {
       model: 'STT model (desktop)',
       dictate: 'Dictate (speech-to-text)',
       stopDictation: 'Stop dictation',
+      engine: 'STT engine',
+      engineAuto: 'Auto (CrispASR if available, else browser)',
+      engineCrispasr: 'CrispASR (local model)',
+      engineBrowser: 'Browser (Web Speech API)',
     },
     analytics: {
       title: 'Analytics',
@@ -503,6 +511,10 @@ export const translations = {
       title: 'Text-zu-Sprache (Vorlesen)',
       hint: 'Desktop: CrispASR TTS-Backends (automatisch heruntergeladene GGUF-Modelle). Web: native Browser-Sprachsynthese.',
       model: 'TTS-Modell (Desktop)',
+      engine: 'TTS-Engine',
+      engineAuto: 'Automatisch (CrispASR wenn verfügbar, sonst Browser)',
+      engineCrispasr: 'CrispASR (lokales Modell)',
+      engineBrowser: 'Browser (native Sprachsynthese)',
     },
     stt: {
       title: 'Sprache-zu-Text (Diktat)',
@@ -510,6 +522,10 @@ export const translations = {
       model: 'STT-Modell (Desktop)',
       dictate: 'Diktieren (Sprache-zu-Text)',
       stopDictation: 'Diktat beenden',
+      engine: 'STT-Engine',
+      engineAuto: 'Automatisch (CrispASR wenn verfügbar, sonst Browser)',
+      engineCrispasr: 'CrispASR (lokales Modell)',
+      engineBrowser: 'Browser (Web Speech API)',
     },
     analytics: {
       title: 'Analytik',
