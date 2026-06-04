@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal } from '@lucide/svelte';
+  import { i18n } from '$lib/i18n.svelte';
   import Post from '$lib/components/Post.svelte';
   import CrosspostGroup from '$lib/components/CrosspostGroup.svelte';
   import AdvancedFilters from '$lib/components/AdvancedFilters.svelte';
@@ -339,7 +340,7 @@
   <div class="flex items-center justify-between mb-4">
     <div class="flex items-center gap-2">
       <Rss size={24} />
-      <h1 class="text-2xl font-bold">Feed</h1>
+      <h1 class="text-2xl font-bold">{i18n.t.feed.title}</h1>
       {#if posts.length > 0}
         <span class="text-sm text-[var(--color-text-muted)] ml-2">({progress} posts)</span>
       {/if}
@@ -352,14 +353,14 @@
           class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {feedMode === 'timeline' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
         >
           <Globe size={12} />
-          Timeline
+          {i18n.t.feed.timeline}
         </button>
         <button
           onclick={() => switchMode('my-posts')}
           class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {feedMode === 'my-posts' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
         >
           <User size={12} />
-          My Posts
+          {i18n.t.feed.myPosts}
         </button>
       </div>
 
@@ -368,7 +369,7 @@
         <button
           onclick={() => platformFilter = 'all'}
           class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors {platformFilter === 'all' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)]'}"
-        >All</button>
+        >{i18n.t.feed.all}</button>
         <button
           onclick={() => platformFilter = 'bluesky'}
           class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1 {platformFilter === 'bluesky' ? 'bg-[var(--color-bluesky)] text-white' : 'text-[var(--color-text-muted)]'}"
@@ -411,8 +412,8 @@
   {:else if accounts.length === 0}
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <Inbox size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
-      <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">No Accounts Connected</h3>
-      <p class="text-sm text-[var(--color-text-muted)]">Add accounts in <a href="/settings" class="text-[var(--color-primary)] underline">Settings</a> first.</p>
+      <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">{i18n.t.feed.noAccounts}</h3>
+      <p class="text-sm text-[var(--color-text-muted)]">{i18n.t.feed.addAccountsFirst}</p>
     </div>
   {:else}
     {#if showFilters}
@@ -433,14 +434,14 @@
       <div class="text-center py-12">
         <Loader2 size={32} class="text-[var(--color-text-muted)] animate-spin mx-auto" />
         <p class="text-sm text-[var(--color-text-muted)] mt-2">
-          Loading {feedMode === 'timeline' ? 'timeline' : 'your posts'}...
+          {feedMode === 'timeline' ? i18n.t.feed.loadingTimeline : i18n.t.feed.loadingYourPosts}
         </p>
       </div>
     {:else if finalFeed.length === 0}
       <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
         <Inbox size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
         <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">
-          {posts.length > 0 ? 'No Posts Match Your Filters' : 'No Posts Found'}
+          {posts.length > 0 ? i18n.t.feed.noPostsMatch : i18n.t.feed.noPostsFound}
         </h3>
       </div>
     {:else}
@@ -458,11 +459,11 @@
       <div bind:this={scrollSentinel} class="py-6 text-center">
         {#if loadingMore}
           <Loader2 size={24} class="text-[var(--color-text-muted)] animate-spin mx-auto" />
-          <p class="text-xs text-[var(--color-text-muted)] mt-2">Loading more...</p>
+          <p class="text-xs text-[var(--color-text-muted)] mt-2">{i18n.t.feed.loadingMore}</p>
         {:else if hasMoreContent}
-          <p class="text-xs text-[var(--color-text-muted)]">Scroll for more</p>
+          <p class="text-xs text-[var(--color-text-muted)]">{i18n.t.feed.scrollMore}</p>
         {:else}
-          <p class="text-xs text-[var(--color-text-muted)]">End of feed</p>
+          <p class="text-xs text-[var(--color-text-muted)]">{i18n.t.feed.endOfFeed}</p>
         {/if}
       </div>
     {/if}
