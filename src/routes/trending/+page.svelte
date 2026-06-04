@@ -17,8 +17,18 @@
   let tags: TrendingTag[] = $state([]);
   let links: TrendingLink[] = $state([]);
   let trendingPosts: UnifiedPost[] = $state([]);
+  let filterLatin = $state(true); // Filter to mostly-Latin tags by default
 
   let mastoClient: MastodonClient | null = $state(null);
+
+  /** Check if a string is mostly Latin/ASCII script */
+  function isLatinScript(text: string): boolean {
+    const latin = text.replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/g, '');
+    return latin.length > text.length * 0.4; // At least 40% Latin chars
+  }
+
+  const filteredTags = $derived(filterLatin ? tags.filter(t => isLatinScript(t.name)) : tags);
+  const filteredLinks = $derived(filterLatin ? links.filter(l => isLatinScript(l.title || l.url)) : links);
 
   onMount(async () => {
     try {
@@ -75,7 +85,11 @@
     <span class="text-xs px-2 py-0.5 bg-[var(--color-mastodon)]/20 text-[var(--color-mastodon)] rounded">Mastodon</span>
   </div>
   <p class="text-xs text-[var(--color-text-muted)] mb-4 -mt-4">
-    Global trends from your Mastodon instance. These are instance-wide, not personalized to your follows.
+    Global trends from your Mastodon instance.
+    <label class="inline-flex items-center gap-1.5 ml-3 cursor-pointer">
+      <input type="checkbox" bind:checked={filterLatin} class="rounded" />
+      <span>Latin only</span>
+    </label>
   </p>
 
   {#if error}
@@ -85,10 +99,10 @@
   <!-- Tabs -->
   <div class="flex items-center gap-1 border-b border-[var(--color-border)] mb-4">
     <button onclick={() => activeTab = 'tags'} class="px-4 py-2 text-sm font-medium border-b-2 -mb-px {activeTab === 'tags' ? 'border-[var(--color-primary)] text-[var(--color-text)]' : 'border-transparent text-[var(--color-text-muted)]'}">
-      <Hash size={14} class="inline mr-1" /> Tags ({tags.length})
+      <Hash size={14} class="inline mr-1" /> Tags ({filteredTags.length})
     </button>
     <button onclick={() => activeTab = 'links'} class="px-4 py-2 text-sm font-medium border-b-2 -mb-px {activeTab === 'links' ? 'border-[var(--color-primary)] text-[var(--color-text)]' : 'border-transparent text-[var(--color-text-muted)]'}">
-      <Link2 size={14} class="inline mr-1" /> Links ({links.length})
+      <Link2 size={14} class="inline mr-1" /> Links ({filteredLinks.length})
     </button>
     <button onclick={() => activeTab = 'posts'} class="px-4 py-2 text-sm font-medium border-b-2 -mb-px {activeTab === 'posts' ? 'border-[var(--color-primary)] text-[var(--color-text)]' : 'border-transparent text-[var(--color-text-muted)]'}">
       <Rss size={14} class="inline mr-1" /> Posts ({trendingPosts.length})
@@ -105,7 +119,7 @@
   {:else}
     {#if activeTab === 'tags'}
       <div class="space-y-2">
-        {#each tags as tag}
+        {#each filteredTags as tag}
           <a href="/search?q=%23{tag.name}" class="flex items-center justify-between p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] hover:border-[var(--color-mastodon)] transition-colors">
             <div>
               <span class="text-sm font-medium">#{tag.name}</span>
@@ -113,11 +127,11 @@
             <span class="text-xs text-[var(--color-text-muted)]">{totalUses(tag.history)} uses</span>
           </a>
         {/each}
-        {#if tags.length === 0}<p class="text-center py-8 text-sm text-[var(--color-text-muted)]">No trending tags.</p>{/if}
+        {#if filteredTags.length === 0}<p class="text-center py-8 text-sm text-[var(--color-text-muted)]">No trending tags{filterLatin ? ' (try disabling Latin filter)' : ''}.</p>{/if}
       </div>
     {:else if activeTab === 'links'}
       <div class="space-y-3">
-        {#each links as link}
+        {#each filteredLinks as link}
           <a href={link.url} target="_blank" rel="noopener noreferrer" class="flex gap-3 p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] hover:border-[var(--color-mastodon)] transition-colors">
             {#if link.image}
               <img src={link.image} alt="" class="w-20 h-14 rounded object-cover flex-shrink-0" />
@@ -129,7 +143,7 @@
             </div>
           </a>
         {/each}
-        {#if links.length === 0}<p class="text-center py-8 text-sm text-[var(--color-text-muted)]">No trending links.</p>{/if}
+        {#if filteredLinks.length === 0}<p class="text-center py-8 text-sm text-[var(--color-text-muted)]">No trending links{filterLatin ? ' (try disabling Latin filter)' : ''}.</p>{/if}
       </div>
     {:else}
       <div class="space-y-3">

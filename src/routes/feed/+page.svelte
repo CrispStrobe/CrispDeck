@@ -55,8 +55,38 @@
       initialLoading = false;
     }
 
-    return () => observer?.disconnect();
+    // Poll for new posts every 60 seconds
+    const pollInterval = setInterval(checkForNewPosts, 60000);
+    return () => { observer?.disconnect(); clearInterval(pollInterval); };
   });
+
+  let newPostsAvailable = $state(0);
+
+  async function checkForNewPosts() {
+    if (posts.length === 0 || loading) return;
+    const newestDate = posts[0]?.createdAt;
+    if (!newestDate) return;
+
+    for (const acct of accounts) {
+      const entry = clientEntries.get(acct.id);
+      if (!entry) continue;
+      try {
+        if (acct.platform === 'bluesky' && entry.oauthAgent) {
+          const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 5 });
+          const newer = r.data.feed.filter(p => {
+            const record = p.post.record as any;
+            return record?.createdAt > newestDate;
+          });
+          if (newer.length > 0) newPostsAvailable += newer.length;
+        }
+      } catch {}
+    }
+  }
+
+  function loadNewPosts() {
+    newPostsAvailable = 0;
+    loadFeed();
+  }
 
   // Reactive infinite scroll — observes sentinel whenever it appears in DOM
   $effect(() => {
@@ -343,6 +373,16 @@
   {:else}
     {#if showFilters}
       <AdvancedFilters {filters} onchange={handleFilterChange} startOpen={true} />
+    {/if}
+
+    <!-- New posts banner -->
+    {#if newPostsAvailable > 0}
+      <button
+        onclick={loadNewPosts}
+        class="w-full mb-3 py-2 bg-[var(--color-primary)]/20 text-[var(--color-primary)] text-sm font-medium rounded-lg hover:bg-[var(--color-primary)]/30 transition-colors"
+      >
+        {newPostsAvailable} new post{newPostsAvailable > 1 ? 's' : ''} available — click to refresh
+      </button>
     {/if}
 
     {#if loading && posts.length === 0}

@@ -166,16 +166,51 @@
           }
         }
       } else {
-        // Mastodon DMs are just statuses with direct visibility
-        // The conversation endpoint gives the last status, we'd need to fetch the context
-        if (convo.lastMessage) {
-          messages = [{
-            id: convo.id,
-            text: convo.lastMessage,
-            sender: convo.participant,
-            createdAt: convo.lastDate ?? new Date().toISOString(),
-            isOurs: false,
-          }];
+        // Mastodon: load all direct messages between us and this person
+        for (const [, entry] of clientEntries) {
+          if (entry.platform !== 'mastodon') continue;
+          const masto = entry.client as MastodonClient;
+          const token = masto.getAccessToken();
+          if (!token) break;
+          try {
+            // Search for direct statuses mentioning this user
+            const resp = await fetch(
+              `${masto.getInstanceUrl()}/api/v1/conversations?limit=40`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            if (resp.ok) {
+              const convos = await resp.json();
+              // Find the matching conversation and load its statuses
+              const match = convos.find((c: any) =>
+                c.accounts?.some((a: any) => `@${a.acct}` === convo.participant.handle || a.acct === convo.participant.handle.replace(/^@/, ''))
+              );
+              if (match?.last_status) {
+                // Get the context (ancestors = earlier messages)
+                const ctxResp = await fetch(
+                  `${masto.getInstanceUrl()}/api/v1/statuses/${match.last_status.id}/context`,
+                  { headers: { Authorization: `Bearer ${token}` } }
+                );
+                if (ctxResp.ok) {
+                  const ctx = await ctxResp.json();
+                  const allStatuses = [...(ctx.ancestors ?? []), match.last_status, ...(ctx.descendants ?? [])];
+                  const myHandle = accounts.find(a => a.platform === 'mastodon')?.handle ?? '';
+                  messages = allStatuses.map((s: any) => ({
+                    id: s.id,
+                    text: s.content?.replace(/<[^>]*>?/gm, '') ?? '',
+                    sender: { handle: `@${s.account.acct}`, displayName: s.account.display_name, avatar: s.account.avatar },
+                    createdAt: s.created_at,
+                    isOurs: `@${s.account.acct}`.includes(myHandle.replace(/^@/, '').split('@')[0]),
+                  }));
+                } else {
+                  // Fallback: just show last message
+                  messages = [{ id: match.last_status.id, text: match.last_status.content?.replace(/<[^>]*>?/gm, '') ?? '', sender: convo.participant, createdAt: match.last_status.created_at, isOurs: false }];
+                }
+              }
+            }
+          } catch (e) {
+            messages = [{ id: 'error', text: `Failed: ${e}`, sender: { handle: 'system' }, createdAt: new Date().toISOString(), isOurs: false }];
+          }
+          break;
         }
       }
     } catch (e) {
