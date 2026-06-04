@@ -8,11 +8,20 @@
   import { Settings, Plus, Trash2, Star, ExternalLink, Loader2, Shield } from '@lucide/svelte';
   import { startBlueskyOAuth } from '$lib/api/bluesky-oauth';
   import { i18n, type Language } from '$lib/i18n.svelte';
-  import { getTargetLanguage, setTargetLanguage } from '$lib/translate';
+  import { getTranslateConfig, setTranslateConfig, type TranslateProvider } from '$lib/translate';
   import type { Account } from '$lib/types';
 
   let uiLanguage = $state<Language>(i18n.lang);
-  let translateLang = $state(getTargetLanguage());
+
+  // Translation config
+  const txConfig = getTranslateConfig();
+  let translateProvider = $state<TranslateProvider>(txConfig.provider);
+  let translateLang = $state(txConfig.targetLang);
+  let openaiBaseUrl = $state(txConfig.openaiBaseUrl ?? 'https://api.openai.com/v1');
+  let openaiApiKey = $state(txConfig.openaiApiKey ?? '');
+  let openaiModel = $state(txConfig.openaiModel ?? 'gpt-4o-mini');
+  let crispasrModel = $state(txConfig.crispasrModel ?? 'm2m100-418m-q4_k');
+
   let altTextMode = $state<'off' | 'warn' | 'require'>(
     (localStorage.getItem('crispdeck-alt-text-mode') as any) ?? 'off'
   );
@@ -21,8 +30,15 @@
     i18n.setLanguage(uiLanguage);
   }
 
-  function handleTranslateLangChange() {
-    setTargetLanguage(translateLang);
+  function saveTranslateConfig() {
+    setTranslateConfig({
+      provider: translateProvider,
+      targetLang: translateLang,
+      openaiBaseUrl: openaiBaseUrl || undefined,
+      openaiApiKey: openaiApiKey || undefined,
+      openaiModel: openaiModel || undefined,
+      crispasrModel: crispasrModel || undefined,
+    });
   }
 
   function handleAltTextModeChange() {
@@ -429,28 +445,6 @@
         </select>
       </div>
 
-      <!-- Translation target language -->
-      <div class="flex items-center justify-between">
-        <label for="translate-lang" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.translateTarget}</label>
-        <select
-          id="translate-lang"
-          bind:value={translateLang}
-          onchange={handleTranslateLangChange}
-          class="px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none"
-        >
-          <option value="en">English</option>
-          <option value="de">Deutsch</option>
-          <option value="fr">Français</option>
-          <option value="es">Español</option>
-          <option value="ja">日本語</option>
-          <option value="pt">Português</option>
-          <option value="zh">中文</option>
-          <option value="ko">한국어</option>
-          <option value="it">Italiano</option>
-          <option value="nl">Nederlands</option>
-        </select>
-      </div>
-
       <!-- Alt text enforcement -->
       <div class="flex items-center justify-between">
         <label for="alt-text-mode" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.altTextMode}</label>
@@ -465,6 +459,136 @@
           <option value="require">{i18n.t.settings.altTextRequire}</option>
         </select>
       </div>
+    </div>
+  </section>
+
+  <!-- Translation -->
+  <section class="mb-8">
+    <h2 class="text-lg font-semibold mb-3">{i18n.t.settings.translateTarget}</h2>
+    <div class="space-y-4 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+      <!-- Provider -->
+      <div>
+        <label class="block text-sm text-[var(--color-text-muted)] mb-2">Translation provider</label>
+        <div class="flex items-center bg-[var(--color-bg)] rounded-lg border border-[var(--color-border)] p-0.5">
+          <button
+            onclick={() => { translateProvider = 'mymemory'; saveTranslateConfig(); }}
+            class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {translateProvider === 'mymemory' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)]'}"
+          >
+            MyMemory (free)
+          </button>
+          <button
+            onclick={() => { translateProvider = 'crispasr'; saveTranslateConfig(); }}
+            class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {translateProvider === 'crispasr' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)]'}"
+          >
+            CrispASR (local)
+          </button>
+          <button
+            onclick={() => { translateProvider = 'openai'; saveTranslateConfig(); }}
+            class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {translateProvider === 'openai' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)]'}"
+          >
+            OpenAI / BYOK
+          </button>
+        </div>
+      </div>
+
+      <!-- Target language -->
+      <div class="flex items-center justify-between">
+        <label for="translate-lang" class="text-sm text-[var(--color-text-muted)]">Target language</label>
+        <select
+          id="translate-lang"
+          bind:value={translateLang}
+          onchange={saveTranslateConfig}
+          class="px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none"
+        >
+          <option value="en">English</option>
+          <option value="de">Deutsch</option>
+          <option value="fr">Français</option>
+          <option value="es">Español</option>
+          <option value="ja">日本語</option>
+          <option value="pt">Português</option>
+          <option value="zh">中文</option>
+          <option value="ko">한국어</option>
+          <option value="it">Italiano</option>
+          <option value="nl">Nederlands</option>
+          <option value="ru">Русский</option>
+          <option value="ar">العربية</option>
+        </select>
+      </div>
+
+      <!-- Provider-specific config -->
+      {#if translateProvider === 'mymemory'}
+        <p class="text-xs text-[var(--color-text-muted)]">
+          Free API, no key needed. 5000 chars/day limit. Auto-detects source language.
+        </p>
+      {/if}
+
+      {#if translateProvider === 'crispasr'}
+        <div class="space-y-2">
+          <p class="text-xs text-[var(--color-text-muted)]">
+            Local translation via CrispASR with M2M-100 GGUF models. Runs natively on CPU/GPU — no API key, fully offline. Model downloaded on first use. Requires desktop app.
+          </p>
+          <div>
+            <label for="crispasr-model" class="block text-xs text-[var(--color-text-muted)] mb-1">Model</label>
+            <select
+              id="crispasr-model"
+              bind:value={crispasrModel}
+              onchange={saveTranslateConfig}
+              class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
+            >
+              <option value="m2m100-418m-q4_k">M2M-100 418M Q4_K · 271 MB · 100 languages</option>
+              <option value="m2m100-418m-q8_0">M2M-100 418M Q8_0 · 502 MB · 100 languages</option>
+              <option value="m2m100-418m-f16">M2M-100 418M F16 · 934 MB · 100 languages</option>
+            </select>
+          </div>
+          <p class="text-[10px] text-[var(--color-text-muted)]">
+            Same models as CrisperWeaver. Coming soon for desktop builds — use BYOK or MyMemory for now.
+          </p>
+        </div>
+      {/if}
+
+      {#if translateProvider === 'openai'}
+        <div class="space-y-3">
+          <p class="text-xs text-[var(--color-text-muted)]">
+            Bring your own key. Works with OpenAI, Mistral, Groq, Ollama, llama.cpp, or any OpenAI-compatible endpoint.
+          </p>
+          <div>
+            <label for="openai-base" class="block text-xs text-[var(--color-text-muted)] mb-1">API Base URL</label>
+            <input
+              id="openai-base"
+              type="text"
+              bind:value={openaiBaseUrl}
+              onchange={saveTranslateConfig}
+              placeholder="https://api.openai.com/v1"
+              class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
+            />
+          </div>
+          <div>
+            <label for="openai-key" class="block text-xs text-[var(--color-text-muted)] mb-1">API Key</label>
+            <input
+              id="openai-key"
+              type="password"
+              bind:value={openaiApiKey}
+              onchange={saveTranslateConfig}
+              placeholder="sk-..."
+              class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
+            />
+          </div>
+          <div>
+            <label for="openai-model" class="block text-xs text-[var(--color-text-muted)] mb-1">Model</label>
+            <input
+              id="openai-model"
+              type="text"
+              bind:value={openaiModel}
+              onchange={saveTranslateConfig}
+              placeholder="gpt-4o-mini"
+              class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
+            />
+            <p class="text-[10px] text-[var(--color-text-muted)] mt-1">
+              For Ollama: base URL = http://localhost:11434/v1, model = llama3.2, no key needed.
+            </p>
+          </div>
+        </div>
+      {/if}
     </div>
   </section>
 </div>

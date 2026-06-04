@@ -130,6 +130,14 @@ Features GraySky does well that CrispDeck should adopt:
   - **Require**: block posting entirely if any attached image lacks alt text
 - Nudge text in compose: "Add alt text for accessibility"
 
+### 17. CrispASR integration (translation + TTS + STT)
+- Bundle CrispASR as a native Rust dependency in Tauri (same approach as CrisperWeaver)
+- **Translation**: M2M-100 GGUF models (271MB Q4_K – 934MB F16), 100 languages, on-demand download
+- **TTS (read posts aloud)**: Kokoro/other TTS models via CrispASR, "Read" button on posts
+- **STT (dictate posts)**: Whisper models via CrispASR, microphone button in compose
+- Model download manager in Settings (list available, download, delete)
+- Web fallback: BYOK OpenAI-compatible endpoint or MyMemory free API
+
 ## Architecture Notes
 
 ### Local Archive (item #2) design
