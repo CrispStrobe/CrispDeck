@@ -23,7 +23,7 @@ export async function requestPermission(): Promise<NotificationPermission> {
   if (w.__TAURI_INTERNALS__) {
     try {
       const { isPermissionGranted, requestPermission: tauriRequest } =
-        await import('@tauri-apps/plugin-notification');
+        await import(/* @vite-ignore */ '@tauri-apps/plugin-notification');
       let granted = await isPermissionGranted();
       if (!granted) {
         const perm = await tauriRequest();
@@ -49,7 +49,7 @@ export async function getPermission(): Promise<NotificationPermission> {
   const w = globalThis as any;
   if (w.__TAURI_INTERNALS__) {
     try {
-      const { isPermissionGranted } = await import('@tauri-apps/plugin-notification');
+      const { isPermissionGranted } = await import(/* @vite-ignore */ '@tauri-apps/plugin-notification');
       return (await isPermissionGranted()) ? 'granted' : 'default';
     } catch {}
   }
@@ -66,7 +66,7 @@ export async function notify(title: string, body: string, icon?: string): Promis
   const w = globalThis as any;
   if (w.__TAURI_INTERNALS__) {
     try {
-      const { sendNotification } = await import('@tauri-apps/plugin-notification');
+      const { sendNotification } = await import(/* @vite-ignore */ '@tauri-apps/plugin-notification');
       sendNotification({ title, body });
       return;
     } catch {}
