@@ -308,7 +308,7 @@
   {/if}
   {#if bskyDmNote}
     <div class="mx-4 mt-2 p-3 bg-blue-900/30 border border-blue-700/30 rounded-lg text-blue-300 text-xs">
-      Bluesky DMs are not available with app passwords. Bluesky requires OAuth for chat access, which CrispDeck doesn't support yet. Mastodon DMs work normally.
+      Bluesky DMs require OAuth login. Reconnect your Bluesky account via OAuth in Settings to enable chat. Mastodon DMs work with any login method.
     </div>
   {/if}
 

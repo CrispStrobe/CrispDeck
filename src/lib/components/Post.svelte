@@ -516,12 +516,12 @@
   <div class="flex items-center justify-between mt-3 pl-13">
     <div class="flex items-center gap-4">
       {#if onreply}
-        <button onclick={() => onreply?.(post)} class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-blue-400 transition-colors" title="Reply">
+        <button onclick={() => onreply?.(post)} class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-blue-400 transition-colors" title="Reply" aria-label="Reply ({post.replyCount ?? 0} replies)">
           <MessageCircle size={14} />
           <span class="text-xs">{post.replyCount ?? 0}</span>
         </button>
       {:else}
-        <div class="flex items-center gap-1.5 text-[var(--color-text-muted)]">
+        <div class="flex items-center gap-1.5 text-[var(--color-text-muted)]" aria-label="{post.replyCount ?? 0} replies">
           <MessageCircle size={14} />
           <span class="text-xs">{post.replyCount ?? 0}</span>
         </div>
@@ -532,6 +532,8 @@
         disabled={!onboost}
         class="flex items-center gap-1.5 transition-colors {boosted ? 'text-green-400' : 'text-[var(--color-text-muted)]'} {onboost ? 'hover:text-green-400' : ''}"
         title="Boost"
+        aria-label="{boosted ? 'Undo boost' : 'Boost'} ({localBoostCount} boosts)"
+        aria-pressed={boosted}
       >
         <Repeat size={14} />
         <span class="text-xs">{localBoostCount}</span>
@@ -542,6 +544,7 @@
           onclick={() => onquote?.(post)}
           class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-purple-400 transition-colors"
           title="Quote"
+          aria-label="Quote post"
         >
           <Quote size={14} />
         </button>
@@ -552,6 +555,8 @@
         disabled={!onlike}
         class="flex items-center gap-1.5 transition-colors {liked ? 'text-red-400' : 'text-[var(--color-text-muted)]'} {onlike ? 'hover:text-red-400' : ''}"
         title="Like"
+        aria-label="{liked ? 'Unlike' : 'Like'} ({localLikeCount} likes)"
+        aria-pressed={liked}
       >
         <Heart size={14} class={liked ? 'fill-current' : ''} />
         <span class="text-xs">{localLikeCount}</span>
@@ -561,6 +566,8 @@
         onclick={handleBookmark}
         class="flex items-center gap-1.5 transition-colors {bookmarked ? 'text-yellow-400' : 'text-[var(--color-text-muted)]'} hover:text-yellow-400"
         title={bookmarked ? 'Remove bookmark' : 'Bookmark'}
+        aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark this post'}
+        aria-pressed={bookmarked}
       >
         <Bookmark size={14} class={bookmarked ? 'fill-current' : ''} />
       </button>
@@ -569,6 +576,7 @@
         onclick={handleShare}
         class="flex items-center gap-1.5 transition-colors {copied ? 'text-[var(--color-success)]' : 'text-[var(--color-text-muted)]'} hover:text-[var(--color-text)]"
         title={copied ? 'Copied!' : 'Copy link'}
+        aria-label="Copy link to post"
       >
         <Share size={14} />
       </button>
@@ -577,6 +585,8 @@
         onclick={toggleReadAloud}
         class="flex items-center gap-1.5 transition-colors {speaking ? 'text-green-400' : 'text-[var(--color-text-muted)]'} hover:text-green-400 opacity-0 group-hover:opacity-100"
         title={speaking ? 'Stop reading' : 'Read aloud'}
+        aria-label={speaking ? 'Stop reading aloud' : 'Read post aloud'}
+        aria-pressed={speaking}
       >
         {#if speaking}<VolumeOff size={12} />{:else}<Volume2 size={12} />{/if}
       </button>
@@ -586,6 +596,7 @@
         disabled={translating}
         class="flex items-center gap-1.5 transition-colors {translation ? 'text-blue-400' : 'text-[var(--color-text-muted)]'} hover:text-blue-400 opacity-0 group-hover:opacity-100"
         title={translation ? 'Hide translation' : 'Translate'}
+        aria-label={translation ? 'Hide translation' : 'Translate post'}
       >
         {#if translating}
           <Loader2 size={12} class="animate-spin" />
@@ -599,6 +610,7 @@
         disabled={capturingImage}
         class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors opacity-0 group-hover:opacity-100"
         title="Share as image"
+        aria-label="Share post as image"
       >
         {#if capturingImage}
           <Loader2 size={12} class="animate-spin" />
@@ -611,6 +623,7 @@
         onclick={handleReport}
         class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors opacity-0 group-hover:opacity-100"
         title="Report"
+        aria-label="Report post"
       >
         <Flag size={12} />
       </button>

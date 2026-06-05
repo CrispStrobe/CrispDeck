@@ -15,13 +15,18 @@
   let licenses: LicenseEntry[] = $state([]);
   let generatedAt: string | null = $state(null);
   let search = $state('');
+  let sourceFilter: 'all' | 'Frontend' | 'Backend' = $state('all');
   let loading = $state(true);
 
-  const filtered = $derived(licenses.filter(l =>
-    l.name.toLowerCase().includes(search.toLowerCase()) ||
-    l.author?.toLowerCase().includes(search.toLowerCase()) ||
-    (l.license ?? '').toLowerCase().includes(search.toLowerCase())
-  ));
+  const filtered = $derived(licenses.filter(l => {
+    if (sourceFilter !== 'all' && l.source !== sourceFilter) return false;
+    return l.name.toLowerCase().includes(search.toLowerCase()) ||
+      l.author?.toLowerCase().includes(search.toLowerCase()) ||
+      (l.license ?? '').toLowerCase().includes(search.toLowerCase());
+  }));
+
+  const frontendCount = $derived(licenses.filter(l => l.source === 'Frontend').length);
+  const backendCount = $derived(licenses.filter(l => l.source === 'Backend').length);
 
   onMount(async () => {
     try {
@@ -100,15 +105,22 @@
   <!-- Open Source Licenses -->
   <section class="mb-6 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
     <div class="flex items-center justify-between mb-3">
-      <h3 class="text-sm font-semibold">Open Source Licenses ({licenses.length})</h3>
-      <div class="flex items-center gap-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md px-2 py-1">
-        <Search size={12} class="text-[var(--color-text-muted)]" />
-        <input
-          type="text"
-          bind:value={search}
-          placeholder="Search {licenses.length} licenses..."
-          class="bg-transparent text-xs text-[var(--color-text)] focus:outline-none w-40"
-        />
+      <h3 class="text-sm font-semibold">Open Source Licenses ({filtered.length} of {licenses.length})</h3>
+      <div class="flex items-center gap-2">
+        <div class="flex items-center bg-[var(--color-bg)] rounded-md border border-[var(--color-border)] p-0.5">
+          <button onclick={() => sourceFilter = 'all'} class="px-2 py-0.5 text-[10px] rounded {sourceFilter === 'all' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)]'}">All</button>
+          <button onclick={() => sourceFilter = 'Frontend'} class="px-2 py-0.5 text-[10px] rounded {sourceFilter === 'Frontend' ? 'bg-blue-600 text-white' : 'text-[var(--color-text-muted)]'}">NPM ({frontendCount})</button>
+          <button onclick={() => sourceFilter = 'Backend'} class="px-2 py-0.5 text-[10px] rounded {sourceFilter === 'Backend' ? 'bg-red-600 text-white' : 'text-[var(--color-text-muted)]'}">Rust ({backendCount})</button>
+        </div>
+        <div class="flex items-center gap-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md px-2 py-1">
+          <Search size={12} class="text-[var(--color-text-muted)]" />
+          <input
+            type="text"
+            bind:value={search}
+            placeholder="Search..."
+            class="bg-transparent text-xs text-[var(--color-text)] focus:outline-none w-28"
+          />
+        </div>
       </div>
     </div>
 

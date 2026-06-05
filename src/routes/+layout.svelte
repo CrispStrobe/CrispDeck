@@ -25,6 +25,7 @@
   let offline = $state(false);
   let pendingG = $state(false);
   let bookmarkCount = $state(0);
+  let unreadMessages = $state(0);
 
   onMount(async () => {
     // Restore theme
@@ -37,12 +38,45 @@
     window.addEventListener('offline', () => offline = true);
 
     bookmarkCount = await getBookmarkCount();
-    // Refresh count periodically
+    // Check unread messages on load
+    checkUnreadMessages();
+    // Refresh counts periodically
     const interval = setInterval(async () => {
       bookmarkCount = await getBookmarkCount();
+      checkUnreadMessages();
     }, 30000);
     return () => clearInterval(interval);
   });
+
+  async function checkUnreadMessages() {
+    try {
+      const { initAllClients } = await import('$lib/api/client-factory');
+      const { accounts: accts, clients } = await initAllClients();
+      let count = 0;
+      for (const [id, entry] of clients) {
+        const acct = accts.find(a => a.id === id);
+        if (!acct) continue;
+        if (acct.platform === 'bluesky' && entry.oauthAgent) {
+          try {
+            const proxyHeaders = { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' };
+            const r = await (entry.oauthAgent as any).api.chat.bsky.convo.listConvos({ limit: 50 }, { headers: proxyHeaders });
+            count += (r.data.convos ?? []).reduce((s: number, c: any) => s + (c.unreadCount ?? 0), 0);
+          } catch {}
+        } else if (acct.platform === 'mastodon') {
+          const { MastodonClient } = await import('$lib/api/mastodon');
+          const masto = entry.client as InstanceType<typeof MastodonClient>;
+          const token = masto.getAccessToken();
+          if (token) {
+            try {
+              const resp = await fetch(`${masto.getInstanceUrl()}/api/v1/conversations?limit=40`, { headers: { Authorization: `Bearer ${token}` } });
+              if (resp.ok) { const convos = await resp.json(); count += convos.filter((c: any) => c.unread).length; }
+            } catch {}
+          }
+        }
+      }
+      unreadMessages = count;
+    } catch {}
+  }
 
   function handleGlobalKeydown(e: KeyboardEvent) {
     // Don't capture when typing in inputs
@@ -68,7 +102,7 @@
     { href: '/compose', icon: PenSquare, label: i18n.t.nav.compose },
     { href: '/drafts', icon: FileText, label: i18n.t.nav.drafts },
     { href: '/notifications', icon: Bell, label: i18n.t.nav.notifications },
-    { href: '/messages', icon: MessageSquare, label: i18n.t.nav.messages },
+    { href: '/messages', icon: MessageSquare, label: i18n.t.nav.messages, badge: () => unreadMessages > 0 ? unreadMessages : 0 },
     { href: '/bookmarks', icon: Bookmark, label: i18n.t.nav.bookmarks, badge: () => bookmarkCount > 0 ? bookmarkCount : 0 },
     { href: '/lists', icon: List, label: i18n.t.nav.lists },
     { href: '/starterpacks', icon: Package, label: i18n.t.nav.starterPacks },
@@ -103,9 +137,11 @@
 <svelte:window onkeydown={handleGlobalKeydown} />
 <KeyboardShortcuts bind:show={showShortcuts} />
 
-<div class="flex h-screen">
+<a href="#main-content" class="skip-to-content">Skip to content</a>
+
+<div class="flex h-screen" dir={i18n.dir}>
   <!-- Desktop sidebar -->
-  <nav class="hidden md:flex {collapsed ? 'w-14' : 'w-52'} bg-[var(--color-surface)] border-r border-[var(--color-border)] flex-col transition-all duration-200 flex-shrink-0">
+  <nav aria-label="Main navigation" class="hidden md:flex {collapsed ? 'w-14' : 'w-52'} bg-[var(--color-surface)] border-r border-[var(--color-border)] flex-col transition-all duration-200 flex-shrink-0">
     <div class="flex items-center justify-between px-3 py-3 border-b border-[var(--color-border)]">
       {#if !collapsed}
         <div>
@@ -122,7 +158,7 @@
         </button>
       </div>
     </div>
-    <ul class="flex-1 py-1 overflow-y-auto">
+    <ul class="flex-1 py-1 overflow-y-auto" role="list">
       {#each navItems as item}
         <li>
           <a
@@ -145,7 +181,7 @@
       {/each}
     </ul>
     {#if !collapsed}
-      <div class="px-3 py-2 border-t border-[var(--color-border)] text-[10px] text-[var(--color-text-muted)]">v0.2.1</div>
+      <div class="px-3 py-2 border-t border-[var(--color-border)] text-[10px] text-[var(--color-text-muted)]">v0.3.0</div>
     {/if}
   </nav>
 
@@ -184,7 +220,7 @@
   {/if}
 
   <!-- Main content -->
-  <main class="flex-1 overflow-y-auto md:pt-0 pt-12 pb-16 md:pb-0">
+  <main id="main-content" class="flex-1 overflow-y-auto md:pt-0 pt-12 pb-16 md:pb-0" role="main">
     {#if offline}
       <div class="bg-yellow-900/50 border-b border-yellow-700 px-4 py-2 text-center text-xs text-yellow-200">
         You're offline — some features may be unavailable

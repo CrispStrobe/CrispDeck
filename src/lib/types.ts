@@ -86,6 +86,7 @@ export interface UnifiedPost {
   repostAuthor?: PostAuthor;
   embeds?: unknown;
   raw?: unknown;
+  sourceAccount?: string; // handle of account that loaded this post (multi-account feed indicator)
 }
 
 export interface CrosspostGroup {

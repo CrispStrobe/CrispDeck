@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { listDrafts, deleteDraft as dbDeleteDraft, saveDraft as dbSaveDraft } from '$lib/db';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { FileText, Trash2, Clock, Send, Loader2, Edit3, Calendar } from '@lucide/svelte';
+  import { FileText, Trash2, Clock, Send, Loader2, Edit3, Calendar, Eye } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
@@ -141,6 +141,15 @@
 
   const scheduledDrafts = $derived(drafts.filter(d => d.scheduled_at));
   const unscheduledDrafts = $derived(drafts.filter(d => !d.scheduled_at));
+
+  let previewDraftId: number | null = $state(null);
+
+  function getDraftPlatforms(draft: Draft): Platform[] {
+    const ids = Array.isArray(draft.target_accounts)
+      ? draft.target_accounts
+      : JSON.parse(draft.target_accounts as unknown as string);
+    return [...new Set(ids.map((id: number) => accounts.find(a => a.id === id)?.platform).filter(Boolean))] as Platform[];
+  }
 </script>
 
 <svelte:head><title>CrispDeck — Drafts</title></svelte:head>
@@ -207,6 +216,13 @@
               </div>
               <div class="flex items-center gap-1 flex-shrink-0">
                 <button
+                  onclick={() => previewDraftId = previewDraftId === draft.id ? null : draft.id}
+                  class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors {previewDraftId === draft.id ? 'text-[var(--color-primary)]' : ''}"
+                  title="Preview"
+                >
+                  <Eye size={14} />
+                </button>
+                <button
                   onclick={() => postDraft(draft)}
                   disabled={posting === draft.id}
                   class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-success)] transition-colors"
@@ -219,6 +235,32 @@
                 </button>
               </div>
             </div>
+            <!-- Post preview -->
+            {#if previewDraftId === draft.id}
+              <div class="mt-3 pt-3 border-t border-[var(--color-border)] space-y-2">
+                {#each getDraftPlatforms(draft) as plat}
+                  {@const plan = splitForPlatform(draft.text.trim(), plat)}
+                  <div class="p-2 bg-[var(--color-bg)] rounded border border-[var(--color-border)]">
+                    <div class="flex items-center gap-1.5 mb-1.5">
+                      <span class="w-2 h-2 rounded-full" style="background: {plat === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"></span>
+                      <span class="text-[10px] font-medium text-[var(--color-text-muted)] capitalize">{plat}</span>
+                      {#if plan.parts.length > 1}
+                        <span class="text-[10px] px-1 py-0.5 bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded">{plan.parts.length}-post thread</span>
+                      {/if}
+                      {#if draft.content_warning}
+                        <span class="text-[10px] px-1 py-0.5 bg-yellow-600/20 text-yellow-400 rounded">CW: {draft.content_warning}</span>
+                      {/if}
+                    </div>
+                    {#each plan.parts as part, i}
+                      <div class="text-xs text-[var(--color-text)] whitespace-pre-wrap break-words {i > 0 ? 'mt-2 pt-2 border-t border-[var(--color-border)]/50' : ''}">
+                        {part.text}
+                        <span class="text-[9px] text-[var(--color-text-muted)] ml-1">{part.charCount}/{part.charLimit}</span>
+                      </div>
+                    {/each}
+                  </div>
+                {/each}
+              </div>
+            {/if}
           </div>
         {/each}
       </div>
@@ -248,6 +290,13 @@
                 >
                   <Edit3 size={14} />
                 </a>
+                <button
+                  onclick={() => previewDraftId = previewDraftId === draft.id ? null : draft.id}
+                  class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors {previewDraftId === draft.id ? 'text-[var(--color-primary)]' : ''}"
+                  title="Preview"
+                >
+                  <Eye size={14} />
+                </button>
                 <button
                   onclick={() => postDraft(draft)}
                   disabled={posting === draft.id}
@@ -295,6 +344,32 @@
                 >
                   Cancel
                 </button>
+              </div>
+            {/if}
+            <!-- Post preview -->
+            {#if previewDraftId === draft.id}
+              <div class="mt-3 pt-3 border-t border-[var(--color-border)] space-y-2">
+                {#each getDraftPlatforms(draft) as plat}
+                  {@const plan = splitForPlatform(draft.text.trim(), plat)}
+                  <div class="p-2 bg-[var(--color-bg)] rounded border border-[var(--color-border)]">
+                    <div class="flex items-center gap-1.5 mb-1.5">
+                      <span class="w-2 h-2 rounded-full" style="background: {plat === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"></span>
+                      <span class="text-[10px] font-medium text-[var(--color-text-muted)] capitalize">{plat}</span>
+                      {#if plan.parts.length > 1}
+                        <span class="text-[10px] px-1 py-0.5 bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded">{plan.parts.length}-post thread</span>
+                      {/if}
+                      {#if draft.content_warning}
+                        <span class="text-[10px] px-1 py-0.5 bg-yellow-600/20 text-yellow-400 rounded">CW: {draft.content_warning}</span>
+                      {/if}
+                    </div>
+                    {#each plan.parts as part, i}
+                      <div class="text-xs text-[var(--color-text)] whitespace-pre-wrap break-words {i > 0 ? 'mt-2 pt-2 border-t border-[var(--color-border)]/50' : ''}">
+                        {part.text}
+                        <span class="text-[9px] text-[var(--color-text-muted)] ml-1">{part.charCount}/{part.charLimit}</span>
+                      </div>
+                    {/each}
+                  </div>
+                {/each}
               </div>
             {/if}
           </div>

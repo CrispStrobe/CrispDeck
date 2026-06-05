@@ -12,20 +12,30 @@
     type,
     posts = [],
     loading = false,
+    width = 380,
     onrefresh,
     onremove,
     onlike,
     onboost,
+    onwidthchange,
+    ondragstart: onDragStart,
+    ondragover: onDragOver,
+    ondrop: onDrop,
   }: {
     id: string;
     title: string;
     type: ColumnType;
     posts: UnifiedPost[];
     loading?: boolean;
+    width?: number;
     onrefresh?: () => void;
     onremove?: () => void;
     onlike?: (post: UnifiedPost) => void;
     onboost?: (post: UnifiedPost) => void;
+    onwidthchange?: (width: number) => void;
+    ondragstart?: (e: DragEvent) => void;
+    ondragover?: (e: DragEvent) => void;
+    ondrop?: (e: DragEvent) => void;
   } = $props();
 
   let filterText = $state('');
@@ -35,9 +45,44 @@
           p.author.handle.toLowerCase().includes(filterText.toLowerCase()))
       : posts
   );
+
+  // Resize handle
+  let resizing = $state(false);
+  let startX = 0;
+  let startWidth = 0;
+
+  function onResizeStart(e: MouseEvent) {
+    e.preventDefault();
+    resizing = true;
+    startX = e.clientX;
+    startWidth = width;
+    document.addEventListener('mousemove', onResizeMove);
+    document.addEventListener('mouseup', onResizeEnd);
+  }
+
+  function onResizeMove(e: MouseEvent) {
+    if (!resizing) return;
+    const delta = e.clientX - startX;
+    const newWidth = Math.max(280, Math.min(600, startWidth + delta));
+    width = newWidth;
+  }
+
+  function onResizeEnd() {
+    resizing = false;
+    document.removeEventListener('mousemove', onResizeMove);
+    document.removeEventListener('mouseup', onResizeEnd);
+    onwidthchange?.(width);
+  }
 </script>
 
-<div class="flex flex-col h-full min-w-[350px] max-w-[400px] bg-[var(--color-bg)] border-r border-[var(--color-border)]">
+<div
+  class="flex flex-col h-full bg-[var(--color-bg)] border-r border-[var(--color-border)] relative flex-shrink-0"
+  style="width: {width}px"
+  draggable="true"
+  ondragstart={onDragStart}
+  ondragover={onDragOver}
+  ondrop={onDrop}
+>
   <!-- Column header -->
   <div class="flex items-center justify-between px-3 py-2 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex-shrink-0">
     <div class="flex items-center gap-2">
@@ -82,4 +127,13 @@
       {/each}
     {/if}
   </div>
+
+  <!-- Resize handle (right edge) -->
+  <div
+    class="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[var(--color-primary)]/40 transition-colors {resizing ? 'bg-[var(--color-primary)]/60' : ''}"
+    onmousedown={onResizeStart}
+    role="separator"
+    aria-orientation="vertical"
+    tabindex="-1"
+  ></div>
 </div>

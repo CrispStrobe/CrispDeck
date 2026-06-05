@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { BarChart3, Heart, Repeat, MessageCircle, Clock, TrendingUp, Download, Loader2, ChevronDown } from '@lucide/svelte';
+  import { BarChart3, Heart, Repeat, MessageCircle, Clock, TrendingUp, Download, Loader2, ChevronDown, Percent } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
@@ -14,6 +14,9 @@
   let posts: UnifiedPost[] = $state([]);
   let loading = $state(false);
   let loadingProgress = $state('');
+  let loadingPercent = $state(0);
+  let loadingAccount = $state('');
+  let loadingAccountIndex = $state(0);
   let error = $state('');
   let dateRange: 'all' | '7d' | '30d' | '90d' = $state('all');
   let expandedStat: string | null = $state(null);
@@ -33,33 +36,44 @@
     loading = true;
     posts = [];
     let total = 0;
+    loadingPercent = 0;
+    loadingAccountIndex = 0;
 
     for (const acct of accounts) {
       const entry = clientEntries.get(acct.id);
       if (!entry) continue;
+      loadingAccountIndex++;
+      loadingAccount = acct.handle;
       try {
         if (acct.platform === 'bluesky') {
           const client = entry.client as BlueskyClient;
           let cursor: string | undefined;
+          let pages = 0;
           do {
             const result = await client.getAuthorFeed(acct.handle, cursor);
             const normalized = result.feed.map(p => normalizePost(p, 'bluesky'));
             posts = [...posts, ...normalized];
             total += normalized.length;
             cursor = result.cursor;
-            loadingProgress = `Bluesky: ${total} posts...`;
+            pages++;
+            loadingProgress = `${acct.handle}: ${total} posts (page ${pages})`;
+            // Estimate progress: accounts proportion + within-account proportion (assume ~20 pages max)
+            loadingPercent = Math.min(99, Math.round(((loadingAccountIndex - 1) / accounts.length + (1 / accounts.length) * Math.min(pages / 20, 0.95)) * 100));
           } while (cursor);
         } else {
           const client = entry.client as MastodonClient;
           const account = await client.getAccountByHandle(acct.handle);
           let cursor: string | undefined;
+          let pages = 0;
           do {
             const statuses = await client.getAccountStatuses(account.id, cursor);
             const normalized = statuses.map(p => normalizePost(p, 'mastodon'));
             posts = [...posts, ...normalized];
             total += normalized.length;
             cursor = statuses.length > 0 ? statuses[statuses.length - 1].id : undefined;
-            loadingProgress = `Mastodon: ${total} posts...`;
+            pages++;
+            loadingProgress = `${acct.handle}: ${total} posts (page ${pages})`;
+            loadingPercent = Math.min(99, Math.round(((loadingAccountIndex - 1) / accounts.length + (1 / accounts.length) * Math.min(pages / 20, 0.95)) * 100));
             if (statuses.length < 40) cursor = undefined;
           } while (cursor);
         }
@@ -68,6 +82,7 @@
       }
     }
     loadingProgress = `Loaded ${total} posts total.`;
+    loadingPercent = 100;
     loading = false;
   }
 
@@ -87,16 +102,20 @@
       `- Total boosts: ${totalReposts} (avg ${avgReposts}/post)`,
       `- Total replies received: ${totalReplies}`,
       `- Total engagement: ${totalLikes + totalReposts + totalReplies}`,
+      `- Engagement rate: ${engagementRate}%`,
       ``,
       `## Platform Breakdown`,
-      `- Bluesky: ${bskyCount} posts, ${bskyLikes} likes`,
-      `- Mastodon: ${mastoCount} posts, ${mastoLikes} likes`,
+      `- Bluesky: ${bskyCount} posts, ${bskyLikes} likes, ${bskyReposts} boosts, ${bskyReplies} replies`,
+      `- Mastodon: ${mastoCount} posts, ${mastoLikes} likes, ${mastoReposts} boosts, ${mastoReplies} replies`,
       ``,
       `## Top 5 by Likes`,
       ...topByLikes.map((p, i) => `${i + 1}. [${p.likeCount} likes] ${p.text.substring(0, 80)}...`),
       ``,
       `## Top 5 by Boosts`,
       ...topByReposts.map((p, i) => `${i + 1}. [${p.repostCount} boosts] ${p.text.substring(0, 80)}...`),
+      ``,
+      `## Top 5 by Engagement`,
+      ...topByEngagement.map((p, i) => `${i + 1}. [${(p.likeCount ?? 0) + (p.repostCount ?? 0)} engagement] ${p.text.substring(0, 80)}...`),
       ``,
       `## Posting Activity by Hour`,
       ...postsByHour().map((count, h) => count > 0 ? `- ${h}:00 — ${count} posts` : '').filter(Boolean),
@@ -126,6 +145,11 @@
   const totalReplies = $derived(originalPosts.reduce((s, p) => s + (p.replyCount ?? 0), 0));
   const avgLikes = $derived(originalPosts.length > 0 ? (totalLikes / originalPosts.length).toFixed(1) : '0');
   const avgReposts = $derived(originalPosts.length > 0 ? (totalReposts / originalPosts.length).toFixed(1) : '0');
+  const engagementRate = $derived(
+    originalPosts.length > 0
+      ? ((totalLikes + totalReposts + totalReplies) / originalPosts.length).toFixed(1)
+      : '0'
+  );
 
   const topByLikes = $derived(sortPosts([...originalPosts], 'likes').slice(0, 5));
   const topByReposts = $derived(sortPosts([...originalPosts], 'reposts').slice(0, 5));
@@ -138,10 +162,19 @@
   });
   const maxHourly = $derived(Math.max(...postsByHour(), 1));
 
-  const bskyCount = $derived(originalPosts.filter(p => p.platform === 'bluesky').length);
-  const mastoCount = $derived(originalPosts.filter(p => p.platform === 'mastodon').length);
-  const bskyLikes = $derived(originalPosts.filter(p => p.platform === 'bluesky').reduce((s, p) => s + (p.likeCount ?? 0), 0));
-  const mastoLikes = $derived(originalPosts.filter(p => p.platform === 'mastodon').reduce((s, p) => s + (p.likeCount ?? 0), 0));
+  // Platform breakdown — full stats
+  const bskyPosts = $derived(originalPosts.filter(p => p.platform === 'bluesky'));
+  const mastoPosts = $derived(originalPosts.filter(p => p.platform === 'mastodon'));
+  const bskyCount = $derived(bskyPosts.length);
+  const mastoCount = $derived(mastoPosts.length);
+  const bskyLikes = $derived(bskyPosts.reduce((s, p) => s + (p.likeCount ?? 0), 0));
+  const mastoLikes = $derived(mastoPosts.reduce((s, p) => s + (p.likeCount ?? 0), 0));
+  const bskyReposts = $derived(bskyPosts.reduce((s, p) => s + (p.repostCount ?? 0), 0));
+  const mastoReposts = $derived(mastoPosts.reduce((s, p) => s + (p.repostCount ?? 0), 0));
+  const bskyReplies = $derived(bskyPosts.reduce((s, p) => s + (p.replyCount ?? 0), 0));
+  const mastoReplies = $derived(mastoPosts.reduce((s, p) => s + (p.replyCount ?? 0), 0));
+  const bskyEngRate = $derived(bskyCount > 0 ? ((bskyLikes + bskyReposts + bskyReplies) / bskyCount).toFixed(1) : '0');
+  const mastoEngRate = $derived(mastoCount > 0 ? ((mastoLikes + mastoReposts + mastoReplies) / mastoCount).toFixed(1) : '0');
 
   const handle = $derived(accounts[0]?.handle ?? 'user');
 </script>
@@ -195,7 +228,18 @@
     </div>
   {:else if loading}
     <div class="text-center py-12">
-      <Loader2 size={32} class="text-[var(--color-text-muted)] animate-spin mx-auto mb-3" />
+      <div class="max-w-md mx-auto mb-4">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs text-[var(--color-text-muted)]">{loadingAccount}</span>
+          <span class="text-xs text-[var(--color-text-muted)]">{loadingPercent}%</span>
+        </div>
+        <div class="w-full h-2 bg-[var(--color-surface)] rounded-full border border-[var(--color-border)] overflow-hidden">
+          <div
+            class="h-full bg-[var(--color-primary)] rounded-full transition-all duration-300"
+            style="width: {loadingPercent}%"
+          ></div>
+        </div>
+      </div>
       <p class="text-sm text-[var(--color-text-muted)]">{loadingProgress}</p>
       {#if posts.length > 0}
         <p class="text-xs text-[var(--color-text-muted)] mt-1">{posts.length} posts loaded so far...</p>
@@ -218,7 +262,7 @@
     </div>
 
     <!-- Stats grid (clickable) -->
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
       <button onclick={() => toggleStat('posts')} class="bg-[var(--color-surface)] p-3 rounded-lg border border-[var(--color-border)] text-center hover:border-[var(--color-primary)] transition-colors {expandedStat === 'posts' ? 'border-[var(--color-primary)]' : ''}">
         <MessageCircle size={18} class="text-[var(--color-text-muted)] mx-auto mb-1" />
         <div class="text-lg font-bold text-[var(--color-primary)]">{originalPosts.length}</div>
@@ -244,16 +288,21 @@
         <div class="text-lg font-bold text-purple-400">{(totalLikes + totalReposts).toLocaleString()}</div>
         <div class="text-[10px] text-[var(--color-text-muted)]">Total Engagement</div>
       </button>
+      <button onclick={() => toggleStat('rate')} class="bg-[var(--color-surface)] p-3 rounded-lg border border-[var(--color-border)] text-center hover:border-amber-500 transition-colors {expandedStat === 'rate' ? 'border-amber-500' : ''}">
+        <Percent size={18} class="text-[var(--color-text-muted)] mx-auto mb-1" />
+        <div class="text-lg font-bold text-amber-400">{engagementRate}</div>
+        <div class="text-[10px] text-[var(--color-text-muted)]">Eng. per post</div>
+      </button>
     </div>
 
     <!-- Expanded stat: top posts -->
     {#if expandedStat}
       <div class="mb-6 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
         <h3 class="text-sm font-semibold mb-3">
-          Top 5 by {expandedStat === 'likes' ? 'Likes' : expandedStat === 'reposts' ? 'Boosts' : expandedStat === 'engagement' ? 'Engagement' : expandedStat === 'replies' ? 'Replies' : 'Recent'}
+          Top 5 by {expandedStat === 'likes' ? 'Likes' : expandedStat === 'reposts' ? 'Boosts' : expandedStat === 'engagement' || expandedStat === 'rate' ? 'Engagement' : expandedStat === 'replies' ? 'Replies' : 'Recent'}
         </h3>
         <div class="space-y-2">
-          {#each (expandedStat === 'likes' ? topByLikes : expandedStat === 'reposts' ? topByReposts : expandedStat === 'engagement' ? topByEngagement : originalPosts.slice(0, 5)) as post, i}
+          {#each (expandedStat === 'likes' ? topByLikes : expandedStat === 'reposts' ? topByReposts : expandedStat === 'engagement' || expandedStat === 'rate' ? topByEngagement : originalPosts.slice(0, 5)) as post, i}
             <div class="flex items-start gap-3">
               <span class="text-xs text-[var(--color-text-muted)] font-bold mt-1 w-4">#{i + 1}</span>
               <div class="flex-1"><Post {post} /></div>
@@ -263,24 +312,56 @@
       </div>
     {/if}
 
-    <!-- Platform breakdown -->
+    <!-- Platform breakdown — detailed -->
     <div class="mb-6 grid grid-cols-2 gap-3">
-      <div class="bg-[var(--color-surface)] p-3 rounded-lg border border-[var(--color-border)]">
-        <div class="flex items-center gap-2 mb-2">
+      <div class="bg-[var(--color-surface)] p-4 rounded-lg border border-[var(--color-border)]">
+        <div class="flex items-center gap-2 mb-3">
           <span class="w-3 h-3 rounded-full bg-[var(--color-bluesky)]"></span>
           <span class="text-sm font-medium">Bluesky</span>
+          <span class="text-xs text-[var(--color-text-muted)] ml-auto">{bskyCount} posts</span>
         </div>
-        <div class="text-xs text-[var(--color-text-muted)] space-y-0.5">
-          <p>{bskyCount} posts · {bskyLikes.toLocaleString()} likes</p>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div class="flex items-center gap-1.5">
+            <Heart size={12} class="text-red-400" />
+            <span class="text-[var(--color-text-muted)]">{bskyLikes.toLocaleString()} likes</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <Repeat size={12} class="text-green-400" />
+            <span class="text-[var(--color-text-muted)]">{bskyReposts.toLocaleString()} boosts</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <MessageCircle size={12} class="text-blue-400" />
+            <span class="text-[var(--color-text-muted)]">{bskyReplies.toLocaleString()} replies</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <TrendingUp size={12} class="text-amber-400" />
+            <span class="text-[var(--color-text-muted)]">{bskyEngRate}/post</span>
+          </div>
         </div>
       </div>
-      <div class="bg-[var(--color-surface)] p-3 rounded-lg border border-[var(--color-border)]">
-        <div class="flex items-center gap-2 mb-2">
+      <div class="bg-[var(--color-surface)] p-4 rounded-lg border border-[var(--color-border)]">
+        <div class="flex items-center gap-2 mb-3">
           <span class="w-3 h-3 rounded-full bg-[var(--color-mastodon)]"></span>
           <span class="text-sm font-medium">Mastodon</span>
+          <span class="text-xs text-[var(--color-text-muted)] ml-auto">{mastoCount} posts</span>
         </div>
-        <div class="text-xs text-[var(--color-text-muted)] space-y-0.5">
-          <p>{mastoCount} posts · {mastoLikes.toLocaleString()} likes</p>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div class="flex items-center gap-1.5">
+            <Heart size={12} class="text-red-400" />
+            <span class="text-[var(--color-text-muted)]">{mastoLikes.toLocaleString()} likes</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <Repeat size={12} class="text-green-400" />
+            <span class="text-[var(--color-text-muted)]">{mastoReposts.toLocaleString()} boosts</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <MessageCircle size={12} class="text-blue-400" />
+            <span class="text-[var(--color-text-muted)]">{mastoReplies.toLocaleString()} replies</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <TrendingUp size={12} class="text-amber-400" />
+            <span class="text-[var(--color-text-muted)]">{mastoEngRate}/post</span>
+          </div>
         </div>
       </div>
     </div>

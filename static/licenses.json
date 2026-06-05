@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-06-04T08:23:52.997Z",
+  "generatedAt": "2026-06-05T14:36:41.963Z",
   "counts": {
     "frontend": 12,
-    "backend": 0,
-    "total": 12
+    "backend": 38,
+    "total": 50
   },
   "licenses": [
     {
@@ -87,6 +87,142 @@
       "source": "Frontend"
     },
     {
+      "name": "aes-gcm",
+      "version": "latest",
+      "license": "Apache-2.0 OR MIT",
+      "author": "RustCrypto Developers",
+      "link": "https://crates.io/crates/aes-gcm",
+      "source": "Backend"
+    },
+    {
+      "name": "anyhow",
+      "version": "latest",
+      "license": "Apache-2.0 OR MIT",
+      "author": "David Tolnay",
+      "link": "https://crates.io/crates/anyhow",
+      "source": "Backend"
+    },
+    {
+      "name": "argon2",
+      "version": "latest",
+      "license": "Apache-2.0 OR MIT",
+      "author": "RustCrypto Developers",
+      "link": "https://crates.io/crates/argon2",
+      "source": "Backend"
+    },
+    {
+      "name": "authors",
+      "version": "latest",
+      "license": "Unknown",
+      "author": "Various",
+      "link": "https://crates.io/crates/authors",
+      "source": "Backend"
+    },
+    {
+      "name": "base64",
+      "version": "latest",
+      "license": "Apache-2.0 OR MIT",
+      "author": "Marshall Pierce",
+      "link": "https://crates.io/crates/base64",
+      "source": "Backend"
+    },
+    {
+      "name": "crate-type",
+      "version": "latest",
+      "license": "Unknown",
+      "author": "Various",
+      "link": "https://crates.io/crates/crate-type",
+      "source": "Backend"
+    },
+    {
+      "name": "crispasr",
+      "version": "latest",
+      "license": "Unknown",
+      "author": "Various",
+      "link": "https://crates.io/crates/crispasr",
+      "source": "Backend"
+    },
+    {
+      "name": "crispasr-cuda",
+      "version": "latest",
+      "license": "Unknown",
+      "author": "Various",
+      "link": "https://crates.io/crates/crispasr-cuda",
+      "source": "Backend"
+    },
+    {
+      "name": "crispasr-metal",
+      "version": "latest",
+      "license": "Unknown",
+      "author": "Various",
+      "link": "https://crates.io/crates/crispasr-metal",
+      "source": "Backend"
+    },
+    {
+      "name": "crispasr-vulkan",
+      "version": "latest",
+      "license": "Unknown",
+      "author": "Various",
+      "link": "https://crates.io/crates/crispasr-vulkan",
+      "source": "Backend"
+    },
+    {
+      "name": "debug",
+      "version": "latest",
+      "license": "Unknown",
+      "author": "Various",
+      "link": "https://crates.io/crates/debug",
+      "source": "Backend"
+    },
+    {
+      "name": "default",
+      "version": "latest",
+      "license": "Unknown",
+      "author": "Various",
+      "link": "https://crates.io/crates/default",
+      "source": "Backend"
+    },
+    {
+      "name": "description",
+      "version": "latest",
+      "license": "Unknown",
+      "author": "Various",
+      "link": "https://crates.io/crates/description",
+      "source": "Backend"
+    },
+    {
+      "name": "edition",
+      "version": "latest",
+      "license": "Unknown",
+      "author": "Various",
+      "link": "https://crates.io/crates/edition",
+      "source": "Backend"
+    },
+    {
+      "name": "env_logger",
+      "version": "latest",
+      "license": "Apache-2.0 OR MIT",
+      "author": "The Rust Project Developers",
+      "link": "https://crates.io/crates/env_logger",
+      "source": "Backend"
+    },
+    {
+      "name": "git",
+      "version": "latest",
+      "license": "Unknown",
+      "author": "Various",
+      "link": "https://crates.io/crates/git",
+      "source": "Backend"
+    },
+    {
+      "name": "hostname",
+      "version": "latest",
+      "license": "MIT",
+      "author": "svartalf",
+      "link": "https://crates.io/crates/hostname",
+      "source": "Backend"
+    },
+    {
       "name": "html2canvas",
       "version": "n/a",
       "license": "n/a",
@@ -95,12 +231,180 @@
       "source": "Frontend"
     },
     {
+      "name": "license",
+      "version": "latest",
+      "license": "Unknown",
+      "author": "Various",
+      "link": "https://crates.io/crates/license",
+      "source": "Backend"
+    },
+    {
+      "name": "log",
+      "version": "latest",
+      "license": "Apache-2.0 OR MIT",
+      "author": "The Rust Project Developers",
+      "link": "https://crates.io/crates/log",
+      "source": "Backend"
+    },
+    {
       "name": "masto",
       "version": "n/a",
       "license": "n/a",
       "author": "n/a",
       "link": "https://www.npmjs.com/package/masto",
       "source": "Frontend"
+    },
+    {
+      "name": "name",
+      "version": "latest",
+      "license": "Unknown",
+      "author": "Various",
+      "link": "https://crates.io/crates/name",
+      "source": "Backend"
+    },
+    {
+      "name": "optional",
+      "version": "latest",
+      "license": "Unknown",
+      "author": "Various",
+      "link": "https://crates.io/crates/optional",
+      "source": "Backend"
+    },
+    {
+      "name": "rand",
+      "version": "latest",
+      "license": "Apache-2.0 OR MIT",
+      "author": "The Rand Project Developers",
+      "link": "https://crates.io/crates/rand",
+      "source": "Backend"
+    },
+    {
+      "name": "reqwest",
+      "version": "latest",
+      "license": "Apache-2.0 OR MIT",
+      "author": "Sean McArthur",
+      "link": "https://crates.io/crates/reqwest",
+      "source": "Backend"
+    },
+    {
+      "name": "rusqlite",
+      "version": "latest",
+      "license": "MIT",
+      "author": "The rusqlite developers",
+      "link": "https://crates.io/crates/rusqlite",
+      "source": "Backend"
+    },
+    {
+      "name": "serde",
+      "version": "latest",
+      "license": "Apache-2.0 OR MIT",
+      "author": "David Tolnay",
+      "link": "https://crates.io/crates/serde",
+      "source": "Backend"
+    },
+    {
+      "name": "serde_json",
+      "version": "latest",
+      "license": "Apache-2.0 OR MIT",
+      "author": "David Tolnay",
+      "link": "https://crates.io/crates/serde_json",
+      "source": "Backend"
+    },
+    {
+      "name": "strsim",
+      "version": "latest",
+      "license": "MIT",
+      "author": "Danny Guo",
+      "link": "https://crates.io/crates/strsim",
+      "source": "Backend"
+    },
+    {
+      "name": "tauri",
+      "version": "latest",
+      "license": "Apache-2.0 OR MIT",
+      "author": "Tauri Contributors",
+      "link": "https://crates.io/crates/tauri",
+      "source": "Backend"
+    },
+    {
+      "name": "tauri-build",
+      "version": "latest",
+      "license": "Apache-2.0 OR MIT",
+      "author": "Tauri Contributors",
+      "link": "https://crates.io/crates/tauri-build",
+      "source": "Backend"
+    },
+    {
+      "name": "tauri-plugin-dialog",
+      "version": "latest",
+      "license": "Apache-2.0 OR MIT",
+      "author": "Tauri Contributors",
+      "link": "https://crates.io/crates/tauri-plugin-dialog",
+      "source": "Backend"
+    },
+    {
+      "name": "tauri-plugin-fs",
+      "version": "latest",
+      "license": "Apache-2.0 OR MIT",
+      "author": "Tauri Contributors",
+      "link": "https://crates.io/crates/tauri-plugin-fs",
+      "source": "Backend"
+    },
+    {
+      "name": "tauri-plugin-http",
+      "version": "latest",
+      "license": "Apache-2.0 OR MIT",
+      "author": "Tauri Contributors",
+      "link": "https://crates.io/crates/tauri-plugin-http",
+      "source": "Backend"
+    },
+    {
+      "name": "tauri-plugin-opener",
+      "version": "latest",
+      "license": "Apache-2.0 OR MIT",
+      "author": "Tauri Contributors",
+      "link": "https://crates.io/crates/tauri-plugin-opener",
+      "source": "Backend"
+    },
+    {
+      "name": "tauri-plugin-process",
+      "version": "latest",
+      "license": "Apache-2.0 OR MIT",
+      "author": "Tauri Contributors",
+      "link": "https://crates.io/crates/tauri-plugin-process",
+      "source": "Backend"
+    },
+    {
+      "name": "tauri-plugin-shell",
+      "version": "latest",
+      "license": "Apache-2.0 OR MIT",
+      "author": "Tauri Contributors",
+      "link": "https://crates.io/crates/tauri-plugin-shell",
+      "source": "Backend"
+    },
+    {
+      "name": "tauri-plugin-store",
+      "version": "latest",
+      "license": "Apache-2.0 OR MIT",
+      "author": "Tauri Contributors",
+      "link": "https://crates.io/crates/tauri-plugin-store",
+      "source": "Backend"
+    },
+    {
+      "name": "tokio",
+      "version": "latest",
+      "license": "MIT",
+      "author": "Tokio Contributors",
+      "link": "https://crates.io/crates/tokio",
+      "source": "Backend"
+    },
+    {
+      "name": "version",
+      "version": "latest",
+      "license": "Unknown",
+      "author": "Various",
+      "link": "https://crates.io/crates/version",
+      "source": "Backend"
     }
   ]
 }

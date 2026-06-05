@@ -16,7 +16,11 @@
     type: ColumnType;
     platform?: 'bluesky' | 'mastodon';
     query?: string; // for search/hashtag columns
+    width?: number; // column width in pixels
   }
+
+  // Drag-and-drop reorder state
+  let draggedColumnId: string | null = $state(null);
 
   let accounts: Account[] = $state([]);
   let loading = $state(true);
@@ -235,6 +239,39 @@
     saveColumns();
   }
 
+  function handleColumnWidthChange(colId: string, width: number) {
+    columns = columns.map(c => c.id === colId ? { ...c, width } : c);
+    saveColumns();
+  }
+
+  function handleDragStart(colId: string, e: DragEvent) {
+    draggedColumnId = colId;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', colId);
+    }
+  }
+
+  function handleDragOver(colId: string, e: DragEvent) {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+  }
+
+  function handleDrop(colId: string, e: DragEvent) {
+    e.preventDefault();
+    if (!draggedColumnId || draggedColumnId === colId) return;
+    const fromIdx = columns.findIndex(c => c.id === draggedColumnId);
+    const toIdx = columns.findIndex(c => c.id === colId);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const moved = columns[fromIdx];
+    const updated = [...columns];
+    updated.splice(fromIdx, 1);
+    updated.splice(toIdx, 0, moved);
+    columns = updated;
+    saveColumns();
+    draggedColumnId = null;
+  }
+
   async function handleLike(post: UnifiedPost) {
     for (const [id, entry] of clientEntries) {
       const acct = accounts.find(a => a.id === id);
@@ -349,10 +386,15 @@
           type={col.type}
           posts={columnPosts[col.id] ?? []}
           loading={columnLoading[col.id] ?? false}
+          width={col.width ?? 380}
           onrefresh={() => loadColumn(col)}
           onremove={() => removeColumn(col.id)}
           onlike={handleLike}
           onboost={handleBoost}
+          onwidthchange={(w) => handleColumnWidthChange(col.id, w)}
+          ondragstart={(e) => handleDragStart(col.id, e)}
+          ondragover={(e) => handleDragOver(col.id, e)}
+          ondrop={(e) => handleDrop(col.id, e)}
         />
       {/each}
     </div>

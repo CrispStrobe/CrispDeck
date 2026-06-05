@@ -88,6 +88,18 @@
 
 - [x] Push notifications wired into feed refresh (fires when tab hidden + permission granted)
 
+- [x] Analytics overhaul: visual progress bar, engagement rate metric, detailed platform breakdown (likes/boosts/replies/engagement per platform)
+- [x] Archive improvements: CSV/MD export, auto-refresh on visit (append new posts), full Mastodon likes pagination
+- [x] Deck improvements: column width adjustment (280-600px drag resize), drag-and-drop column reorder
+- [x] Feed improvements: post source indicator in multi-account mode, pull-to-refresh on mobile (touch gesture)
+- [x] Messages improvements: unread count badge in sidebar, corrected Bluesky OAuth DM guidance
+- [x] Profile improvements: "Follows you" badge (Bluesky + Mastodon), paginated followers/following lists with Load More
+- [x] Drafts: post preview with per-platform thread splitting and CW display
+- [x] Accessibility: ARIA labels on all post interaction buttons, skip-to-content link, focus-visible indicators, RTL support (CSS + dir attribute)
+- [x] Arabic i18n (8 languages total: en, de, fr, es, ja, pt, zh, ar) with RTL layout support
+- [x] Cargo-license fallback: Cargo.toml parser generates Rust dep licenses when cargo-license not installed (50 total: 12 NPM + 38 Rust)
+- [x] About page: source filter (All / NPM / Rust) for license browser
+
 ## Done
 
-All planned features shipped. 342 frontend + 15 Rust = 357 tests.
+All planned features shipped. 375 frontend + 15 Rust = 390 tests.

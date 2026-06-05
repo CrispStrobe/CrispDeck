@@ -34,12 +34,76 @@
       accounts = result.accounts;
       clientEntries = result.clients;
       stats = await getArchiveStats();
+
+      // Auto-refresh: if archive exists and accounts are configured, append new posts
+      if (stats.total > 0 && accounts.length > 0) {
+        autoRefresh();
+      }
     } catch (e) {
       error = String(e);
     } finally {
       loading = false;
     }
   });
+
+  /** Auto-refresh: fetch only posts newer than the latest archived post */
+  async function autoRefresh() {
+    if (!stats.dateRange) return;
+    building = true;
+    buildProgress = 'Checking for new posts...';
+    let added = 0;
+    const newestDate = new Date(stats.dateRange.newest);
+
+    for (const acct of accounts) {
+      const entry = clientEntries.get(acct.id);
+      if (!entry) continue;
+      try {
+        if (acct.platform === 'bluesky') {
+          const client = entry.client as BlueskyClient;
+          let cursor: string | undefined;
+          let done = false;
+          do {
+            const r = await client.getAuthorFeed(acct.handle, cursor);
+            const posts = r.feed.map(p => normalizePost(p, 'bluesky'));
+            // Stop when we reach already-archived posts
+            const newPosts = posts.filter(p => new Date(p.createdAt) > newestDate);
+            if (newPosts.length > 0) {
+              await archivePosts(newPosts, 'post');
+              added += newPosts.length;
+              buildProgress = `Found ${added} new posts...`;
+            }
+            if (newPosts.length < posts.length) done = true;
+            cursor = r.cursor;
+          } while (cursor && !done);
+        } else {
+          const client = entry.client as MastodonClient;
+          const account = await client.getAccountByHandle(acct.handle);
+          let cursor: string | undefined;
+          let done = false;
+          do {
+            const statuses = await client.getAccountStatuses(account.id, cursor);
+            const posts = statuses.map(p => normalizePost(p, 'mastodon'));
+            const newPosts = posts.filter(p => new Date(p.createdAt) > newestDate);
+            if (newPosts.length > 0) {
+              await archivePosts(newPosts, 'post');
+              added += newPosts.length;
+              buildProgress = `Found ${added} new posts...`;
+            }
+            if (newPosts.length < posts.length) done = true;
+            cursor = statuses.length >= 40 ? statuses[statuses.length - 1].id : undefined;
+          } while (cursor && !done);
+        }
+      } catch (e) {
+        console.error(`Auto-refresh failed for ${acct.handle}:`, e);
+      }
+    }
+
+    buildProgress = added > 0 ? `Added ${added} new posts.` : 'Archive is up to date.';
+    stats = await getArchiveStats();
+    building = false;
+    // Clear progress message after a moment
+    setTimeout(() => { if (!building) buildProgress = ''; }, 3000);
+  }
 
   async function buildArchive() {
     building = true;
@@ -64,7 +128,7 @@
             cursor = r.cursor;
           } while (cursor);
 
-          // Likes
+          // Likes (fully paginated)
           cursor = undefined;
           do {
             buildProgress = `Bluesky likes: ${total}...`;
@@ -92,23 +156,18 @@
             cursor = statuses.length >= 40 ? statuses[statuses.length - 1].id : undefined;
           } while (cursor);
 
-          // Likes
-          const token = client.getAccessToken();
-          if (token) {
+          // Likes (fully paginated via MastodonClient)
+          cursor = undefined;
+          do {
+            buildProgress = `Mastodon likes: ${total}...`;
             try {
-              buildProgress = `Mastodon likes: ${total}...`;
-              const likesResp = await fetch(`${client.getInstanceUrl()}/api/v1/favourites?limit=40`, {
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              if (likesResp.ok) {
-                const likes = await likesResp.json();
-                // snakeToCamel needed
-                const posts = likes.map((s: any) => normalizePost(s, 'mastodon'));
-                await archivePosts(posts, 'like');
-                total += posts.length;
-              }
-            } catch {}
-          }
+              const likes = await client.getFavourites(cursor);
+              const posts = likes.map((s: any) => normalizePost(s, 'mastodon'));
+              await archivePosts(posts, 'like');
+              total += posts.length;
+              cursor = likes.length >= 40 ? (likes[likes.length - 1] as any).id : undefined;
+            } catch { cursor = undefined; }
+          } while (cursor);
         }
       } catch (e) {
         console.error(`Archive build failed for ${acct.handle}:`, e);
@@ -153,9 +212,14 @@
     };
   }
 
-  function exportResults() {
-    const posts = results.map(archiveToUnified);
-    exportAsJson(posts, 'archive');
+  function exportResultsJson() {
+    exportAsJson(results.map(archiveToUnified), 'archive');
+  }
+  function exportResultsCsv() {
+    exportAsCsv(results.map(archiveToUnified), 'archive');
+  }
+  function exportResultsMd() {
+    exportAsMarkdown(results.map(archiveToUnified), 'archive');
   }
 
   function formatDate(d: string) {
@@ -178,7 +242,7 @@
         class="flex items-center gap-1 px-3 py-1.5 text-sm bg-[var(--color-primary)] text-white rounded-md disabled:opacity-50"
       >
         {#if building}<Loader2 size={14} class="animate-spin" />{:else}<RefreshCw size={14} />{/if}
-        {building ? 'Building...' : stats.total > 0 ? 'Refresh' : 'Build Archive'}
+        {building ? 'Building...' : stats.total > 0 ? 'Full Rebuild' : 'Build Archive'}
       </button>
       {#if stats.total > 0}
         <button onclick={handleClear} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)]" title="Clear archive">
@@ -192,9 +256,9 @@
     <div class="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">{error}</div>
   {/if}
 
-  {#if building}
+  {#if buildProgress}
     <div class="mb-4 p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] text-sm flex items-center gap-2">
-      <Loader2 size={14} class="animate-spin text-[var(--color-primary)]" />
+      {#if building}<Loader2 size={14} class="animate-spin text-[var(--color-primary)]" />{/if}
       {buildProgress}
     </div>
   {/if}
@@ -260,9 +324,17 @@
       <div class="flex items-center justify-between mb-3">
         <p class="text-sm text-[var(--color-text-muted)]">{results.length} results</p>
         {#if results.length > 0}
-          <button onclick={exportResults} class="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline">
-            <Download size={12} /> Export results
-          </button>
+          <div class="flex items-center gap-1">
+            <button onclick={exportResultsJson} class="flex items-center gap-1 px-2 py-1 text-xs bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-md">
+              <Download size={10} /> JSON
+            </button>
+            <button onclick={exportResultsCsv} class="flex items-center gap-1 px-2 py-1 text-xs bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-md">
+              <Download size={10} /> CSV
+            </button>
+            <button onclick={exportResultsMd} class="flex items-center gap-1 px-2 py-1 text-xs bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-md">
+              <Download size={10} /> MD
+            </button>
+          </div>
         {/if}
       </div>
       <div class="space-y-2">

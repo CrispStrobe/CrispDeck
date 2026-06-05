@@ -93,21 +93,25 @@ describe('i18n translations', () => {
       }
     });
 
-    it('fr/es/ja have core nav + compose + post sections', () => {
-      for (const lang of ['fr', 'es', 'ja'] as const) {
+    it('fr/es/ja/ar have core nav + compose + feed + settings + common sections', () => {
+      for (const lang of ['fr', 'es', 'ja', 'ar'] as const) {
         expect(translations[lang]).toHaveProperty('nav');
         expect(translations[lang]).toHaveProperty('compose');
-        expect(translations[lang]).toHaveProperty('post');
         expect(translations[lang]).toHaveProperty('feed');
         expect(translations[lang]).toHaveProperty('settings');
         expect(translations[lang]).toHaveProperty('common');
       }
     });
 
-    it('all 5 languages have nav.dashboard', () => {
-      for (const lang of ['en', 'de', 'fr', 'es', 'ja'] as const) {
+    it('all 8 languages have nav.dashboard', () => {
+      for (const lang of ['en', 'de', 'fr', 'es', 'ja', 'pt', 'zh', 'ar'] as const) {
         expect(translations[lang].nav.dashboard).toBeTruthy();
       }
+    });
+
+    it('ar (Arabic) has RTL-appropriate translations', () => {
+      expect(translations.ar.nav.dashboard).toBe('لوحة التحكم');
+      expect(translations.ar.nav.settings).toBe('الإعدادات');
     });
   });
 

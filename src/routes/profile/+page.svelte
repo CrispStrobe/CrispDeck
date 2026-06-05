@@ -20,6 +20,10 @@
   let followingList: Array<{ handle: string; displayName?: string; avatar?: string }> = $state([]);
   let loadingFollows = $state(false);
   let following = $state(false);
+  let followsYou = $state(false);
+  let followersCursor: string | undefined = $state(undefined);
+  let followingCursor: string | undefined = $state(undefined);
+  let loadingMoreFollows = $state(false);
 
   let accounts: Account[] = $state([]);
   let clientEntries: Map<number, ClientEntry> = new Map();
@@ -78,6 +82,7 @@
       const bsky = client as BlueskyClient;
       profile = await bsky.getProfile(handle);
       following = !!profile.viewer?.following;
+      followsYou = !!profile.viewer?.followedBy;
       const { feed } = await bsky.getAuthorFeed(handle);
       posts = sortPosts(feed.map(p => normalizePost(p, 'bluesky')), 'newest');
     } else {
@@ -96,6 +101,17 @@
       };
       const statuses = await masto.getAccountStatuses(account.id);
       posts = sortPosts(statuses.map(s => normalizePost(s, 'mastodon')), 'newest');
+      // Check "follows you" via relationships API
+      const token = masto.getAccessToken();
+      if (token) {
+        try {
+          const relResp = await fetch(`${masto.getInstanceUrl()}/api/v1/accounts/relationships?id[]=${account.id}`, { headers: { Authorization: `Bearer ${token}` } });
+          if (relResp.ok) {
+            const rels = await relResp.json();
+            if (rels[0]) { following = rels[0].following; followsYou = rels[0].followed_by; }
+          }
+        } catch {}
+      }
     }
   }
 
@@ -136,30 +152,55 @@
     activeTab = tab;
     if ((tab === 'followers' && followersList.length > 0) || (tab === 'following' && followingList.length > 0)) return;
     loadingFollows = true;
+    await fetchFollowPage(tab);
+    loadingFollows = false;
+  }
+
+  async function fetchFollowPage(tab: 'followers' | 'following', cursor?: string) {
     const client = getClient();
     try {
       if (platform === 'bluesky') {
         const bsky = (client as BlueskyClient) ?? BlueskyClient.readOnly(handle);
         if (tab === 'followers') {
-          const resp = await bsky.getFollowers(handle);
-          followersList = resp.followers.map((f: any) => ({ handle: f.handle, displayName: f.displayName, avatar: f.avatar }));
+          const resp = await bsky.getFollowers(handle, cursor);
+          const newItems = resp.followers.map((f: any) => ({ handle: f.handle, displayName: f.displayName, avatar: f.avatar }));
+          followersList = cursor ? [...followersList, ...newItems] : newItems;
+          followersCursor = resp.cursor;
         } else {
-          const resp = await bsky.getFollows(handle);
-          followingList = resp.follows.map((f: any) => ({ handle: f.handle, displayName: f.displayName, avatar: f.avatar }));
+          const resp = await bsky.getFollows(handle, cursor);
+          const newItems = resp.follows.map((f: any) => ({ handle: f.handle, displayName: f.displayName, avatar: f.avatar }));
+          followingList = cursor ? [...followingList, ...newItems] : newItems;
+          followingCursor = resp.cursor;
         }
       } else if (platform === 'mastodon' && profile._mastodonId) {
         const masto = client as MastodonClient;
+        const token = masto.getAccessToken();
         const endpoint = tab === 'followers' ? 'followers' : 'following';
-        const resp = await fetch(`${masto.getInstanceUrl()}/api/v1/accounts/${profile._mastodonId}/${endpoint}?limit=80`);
+        const url = new URL(`${masto.getInstanceUrl()}/api/v1/accounts/${profile._mastodonId}/${endpoint}`);
+        url.searchParams.set('limit', '80');
+        if (cursor) url.searchParams.set('max_id', cursor);
+        const resp = await fetch(url.toString(), { headers: token ? { Authorization: `Bearer ${token}` } : {} });
         if (resp.ok) {
           const data = await resp.json();
-          const list = data.map((a: any) => ({ handle: `@${a.acct}`, displayName: a.display_name, avatar: a.avatar }));
-          if (tab === 'followers') followersList = list;
-          else followingList = list;
+          const newItems = data.map((a: any) => ({ handle: `@${a.acct}`, displayName: a.display_name, avatar: a.avatar }));
+          if (tab === 'followers') {
+            followersList = cursor ? [...followersList, ...newItems] : newItems;
+            followersCursor = data.length >= 80 ? data[data.length - 1].id : undefined;
+          } else {
+            followingList = cursor ? [...followingList, ...newItems] : newItems;
+            followingCursor = data.length >= 80 ? data[data.length - 1].id : undefined;
+          }
         }
       }
     } catch (e) { error = String(e); }
-    loadingFollows = false;
+  }
+
+  async function loadMoreFollows() {
+    const cursor = activeTab === 'followers' ? followersCursor : followingCursor;
+    if (!cursor) return;
+    loadingMoreFollows = true;
+    await fetchFollowPage(activeTab as 'followers' | 'following', cursor);
+    loadingMoreFollows = false;
   }
 
   async function blockUser() {
@@ -269,6 +310,9 @@
             <p class="text-sm text-[var(--color-text-muted)]">
               {profile.handle ?? handle}
               <span class="inline-block w-2 h-2 rounded-full ml-1" style="background: {platform === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"></span>
+              {#if followsYou}
+                <span class="ml-2 text-[10px] px-1.5 py-0.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[var(--color-text-muted)]">Follows you</span>
+              {/if}
             </p>
           </div>
           <button
@@ -345,6 +389,19 @@
               </div>
             </a>
           {/each}
+          <!-- Load more -->
+          {@const hasCursor = activeTab === 'followers' ? followersCursor : followingCursor}
+          {#if hasCursor}
+            <div class="text-center py-3">
+              <button
+                onclick={loadMoreFollows}
+                disabled={loadingMoreFollows}
+                class="px-4 py-2 text-xs bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-md text-[var(--color-text-muted)] disabled:opacity-50"
+              >
+                {#if loadingMoreFollows}<Loader2 size={12} class="inline animate-spin" /> Loading...{:else}Load More{/if}
+              </button>
+            </div>
+          {/if}
         </div>
       {/if}
     {:else if activeTab === 'media'}

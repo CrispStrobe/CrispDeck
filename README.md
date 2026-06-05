@@ -59,7 +59,7 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 ### Platform & UX
 - **Bluesky OAuth** (recommended) or app passwords
 - **Mastodon OAuth** with redirect callback
-- **Internationalization**: 5 languages (English, German, French, Spanish, Japanese) with fallback
+- **Internationalization**: 8 languages (English, German, French, Spanish, Japanese, Portuguese, Chinese, Arabic) with RTL support
 - **Keyboard shortcuts**: ? for help, g+key navigation, Ctrl+Enter to post
 - **Collapsible sidebar** + mobile hamburger menu + bottom tab bar
 - Safe area insets, touch targets, responsive design
@@ -239,7 +239,7 @@ git push origin v0.2.1
 - 343 tests (328 frontend + 15 Rust)
 - 24 sidebar navigation items
 - 11 deck column types
-- 7 UI languages (English, German, French, Spanish, Japanese + Portuguese, Chinese)
+- 8 UI languages (English, German, French, Spanish, Japanese, Portuguese, Chinese, Arabic) with RTL support
 - Dark + light theme with toggle
 - Bluesky: OAuth + app password auth (with 2FA), public API reading
 - Mastodon: OAuth, full REST API

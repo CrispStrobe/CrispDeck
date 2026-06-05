@@ -67,6 +67,60 @@ if (rustOutput) {
             source: 'Backend',
         };
     });
+} else {
+    // Fallback: parse Cargo.toml directly for dependency names and known licenses
+    console.log('  Falling back to Cargo.toml parsing...');
+    try {
+        const { readFileSync } = await import('fs');
+        const cargoToml = readFileSync(path.resolve('src-tauri/Cargo.toml'), 'utf8');
+        const knownLicenses = {
+            'tauri': { license: 'Apache-2.0 OR MIT', author: 'Tauri Contributors' },
+            'tauri-plugin-opener': { license: 'Apache-2.0 OR MIT', author: 'Tauri Contributors' },
+            'tauri-plugin-http': { license: 'Apache-2.0 OR MIT', author: 'Tauri Contributors' },
+            'tauri-plugin-store': { license: 'Apache-2.0 OR MIT', author: 'Tauri Contributors' },
+            'tauri-plugin-dialog': { license: 'Apache-2.0 OR MIT', author: 'Tauri Contributors' },
+            'tauri-plugin-fs': { license: 'Apache-2.0 OR MIT', author: 'Tauri Contributors' },
+            'tauri-plugin-shell': { license: 'Apache-2.0 OR MIT', author: 'Tauri Contributors' },
+            'tauri-plugin-process': { license: 'Apache-2.0 OR MIT', author: 'Tauri Contributors' },
+            'tauri-plugin-notification': { license: 'Apache-2.0 OR MIT', author: 'Tauri Contributors' },
+            'serde': { license: 'Apache-2.0 OR MIT', author: 'David Tolnay' },
+            'serde_json': { license: 'Apache-2.0 OR MIT', author: 'David Tolnay' },
+            'tokio': { license: 'MIT', author: 'Tokio Contributors' },
+            'anyhow': { license: 'Apache-2.0 OR MIT', author: 'David Tolnay' },
+            'rusqlite': { license: 'MIT', author: 'The rusqlite developers' },
+            'reqwest': { license: 'Apache-2.0 OR MIT', author: 'Sean McArthur' },
+            'aes-gcm': { license: 'Apache-2.0 OR MIT', author: 'RustCrypto Developers' },
+            'argon2': { license: 'Apache-2.0 OR MIT', author: 'RustCrypto Developers' },
+            'rand': { license: 'Apache-2.0 OR MIT', author: 'The Rand Project Developers' },
+            'base64': { license: 'Apache-2.0 OR MIT', author: 'Marshall Pierce' },
+            'strsim': { license: 'MIT', author: 'Danny Guo' },
+            'hostname': { license: 'MIT', author: 'svartalf' },
+            'log': { license: 'Apache-2.0 OR MIT', author: 'The Rust Project Developers' },
+            'env_logger': { license: 'Apache-2.0 OR MIT', author: 'The Rust Project Developers' },
+            'tauri-build': { license: 'Apache-2.0 OR MIT', author: 'Tauri Contributors' },
+        };
+        // Extract dependency names from [dependencies] section
+        const depRegex = /^(\w[\w-]*)\s*=/gm;
+        let match;
+        const seen = new Set();
+        while ((match = depRegex.exec(cargoToml)) !== null) {
+            const name = match[1];
+            if (seen.has(name)) continue;
+            seen.add(name);
+            const known = knownLicenses[name];
+            rustLicenses.push({
+                name,
+                version: 'latest',
+                license: known?.license || 'Unknown',
+                author: known?.author || 'Various',
+                link: `https://crates.io/crates/${name}`,
+                source: 'Backend',
+            });
+        }
+        console.log(`  Parsed ${rustLicenses.length} Rust deps from Cargo.toml`);
+    } catch (e) {
+        console.warn('  Could not parse Cargo.toml:', e.message);
+    }
 }
 
 // 3. Combine and save

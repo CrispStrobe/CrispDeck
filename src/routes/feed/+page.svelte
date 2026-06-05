@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal } from '@lucide/svelte';
+  import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal, RefreshCw } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import Post from '$lib/components/Post.svelte';
   import CrosspostGroup from '$lib/components/CrosspostGroup.svelte';
@@ -42,6 +42,14 @@
   // Infinite scroll
   let scrollSentinel: HTMLDivElement | undefined = $state();
   let observer: IntersectionObserver | undefined;
+
+  // Pull-to-refresh
+  let pullStartY = 0;
+  let pullDistance = $state(0);
+  let isPulling = $state(false);
+  let pullRefreshing = $state(false);
+
+  const multiAccount = $derived(accounts.length > 1);
 
   onMount(async () => {
     try {
@@ -161,42 +169,43 @@
         const entry = clientEntries.get(acct.id);
         if (!entry) continue;
 
+        const tag = (p: UnifiedPost) => { p.sourceAccount = acct.handle; return p; };
         if (acct.platform === 'bluesky') {
           if (feedMode === 'timeline') {
             // Use OAuth agent for timeline if available (has full access)
             if (entry.oauthAgent) {
               const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 50 });
-              allPosts.push(...r.data.feed.map(p => normalizePost(p, 'bluesky')));
+              allPosts.push(...r.data.feed.map(p => tag(normalizePost(p, 'bluesky'))));
               cursors[acct.id] = r.data.cursor;
             } else {
               const bsky = entry.client as BlueskyClient;
               try {
                 const result = await bsky.getTimeline();
-                allPosts.push(...result.feed.map(p => normalizePost(p, 'bluesky')));
+                allPosts.push(...result.feed.map(p => tag(normalizePost(p, 'bluesky'))));
                 cursors[acct.id] = result.cursor;
               } catch {
                 // Fall back to author feed if timeline auth fails
                 const result = await bsky.getAuthorFeed(acct.handle);
-                allPosts.push(...result.feed.map(p => normalizePost(p, 'bluesky')));
+                allPosts.push(...result.feed.map(p => tag(normalizePost(p, 'bluesky'))));
                 cursors[acct.id] = result.cursor;
               }
             }
           } else {
             const bsky = entry.client as BlueskyClient;
             const result = await bsky.getAuthorFeed(acct.handle);
-            allPosts.push(...result.feed.map(p => normalizePost(p, 'bluesky')));
+            allPosts.push(...result.feed.map(p => tag(normalizePost(p, 'bluesky'))));
             cursors[acct.id] = result.cursor;
           }
         } else {
           const masto = entry.client as MastodonClient;
           if (feedMode === 'timeline') {
             const statuses = await masto.getHomeTimeline();
-            allPosts.push(...statuses.map(p => normalizePost(p, 'mastodon')));
+            allPosts.push(...statuses.map(p => tag(normalizePost(p, 'mastodon'))));
             cursors[acct.id] = statuses.length > 0 ? statuses[statuses.length - 1].id : undefined;
           } else {
             const account = await masto.getAccountByHandle(acct.handle);
             const statuses = await masto.getAccountStatuses(account.id);
-            allPosts.push(...statuses.map(p => normalizePost(p, 'mastodon')));
+            allPosts.push(...statuses.map(p => tag(normalizePost(p, 'mastodon'))));
             cursors[acct.id] = statuses.length > 0 ? statuses[statuses.length - 1].id : undefined;
           }
         }
@@ -343,11 +352,36 @@
   const finalFeed = $derived(detectCrossposts(sorted));
   const hasMoreContent = $derived(Object.values(cursors).some(c => !!c));
   const isLoading = $derived(loading || loadingMore);
+
+  function onTouchStart(e: TouchEvent) {
+    if (window.scrollY === 0) {
+      pullStartY = e.touches[0].clientY;
+      isPulling = true;
+    }
+  }
+
+  function onTouchMove(e: TouchEvent) {
+    if (!isPulling) return;
+    const y = e.touches[0].clientY;
+    pullDistance = Math.max(0, Math.min(120, (y - pullStartY) * 0.5));
+  }
+
+  async function onTouchEnd() {
+    if (!isPulling) return;
+    isPulling = false;
+    if (pullDistance >= 60) {
+      pullRefreshing = true;
+      pullDistance = 50;
+      await loadFeed();
+      pullRefreshing = false;
+    }
+    pullDistance = 0;
+  }
 </script>
 
 <svelte:head><title>CrispDeck — Feed</title><meta name="description" content="Your unified Mastodon + Bluesky timeline" /></svelte:head>
 
-<div class="p-6">
+<div class="p-6" ontouchstart={onTouchStart} ontouchmove={onTouchMove} ontouchend={onTouchEnd}>
   <div class="flex items-center justify-between mb-4">
     <div class="flex items-center gap-2">
       <Rss size={24} />
@@ -416,6 +450,13 @@
     </div>
   {/if}
 
+  <!-- Pull-to-refresh indicator -->
+  {#if pullDistance > 0}
+    <div class="flex items-center justify-center mb-2 transition-all" style="height: {pullDistance}px">
+      <RefreshCw size={20} class="text-[var(--color-primary)] {pullRefreshing ? 'animate-spin' : ''}" style="opacity: {pullDistance / 60}; transform: rotate({pullDistance * 3}deg)" />
+    </div>
+  {/if}
+
   {#if initialLoading}
     <div class="text-center py-12">
       <Loader2 size={32} class="text-[var(--color-text-muted)] animate-spin mx-auto" />
@@ -461,7 +502,16 @@
           {#if isCrosspostGroup(item)}
             <CrosspostGroup group={item} {hideMedia} />
           {:else}
-            <Post post={item} {hideMedia} onlike={handleLike} onboost={handleBoost} onreply={handleReply} onquote={handleQuote} />
+            {#if multiAccount && item.sourceAccount}
+              <div class="relative">
+                <span class="absolute -top-1 right-2 text-[9px] px-1.5 py-0.5 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-muted)] z-10">
+                  via {item.sourceAccount.split('.')[0]}
+                </span>
+                <Post post={item} {hideMedia} onlike={handleLike} onboost={handleBoost} onreply={handleReply} onquote={handleQuote} />
+              </div>
+            {:else}
+              <Post post={item} {hideMedia} onlike={handleLike} onboost={handleBoost} onreply={handleReply} onquote={handleQuote} />
+            {/if}
           {/if}
         {/each}
       </div>
