@@ -8,6 +8,7 @@
   import { Settings, Plus, Trash2, Star, ExternalLink, Loader2, Shield } from '@lucide/svelte';
   import { startBlueskyOAuth } from '$lib/api/bluesky-oauth';
   import { i18n, type Language } from '$lib/i18n.svelte';
+  import { requestPermission, getPermission, isSupported as notifSupported } from '$lib/push-notifications';
   import { getTranslateConfig, setTranslateConfig, type TranslateProvider } from '$lib/translate';
   import type { Account } from '$lib/types';
 
@@ -36,6 +37,10 @@
   function saveTtsEngine() { localStorage.setItem('crispdeck-tts-engine', ttsEngine); }
   function saveSttEngine() { localStorage.setItem('crispdeck-stt-engine', sttEngine); }
 
+  // Notifications
+  let notifPermission = $state<'granted' | 'denied' | 'default'>('default');
+  let notifLoading = $state(false);
+
   // Model manager
   let isTauri = $state(false);
   let crispasrAvailable = $state(false);
@@ -43,6 +48,11 @@
 
   onMount(async () => {
     // ... existing onMount runs loadAccounts
+    // Check notification permission
+    if (notifSupported()) {
+      notifPermission = await getPermission();
+    }
+
     // Check Tauri + CrispASR availability
     if (typeof (globalThis as any).__TAURI_INTERNALS__ !== 'undefined') {
       isTauri = true;
@@ -366,7 +376,7 @@
           <div class="flex items-center justify-between p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
             <div class="flex items-center gap-3">
               {#if account.avatar_url}
-                <img src={account.avatar_url} alt="" class="w-8 h-8 rounded-full" />
+                <img loading="lazy" src={account.avatar_url} alt="" class="w-8 h-8 rounded-full" />
               {:else}
                 <div class="w-8 h-8 rounded-full bg-[var(--color-bluesky)]/20 flex items-center justify-center text-xs">BS</div>
               {/if}
@@ -461,7 +471,7 @@
           <div class="flex items-center justify-between p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
             <div class="flex items-center gap-3">
               {#if account.avatar_url}
-                <img src={account.avatar_url} alt="" class="w-8 h-8 rounded-full" />
+                <img loading="lazy" src={account.avatar_url} alt="" class="w-8 h-8 rounded-full" />
               {:else}
                 <div class="w-8 h-8 rounded-full bg-[var(--color-mastodon)]/20 flex items-center justify-center text-xs">M</div>
               {/if}
@@ -529,6 +539,27 @@
           <option value="feed">Go straight to Feed</option>
           <option value="deck">Go straight to Deck</option>
         </select>
+      </div>
+
+      <!-- Push notifications -->
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-sm text-[var(--color-text-muted)]">Push notifications</span>
+          <p class="text-[10px] text-[var(--color-text-muted)]">Get notified when new posts arrive while the tab is hidden</p>
+        </div>
+        {#if notifPermission === 'granted'}
+          <span class="text-xs text-green-400 px-2 py-1 bg-green-900/20 rounded">Enabled</span>
+        {:else if notifPermission === 'denied'}
+          <span class="text-xs text-red-400 px-2 py-1 bg-red-900/20 rounded">Blocked</span>
+        {:else}
+          <button
+            onclick={async () => { notifLoading = true; notifPermission = await requestPermission(); notifLoading = false; }}
+            disabled={notifLoading}
+            class="px-3 py-1.5 text-xs bg-[var(--color-primary)] text-white rounded-md disabled:opacity-50"
+          >
+            {notifLoading ? '...' : 'Enable'}
+          </button>
+        {/if}
       </div>
 
       <!-- Alt text enforcement -->

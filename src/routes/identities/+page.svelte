@@ -318,7 +318,7 @@
               <div class="flex items-center gap-3">
                 <div class="w-2 h-full rounded-full bg-[var(--color-bluesky)] flex-shrink-0"></div>
                 {#if candidate.bluesky_avatar}
-                  <img src={candidate.bluesky_avatar} alt="" class="w-10 h-10 rounded-full" />
+                  <img loading="lazy" src={candidate.bluesky_avatar} alt="" class="w-10 h-10 rounded-full" />
                 {:else}
                   <div class="w-10 h-10 rounded-full bg-[var(--color-bluesky)]/20 flex items-center justify-center text-xs">BS</div>
                 {/if}
@@ -332,7 +332,7 @@
               <div class="flex items-center gap-3">
                 <div class="w-2 h-full rounded-full bg-[var(--color-mastodon)] flex-shrink-0"></div>
                 {#if candidate.mastodon_avatar}
-                  <img src={candidate.mastodon_avatar} alt="" class="w-10 h-10 rounded-full" />
+                  <img loading="lazy" src={candidate.mastodon_avatar} alt="" class="w-10 h-10 rounded-full" />
                 {:else}
                   <div class="w-10 h-10 rounded-full bg-[var(--color-mastodon)]/20 flex items-center justify-center text-xs">M</div>
                 {/if}
@@ -409,7 +409,7 @@
                   style="background: {link.platform === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"
                 ></div>
                 {#if link.avatar_url}
-                  <img src={link.avatar_url} alt="" class="w-6 h-6 rounded-full" />
+                  <img loading="lazy" src={link.avatar_url} alt="" class="w-6 h-6 rounded-full" />
                 {/if}
                 <div class="min-w-0 flex-1">
                   <p class="text-xs font-medium truncate">{link.display_name || link.handle}</p>

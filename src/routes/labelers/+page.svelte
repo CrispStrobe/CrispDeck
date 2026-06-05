@@ -238,7 +238,7 @@
             <div class="flex items-start justify-between">
               <div class="flex items-center gap-3">
                 {#if labeler.avatar}
-                  <img src={labeler.avatar} alt="" class="w-10 h-10 rounded-full" />
+                  <img loading="lazy" src={labeler.avatar} alt="" class="w-10 h-10 rounded-full" />
                 {/if}
                 <div>
                   <h3 class="text-sm font-medium">{labeler.displayName || labeler.handle}</h3>
@@ -283,7 +283,7 @@
           <div class="flex items-start justify-between p-4">
             <div class="flex items-center gap-3">
               {#if labeler.avatar}
-                <img src={labeler.avatar} alt="" class="w-10 h-10 rounded-full" />
+                <img loading="lazy" src={labeler.avatar} alt="" class="w-10 h-10 rounded-full" />
               {/if}
               <div>
                 <h3 class="text-sm font-medium">{labeler.displayName || labeler.handle}</h3>

@@ -224,7 +224,7 @@
             </h3>
             {#each bskyLists as list}
               <button onclick={() => selectBskyList(list)} class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-[var(--color-surface-hover)] transition-colors flex items-center gap-2 {selectedList?.type === 'bluesky' && selectedList?.uri === list.uri ? 'bg-[var(--color-surface)] border border-[var(--color-border)]' : ''}">
-                {#if list.avatar}<img src={list.avatar} alt="" class="w-5 h-5 rounded" />{/if}
+                {#if list.avatar}<img loading="lazy" src={list.avatar} alt="" class="w-5 h-5 rounded" />{/if}
                 <div class="truncate">
                   <span class="truncate">{list.name}</span>
                   {#if list.listItemCount}<span class="text-[10px] text-[var(--color-text-muted)] ml-1">({list.listItemCount})</span>{/if}
@@ -246,7 +246,7 @@
               <div class="mb-2 border-b border-[var(--color-border)] pb-2">
                 {#each feedSearchResults as feed}
                   <button onclick={() => selectBskyFeed(feed)} class="w-full text-left px-3 py-1.5 text-xs rounded-md hover:bg-[var(--color-surface-hover)] transition-colors flex items-center gap-2">
-                    {#if feed.avatar}<img src={feed.avatar} alt="" class="w-4 h-4 rounded" />{/if}
+                    {#if feed.avatar}<img loading="lazy" src={feed.avatar} alt="" class="w-4 h-4 rounded" />{/if}
                     <span class="truncate">{feed.displayName}</span>
                   </button>
                 {/each}
@@ -254,7 +254,7 @@
             {/if}
             {#each bskyFeeds as feed}
               <button onclick={() => selectBskyFeed(feed)} class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-[var(--color-surface-hover)] transition-colors flex items-center gap-2 {selectedList?.type === 'bluesky' && selectedList?.uri === feed.uri ? 'bg-[var(--color-surface)] border border-[var(--color-border)]' : ''}">
-                {#if feed.avatar}<img src={feed.avatar} alt="" class="w-5 h-5 rounded" />{/if}
+                {#if feed.avatar}<img loading="lazy" src={feed.avatar} alt="" class="w-5 h-5 rounded" />{/if}
                 <span class="truncate">{feed.displayName}</span>
               </button>
             {/each}

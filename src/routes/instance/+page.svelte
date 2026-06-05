@@ -197,7 +197,7 @@
           {#if instance.contact.account}
             <a href="/profile?handle={encodeURIComponent(instance.contact.account.acct)}&platform=mastodon" class="flex items-center gap-2 hover:underline">
               {#if instance.contact.account.avatar}
-                <img src={instance.contact.account.avatar} alt="" class="w-8 h-8 rounded-full" />
+                <img loading="lazy" src={instance.contact.account.avatar} alt="" class="w-8 h-8 rounded-full" />
               {/if}
               <div>
                 <p class="text-sm font-medium">{instance.contact.account.displayName || instance.contact.account.acct}</p>

@@ -231,7 +231,7 @@
             <div class="flex items-start justify-between">
               <div class="flex items-center gap-3">
                 {#if list.avatar}
-                  <img src={list.avatar} alt="" class="w-10 h-10 rounded-lg" />
+                  <img loading="lazy" src={list.avatar} alt="" class="w-10 h-10 rounded-lg" />
                 {/if}
                 <div>
                   <h3 class="text-sm font-medium">{list.name}</h3>
@@ -265,7 +265,7 @@
             <div class="flex items-center gap-3">
               <span class="w-2 h-2 rounded-full" style="background: {item.platform === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"></span>
               {#if item.avatar}
-                <img src={item.avatar} alt="" class="w-8 h-8 rounded-full" />
+                <img loading="lazy" src={item.avatar} alt="" class="w-8 h-8 rounded-full" />
               {:else}
                 <div class="w-8 h-8 rounded-full bg-[var(--color-surface-hover)]"></div>
               {/if}

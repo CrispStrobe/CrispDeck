@@ -339,7 +339,7 @@
               class="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[var(--color-surface-hover)] transition-colors border-b border-[var(--color-border)] {selectedConvo?.id === convo.id ? 'bg-[var(--color-surface)]' : ''}"
             >
               {#if convo.participant.avatar}
-                <img src={convo.participant.avatar} alt="" class="w-10 h-10 rounded-full flex-shrink-0" />
+                <img loading="lazy" src={convo.participant.avatar} alt="" class="w-10 h-10 rounded-full flex-shrink-0" />
               {:else}
                 <div class="w-10 h-10 rounded-full bg-[var(--color-surface-hover)] flex-shrink-0"></div>
               {/if}
@@ -366,7 +366,7 @@
           <!-- Header -->
           <div class="flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border)]">
             {#if selectedConvo.participant.avatar}
-              <img src={selectedConvo.participant.avatar} alt="" class="w-8 h-8 rounded-full" />
+              <img loading="lazy" src={selectedConvo.participant.avatar} alt="" class="w-8 h-8 rounded-full" />
             {/if}
             <div>
               <p class="text-sm font-medium">{selectedConvo.participant.displayName || selectedConvo.participant.handle}</p>

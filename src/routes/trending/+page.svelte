@@ -208,7 +208,7 @@
         {#each filteredLinks as link}
           <a href={link.url} target="_blank" rel="noopener noreferrer" class="flex gap-3 p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] hover:border-[var(--color-mastodon)] transition-colors">
             {#if link.image}
-              <img src={link.image} alt="" class="w-20 h-14 rounded object-cover flex-shrink-0" />
+              <img loading="lazy" src={link.image} alt="" class="w-20 h-14 rounded object-cover flex-shrink-0" />
             {/if}
             <div class="flex-1 min-w-0">
               <h3 class="text-sm font-medium line-clamp-1">{link.title}</h3>

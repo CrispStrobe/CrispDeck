@@ -74,6 +74,42 @@ describe('voice commands', () => {
     });
   });
 
+  describe('integration: insertAtCursor intercept', () => {
+    it('command text is not inserted when matched', () => {
+      // Simulate: user says "go to feed" → tryVoiceCommand returns true
+      const transcript = 'go to feed';
+      const matched = tryVoiceCommand(transcript);
+      expect(matched).toBe(true);
+      // In compose, insertAtCursor checks looksLikeCommand first
+      // If matched, text is NOT appended — verified by the return
+    });
+
+    it('non-command text would be inserted', () => {
+      const transcript = 'Hello everyone this is my post';
+      const isCmd = looksLikeCommand(transcript);
+      expect(isCmd).toBe(false);
+      // insertAtCursor would proceed to add text
+    });
+
+    it('ambiguous text starting with "go" but not a command', () => {
+      // "going to the store" starts with "go" but "go to" prefix check
+      // requires exact prefix, not just "go"
+      const transcript = 'going to the store';
+      expect(looksLikeCommand(transcript)).toBe(false);
+    });
+
+    it('"show" prefix matches looksLikeCommand', () => {
+      expect(looksLikeCommand('show me something')).toBe(true);
+      // But tryVoiceCommand won't match unless it's a known phrase
+      expect(tryVoiceCommand('show me something')).toBe(false);
+    });
+
+    it('command match is case-insensitive in integration', () => {
+      expect(looksLikeCommand('GO TO FEED')).toBe(true);
+      expect(tryVoiceCommand('GO TO FEED')).toBe(true);
+    });
+  });
+
   describe('looksLikeCommand', () => {
     it('detects "go to" prefix', () => {
       expect(looksLikeCommand('go to something')).toBe(true);

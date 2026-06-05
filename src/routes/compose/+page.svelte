@@ -538,7 +538,7 @@
             {#each mediaPreviews as preview, i}
               <div class="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
                 <div class="relative aspect-video">
-                  <img src={preview} alt={altTexts[i] || ''} class="w-full h-full object-cover" />
+                  <img loading="lazy" src={preview} alt={altTexts[i] || ''} class="w-full h-full object-cover" />
                   <button
                     onclick={() => removeMedia(i)}
                     class="absolute top-1 right-1 p-1 bg-black/70 rounded-full text-white hover:bg-black"

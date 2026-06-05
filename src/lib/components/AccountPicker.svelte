@@ -40,7 +40,7 @@
         style="background: {acct.platform === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"
       ></div>
       {#if acct.avatar_url}
-        <img src={acct.avatar_url} alt="" class="w-6 h-6 rounded-full" />
+        <img loading="lazy" src={acct.avatar_url} alt="" class="w-6 h-6 rounded-full" />
       {:else}
         <div class="w-6 h-6 rounded-full bg-[var(--color-surface-hover)] flex items-center justify-center text-[10px]">
           {acct.platform === 'bluesky' ? 'BS' : 'M'}

@@ -166,7 +166,7 @@
           <div class="flex items-start gap-2 flex-1 min-w-0">
             {#if notif.author.avatar}
               <a href="/profile?handle={encodeURIComponent(notif.author.handle)}&platform={notif.platform}">
-                <img src={notif.author.avatar} alt="" class="w-8 h-8 rounded-full flex-shrink-0" />
+                <img loading="lazy" src={notif.author.avatar} alt="" class="w-8 h-8 rounded-full flex-shrink-0" />
               </a>
             {/if}
             <div class="flex-1 min-w-0">

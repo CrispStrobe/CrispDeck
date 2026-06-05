@@ -209,7 +209,7 @@
           <a href={getPackUrl(pack)} target="_blank" rel="noopener noreferrer" class="p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] hover:border-[var(--color-bluesky)] transition-colors">
             <div class="flex items-start gap-3">
               {#if pack.creator.avatar}
-                <img src={pack.creator.avatar} alt="" class="w-8 h-8 rounded-full" />
+                <img loading="lazy" src={pack.creator.avatar} alt="" class="w-8 h-8 rounded-full" />
               {/if}
               <div class="flex-1 min-w-0">
                 <h3 class="font-medium text-sm">{pack.record.name}</h3>

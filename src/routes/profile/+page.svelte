@@ -254,7 +254,7 @@
     <!-- Profile header -->
     <div class="flex items-start gap-4 mb-6">
       {#if profile.avatar}
-        <img src={profile.avatar} alt="" class="w-20 h-20 rounded-full border-4 border-[var(--color-bg)] {profile.banner ? '-mt-12' : ''}" />
+        <img loading="lazy" src={profile.avatar} alt="" class="w-20 h-20 rounded-full border-4 border-[var(--color-bg)] {profile.banner ? '-mt-12' : ''}" />
       {:else}
         <div class="w-20 h-20 rounded-full bg-[var(--color-surface-hover)] flex items-center justify-center text-2xl">
           <User size={32} />
@@ -333,7 +333,7 @@
           {#each list as user}
             <a href="/profile?handle={encodeURIComponent(user.handle)}&platform={platform}" class="flex items-center gap-3 p-2.5 rounded-lg hover:bg-[var(--color-surface-hover)] transition-colors">
               {#if user.avatar}
-                <img src={user.avatar} alt="" class="w-9 h-9 rounded-full" />
+                <img loading="lazy" src={user.avatar} alt="" class="w-9 h-9 rounded-full" />
               {:else}
                 <div class="w-9 h-9 rounded-full bg-[var(--color-surface-hover)]"></div>
               {/if}
