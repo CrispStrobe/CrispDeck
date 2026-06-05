@@ -175,7 +175,7 @@
   }
 </script>
 
-<svelte:head><title>CrispDeck — Lists <div Feeds</title></svelte:head>
+<svelte:head><title>CrispDeck — Lists &amp; Feeds</title></svelte:head>
 
 <div class="p-6 max-w-4xl mx-auto">
   <div class="flex items-center justify-between mb-6">

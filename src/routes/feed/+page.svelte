@@ -381,7 +381,7 @@
 
 <svelte:head><title>CrispDeck — Feed</title><meta name="description" content="Your unified Mastodon + Bluesky timeline" /></svelte:head>
 
-<div class="p-6" ontouchstart={onTouchStart} ontouchmove={onTouchMove} ontouchend={onTouchEnd}>
+<div class="p-6" role="feed" aria-label="Social feed" ontouchstart={onTouchStart} ontouchmove={onTouchMove} ontouchend={onTouchEnd}>
   <div class="flex items-center justify-between mb-4">
     <div class="flex items-center gap-2">
       <Rss size={24} />
