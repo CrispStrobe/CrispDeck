@@ -390,8 +390,7 @@
             </a>
           {/each}
           <!-- Load more -->
-          {@const hasCursor = activeTab === 'followers' ? followersCursor : followingCursor}
-          {#if hasCursor}
+          {#if (activeTab === 'followers' ? followersCursor : followingCursor)}
             <div class="text-center py-3">
               <button
                 onclick={loadMoreFollows}
