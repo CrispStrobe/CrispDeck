@@ -203,7 +203,7 @@
       <div class="bg-[var(--color-surface)] p-3 rounded-lg border border-[var(--color-border)] text-center">
         <Database size={16} class="text-[var(--color-text-muted)] mx-auto mb-1" />
         <div class="text-lg font-bold text-[var(--color-primary)]">{stats.total}</div>
-        <div class="text-[10px] text-[var(--color-text-muted)]">Total Archived</div>
+        <div class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.archive.totalArchived}</div>
       </div>
       <div class="bg-[var(--color-surface)] p-3 rounded-lg border border-[var(--color-border)] text-center">
         <div class="text-lg font-bold text-[var(--color-text)]">{stats.byType.post}</div>
@@ -216,7 +216,7 @@
           <span class="w-2 h-2 rounded-full bg-[var(--color-mastodon)]"></span>
           <span class="text-sm">{stats.byPlatform.mastodon}</span>
         </div>
-        <div class="text-[10px] text-[var(--color-text-muted)]">By Platform</div>
+        <div class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.archive.byPlatform}</div>
       </div>
       <div class="bg-[var(--color-surface)] p-3 rounded-lg border border-[var(--color-border)] text-center">
         {#if stats.dateRange}
@@ -236,16 +236,16 @@
           class="flex-1 px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]"
         />
         <select bind:value={filterType} class="px-2 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-xs text-[var(--color-text)]">
-          <option value="">All types</option>
-          <option value="post">Posts</option>
-          <option value="like">Likes</option>
-          <option value="repost">Reposts</option>
-          <option value="reply">Replies</option>
+          <option value="">{i18n.t.archive.allTypes}</option>
+          <option value="post">{i18n.t.archive.posts}</option>
+          <option value="like">{i18n.t.archive.likes}</option>
+          <option value="repost">{i18n.t.archive.reposts}</option>
+          <option value="reply">{i18n.t.archive.replies}</option>
         </select>
         <select bind:value={filterPlatform} class="px-2 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-xs text-[var(--color-text)]">
-          <option value="">All platforms</option>
-          <option value="bluesky">Bluesky</option>
-          <option value="mastodon">Mastodon</option>
+          <option value="">{i18n.t.archive.allPlatforms}</option>
+          <option value="bluesky">{i18n.t.common.bluesky}</option>
+          <option value="mastodon">{i18n.t.common.mastodon}</option>
         </select>
         <button type="submit" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm">
           <Search size={14} />

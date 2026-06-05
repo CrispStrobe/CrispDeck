@@ -75,6 +75,41 @@
     expandedStat = expandedStat === name ? null : name;
   }
 
+  function exportStatsSummary() {
+    const lines = [
+      `# CrispDeck Analytics Summary`,
+      `Generated: ${new Date().toISOString()}`,
+      `Date range: ${dateRange}`,
+      ``,
+      `## Overview`,
+      `- Total posts: ${originalPosts.length}`,
+      `- Total likes: ${totalLikes} (avg ${avgLikes}/post)`,
+      `- Total boosts: ${totalReposts} (avg ${avgReposts}/post)`,
+      `- Total replies received: ${totalReplies}`,
+      `- Total engagement: ${totalLikes + totalReposts + totalReplies}`,
+      ``,
+      `## Platform Breakdown`,
+      `- Bluesky: ${bskyCount} posts, ${bskyLikes} likes`,
+      `- Mastodon: ${mastoCount} posts, ${mastoLikes} likes`,
+      ``,
+      `## Top 5 by Likes`,
+      ...topByLikes.map((p, i) => `${i + 1}. [${p.likeCount} likes] ${p.text.substring(0, 80)}...`),
+      ``,
+      `## Top 5 by Boosts`,
+      ...topByReposts.map((p, i) => `${i + 1}. [${p.repostCount} boosts] ${p.text.substring(0, 80)}...`),
+      ``,
+      `## Posting Activity by Hour`,
+      ...postsByHour().map((count, h) => count > 0 ? `- ${h}:00 — ${count} posts` : '').filter(Boolean),
+    ];
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `crispdeck-analytics-${new Date().toISOString().split('T')[0]}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // Filter by date range
   const cutoffDate = $derived(() => {
     if (dateRange === 'all') return 0;
@@ -128,6 +163,12 @@
         </button>
         <button onclick={() => exportAsCsv(originalPosts, handle)} class="flex items-center gap-1 px-2 py-1 text-xs bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-md">
           <Download size={10} /> CSV
+        </button>
+        <button onclick={() => exportAsMarkdown(originalPosts, handle)} class="flex items-center gap-1 px-2 py-1 text-xs bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-md">
+          <Download size={10} /> MD
+        </button>
+        <button onclick={exportStatsSummary} class="flex items-center gap-1 px-2 py-1 text-xs bg-[var(--color-primary)]/20 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/30 border border-[var(--color-primary)]/30 rounded-md">
+          <Download size={10} /> Stats
         </button>
       {/if}
     </div>

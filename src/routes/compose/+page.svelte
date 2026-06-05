@@ -636,10 +636,10 @@
                 bind:value={visibility}
                 class="px-2 py-1 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-[var(--color-text)] focus:outline-none"
               >
-                <option value="public">Public</option>
-                <option value="unlisted">Unlisted</option>
-                <option value="private">Followers only</option>
-                <option value="direct">Direct</option>
+                <option value="public">{i18n.t.compose.public}</option>
+                <option value="unlisted">{i18n.t.compose.unlisted}</option>
+                <option value="private">{i18n.t.compose.followersOnlyVis}</option>
+                <option value="direct">{i18n.t.compose.direct}</option>
               </select>
 
               <button
@@ -657,10 +657,10 @@
                 class="px-2 py-1 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-[var(--color-text)] focus:outline-none"
                 title="Who can reply (Bluesky)"
               >
-                <option value="everyone">Anyone can reply</option>
-                <option value="mentioned">Mentioned only</option>
-                <option value="following">Followers only</option>
-                <option value="nobody">No replies</option>
+                <option value="everyone">{i18n.t.compose.anyoneCanReply}</option>
+                <option value="mentioned">{i18n.t.compose.mentionedOnly}</option>
+                <option value="following">{i18n.t.compose.followersOnlyVis}</option>
+                <option value="nobody">{i18n.t.compose.noReplies}</option>
               </select>
             {/if}
           </div>
@@ -727,11 +727,11 @@
                 bind:value={pollExpiry}
                 class="px-2 py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-[var(--color-text)]"
               >
-                <option value={3600}>1 hour</option>
-                <option value={21600}>6 hours</option>
-                <option value={86400}>24 hours</option>
-                <option value={259200}>3 days</option>
-                <option value={604800}>7 days</option>
+                <option value={3600}>{i18n.t.compose.hour1}</option>
+                <option value={21600}>{i18n.t.compose.hours6}</option>
+                <option value={86400}>{i18n.t.compose.hours24}</option>
+                <option value={259200}>{i18n.t.compose.days3}</option>
+                <option value={604800}>{i18n.t.compose.days7}</option>
               </select>
             </div>
           </div>
@@ -745,7 +745,7 @@
         <!-- Platform preview with thread splitting -->
         {#if text.trim()}
           <div class="space-y-2">
-            <span class="text-xs text-[var(--color-text-muted)] uppercase tracking-wider font-medium">Preview</span>
+            <span class="text-xs text-[var(--color-text-muted)] uppercase tracking-wider font-medium">{i18n.t.compose.preview}</span>
             {#if hasBsky}
               {@const bskyPlan = splitForPlatform(text.trim(), 'bluesky')}
               <div class="p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">

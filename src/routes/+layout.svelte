@@ -22,6 +22,7 @@
     localStorage.setItem('crispdeck-theme', theme);
   }
   let showShortcuts = $state(false);
+  let offline = $state(false);
   let pendingG = $state(false);
   let bookmarkCount = $state(0);
 
@@ -29,6 +30,11 @@
     // Restore theme
     const saved = localStorage.getItem('crispdeck-theme') as 'dark' | 'light' | null;
     if (saved) { theme = saved; document.documentElement.setAttribute('data-theme', saved); }
+
+    // Offline detection
+    offline = !navigator.onLine;
+    window.addEventListener('online', () => offline = false);
+    window.addEventListener('offline', () => offline = true);
 
     bookmarkCount = await getBookmarkCount();
     // Refresh count periodically
@@ -179,6 +185,11 @@
 
   <!-- Main content -->
   <main class="flex-1 overflow-y-auto md:pt-0 pt-12 pb-16 md:pb-0">
+    {#if offline}
+      <div class="bg-yellow-900/50 border-b border-yellow-700 px-4 py-2 text-center text-xs text-yellow-200">
+        You're offline — some features may be unavailable
+      </div>
+    {/if}
     <ErrorBoundary>
       {@render children()}
     </ErrorBoundary>
