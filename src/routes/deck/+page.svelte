@@ -270,6 +270,8 @@
   }
 </script>
 
+<svelte:head><title>CrispDeck — Deck</title></svelte:head>
+
 <div class="h-full flex flex-col">
   <!-- Deck header -->
   <div class="flex items-center justify-between px-4 py-2 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex-shrink-0">

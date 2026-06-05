@@ -237,6 +237,8 @@
   });
 </script>
 
+<svelte:head><title>CrispDeck — Profile</title></svelte:head>
+
 <div class="p-6 max-w-3xl mx-auto">
   {#if loading}
     <div class="text-center py-12">

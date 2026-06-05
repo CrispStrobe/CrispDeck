@@ -219,6 +219,8 @@
   const pendingCount = $derived(identities.filter(i => !i.confirmed).length);
 </script>
 
+<svelte:head><title>CrispDeck — Identities</title></svelte:head>
+
 <div class="p-6 max-w-5xl mx-auto">
   <div class="flex items-center justify-between mb-6">
     <div class="flex items-center gap-2">

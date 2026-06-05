@@ -146,6 +146,8 @@
   const handle = $derived(accounts[0]?.handle ?? 'user');
 </script>
 
+<svelte:head><title>CrispDeck — Analytics</title></svelte:head>
+
 <div class="p-6 max-w-4xl mx-auto">
   <div class="flex items-center justify-between mb-4">
     <div class="flex items-center gap-2">

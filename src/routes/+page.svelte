@@ -34,6 +34,8 @@
   const mastoAccounts = $derived(accounts.filter(a => a.platform === 'mastodon'));
 </script>
 
+<svelte:head><title>CrispDeck</title></svelte:head>
+
 <div class="p-6 max-w-4xl mx-auto">
   <h1 class="text-2xl font-bold mb-6">{i18n.t.nav.dashboard}</h1>
 

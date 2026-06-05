@@ -143,6 +143,8 @@
   const unscheduledDrafts = $derived(drafts.filter(d => !d.scheduled_at));
 </script>
 
+<svelte:head><title>CrispDeck — Drafts</title></svelte:head>
+
 <div class="p-6 max-w-4xl mx-auto">
   <div class="flex items-center justify-between mb-6">
     <div class="flex items-center gap-2">

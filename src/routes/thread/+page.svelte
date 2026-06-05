@@ -116,6 +116,8 @@
   }
 </script>
 
+<svelte:head><title>CrispDeck — Thread</title></svelte:head>
+
 <div class="p-6 max-w-3xl mx-auto">
   <a href="/feed" class="flex items-center gap-1 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] mb-4">
     <ArrowLeft size={14} /> Back to feed

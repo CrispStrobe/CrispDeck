@@ -121,6 +121,8 @@
   }
 </script>
 
+<svelte:head><title>CrispDeck — Trending</title></svelte:head>
+
 <div class="p-6 max-w-4xl mx-auto">
   <div class="flex items-center gap-2 mb-6">
     <TrendingUp size={24} />

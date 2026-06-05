@@ -295,6 +295,8 @@
   }
 </script>
 
+<svelte:head><title>CrispDeck — Messages</title></svelte:head>
+
 <div class="h-full flex flex-col">
   <div class="flex items-center gap-2 p-4 border-b border-[var(--color-border)]">
     <MessageSquare size={24} />

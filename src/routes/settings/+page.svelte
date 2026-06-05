@@ -243,6 +243,8 @@
   const mastoAccounts = $derived(accounts.filter(a => a.platform === 'mastodon'));
 </script>
 
+<svelte:head><title>CrispDeck — Settings</title></svelte:head>
+
 <div class="p-6 max-w-3xl mx-auto">
   <div class="flex items-center gap-2 mb-6">
     <Settings size={24} />
