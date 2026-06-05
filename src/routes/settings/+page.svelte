@@ -531,36 +531,36 @@
 
       <!-- Homepage mode -->
       <div class="flex items-center justify-between">
-        <label for="home-mode" class="text-sm text-[var(--color-text-muted)]">Homepage</label>
+        <label for="home-mode" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.homepage}</label>
         <select
           id="home-mode"
           value={localStorage.getItem('crispdeck-home-mode') ?? 'dashboard'}
           onchange={(e) => localStorage.setItem('crispdeck-home-mode', (e.target as HTMLSelectElement).value)}
           class="px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none"
         >
-          <option value="dashboard">Dashboard (overview)</option>
-          <option value="feed">Go straight to Feed</option>
-          <option value="deck">Go straight to Deck</option>
+          <option value="dashboard">{i18n.t.settings.homeDashboard}</option>
+          <option value="feed">{i18n.t.settings.homeFeed}</option>
+          <option value="deck">{i18n.t.settings.homeDeck}</option>
         </select>
       </div>
 
       <!-- Push notifications -->
       <div class="flex items-center justify-between">
         <div>
-          <span class="text-sm text-[var(--color-text-muted)]">Push notifications</span>
-          <p class="text-[10px] text-[var(--color-text-muted)]">Get notified when new posts arrive while the tab is hidden</p>
+          <span class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.pushNotifications}</span>
+          <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.pushHint}</p>
         </div>
         {#if notifPermission === 'granted'}
-          <span class="text-xs text-green-400 px-2 py-1 bg-green-900/20 rounded">Enabled</span>
+          <span class="text-xs text-green-400 px-2 py-1 bg-green-900/20 rounded">{i18n.t.settings.pushEnabled}</span>
         {:else if notifPermission === 'denied'}
-          <span class="text-xs text-red-400 px-2 py-1 bg-red-900/20 rounded">Blocked</span>
+          <span class="text-xs text-red-400 px-2 py-1 bg-red-900/20 rounded">{i18n.t.settings.pushBlocked}</span>
         {:else}
           <button
             onclick={async () => { notifLoading = true; notifPermission = await requestPermission(); notifLoading = false; }}
             disabled={notifLoading}
             class="px-3 py-1.5 text-xs bg-[var(--color-primary)] text-white rounded-md disabled:opacity-50"
           >
-            {notifLoading ? '...' : 'Enable'}
+            {notifLoading ? '...' : i18n.t.settings.pushEnable}
           </button>
         {/if}
       </div>
@@ -588,7 +588,7 @@
     <div class="space-y-4 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
       <!-- Provider -->
       <div>
-        <label class="block text-sm text-[var(--color-text-muted)] mb-2">Translation provider</label>
+        <label class="block text-sm text-[var(--color-text-muted)] mb-2">{i18n.t.settings.translationProvider}</label>
         <div class="flex items-center bg-[var(--color-bg)] rounded-lg border border-[var(--color-border)] p-0.5">
           <button
             onclick={() => { translateProvider = 'mymemory'; saveTranslateConfig(); }}
@@ -723,7 +723,7 @@
 
   <!-- Text-to-Speech -->
   <section class="mb-8">
-    <h2 class="text-lg font-semibold mb-3">Text-to-Speech (Read Aloud)</h2>
+    <h2 class="text-lg font-semibold mb-3">{i18n.t.settings.ttsTitle}</h2>
     <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
       <div class="flex items-center justify-between">
         <label for="tts-engine" class="text-xs text-[var(--color-text-muted)]">{i18n.t.tts.engine}</label>
@@ -772,7 +772,7 @@
 
   <!-- Speech-to-Text -->
   <section class="mb-8">
-    <h2 class="text-lg font-semibold mb-3">Speech-to-Text (Dictation)</h2>
+    <h2 class="text-lg font-semibold mb-3">{i18n.t.settings.sttTitle}</h2>
     <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
       <div class="flex items-center justify-between">
         <label for="stt-engine" class="text-xs text-[var(--color-text-muted)]">{i18n.t.stt.engine}</label>
