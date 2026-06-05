@@ -396,7 +396,7 @@
   <div class="flex items-start gap-3">
     <a href={getProfileUrl(post)}>
       {#if post.author.avatar}
-        <img loading="lazy" src={post.author.avatar} alt="" loading="lazy" class="w-10 h-10 rounded-full bg-[var(--color-surface-hover)]" />
+        <img loading="lazy" src={post.author.avatar} alt="" class="w-10 h-10 rounded-full bg-[var(--color-surface-hover)]" />
       {:else}
         <div class="w-10 h-10 rounded-full bg-[var(--color-surface-hover)] flex items-center justify-center text-xs text-[var(--color-text-muted)]">
           {post.author.handle.charAt(0).toUpperCase()}
@@ -443,7 +443,7 @@
         <div class="grid grid-cols-2 gap-2 pt-2">
           {#each bskyImages as image}
             <a href={image.fullsize} target="_blank" rel="noopener noreferrer">
-              <img loading="lazy" src={image.thumb} alt={image.alt} loading="lazy || ''} class="rounded-md w-full aspect-video object-cover" />
+              <img loading="lazy" src={image.thumb} alt={image.alt || ''} class="rounded-md w-full aspect-video object-cover" />
             </a>
           {/each}
         </div>
@@ -453,7 +453,7 @@
       {#if bskyExternal}
         <a href={bskyExternal.uri} target="_blank" rel="noopener noreferrer" class="mt-2 block border border-[var(--color-border)] rounded-lg overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
           {#if bskyExternal.thumb}
-            <img loading="lazy" src={bskyExternal.thumb} alt="" loading="lazy" class="w-full h-32 object-cover" />
+            <img loading="lazy" src={bskyExternal.thumb} alt="" class="w-full h-32 object-cover" />
           {/if}
           <div class="p-3">
             <p class="text-xs text-[var(--color-text-muted)]">{new URL(bskyExternal.uri).hostname}</p>
@@ -472,7 +472,7 @@
             {@const imageUrl = attachment.previewUrl || attachment.url || attachment.remoteUrl}
             {#if imageUrl}
               <a href={attachment.url || imageUrl} target="_blank" rel="noopener noreferrer">
-                <img loading="lazy" src={imageUrl} alt={attachment.description || `Image ${i + 1}`} class="rounded-md w-full aspect-video object-cover bg-[var(--color-surface-hover)]" loading="lazy" />
+                <img loading="lazy" src={imageUrl} alt={attachment.description || `Image ${i + 1}`} class="rounded-md w-full aspect-video object-cover bg-[var(--color-surface-hover)]" />
               </a>
             {/if}
           {/each}
