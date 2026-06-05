@@ -295,7 +295,7 @@
   }
 </script>
 
-<svelte:head><title>CrispDeck — Messages</title></svelte:head>
+<svelte:head><title>CrispDeck — Messages</title><meta name="description" content="Direct messages across Mastodon and Bluesky" /></svelte:head>
 
 <div class="h-full flex flex-col">
   <div class="flex items-center gap-2 p-4 border-b border-[var(--color-border)]">

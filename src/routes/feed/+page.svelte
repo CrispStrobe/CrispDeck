@@ -345,7 +345,7 @@
   const isLoading = $derived(loading || loadingMore);
 </script>
 
-<svelte:head><title>CrispDeck — Feed</title></svelte:head>
+<svelte:head><title>CrispDeck — Feed</title><meta name="description" content="Your unified Mastodon + Bluesky timeline" /></svelte:head>
 
 <div class="p-6">
   <div class="flex items-center justify-between mb-4">

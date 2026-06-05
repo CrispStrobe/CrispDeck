@@ -56,7 +56,7 @@
     if (e.key === 'g') { pendingG = true; setTimeout(() => pendingG = false, 1000); return; }
     if (pendingG) {
       pendingG = false;
-      const routes: Record<string, string> = { h: '/', f: '/feed', c: '/compose', n: '/notifications', s: '/search', d: '/deck', m: '/messages', a: '/archive' };
+      const routes: Record<string, string> = { h: '/', f: '/feed', c: '/compose', n: '/notifications', s: '/search', d: '/deck', m: '/messages', a: '/archive', t: '/trending', b: '/bookmarks', p: '/settings', i: '/identities' };
       if (routes[e.key]) { goto(routes[e.key]); return; }
     }
   }

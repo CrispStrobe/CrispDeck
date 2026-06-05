@@ -270,7 +270,7 @@
   }
 </script>
 
-<svelte:head><title>CrispDeck — Deck</title></svelte:head>
+<svelte:head><title>CrispDeck — Deck</title><meta name="description" content="Multi-column TweetDeck-style view" /></svelte:head>
 
 <div class="h-full flex flex-col">
   <!-- Deck header -->

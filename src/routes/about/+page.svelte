@@ -41,12 +41,12 @@
   });
 </script>
 
-<svelte:head><title>CrispDeck — About</title></svelte:head>
+<svelte:head><title>CrispDeck — About</title><meta name="description" content="About CrispDeck — open source social client" /></svelte:head>
 
 <div class="p-6 max-w-3xl mx-auto">
   <div class="flex items-center gap-2 mb-6">
     <Info size={24} />
-    <h1 class="text-2xl font-bold">About CrispDeck</h1>
+    <h1 class="text-2xl font-bold">{i18n.t.about.title}</h1>
   </div>
 
   <!-- App info -->
@@ -73,7 +73,7 @@
 
   <!-- Provider / Legal -->
   <section class="mb-6 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
-    <h3 class="text-sm font-semibold mb-2">Service Provider</h3>
+    <h3 class="text-sm font-semibold mb-2">{i18n.t.about.serviceProvider}</h3>
     <p class="text-sm text-[var(--color-text-muted)] leading-relaxed">
       Christian Ströbele<br />
       Nikolausstr. 5<br />
@@ -83,7 +83,7 @@
   </section>
 
   <section class="mb-6 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
-    <h3 class="text-sm font-semibold mb-2">Contact</h3>
+    <h3 class="text-sm font-semibold mb-2">{i18n.t.about.contact}</h3>
     <p class="text-sm text-[var(--color-text-muted)]">
       Email: postmaster@crispstro.be<br />
       Phone: +49 176 6421 8601

@@ -99,7 +99,7 @@
   }
 </script>
 
-<svelte:head><title>CrispDeck — Search</title></svelte:head>
+<svelte:head><title>CrispDeck — Search</title><meta name="description" content="Search posts across all connected accounts" /></svelte:head>
 
 <div class="p-6 max-w-4xl mx-auto">
   <div class="flex items-center gap-2 mb-6">

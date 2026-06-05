@@ -15,7 +15,7 @@
   });
 </script>
 
-<svelte:head><title>CrispDeck — Bookmarks</title></svelte:head>
+<svelte:head><title>CrispDeck — Bookmarks</title><meta name="description" content="Your saved posts" /></svelte:head>
 
 <div class="p-6 max-w-3xl mx-auto">
   <div class="flex items-center gap-2 mb-6">

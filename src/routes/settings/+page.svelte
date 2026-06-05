@@ -243,12 +243,12 @@
   const mastoAccounts = $derived(accounts.filter(a => a.platform === 'mastodon'));
 </script>
 
-<svelte:head><title>CrispDeck — Settings</title></svelte:head>
+<svelte:head><title>CrispDeck — Settings</title><meta name="description" content="Account management and app preferences" /></svelte:head>
 
 <div class="p-6 max-w-3xl mx-auto">
   <div class="flex items-center gap-2 mb-6">
     <Settings size={24} />
-    <h1 class="text-2xl font-bold">Settings</h1>
+    <h1 class="text-2xl font-bold">{i18n.t.settings.title}</h1>
   </div>
 
   {#if error}
@@ -284,7 +284,7 @@
               class="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {bskyAuthMode === 'oauth' ? 'bg-[var(--color-bluesky)] text-white' : 'text-[var(--color-text-muted)]'}"
             >
               <Shield size={12} />
-              OAuth (recommended)
+              {i18n.t.settings.oauthRecommended}
             </button>
             <button
               onclick={() => bskyAuthMode = 'app-password'}
@@ -295,7 +295,7 @@
           </div>
 
           <div>
-            <label for="bsky-handle" class="block text-sm text-[var(--color-text-muted)] mb-1">Handle</label>
+            <label for="bsky-handle" class="block text-sm text-[var(--color-text-muted)] mb-1">{i18n.t.settings.handle}</label>
             <input
               id="bsky-handle"
               type="text"
@@ -317,13 +317,13 @@
               >
                 {#if bskyLoading}<Loader2 size={14} class="animate-spin" />{/if}
                 <Shield size={14} />
-                Connect with OAuth
+                {i18n.t.settings.connectOAuth}
               </button>
-              <button onclick={() => showBskyForm = false} class="px-4 py-2 text-sm text-[var(--color-text-muted)]">Cancel</button>
+              <button onclick={() => showBskyForm = false} class="px-4 py-2 text-sm text-[var(--color-text-muted)]">{i18n.t.settings.cancel}</button>
             </div>
           {:else}
             <div>
-              <label for="bsky-password" class="block text-sm text-[var(--color-text-muted)] mb-1">App Password</label>
+              <label for="bsky-password" class="block text-sm text-[var(--color-text-muted)] mb-1">{i18n.t.settings.appPassword}</label>
               <input
                 id="bsky-password"
                 type="password"
@@ -370,7 +370,7 @@
 
     {#if bskyAccounts.length === 0}
       <p class="text-sm text-[var(--color-text-muted)] p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
-        No Bluesky accounts connected.
+        {i18n.t.settings.noBluesky}.
       </p>
     {:else}
       <div class="space-y-2">
@@ -385,7 +385,7 @@
               <div>
                 <span class="text-sm font-medium">{account.handle}</span>
                 {#if account.is_primary}
-                  <span class="ml-2 text-xs text-yellow-400">★ primary</span>
+                  <span class="ml-2 text-xs text-yellow-400">★ {i18n.t.settings.primary}</span>
                 {/if}
               </div>
             </div>
@@ -425,7 +425,7 @@
       <div class="mb-4 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
         <div class="space-y-3">
           <div>
-            <label for="masto-instance" class="block text-sm text-[var(--color-text-muted)] mb-1">Instance</label>
+            <label for="masto-instance" class="block text-sm text-[var(--color-text-muted)] mb-1">{i18n.t.settings.instance}</label>
             <input
               id="masto-instance"
               type="text"
@@ -442,9 +442,9 @@
             >
               {#if mastoLoading}<Loader2 size={14} class="animate-spin" />{/if}
               {#if mastoOAuthState}
-                Waiting for authorization...
+                {i18n.t.settings.waitingAuth}
               {:else}
-                Authorize with OAuth
+                {i18n.t.settings.authorizeOAuth}
               {/if}
             </button>
             <button
@@ -465,7 +465,7 @@
 
     {#if mastoAccounts.length === 0}
       <p class="text-sm text-[var(--color-text-muted)] p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
-        No Mastodon accounts connected.
+        {i18n.t.settings.noMastodon}.
       </p>
     {:else}
       <div class="space-y-2">
@@ -485,7 +485,7 @@
                   <span class="text-xs text-[var(--color-text-muted)] ml-1">{account.handle}</span>
                 {/if}
                 {#if account.is_primary}
-                  <span class="ml-2 text-xs text-yellow-400">★ primary</span>
+                  <span class="ml-2 text-xs text-yellow-400">★ {i18n.t.settings.primary}</span>
                 {/if}
               </div>
             </div>

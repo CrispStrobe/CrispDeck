@@ -163,7 +163,7 @@
   }
 </script>
 
-<svelte:head><title>CrispDeck — Archive</title></svelte:head>
+<svelte:head><title>CrispDeck — Archive</title><meta name="description" content="Local archive of your posts and likes" /></svelte:head>
 
 <div class="p-6 max-w-4xl mx-auto">
   <div class="flex items-center justify-between mb-6">

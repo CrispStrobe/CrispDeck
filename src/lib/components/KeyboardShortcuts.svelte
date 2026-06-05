@@ -13,6 +13,10 @@
       { key: 'g d', desc: 'Go to Deck' },
       { key: 'g m', desc: 'Go to Messages' },
       { key: 'g a', desc: 'Go to Archive' },
+      { key: 'g t', desc: 'Go to Trending' },
+      { key: 'g b', desc: 'Go to Bookmarks' },
+      { key: 'g p', desc: 'Go to Settings' },
+      { key: 'g i', desc: 'Go to Identities' },
     ]},
     { section: 'Compose', items: [
       { key: 'Ctrl+Enter', desc: 'Submit post' },

@@ -121,7 +121,7 @@
   }
 </script>
 
-<svelte:head><title>CrispDeck — Trending</title></svelte:head>
+<svelte:head><title>CrispDeck — Trending</title><meta name="description" content="Trending topics on Bluesky and Mastodon" /></svelte:head>
 
 <div class="p-6 max-w-4xl mx-auto">
   <div class="flex items-center gap-2 mb-6">
