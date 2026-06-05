@@ -79,7 +79,7 @@ export class BlueskyClient {
     return new BlueskyClient(handle);
   }
 
-  async login(): Promise<void> {
+  async login(authFactorToken?: string): Promise<void> {
     if (this.loggedIn || !this.authAgent || !this.appPassword) return;
 
     // Resolve PDS if not already known
@@ -89,7 +89,11 @@ export class BlueskyClient {
       this.authAgent = new BskyAgent({ service: this.pdsUrl });
     }
 
-    await this.authAgent.login({ identifier: this.handle, password: this.appPassword });
+    await this.authAgent.login({
+      identifier: this.handle,
+      password: this.appPassword,
+      ...(authFactorToken ? { authFactorToken } : {}),
+    });
     this.loggedIn = true;
   }
 

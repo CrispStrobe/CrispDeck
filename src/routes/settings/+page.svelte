@@ -94,6 +94,8 @@
   let bskyAuthMode: 'app-password' | 'oauth' = $state('oauth');
   let bskyHandle = $state('');
   let bskyAppPassword = $state('');
+  let bsky2faToken = $state('');
+  let bskyNeeds2fa = $state(false);
   let bskyLoading = $state(false);
 
   // Add Mastodon form
@@ -141,10 +143,22 @@
       const credentials = JSON.stringify({ app_password: bskyAppPassword });
       const handle = bskyHandle.trim().replace(/^@/, '');
 
-      // Verify credentials + fetch profile
+      // Verify credentials + fetch profile (with optional 2FA)
       const { BlueskyClient } = await import('$lib/api/bluesky');
       const testClient = new BlueskyClient(handle, bskyAppPassword);
-      await testClient.login();
+      try {
+        await testClient.login(bsky2faToken || undefined);
+      } catch (loginErr: any) {
+        // Check if 2FA is required
+        const msg = String(loginErr);
+        if (msg.includes('AuthFactorTokenRequired') || msg.includes('auth_factor')) {
+          bskyNeeds2fa = true;
+          bskyLoading = false;
+          error = 'Two-factor authentication required. Check your email for the code and enter it below.';
+          return;
+        }
+        throw loginErr;
+      }
       const profile = await testClient.getProfile(handle);
 
       await dbAddAccount({
@@ -309,6 +323,18 @@
                 App passwords don't support DMs. Generate at Settings → App Passwords on bsky.app
               </p>
             </div>
+            {#if bskyNeeds2fa}
+              <div>
+                <label for="bsky-2fa" class="block text-sm text-[var(--color-text-muted)] mb-1">2FA Code (check your email)</label>
+                <input
+                  id="bsky-2fa"
+                  type="text"
+                  bind:value={bsky2faToken}
+                  placeholder="XXXXX-XXXXX"
+                  class="w-full px-3 py-2 bg-[var(--color-bg)] border border-yellow-600 rounded-md text-sm text-[var(--color-text)] focus:outline-none focus:border-yellow-400"
+                />
+              </div>
+            {/if}
             <div class="flex gap-2">
               <button
                 onclick={addBlueskyAccount}
@@ -485,6 +511,21 @@
           <option value="fr">Français</option>
           <option value="es">Español</option>
           <option value="ja">日本語</option>
+        </select>
+      </div>
+
+      <!-- Homepage mode -->
+      <div class="flex items-center justify-between">
+        <label for="home-mode" class="text-sm text-[var(--color-text-muted)]">Homepage</label>
+        <select
+          id="home-mode"
+          value={localStorage.getItem('crispdeck-home-mode') ?? 'dashboard'}
+          onchange={(e) => localStorage.setItem('crispdeck-home-mode', (e.target as HTMLSelectElement).value)}
+          class="px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none"
+        >
+          <option value="dashboard">Dashboard (overview)</option>
+          <option value="feed">Go straight to Feed</option>
+          <option value="deck">Go straight to Deck</option>
         </select>
       </div>
 

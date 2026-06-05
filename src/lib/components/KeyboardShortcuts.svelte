@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X } from '@lucide/svelte';
+  import { X, Mic } from '@lucide/svelte';
 
   let { show = $bindable(false) }: { show: boolean } = $props();
 
@@ -12,6 +12,7 @@
       { key: 'g s', desc: 'Go to Search' },
       { key: 'g d', desc: 'Go to Deck' },
       { key: 'g m', desc: 'Go to Messages' },
+      { key: 'g a', desc: 'Go to Archive' },
     ]},
     { section: 'Compose', items: [
       { key: 'Ctrl+Enter', desc: 'Submit post' },
@@ -20,6 +21,20 @@
     { section: 'General', items: [
       { key: '?', desc: 'Show this help' },
     ]},
+  ];
+
+  const voiceCommands = [
+    { phrase: '"go to feed"', desc: 'Navigate to feed' },
+    { phrase: '"new post"', desc: 'Open compose' },
+    { phrase: '"open settings"', desc: 'Open settings' },
+    { phrase: '"go to notifications"', desc: 'Show notifications' },
+    { phrase: '"open messages"', desc: 'Open messages' },
+    { phrase: '"show bookmarks"', desc: 'Open bookmarks' },
+    { phrase: '"go to trending"', desc: 'Show trending' },
+    { phrase: '"scroll up"', desc: 'Scroll to top' },
+    { phrase: '"scroll down"', desc: 'Scroll down' },
+    { phrase: '"go back"', desc: 'Go back' },
+    { phrase: '"go home"', desc: 'Dashboard' },
   ];
 </script>
 
@@ -45,6 +60,17 @@
             </div>
           </div>
         {/each}
+      {/each}
+
+      <h3 class="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mt-6 mb-2 flex items-center gap-1.5">
+        <Mic size={12} /> Voice Commands (while dictating)
+      </h3>
+      <p class="text-[10px] text-[var(--color-text-muted)] mb-2">Speak these while the mic is active in Compose. Also works in German.</p>
+      {#each voiceCommands as cmd}
+        <div class="flex items-center justify-between py-1">
+          <span class="text-sm text-[var(--color-text-muted)]">{cmd.desc}</span>
+          <span class="text-[10px] text-[var(--color-primary)] font-mono">{cmd.phrase}</span>
+        </div>
       {/each}
     </div>
   </div>

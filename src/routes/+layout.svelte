@@ -2,8 +2,9 @@
   import '../app.css';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import { Home, Rss, Columns3, PenSquare, FileText, Bell, MessageSquare, Bookmark, Users, Search, List, Package, Shield, Tag, Server, TrendingUp, Archive, BarChart3, Settings, Info, ChevronsLeft, ChevronsRight, Menu, X } from '@lucide/svelte';
+  import { Home, Rss, Columns3, PenSquare, FileText, Bell, MessageSquare, Bookmark, Users, Search, List, Package, Shield, Tag, Server, TrendingUp, Archive, BarChart3, Settings, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon } from '@lucide/svelte';
   import KeyboardShortcuts from '$lib/components/KeyboardShortcuts.svelte';
+  import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
   import { i18n } from '$lib/i18n.svelte';
 
   let { children } = $props();
@@ -13,11 +14,22 @@
 
   let collapsed = $state(false);
   let mobileMenuOpen = $state(false);
+  let theme = $state<'dark' | 'light'>('dark');
+
+  function toggleTheme() {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('crispdeck-theme', theme);
+  }
   let showShortcuts = $state(false);
   let pendingG = $state(false);
   let bookmarkCount = $state(0);
 
   onMount(async () => {
+    // Restore theme
+    const saved = localStorage.getItem('crispdeck-theme') as 'dark' | 'light' | null;
+    if (saved) { theme = saved; document.documentElement.setAttribute('data-theme', saved); }
+
     bookmarkCount = await getBookmarkCount();
     // Refresh count periodically
     const interval = setInterval(async () => {
@@ -95,9 +107,14 @@
           <p class="text-[10px] text-[var(--color-text-muted)]">Mastodon + Bluesky</p>
         </div>
       {/if}
-      <button onclick={() => collapsed = !collapsed} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors" title={collapsed ? 'Expand' : 'Collapse'}>
-        {#if collapsed}<ChevronsRight size={16} />{:else}<ChevronsLeft size={16} />{/if}
-      </button>
+      <div class="flex items-center gap-1">
+        <button onclick={toggleTheme} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors" title={theme === 'dark' ? 'Light mode' : 'Dark mode'}>
+          {#if theme === 'dark'}<Sun size={14} />{:else}<Moon size={14} />{/if}
+        </button>
+        <button onclick={() => collapsed = !collapsed} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors" title={collapsed ? 'Expand' : 'Collapse'}>
+          {#if collapsed}<ChevronsRight size={16} />{:else}<ChevronsLeft size={16} />{/if}
+        </button>
+      </div>
     </div>
     <ul class="flex-1 py-1 overflow-y-auto">
       {#each navItems as item}
@@ -162,7 +179,9 @@
 
   <!-- Main content -->
   <main class="flex-1 overflow-y-auto md:pt-0 pt-12 pb-16 md:pb-0">
-    {@render children()}
+    <ErrorBoundary>
+      {@render children()}
+    </ErrorBoundary>
   </main>
 
   <!-- Mobile bottom tab bar -->
