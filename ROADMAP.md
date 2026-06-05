@@ -86,6 +86,8 @@
 - [x] Push notifications scaffold (Tauri plugin + Web Notifications API)
 - [x] Theme, 2FA, push notification tests
 
-## Remaining
+- [x] Push notifications wired into feed refresh (fires when tab hidden + permission granted)
 
-- [ ] Wire push notifications into feed refresh polling
+## Done
+
+All planned features shipped. 342 frontend + 15 Rust = 357 tests.
