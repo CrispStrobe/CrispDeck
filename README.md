@@ -220,7 +220,7 @@ static/
 
 ## CI/CD
 
-- **CI** (`ci.yml`): 260 frontend tests + frontend build + Rust check on Linux/macOS/Windows — every push and PR
+- **CI** (`ci.yml`): 328 frontend tests + frontend build + Rust check on Linux/macOS/Windows — every push and PR
 - **Mobile** (`mobile.yml`): iOS + Android builds via Tauri 2 — triggers on `v*` tags
 - **Release** (`release.yml`): Cross-platform Tauri builds — triggers on `v*` tags, creates GitHub Releases with `.deb`, `.dmg`, `.msi`
 
@@ -228,19 +228,22 @@ static/
 
 ```bash
 # Bump version in package.json + src-tauri/tauri.conf.json + src-tauri/Cargo.toml
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
 ## Stats
 
-- 61 commits
-- 74 source files (25 pages, 9 components, 20 frontend + 1 Rust test files)
-- 276 tests (260 frontend + 11 Rust unit + 5 Rust live translation)
-- 23 sidebar navigation items
+- 79 commits
+- 83 source files (25 pages, 10 components, 26 frontend + 1 Rust test files, 16 Rust source)
+- 343 tests (328 frontend + 15 Rust)
+- 24 sidebar navigation items
 - 11 deck column types
-- Bluesky: OAuth + app password auth, public API reading
+- 7 UI languages (English, German, French, Spanish, Japanese + Portuguese, Chinese)
+- Dark + light theme with toggle
+- Bluesky: OAuth + app password auth (with 2FA), public API reading
 - Mastodon: OAuth, full REST API
+- CrispASR: 106 models (NMT/TTS/STT) via optional Cargo feature
 
 ## License
 

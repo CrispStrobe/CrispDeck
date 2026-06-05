@@ -76,6 +76,16 @@
 - [x] Wired all pages to i18n (analytics, drafts, archive, profile, deck, identities, labelers, instance, moderation, compose)
 - [x] TTS/STT engine selector: auto / CrispASR / browser (user choice per feature)
 
+- [x] Dark/light theme toggle with persistence
+- [x] Voice commands in keyboard shortcuts overlay (14 commands)
+- [x] Homepage mode selector: dashboard / feed / deck
+- [x] Bluesky 2FA (auth factor token on app-password login)
+- [x] Error boundary (per-page crash recovery with retry + stack trace)
+- [x] 9 live Bluesky API integration tests
+- [x] Portuguese + Chinese i18n (7 languages total)
+- [x] Push notifications scaffold (Tauri plugin + Web Notifications API)
+- [x] Theme, 2FA, push notification tests
+
 ## Remaining
 
-- [ ] Push notifications (Tauri mobile)
+- [ ] Wire push notifications into feed refresh polling
