@@ -7,6 +7,7 @@
   import AdvancedFilters from '$lib/components/AdvancedFilters.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
+  import { notifyNewPosts, getPermission } from '$lib/push-notifications';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { normalizePost, filterPosts, sortPosts, detectCrossposts } from '$lib/api/unified';
   import type { UnifiedPost, FeedItem, Filters, Account, CrosspostGroup as CrosspostGroupType } from '$lib/types';
@@ -89,6 +90,14 @@
       } catch {}
     }
     newPostsAvailable = count; // Replace, don't accumulate
+
+    // Send push notification if page is not visible and we have new posts
+    if (count > 0 && document.hidden) {
+      const perm = await getPermission();
+      if (perm === 'granted') {
+        notifyNewPosts(count);
+      }
+    }
   }
 
   async function loadNewPosts() {
