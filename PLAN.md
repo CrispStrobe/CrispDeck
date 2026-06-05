@@ -1,240 +1,210 @@
 # CrispDeck Development Plan
 
-## Current State (2026-06-03)
+## Current State (2026-06-05)
 
-32 commits, 118 tests, 16 pages, live at https://crispdeck.vercel.app
+v0.3.0 → v0.4.0 in progress — 491 tests, 24 pages, live at https://crispdeck.vercel.app
 
-## Immediate Fixes Needed
+Items 1–25 from the original plan are **done**. Items 26–29, 31, 33–40 are **done**. Item 32 (DeepL) was reverted — prefer own services. Remaining: 30 (visual feed builder) and blue ocean items 41–43.
 
-### 1. Analytics overhaul
-- **Problem**: Only loads first page of posts (50 bsky + 40 masto), so "top post" is often an old repost
-- **Fix**:
-  - Load ALL posts (paginate fully) before computing analytics, with progress bar
-  - Show top 5 posts by likes, not just 1
-  - Show top 5 by reposts, top 5 by engagement
-  - Make stat cards clickable → expand to show the posts behind the number
-  - Add platform breakdown per stat (Bluesky likes vs Mastodon likes)
-  - Add date range filter (last 7d / 30d / 90d / all time)
+---
 
-### 2. Local post index / archive
-- **Problem**: Search only hits live APIs. No way to search your own historical posts, likes, reposts
-- **Solution**: Build a local IndexedDB archive that stores:
-  - All your own posts (fetched via Load All)
-  - Posts you've liked
-  - Posts you've reposted
-  - Posts you've replied to
-  - Indexed by text, author, date, platform
-- **Features**:
-  - "Build Archive" button that paginates through your full history
-  - Progress indicator (fetched X of ~Y posts)
-  - Search within archive (full text, by author, date range)
-  - Filter archive (only liked, only reposted, only replies)
-  - Export from archive (JSON/CSV/MD) with filters applied
-  - Archive stats (total posts, date range, platform breakdown)
-  - Auto-refresh: append new posts on each visit
+## Competitive Position
 
-### 3. Deck improvements
-- Add filters per deck column (search, hide replies/reposts, min likes)
-- Add Mastodon-specific columns (local timeline, federated timeline)
-- Column width adjustment
-- Column reorder via drag
+CrispDeck is the only client combining multi-column deck view + multi-network (Bluesky + Mastodon) + web-first cross-platform + analytics + free/open-source. Closest competitors:
 
-### 4. Feed improvements
-- Show post source (which account loaded it) in multi-account mode
-- "New posts available" indicator at top when new content arrives
-- Pull-to-refresh on mobile
+| | CrispDeck | Indigo (May 2026) | Openvibe | deck.blue | Ivory |
+|---|---|---|---|---|---|
+| Bluesky + Mastodon | Yes | Yes | Yes + Nostr + Threads | Bluesky only | Mastodon only |
+| Column/deck view | Yes | No | No | Yes | Mac only |
+| Web + desktop + mobile | Yes | Apple only | Mobile only | Web only | Apple only |
+| Analytics | Yes | No | No | No | Basic |
+| Free to post | Yes | No ($5/mo) | 2 accts free | Yes | No ($2/mo) |
+| Open source | Yes (AGPL) | No | No | No | No |
 
-### 5. Messages improvements
-- Fix Bluesky DMs (withProxy approach may need further debugging)
-- Full conversation thread loading for Mastodon (currently shows only last message)
-- Send new conversation (not just reply to existing)
-- Unread badge in sidebar
+---
 
-### 6. Profile improvements
-- Show who a user follows / is followed by (follower lists)
-- "Posts and replies" vs "Posts" vs "Media" should paginate
-- Add block/mute buttons on profile
-- Show if user is following you (follows you badge)
+## Phase 4: Competitive Feature Gap (v0.4.0)
 
-## Medium-term Features
+### Priority 1 — High impact, moderate effort
 
-### 7. Post interactions expansion
-- Bookmark posts locally (cross-platform bookmarks in IndexedDB)
-- Thread view: click a post → see full thread with context
-- Share/copy link to post
-- Report post/account
+#### 26. Notification grouping/batching
+- **Inspiration**: Elk, Indigo
+- Collapse duplicate notifications: "12 people liked your post" → single entry with avatars
+- Group by post: all likes/reposts/replies on the same post shown together
+- Expandable to see individual actors
+- Separate from deck notification column (which remains chronological)
 
-### 8. Multi-column deck enhancements
-- Saved column layouts (name and switch between layouts)
-- Column for specific user's posts
-- Column for a hashtag
-- Column for a Bluesky custom feed
-- Column for a Mastodon list timeline
-- Auto-refresh columns on interval
+#### 27. Cross-network de-duplication
+- **Inspiration**: Indigo
+- Extend existing Jaro-Winkler identity matching to detect same-content crossposts
+- When the same person (matched identity) posts near-identical text on both networks within a time window, collapse to one entry
+- Show "also posted on [Bluesky/Mastodon]" indicator
+- Click to expand and see both versions
+- Configurable: off / soft (indicator only) / merge (collapse)
 
-### 9. Compose enhancements
-- Emoji picker
-- GIF search and insert
-- Schedule posts with preview of what they'll look like
-- Post templates (save reusable templates)
-- Character count warning thresholds (80%, 90%, 100%)
+#### 28. Catch-up mode
+- **Inspiration**: Phanpy
+- New view: "Here's what happened in the last N hours" (1h / 3h / 6h / 12h)
+- Finite, sortable list — posts ranked by engagement, not chronological
+- Clear "You're caught up!" endpoint
+- Reduces infinite-scroll anxiety
+- Accessible from feed page as a toggle or separate route
 
-### 10. Accessibility & i18n
-- Screen reader improvements (ARIA labels throughout)
-- Keyboard navigation for all interactive elements
-- Language selector
-- RTL support
+#### 29. AI compose assistance
+- **Inspiration**: Ice Cubes
+- AI-powered features in compose toolbar:
+  - **Alt-text generation**: analyze attached image, suggest descriptive alt text
+  - **Text correction**: fix typos/grammar
+  - **Shorten**: condense text to fit character limits
+  - **Hashtag suggestions**: suggest relevant hashtags
+- Desktop: use CrispASR vision/language models
+- Web: BYOK OpenAI-compatible endpoint (reuse existing translation BYOK pattern)
+- All AI features optional, never auto-applied
 
-## Inspired by GraySky Comparison
+### Priority 2 — Medium impact, nice differentiators
 
-Features GraySky does well that CrispDeck should adopt:
+#### 30. Visual feed builder for Bluesky
+- **Inspiration**: Skyfeed
+- GUI for creating custom Bluesky algorithmic feeds without coding
+- Filter by: keywords, language, has-media, min-likes, author list, exclude terms
+- Preview feed results before publishing
+- Publish feed to Bluesky network
+- Manage/edit/delete own published feeds
 
-### 11. GIF picker (Tenor/Giphy)
-- Search, trending, and featured GIFs in compose
-- Convert GIF preview to JPEG thumbnail for Bluesky external embed format
-- Already on ROADMAP as low-priority — elevate priority
+#### 31. RSS feed integration
+- **Inspiration**: Openvibe
+- Subscribe to RSS/Atom feeds alongside social timelines
+- Render RSS items as posts in unified feed and deck columns
+- New deck column type: RSS
+- OPML import/export
+- Use cases: follow blogs, newsletters, Substack, news sites
 
-### 12. Inline post translation
-- "Translate" button on any post in feed/thread view
-- Use a free translation API (Google Translate, LibreTranslate, or DeepL free tier)
-- Show translated text inline below original, with source language and provider attribution
-- Cache translations locally (IndexedDB) to avoid repeated API calls
+#### 32. DeepL translation option
+- **Inspiration**: Graysky
+- Add DeepL as a translation provider alongside CrispASR / BYOK / MyMemory
+- BYOK DeepL API key in settings
+- Higher translation quality for European languages
+- Free tier: 500K chars/month
 
-### 13. Internationalization (i18n)
-- Reuse the pattern from CrispSorter (`src/lib/i18n.svelte.ts`):
-  - `TranslationService` class with Svelte 5 runes (`$state` for lang, `$derived` for active dict)
-  - Static translation dictionaries per language, singleton export (`i18n.t.section.key`)
-  - No external dependency needed
-- Extract all UI strings into message catalogs
-- Start with English + German (already done in CrispSorter), then add French, Spanish, Japanese, Portuguese
-- RTL support for Arabic/Hebrew
-- Language selector in settings
+#### 33. Algorithmic "For You" feed
+- **Inspiration**: Mammoth
+- Personalized timeline using local engagement data from analytics/archive
+- Rank posts by: authors you interact with most, topics you engage with, time-of-day patterns
+- All computation local — no server-side algorithm
+- Privacy-preserving: your engagement data never leaves your device
 
-### 14. Share post as image
-- Render any post as a styled image (canvas or html2canvas)
-- Include post text, author, avatar, timestamp, CrispDeck branding
-- Copy to clipboard or download as PNG/JPEG
-- Option to share directly (Web Share API / Tauri share)
+#### 34. Real-time firehose counters
+- **Inspiration**: Skyfeed
+- Subscribe to Bluesky Jetstream for live-updating like/repost/reply counts
+- Counters animate when updated
+- Optional: real-time new post insertion in deck columns
+- Toggle in settings (can be noisy)
 
-### 15. Custom PDS resolution
-- On Bluesky login, resolve user's actual PDS URL from their DID document
-  - `did:plc` → query `plc.directory`
-  - `did:web` → fetch `.well-known/did.json`
-- Route API calls to user's actual PDS, not hardcoded `bsky.social`
-- Enables federated / third-party PDS instances to work out of the box
+### Priority 3 — Polish and UX
 
-### 16. Alt text enforcement modes
-- Settings toggle with three modes:
-  - **Off**: alt text optional (current behavior)
-  - **Warn**: show warning dialog if posting without alt text, allow override
-  - **Require**: block posting entirely if any attached image lacks alt text
-- Nudge text in compose: "Add alt text for accessibility"
+#### 35. OLED dark theme
+- **Inspiration**: Moshidon
+- True black (#000) background variant of dark theme
+- Reduces battery usage on OLED/AMOLED screens
+- Three theme options: light / dark / OLED black
 
-### 17. CrispASR integration (translation + TTS + STT)
-- Bundle CrispASR as a native Rust dependency in Tauri (same approach as CrisperWeaver)
-- **Translation**: M2M-100 GGUF models (271MB Q4_K – 934MB F16), 100 languages, on-demand download
-- **TTS (read posts aloud)**: Kokoro/other TTS models via CrispASR, "Read" button on posts
-- **STT (dictate posts)**: Whisper models via CrispASR, microphone button in compose
-- Model download manager in Settings (list available, download, delete)
-- Web fallback: BYOK OpenAI-compatible endpoint or MyMemory free API
+#### 36. Tag groups
+- **Inspiration**: Ice Cubes
+- Save sets of hashtags as named groups
+- Each group becomes a custom mini-timeline combining posts from all tags
+- Usable as deck column source
+- Quick-insert tag group into compose
 
-### 18. Starter Packs search improvement
-- Current: only searches by actor handle, limited results
-- Needed: use Bluesky's search API to find packs by topic/keyword directly
-- Show pack member preview, join count, popularity ranking
+#### 37. Post scheduling with calendar view
+- **Enhancement of existing drafts**
+- Visual calendar showing scheduled posts
+- Drag to reschedule
+- Preview how post will look on each platform
+- Timezone-aware
 
-### 19. Bluesky lists — browse, search, use
-- Browse public lists by category
-- Search lists by name/topic
-- Subscribe to lists as feed sources
-- Create/manage own Bluesky lists (not just Mastodon)
-- Use lists in Deck columns
+#### 38. Hide engagement counts
+- **Inspiration**: Skeets
+- Toggle in settings to hide like/repost/reply counts on all posts
+- Mental health feature — focus on content, not numbers
+- Applies to feed, deck, thread view, and profile
 
-### 20. Cargo-license integration for About page
-- Install cargo-license in CI or bundle pre-generated Rust licenses
-- Currently only frontend (NPM) licenses are generated
+#### 39. Thread un-rolling
+- **Blue ocean**: no competitor does this
+- Render a multi-post thread as a single readable article
+- Clean typography, no repeated avatars/timestamps
+- "Read as article" button on any thread
+- Share un-rolled thread as image or text
 
-### 21. Dictation mic button in compose
-- Mic button in compose toolbar → STT via CrispASR whisper/parakeet
-- Web fallback: browser Web Speech API
-- Insert transcribed text at cursor position
+---
 
-### 22. Read-aloud button on posts
-- Speaker icon on posts → TTS via CrispASR kokoro/vibevoice
-- Web fallback: browser SpeechSynthesis API
-- Play/stop toggle, audio output to default device
+## Blue Ocean Opportunities (v0.5.0+)
 
-### 23. Bluesky moderation lists
-- Subscribe to moderation lists (mute all / block all members)
-- Browse/search public moderation lists
-- Manage own moderation lists (create, add/remove members)
-- Show list purpose (curate vs moderation) in Lists page
+These features have **no equivalent in any competitor**:
 
-### 24. Feed scroll position preservation
-- When new posts load at bottom (infinite scroll), maintain current scroll position
-- Don't jump user back to top when "new posts" indicator is dismissed
-- "New posts available" banner stays anchored at top; clicking scrolls up
+#### 40. Cross-platform analytics comparison
+- Side-by-side Bluesky vs Mastodon audience insights
+- "Your Bluesky audience engages more on weekdays, Mastodon on weekends"
+- Best posting times per platform
+- Audience overlap visualization (how many followers are on both?)
 
-### 25. Feed refresh performance
-- "New posts" check currently reloads full feed — use cursor-based incremental fetch
-- Only fetch posts newer than the latest currently displayed post
-- Reduce polling interval or use streaming where available
+#### 41. Optimal crosspost timing
+- Analyze follower activity patterns from archive data
+- Suggest best time to post on each platform
+- Option to auto-delay crosspost: post to platform A now, schedule platform B for its optimal time
+
+#### 42. Unified follower graph visualization
+- Interactive graph showing follower overlap across platforms
+- Identify: who follows you on both, who's only on Bluesky, who's only on Mastodon
+- Uses existing identity matching infrastructure
+- Exportable data
+
+#### 43. Nostr and Threads support
+- **Inspiration**: Openvibe
+- Extend multi-network architecture to Nostr (NIP-01 relay protocol) and Threads (ActivityPub)
+- Unified compose, feed, notifications across 4 networks
+- Would make CrispDeck the most comprehensive open-social client with a deck view
+
+---
 
 ## Architecture Notes
 
-### Local Archive (item #2) design
+### Notification grouping (item #26) design
 
 ```
-IndexedDB store: 'archive'
-Schema:
-  id: auto
-  uri: string (unique)
-  platform: 'bluesky' | 'mastodon'
-  type: 'post' | 'like' | 'repost' | 'reply'
-  text: string
-  author_handle: string
-  author_name: string
-  created_at: string (ISO)
-  like_count: number
-  repost_count: number
-  reply_count: number
-  has_media: boolean
-  raw: object
-  indexed_at: string (ISO)
+Group notifications by target post URI + type:
+  Map<postUri, {
+    type: 'like' | 'repost' | 'reply' | 'follow' | 'mention',
+    actors: Actor[],
+    post: Post,
+    latestAt: Date,
+    count: number
+  }>
 
-Indexes:
-  - platform
-  - type
-  - author_handle
-  - created_at
-  - text (for search — may need a separate FTS approach)
-
-For full-text search in IndexedDB, use:
-  - Simple: filter + includes() on text field
-  - Better: maintain a separate word→uri inverted index
-  - Best: use a WASM-based search lib like minisearch
+Sort groups by latestAt descending.
+Render: "[avatar1, avatar2, +10] liked your post" with expandable actor list.
+Follows are grouped separately: "15 new followers" with list.
 ```
 
-### Analytics pagination (item #1) design
+### Cross-network dedup (item #27) design
 
 ```
-Current: loads 1 page per account
-New: async generator that yields pages, updates stats progressively
+For each post in unified feed:
+  1. Check if author has a matched cross-platform identity
+  2. If yes, look for posts from their other identity within ±5 minutes
+  3. Compare text similarity (Jaro-Winkler > 0.85 = likely same post)
+  4. If match found, merge into single feed entry with platform indicators
+  5. Store dedup decisions in session cache (Map<uri, mergedUri>)
+```
 
-async function* fetchAllPosts(accounts, clients) {
-  for (const acct of accounts) {
-    let cursor;
-    do {
-      const { feed, cursor: next } = await fetchPage(acct, cursor);
-      yield { posts: feed, acct, progress: ... };
-      cursor = next;
-    } while (cursor);
-  }
-}
+### Catch-up mode (item #28) design
 
-// In component: iterate and update stats reactively
-for await (const batch of fetchAllPosts(...)) {
-  posts = [...posts, ...batch.posts];
-  // $derived stats update automatically
-}
+```
+Route: /catchup?hours=6
+
+1. Fetch posts from last N hours (use existing feed pagination with date cutoff)
+2. Score each post: likes × 2 + reposts × 3 + replies × 1
+3. Sort by score descending
+4. Show in scrollable list with "You're all caught up!" footer
+5. Mark as read when user reaches bottom
+6. Badge in sidebar: "Catch up (42 posts)"
 ```

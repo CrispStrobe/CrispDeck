@@ -2,7 +2,7 @@
   import '../app.css';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import { Home, Rss, Columns3, PenSquare, FileText, Bell, MessageSquare, Bookmark, Users, Search, List, Package, Shield, Tag, Server, TrendingUp, Archive, BarChart3, Settings, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon } from '@lucide/svelte';
+  import { Home, Rss, Columns3, PenSquare, FileText, Bell, MessageSquare, Bookmark, Users, Search, List, Package, Shield, Tag, Server, TrendingUp, Archive, BarChart3, Settings, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon, Clock, Smartphone } from '@lucide/svelte';
   import KeyboardShortcuts from '$lib/components/KeyboardShortcuts.svelte';
   import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
   import { i18n } from '$lib/i18n.svelte';
@@ -14,10 +14,10 @@
 
   let collapsed = $state(false);
   let mobileMenuOpen = $state(false);
-  let theme = $state<'dark' | 'light'>('dark');
+  let theme = $state<'dark' | 'oled' | 'light'>('dark');
 
   function toggleTheme() {
-    theme = theme === 'dark' ? 'light' : 'dark';
+    theme = theme === 'dark' ? 'oled' : theme === 'oled' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('crispdeck-theme', theme);
   }
@@ -29,7 +29,7 @@
 
   onMount(async () => {
     // Restore theme
-    const saved = localStorage.getItem('crispdeck-theme') as 'dark' | 'light' | null;
+    const saved = localStorage.getItem('crispdeck-theme') as 'dark' | 'oled' | 'light' | null;
     if (saved) { theme = saved; document.documentElement.setAttribute('data-theme', saved); }
 
     // Offline detection
@@ -90,7 +90,7 @@
     if (e.key === 'g') { pendingG = true; setTimeout(() => pendingG = false, 1000); return; }
     if (pendingG) {
       pendingG = false;
-      const routes: Record<string, string> = { h: '/', f: '/feed', c: '/compose', n: '/notifications', s: '/search', d: '/deck', m: '/messages', a: '/archive', t: '/trending', b: '/bookmarks', p: '/settings', i: '/identities' };
+      const routes: Record<string, string> = { h: '/', f: '/feed', c: '/compose', n: '/notifications', s: '/search', d: '/deck', m: '/messages', a: '/archive', t: '/trending', b: '/bookmarks', p: '/settings', i: '/identities', u: '/catchup' };
       if (routes[e.key]) { goto(routes[e.key]); return; }
     }
   }
@@ -98,6 +98,7 @@
   const navItems = $derived([
     { href: '/', icon: Home, label: i18n.t.nav.dashboard },
     { href: '/feed', icon: Rss, label: i18n.t.nav.feed },
+    { href: '/catchup', icon: Clock, label: i18n.t.catchup.title },
     { href: '/deck', icon: Columns3, label: i18n.t.nav.deck },
     { href: '/compose', icon: PenSquare, label: i18n.t.nav.compose },
     { href: '/drafts', icon: FileText, label: i18n.t.nav.drafts },
@@ -150,8 +151,8 @@
         </div>
       {/if}
       <div class="flex items-center gap-1">
-        <button onclick={toggleTheme} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors" title={theme === 'dark' ? 'Light mode' : 'Dark mode'}>
-          {#if theme === 'dark'}<Sun size={14} />{:else}<Moon size={14} />{/if}
+        <button onclick={toggleTheme} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors" title={theme === 'dark' ? 'OLED mode' : theme === 'oled' ? 'Light mode' : 'Dark mode'}>
+          {#if theme === 'dark'}<Smartphone size={14} />{:else if theme === 'oled'}<Sun size={14} />{:else}<Moon size={14} />{/if}
         </button>
         <button onclick={() => collapsed = !collapsed} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors" title={collapsed ? 'Expand' : 'Collapse'}>
           {#if collapsed}<ChevronsRight size={16} />{:else}<ChevronsLeft size={16} />{/if}

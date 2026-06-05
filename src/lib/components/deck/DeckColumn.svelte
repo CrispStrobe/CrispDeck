@@ -1,16 +1,19 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { X, RefreshCw, Loader2, GripVertical } from '@lucide/svelte';
+  import { X, RefreshCw, Loader2, GripVertical, Heart, Repeat, UserPlus, MessageCircle, AtSign, Bell, Quote, ChevronDown, ChevronUp } from '@lucide/svelte';
   import Post from '$lib/components/Post.svelte';
   import type { UnifiedPost } from '$lib/types';
+  import type { NotificationGroup } from '$lib/notification-grouping';
+  import { i18n } from '$lib/i18n.svelte';
 
-  export type ColumnType = 'timeline' | 'mentions' | 'notifications' | 'my-posts' | 'search' | 'list' | 'hashtag' | 'user' | 'feed' | 'local' | 'federated';
+  export type ColumnType = 'timeline' | 'mentions' | 'notifications' | 'my-posts' | 'search' | 'list' | 'hashtag' | 'user' | 'feed' | 'local' | 'federated' | 'tag-group' | 'rss';
 
   let {
     id,
     title,
     type,
     posts = [],
+    notificationGroups = [],
     loading = false,
     width = 380,
     onrefresh,
@@ -26,6 +29,7 @@
     title: string;
     type: ColumnType;
     posts: UnifiedPost[];
+    notificationGroups?: NotificationGroup[];
     loading?: boolean;
     width?: number;
     onrefresh?: () => void;
@@ -37,6 +41,69 @@
     ondragover?: (e: DragEvent) => void;
     ondrop?: (e: DragEvent) => void;
   } = $props();
+
+  let expandedGroups: Set<string> = $state(new Set());
+
+  function toggleGroup(groupId: string) {
+    const next = new Set(expandedGroups);
+    if (next.has(groupId)) next.delete(groupId);
+    else next.add(groupId);
+    expandedGroups = next;
+  }
+
+  function getNotifIcon(ntype: string) {
+    switch (ntype) {
+      case 'like': case 'favourite': return Heart;
+      case 'repost': case 'reblog': return Repeat;
+      case 'follow': return UserPlus;
+      case 'mention': return AtSign;
+      case 'reply': return MessageCircle;
+      case 'quote': return Quote;
+      default: return Bell;
+    }
+  }
+
+  function getNotifColor(ntype: string): string {
+    switch (ntype) {
+      case 'like': case 'favourite': return 'text-red-400';
+      case 'repost': case 'reblog': return 'text-green-400';
+      case 'follow': return 'text-blue-400';
+      case 'mention': case 'reply': return 'text-yellow-400';
+      case 'quote': return 'text-purple-400';
+      default: return 'text-[var(--color-text-muted)]';
+    }
+  }
+
+  function getNotifActionText(ntype: string, count: number): string {
+    if (count === 1) {
+      switch (ntype) {
+        case 'like': return i18n.t.notifications.liked;
+        case 'repost': return i18n.t.notifications.boosted;
+        case 'follow': return i18n.t.notifications.followed;
+        case 'mention': return i18n.t.notifications.mentioned;
+        case 'reply': return i18n.t.notifications.replied;
+        case 'quote': return i18n.t.notifications.quoted;
+        default: return ntype;
+      }
+    }
+    switch (ntype) {
+      case 'like': return i18n.t.notifications.likedGroup.replace('{count}', String(count));
+      case 'repost': return i18n.t.notifications.boostedGroup.replace('{count}', String(count));
+      case 'follow': return i18n.t.notifications.followedGroup.replace('{count}', String(count));
+      default: return ntype;
+    }
+  }
+
+  function formatNotifTime(dateStr: string): string {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    if (diff < 60000) return i18n.t.notifications.justNow;
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
+    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  /** Whether this column should render grouped notifications instead of posts */
+  const useGroupedNotifs = $derived(type === 'notifications' && notificationGroups.length > 0);
 
   let filterText = $state('');
   const filteredPosts = $derived(
@@ -115,10 +182,68 @@
 
   <!-- Column content -->
   <div class="flex-1 overflow-y-auto p-2 space-y-2">
-    {#if loading && filteredPosts.length === 0}
+    {#if loading && filteredPosts.length === 0 && notificationGroups.length === 0}
       <div class="text-center py-8">
         <Loader2 size={20} class="text-[var(--color-text-muted)] animate-spin mx-auto" />
       </div>
+    {:else if useGroupedNotifs}
+      <!-- Grouped notification rendering for notification columns -->
+      {#each notificationGroups as group (group.id)}
+        {@const NIcon = getNotifIcon(group.type)}
+        {@const isGrouped = group.actors.length > 1}
+        {@const isExpanded = expandedGroups.has(group.id)}
+        <div class="rounded-lg hover:bg-[var(--color-surface)] transition-colors">
+          <div class="flex items-start gap-2 p-2">
+            <div class="flex-shrink-0 mt-0.5 {getNotifColor(group.type)}">
+              <NIcon size={12} />
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-[11px]">
+                {#if isGrouped}
+                  <div class="flex -space-x-1.5 mb-1">
+                    {#each group.actors.slice(0, 3) as actor}
+                      {#if actor.avatar}
+                        <img loading="lazy" src={actor.avatar} alt="" class="w-5 h-5 rounded-full border border-[var(--color-bg)]" />
+                      {/if}
+                    {/each}
+                    {#if group.actors.length > 3}
+                      <span class="w-5 h-5 rounded-full bg-[var(--color-surface)] border border-[var(--color-bg)] flex items-center justify-center text-[8px] font-bold text-[var(--color-text-muted)]">
+                        +{group.actors.length - 3}
+                      </span>
+                    {/if}
+                  </div>
+                  <span class="font-semibold">{group.actors[0].displayName || group.actors[0].handle}</span>
+                  <span class="text-[var(--color-text-muted)]"> {getNotifActionText(group.type, group.actors.length)}</span>
+                  <button onclick={() => toggleGroup(group.id)} class="inline-flex ml-0.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+                    {#if isExpanded}<ChevronUp size={10} />{:else}<ChevronDown size={10} />{/if}
+                  </button>
+                {:else}
+                  {#if group.actors[0]?.avatar}
+                    <img loading="lazy" src={group.actors[0].avatar} alt="" class="w-5 h-5 rounded-full inline mr-1 align-text-bottom" />
+                  {/if}
+                  <span class="font-semibold">{group.actors[0]?.displayName || group.actors[0]?.handle}</span>
+                  <span class="text-[var(--color-text-muted)]"> {getNotifActionText(group.type, 1)}</span>
+                {/if}
+              </p>
+              {#if group.text}
+                <p class="text-[10px] text-[var(--color-text-muted)] mt-0.5 line-clamp-1">{group.text}</p>
+              {/if}
+              {#if isGrouped && isExpanded}
+                <div class="mt-1 space-y-0.5">
+                  {#each group.actors as actor}
+                    <div class="flex items-center gap-1 text-[10px] py-0.5">
+                      {#if actor.avatar}<img loading="lazy" src={actor.avatar} alt="" class="w-4 h-4 rounded-full" />{/if}
+                      <span>{actor.displayName || actor.handle}</span>
+                      <span class="w-1.5 h-1.5 rounded-full ml-auto" style="background: {actor.platform === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"></span>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+            <span class="text-[9px] text-[var(--color-text-muted)] flex-shrink-0">{formatNotifTime(group.latestAt)}</span>
+          </div>
+        </div>
+      {/each}
     {:else if filteredPosts.length === 0}
       <p class="text-center py-8 text-xs text-[var(--color-text-muted)]">{filterText ? 'No matches' : 'No posts'}</p>
     {:else}

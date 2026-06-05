@@ -143,6 +143,34 @@
   const unscheduledDrafts = $derived(drafts.filter(d => !d.scheduled_at));
 
   let previewDraftId: number | null = $state(null);
+  let showCalendar = $state(false);
+
+  // Calendar helpers
+  function getWeekDays(): Date[] {
+    const today = new Date();
+    const start = new Date(today);
+    start.setDate(today.getDate() - today.getDay()); // Start from Sunday
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      return d;
+    });
+  }
+
+  function isSameDay(d1: Date, d2: Date): boolean {
+    return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+  }
+
+  function getDraftsForDay(day: Date): Draft[] {
+    return scheduledDrafts.filter(d => d.scheduled_at && isSameDay(new Date(d.scheduled_at), day));
+  }
+
+  function isToday(day: Date): boolean {
+    return isSameDay(day, new Date());
+  }
+
+  const weekDays = $derived(getWeekDays());
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   function getDraftPlatforms(draft: Draft): Platform[] {
     const ids = Array.isArray(draft.target_accounts)
@@ -163,9 +191,19 @@
         <span class="text-sm text-[var(--color-text-muted)] ml-2">({drafts.length})</span>
       {/if}
     </div>
-    <a href="/compose" class="flex items-center gap-1 px-3 py-1.5 text-sm bg-[var(--color-primary)] text-white rounded-md">
-      <Edit3 size={14} /> New Post
-    </a>
+    <div class="flex items-center gap-2">
+      {#if scheduledDrafts.length > 0}
+        <button
+          onclick={() => showCalendar = !showCalendar}
+          class="flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors {showCalendar ? 'bg-yellow-600 text-white' : 'bg-[var(--color-surface)] text-[var(--color-text-muted)] border border-[var(--color-border)] hover:text-[var(--color-text)]'}"
+        >
+          <Calendar size={14} /> {i18n.t.drafts.calendarView}
+        </button>
+      {/if}
+      <a href="/compose" class="flex items-center gap-1 px-3 py-1.5 text-sm bg-[var(--color-primary)] text-white rounded-md">
+        <Edit3 size={14} /> {i18n.t.drafts.newPost}
+      </a>
+    </div>
   </div>
 
   {#if error}
@@ -182,6 +220,35 @@
           {result.success ? 'Posted' : 'Failed'}: {result.platform} {result.uri ?? result.error ?? ''}
         </div>
       {/each}
+    </div>
+  {/if}
+
+  <!-- Calendar view -->
+  {#if showCalendar && scheduledDrafts.length > 0}
+    <div class="mb-6 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] overflow-hidden">
+      <div class="grid grid-cols-7 border-b border-[var(--color-border)]">
+        {#each dayNames as name}
+          <div class="px-2 py-1.5 text-center text-[10px] font-semibold text-[var(--color-text-muted)] uppercase">{name}</div>
+        {/each}
+      </div>
+      <div class="grid grid-cols-7 min-h-[120px]">
+        {#each weekDays as day, i}
+          {@const dayDrafts = getDraftsForDay(day)}
+          <div class="border-r border-[var(--color-border)] p-1.5 {i === 6 ? 'border-r-0' : ''} {isToday(day) ? 'bg-[var(--color-primary)]/5' : ''}">
+            <div class="text-[10px] font-medium mb-1 {isToday(day) ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'}">
+              {day.getDate()}
+            </div>
+            {#each dayDrafts as draft}
+              <div
+                class="px-1 py-0.5 mb-0.5 text-[9px] rounded bg-yellow-600/20 text-yellow-300 truncate cursor-default"
+                title="{draft.text.substring(0, 80)} — {new Date(draft.scheduled_at!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}"
+              >
+                {new Date(draft.scheduled_at!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} {draft.text.substring(0, 20)}...
+              </div>
+            {/each}
+          </div>
+        {/each}
+      </div>
     </div>
   {/if}
 

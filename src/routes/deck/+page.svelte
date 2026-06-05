@@ -9,6 +9,9 @@
   import { MastodonClient } from '$lib/api/mastodon';
   import { normalizePost, sortPosts } from '$lib/api/unified';
   import type { UnifiedPost, Account } from '$lib/types';
+  import { groupNotifications, type UnifiedNotification, type NotificationGroup } from '$lib/notification-grouping';
+  import { listTagGroups } from '$lib/tag-groups';
+  import { listFeeds, fetchFeed, rssItemToPost } from '$lib/rss';
 
   interface DeckColumnConfig {
     id: string;
@@ -27,6 +30,7 @@
   let showAddMenu = $state(false);
   let columns: DeckColumnConfig[] = $state([]);
   let columnPosts: Record<string, UnifiedPost[]> = $state({});
+  let columnNotifGroups: Record<string, NotificationGroup[]> = $state({});
   let columnLoading: Record<string, boolean> = $state({});
 
   let clientEntries: Map<number, ClientEntry> = new Map();
@@ -49,6 +53,8 @@
     { type: 'user', label: 'User Feed...' },
     { type: 'list', label: 'Mastodon List...' },
     { type: 'feed', label: 'Bluesky Feed...' },
+    { type: 'tag-group', label: 'Tag Group...' },
+    { type: 'rss', label: 'RSS Feed...' },
   ];
 
   // Saved layouts
@@ -135,13 +141,43 @@
             if (resp.ok) for (const n of await resp.json()) { if (n.status) posts.push(normalizePost(n.status, 'mastodon')); }
           }
         } catch {}
-      } else if (col.type === 'notifications' && bskyClient) {
-        try {
+      } else if (col.type === 'notifications') {
+        // Fetch from both platforms and group
+        const allNotifs: UnifiedNotification[] = [];
+        if (bskyClient) try {
           const { notifications } = await bskyClient.getNotifications();
-          for (const n of notifications.slice(0, 20)) {
-            if ((n.record as any)?.text) posts.push({ uri: n.uri, text: `[${n.reason}] ${(n.record as any).text || ''}`, author: { handle: n.author.handle, displayName: n.author.displayName, avatar: n.author.avatar }, createdAt: n.indexedAt, platform: 'bluesky', isRepost: false, raw: n });
+          for (const n of notifications) {
+            allNotifs.push({
+              id: `bsky-${n.uri}`,
+              platform: 'bluesky',
+              type: n.reason,
+              createdAt: n.indexedAt,
+              author: { handle: n.author.handle, displayName: n.author.displayName, avatar: n.author.avatar },
+              text: (n.record as any)?.text,
+              postUri: n.reasonSubject,
+            });
           }
         } catch {}
+        if (mastoClient) try {
+          const token = mastoClient.getAccessToken();
+          if (token) {
+            const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/notifications?limit=40`, { headers: { Authorization: `Bearer ${token}` } });
+            if (resp.ok) for (const n of await resp.json()) {
+              allNotifs.push({
+                id: `masto-${n.id}`,
+                platform: 'mastodon',
+                type: n.type,
+                createdAt: n.created_at,
+                author: { handle: n.account?.acct ? `@${n.account.acct}` : '?', displayName: n.account?.display_name, avatar: n.account?.avatar },
+                text: n.status?.content?.replace(/<[^>]*>?/gm, ''),
+                postUri: n.status?.uri,
+              });
+            }
+          }
+        } catch {}
+        columnNotifGroups[col.id] = groupNotifications(allNotifs);
+        columnLoading[col.id] = false;
+        return; // Skip the post-based flow
       } else if (col.type === 'search' && col.query && bskyClient) {
         try {
           const r = await bskyClient.searchPosts(col.query);
@@ -157,6 +193,28 @@
           const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/timelines/tag/${col.query}?limit=40`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
           if (resp.ok) posts.push(...(await resp.json()).map((s: any) => normalizePost(s, 'mastodon')));
         } catch {}
+      } else if (col.type === 'tag-group' && col.query) {
+        // query is comma-separated tags
+        const tags = col.query.split(',').filter(Boolean);
+        for (const tag of tags) {
+          if (bskyClient) try {
+            const r = await bskyClient.searchPosts(`#${tag}`);
+            for (const p of r.posts) posts.push({ uri: p.uri, text: (p.record as any).text ?? '', author: { handle: p.author.handle, displayName: p.author.displayName, avatar: p.author.avatar }, createdAt: (p.record as any).createdAt ?? p.indexedAt, platform: 'bluesky', likeCount: p.likeCount, repostCount: p.repostCount, isRepost: false, raw: p });
+          } catch {}
+          if (mastoClient) try {
+            const token = mastoClient.getAccessToken();
+            const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/timelines/tag/${tag}?limit=20`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+            if (resp.ok) posts.push(...(await resp.json()).map((s: any) => normalizePost(s, 'mastodon')));
+          } catch {}
+        }
+      } else if (col.type === 'rss' && col.query) {
+        try {
+          const items = await fetchFeed(col.query);
+          const feedTitle = col.title.replace(/^RSS: /, '');
+          posts.push(...items.slice(0, 30).map(item => rssItemToPost(item, feedTitle)));
+        } catch (e) {
+          console.error(`Failed to fetch RSS ${col.query}:`, e);
+        }
       } else if (col.type === 'user' && col.query) {
         // Try Bluesky first (handles with dots), then Mastodon (handles with @)
         if (bskyClient && (col.query.includes('.') || !col.query.includes('@'))) try { posts.push(...(await bskyClient.getAuthorFeed(col.query)).feed.map(p => normalizePost(p, 'bluesky'))); } catch {}
@@ -224,6 +282,40 @@
       query = prompt('Bluesky feed URI (at://...):') ?? undefined;
       if (!query) return;
       title = `Feed: ${query.split('/').pop()}`;
+    } else if (type === 'tag-group') {
+      const groups = listTagGroups();
+      if (groups.length === 0) {
+        alert('No tag groups saved yet. Create one in Settings or use multiple hashtag columns.');
+        return;
+      }
+      const name = prompt(`Tag groups: ${groups.map(g => g.name).join(', ')}\nEnter group name:`);
+      if (!name) return;
+      const group = groups.find(g => g.name.toLowerCase() === name.toLowerCase());
+      if (!group) { alert(`Tag group "${name}" not found.`); return; }
+      query = group.tags.join(',');
+      title = `#${group.name}`;
+    } else if (type === 'rss') {
+      const feeds = listFeeds();
+      if (feeds.length === 0) {
+        const url = prompt('RSS feed URL:');
+        if (!url) return;
+        query = url;
+        title = `RSS: ${new URL(url).hostname}`;
+      } else {
+        const name = prompt(`RSS feeds: ${feeds.map(f => f.title).join(', ')}\nEnter feed name or paste a new URL:`);
+        if (!name) return;
+        const feed = feeds.find(f => f.title.toLowerCase() === name.toLowerCase());
+        if (feed) {
+          query = feed.url;
+          title = `RSS: ${feed.title}`;
+        } else if (name.startsWith('http')) {
+          query = name;
+          title = `RSS: ${new URL(name).hostname}`;
+        } else {
+          alert(`Feed "${name}" not found.`);
+          return;
+        }
+      }
     }
 
     columns = [...columns, { id, title, type, query }];
@@ -385,6 +477,7 @@
           title={col.title}
           type={col.type}
           posts={columnPosts[col.id] ?? []}
+          notificationGroups={columnNotifGroups[col.id] ?? []}
           loading={columnLoading[col.id] ?? false}
           width={col.width ?? 380}
           onrefresh={() => loadColumn(col)}

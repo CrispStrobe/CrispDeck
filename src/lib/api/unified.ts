@@ -43,7 +43,10 @@ export function normalizePost(post: PlatformPost, platform: 'bluesky' | 'mastodo
     const item = post as mastodon.v1.Status;
     const target = item.reblog ?? item;
     // For reblogs: use the reblog time (item.createdAt), not original post time (target.createdAt)
-    const feedDate = item.reblog ? item.createdAt : target.createdAt;
+    // Handle both camelCase (masto library) and snake_case (raw fetch) property names
+    const feedDate = item.reblog
+      ? (item.createdAt ?? (item as any).created_at)
+      : (target.createdAt ?? (target as any).created_at);
     return {
       uri: target.uri,
       text: target.content.replace(/<[^>]*>?/gm, ''),
@@ -51,15 +54,15 @@ export function normalizePost(post: PlatformPost, platform: 'bluesky' | 'mastodo
         handle: target.account.acct.includes('@')
           ? `@${target.account.acct}`
           : `@${target.account.acct}@${new URL(target.account.url).hostname}`,
-        displayName: target.account.displayName,
-        avatar: target.account.avatar,
+        displayName: target.account.displayName ?? (target.account as any).display_name,
+        avatar: target.account.avatar ?? (target.account as any).avatar_static,
       },
       createdAt: feedDate,
       platform: 'mastodon',
-      replyCount: target.repliesCount,
-      repostCount: target.reblogsCount,
-      likeCount: target.favouritesCount,
-      replyParentUri: target.inReplyToId ?? undefined,
+      replyCount: target.repliesCount ?? (target as any).replies_count ?? 0,
+      repostCount: target.reblogsCount ?? (target as any).reblogs_count ?? 0,
+      likeCount: target.favouritesCount ?? (target as any).favourites_count ?? 0,
+      replyParentUri: target.inReplyToId ?? (target as any).in_reply_to_id ?? undefined,
       isRepost: !!item.reblog,
       repostAuthor: item.reblog
         ? {
@@ -120,9 +123,40 @@ function jaroWinkler(s1: string, s2: string): number {
   return jaro + prefix * 0.1 * (1 - jaro);
 }
 
-/** Detect crossposted content between platforms */
-export function detectCrossposts(posts: UnifiedPost[]): FeedItem[] {
-  const SIMILARITY_THRESHOLD = 0.9;
+/**
+ * Build a lookup set from confirmed identities: pairs of handles that are the same person.
+ * Returns a Set of "handleA<>handleB" keys (sorted so order doesn't matter).
+ */
+export function buildIdentityPairs(identities: { confirmed: boolean; links: { handle: string }[] }[]): Set<string> {
+  const pairs = new Set<string>();
+  for (const identity of identities) {
+    if (!identity.confirmed) continue;
+    const handles = identity.links.map(l => l.handle.toLowerCase());
+    // Create pairs from all links (typically 2: one bsky + one mastodon)
+    for (let i = 0; i < handles.length; i++) {
+      for (let j = i + 1; j < handles.length; j++) {
+        const key = [handles[i], handles[j]].sort().join('<>');
+        pairs.add(key);
+      }
+    }
+  }
+  return pairs;
+}
+
+/** Check if two handles are confirmed to be the same person */
+function areIdentityMatched(handle1: string, handle2: string, identityPairs: Set<string>): boolean {
+  const key = [handle1.toLowerCase(), handle2.toLowerCase()].sort().join('<>');
+  return identityPairs.has(key);
+}
+
+/**
+ * Detect crossposted content between platforms.
+ * When identityPairs is provided, uses a lower similarity threshold (0.7)
+ * for posts by authors confirmed to be the same person.
+ */
+export function detectCrossposts(posts: UnifiedPost[], identityPairs?: Set<string>): FeedItem[] {
+  const DEFAULT_THRESHOLD = 0.9;
+  const IDENTITY_THRESHOLD = 0.7;
   const TIME_WINDOW_MS = 24 * 60 * 60 * 1000;
   const feedItems: FeedItem[] = [];
   const processedUris = new Set<string>();
@@ -142,16 +176,22 @@ export function detectCrossposts(posts: UnifiedPost[]): FeedItem[] {
 
     let bestMatch: UnifiedPost | null = null;
     let bestScore = 0;
+    let bestIsIdentityMatch = false;
 
     for (const post2 of potentialMatches) {
       const score = jaroWinkler(post1.text, post2.text);
       if (score > bestScore) {
         bestScore = score;
         bestMatch = post2;
+        bestIsIdentityMatch = identityPairs
+          ? areIdentityMatched(post1.author.handle, post2.author.handle, identityPairs)
+          : false;
       }
     }
 
-    if (bestMatch && bestScore >= SIMILARITY_THRESHOLD) {
+    const threshold = bestIsIdentityMatch ? IDENTITY_THRESHOLD : DEFAULT_THRESHOLD;
+
+    if (bestMatch && bestScore >= threshold) {
       const allMatches = [post1, bestMatch].sort((a, b) =>
         a.platform.localeCompare(b.platform)
       );

@@ -177,6 +177,77 @@
   const mastoEngRate = $derived(mastoCount > 0 ? ((mastoLikes + mastoReposts + mastoReplies) / mastoCount).toFixed(1) : '0');
 
   const handle = $derived(accounts[0]?.handle ?? 'user');
+
+  // Cross-platform comparison: hourly activity per platform
+  const bskyByHour = $derived(() => {
+    const hours = Array(24).fill(0);
+    bskyPosts.forEach(p => { hours[new Date(p.createdAt).getHours()]++; });
+    return hours;
+  });
+  const mastoByHour = $derived(() => {
+    const hours = Array(24).fill(0);
+    mastoPosts.forEach(p => { hours[new Date(p.createdAt).getHours()]++; });
+    return hours;
+  });
+
+  // Day-of-week patterns
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const bskyByDay = $derived(() => {
+    const days = Array(7).fill(0);
+    bskyPosts.forEach(p => { days[new Date(p.createdAt).getDay()]++; });
+    return days;
+  });
+  const mastoByDay = $derived(() => {
+    const days = Array(7).fill(0);
+    mastoPosts.forEach(p => { days[new Date(p.createdAt).getDay()]++; });
+    return days;
+  });
+
+  // Avg engagement per platform per day of week
+  const bskyEngByDay = $derived(() => {
+    const eng = Array(7).fill(0);
+    const cnt = Array(7).fill(0);
+    bskyPosts.forEach(p => {
+      const d = new Date(p.createdAt).getDay();
+      eng[d] += (p.likeCount ?? 0) + (p.repostCount ?? 0);
+      cnt[d]++;
+    });
+    return eng.map((e, i) => cnt[i] > 0 ? e / cnt[i] : 0);
+  });
+  const mastoEngByDay = $derived(() => {
+    const eng = Array(7).fill(0);
+    const cnt = Array(7).fill(0);
+    mastoPosts.forEach(p => {
+      const d = new Date(p.createdAt).getDay();
+      eng[d] += (p.likeCount ?? 0) + (p.repostCount ?? 0);
+      cnt[d]++;
+    });
+    return eng.map((e, i) => cnt[i] > 0 ? e / cnt[i] : 0);
+  });
+
+  // Best posting time per platform
+  const bestBskyHour = $derived(() => {
+    const eng = Array(24).fill(0);
+    const cnt = Array(24).fill(0);
+    bskyPosts.forEach(p => {
+      const h = new Date(p.createdAt).getHours();
+      eng[h] += (p.likeCount ?? 0) + (p.repostCount ?? 0);
+      cnt[h]++;
+    });
+    const avg = eng.map((e, i) => cnt[i] > 0 ? e / cnt[i] : 0);
+    return avg.indexOf(Math.max(...avg));
+  });
+  const bestMastoHour = $derived(() => {
+    const eng = Array(24).fill(0);
+    const cnt = Array(24).fill(0);
+    mastoPosts.forEach(p => {
+      const h = new Date(p.createdAt).getHours();
+      eng[h] += (p.likeCount ?? 0) + (p.repostCount ?? 0);
+      cnt[h]++;
+    });
+    const avg = eng.map((e, i) => cnt[i] > 0 ? e / cnt[i] : 0);
+    return avg.indexOf(Math.max(...avg));
+  });
 </script>
 
 <svelte:head><title>CrispDeck — Analytics</title><meta name="description" content="Post analytics and engagement stats" /></svelte:head>
@@ -384,5 +455,87 @@
         {/each}
       </div>
     </div>
+
+    <!-- Cross-platform comparison -->
+    {#if bskyCount > 0 && mastoCount > 0}
+      <div class="mb-6">
+        <h3 class="font-semibold text-sm mb-3 flex items-center gap-2">
+          <TrendingUp size={16} />
+          {i18n.t.analytics.comparison}
+        </h3>
+
+        <!-- Best posting times -->
+        <div class="grid grid-cols-2 gap-3 mb-4">
+          <div class="bg-[var(--color-surface)] p-3 rounded-lg border border-[var(--color-border)]">
+            <div class="flex items-center gap-1.5 mb-2">
+              <span class="w-2 h-2 rounded-full bg-[var(--color-bluesky)]"></span>
+              <span class="text-xs font-medium">{i18n.t.analytics.bestTime}</span>
+            </div>
+            <div class="text-2xl font-bold text-[var(--color-bluesky)]">{bestBskyHour()}:00</div>
+            <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.analytics.bestTimeHint}</p>
+          </div>
+          <div class="bg-[var(--color-surface)] p-3 rounded-lg border border-[var(--color-border)]">
+            <div class="flex items-center gap-1.5 mb-2">
+              <span class="w-2 h-2 rounded-full bg-[var(--color-mastodon)]"></span>
+              <span class="text-xs font-medium">{i18n.t.analytics.bestTime}</span>
+            </div>
+            <div class="text-2xl font-bold text-[var(--color-mastodon)]">{bestMastoHour()}:00</div>
+            <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.analytics.bestTimeHint}</p>
+          </div>
+        </div>
+
+        <!-- Day-of-week engagement comparison -->
+        <div class="bg-[var(--color-surface)] p-4 rounded-lg border border-[var(--color-border)] mb-4">
+          <h4 class="text-xs font-medium text-[var(--color-text-muted)] mb-3">{i18n.t.analytics.engagementByDay}</h4>
+          <div class="grid grid-cols-7 gap-1">
+            {#each dayNames as day, i}
+              {@const bskyEng = bskyEngByDay()[i]}
+              {@const mastoEng = mastoEngByDay()[i]}
+              {@const maxEng = Math.max(...bskyEngByDay(), ...mastoEngByDay(), 1)}
+              <div class="text-center">
+                <div class="text-[9px] text-[var(--color-text-muted)] mb-1">{day}</div>
+                <div class="flex gap-0.5 items-end h-16 justify-center">
+                  <div
+                    class="w-2.5 rounded-t bg-[var(--color-bluesky)]/60"
+                    style="height: {(bskyEng / maxEng) * 100}%; min-height: 2px"
+                    title="Bluesky: {bskyEng.toFixed(1)} avg engagement"
+                  ></div>
+                  <div
+                    class="w-2.5 rounded-t bg-[var(--color-mastodon)]/60"
+                    style="height: {(mastoEng / maxEng) * 100}%; min-height: 2px"
+                    title="Mastodon: {mastoEng.toFixed(1)} avg engagement"
+                  ></div>
+                </div>
+              </div>
+            {/each}
+          </div>
+          <div class="flex items-center justify-center gap-4 mt-2 text-[9px] text-[var(--color-text-muted)]">
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded bg-[var(--color-bluesky)]/60"></span> Bluesky</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded bg-[var(--color-mastodon)]/60"></span> Mastodon</span>
+          </div>
+        </div>
+
+        <!-- Activity comparison by hour -->
+        <div class="bg-[var(--color-surface)] p-4 rounded-lg border border-[var(--color-border)]">
+          <h4 class="text-xs font-medium text-[var(--color-text-muted)] mb-3">{i18n.t.analytics.activityByHour}</h4>
+          <div class="flex items-end justify-between gap-0.5 h-20">
+            {#each Array(24) as _, hour}
+              {@const bskyH = bskyByHour()[hour]}
+              {@const mastoH = mastoByHour()[hour]}
+              {@const maxH = Math.max(...bskyByHour(), ...mastoByHour(), 1)}
+              <div class="flex-1 flex gap-px items-end" title="{hour}:00 — Bluesky: {bskyH}, Mastodon: {mastoH}">
+                <div class="flex-1 bg-[var(--color-bluesky)]/50 rounded-t" style="height: {(bskyH / maxH) * 100}%; min-height: 1px"></div>
+                <div class="flex-1 bg-[var(--color-mastodon)]/50 rounded-t" style="height: {(mastoH / maxH) * 100}%; min-height: 1px"></div>
+              </div>
+            {/each}
+          </div>
+          <div class="flex justify-between mt-0.5">
+            {#each Array(24) as _, h}
+              <span class="text-[8px] text-[var(--color-text-muted)] flex-1 text-center">{h % 6 === 0 ? h : ''}</span>
+            {/each}
+          </div>
+        </div>
+      </div>
+    {/if}
   {/if}
 </div>

@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { MessageCircle, Loader2, ArrowLeft } from '@lucide/svelte';
+  import { MessageCircle, Loader2, ArrowLeft, BookOpen } from '@lucide/svelte';
+  import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import { normalizePost } from '$lib/api/unified';
@@ -114,14 +115,45 @@
     ancestors = context.ancestors.map(s => normalizePost(s, 'mastodon'));
     replies = context.descendants.map(s => normalizePost(s, 'mastodon'));
   }
+
+  let articleMode = $state(false);
+
+  /** Build a single article from the thread author's posts (ancestors + main + their replies) */
+  const articlePosts = $derived.by(() => {
+    if (!mainPost) return [];
+    const authorHandle = mainPost.author.handle;
+    const all = [...ancestors, mainPost, ...replies].filter(
+      p => p.author.handle === authorHandle
+    );
+    // Deduplicate by URI
+    const seen = new Set<string>();
+    return all.filter(p => {
+      if (seen.has(p.uri)) return false;
+      seen.add(p.uri);
+      return true;
+    });
+  });
+
+  const articleText = $derived(articlePosts.map(p => p.text).join('\n\n'));
 </script>
 
 <svelte:head><title>CrispDeck — Thread</title></svelte:head>
 
 <div class="p-6 max-w-3xl mx-auto">
-  <a href="/feed" class="flex items-center gap-1 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] mb-4">
-    <ArrowLeft size={14} /> Back to feed
-  </a>
+  <div class="flex items-center justify-between mb-4">
+    <a href="/feed" class="flex items-center gap-1 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+      <ArrowLeft size={14} /> {i18n.t.profile.backToFeed}
+    </a>
+    {#if mainPost && articlePosts.length > 1}
+      <button
+        onclick={() => articleMode = !articleMode}
+        class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors {articleMode ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)]'}"
+      >
+        <BookOpen size={14} />
+        {i18n.t.thread.readAsArticle}
+      </button>
+    {/if}
+  </div>
 
   {#if error}
     <div class="p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">{error}</div>
@@ -129,6 +161,30 @@
 
   {#if loading}
     <div class="text-center py-12"><Loader2 size={32} class="text-[var(--color-text-muted)] animate-spin mx-auto" /></div>
+  {:else if articleMode && mainPost}
+    <!-- Article (un-rolled thread) -->
+    <article class="bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] p-6 md:p-8">
+      <div class="flex items-center gap-3 mb-6 pb-4 border-b border-[var(--color-border)]">
+        {#if mainPost.author.avatar}
+          <img src={mainPost.author.avatar} alt="" class="w-10 h-10 rounded-full" />
+        {/if}
+        <div>
+          <p class="font-semibold">{mainPost.author.displayName || mainPost.author.handle}</p>
+          <p class="text-xs text-[var(--color-text-muted)]">@{mainPost.author.handle} · {articlePosts.length} {i18n.t.thread.parts}</p>
+        </div>
+        <span class="ml-auto w-2 h-2 rounded-full" style="background: {platform === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"></span>
+      </div>
+      <div class="prose prose-invert max-w-none text-[var(--color-text)] leading-relaxed text-[15px] space-y-4">
+        {#each articleText.split('\n\n') as paragraph}
+          {#if paragraph.trim()}
+            <p>{paragraph}</p>
+          {/if}
+        {/each}
+      </div>
+      <div class="mt-6 pt-4 border-t border-[var(--color-border)] text-xs text-[var(--color-text-muted)]">
+        {new Date(mainPost.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+      </div>
+    </article>
   {:else}
     <!-- Ancestors (parent chain) -->
     {#if ancestors.length > 0}

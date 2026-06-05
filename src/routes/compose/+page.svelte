@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { logCrosspost, saveDraft as dbSaveDraft, listDrafts, deleteDraft as dbDeleteDraft } from '$lib/db';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { PenSquare, Send, Loader2, X, ImagePlus, AlertTriangle, Check, BarChart3, Shield, Mic, MicOff } from '@lucide/svelte';
+  import { PenSquare, Send, Loader2, X, ImagePlus, AlertTriangle, Check, BarChart3, Shield, Mic, MicOff, Sparkles } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import AccountPicker from '$lib/components/AccountPicker.svelte';
   import MentionAutocomplete from '$lib/components/MentionAutocomplete.svelte';
@@ -15,6 +15,7 @@
   import { splitForPlatform, planThread, type ThreadPlan } from '$lib/compose/thread';
   import { validateMediaFile, createPreviewUrl, revokePreviewUrl } from '$lib/compose/media';
   import { tryVoiceCommand, looksLikeCommand } from '$lib/voice-commands';
+  import { runAIAction, isAIConfigured, type AIAction } from '$lib/compose/ai';
   import type { Account, Platform } from '$lib/types';
 
   let accounts: Account[] = $state([]);
@@ -49,6 +50,39 @@
   let pollOptions = $state(['', '']);
   let pollExpiry = $state(86400); // 24h default
   let pollMultiple = $state(false);
+
+  // AI compose
+  let showAIMenu = $state(false);
+  let aiLoading = $state(false);
+  let aiError = $state('');
+
+  async function handleAIAction(action: AIAction) {
+    showAIMenu = false;
+    aiError = '';
+    if (action !== 'alt-text' && !text.trim()) return;
+    aiLoading = true;
+    try {
+      const input = action === 'alt-text'
+        ? 'Please describe the attached image for accessibility purposes.'
+        : text;
+      const result = await runAIAction(action, input);
+      if (action === 'hashtags') {
+        // Append hashtags to existing text
+        text = text.trimEnd() + '\n\n' + result.text;
+      } else if (action === 'alt-text') {
+        // Apply to first media without alt text
+        const idx = altTexts.findIndex(t => !t.trim());
+        if (idx >= 0) altTexts[idx] = result.text;
+      } else {
+        // Replace text (correct/shorten)
+        text = result.text;
+      }
+    } catch (e) {
+      aiError = String(e instanceof Error ? e.message : e);
+    } finally {
+      aiLoading = false;
+    }
+  }
 
   // Quote context
   let quoteUri = $state('');
@@ -593,6 +627,41 @@
             >
               {#if dictating}<MicOff size={16} />{:else}<Mic size={16} />{/if}
             </button>
+
+            <!-- AI Compose -->
+            {#if isAIConfigured()}
+              <div class="relative">
+                <button
+                  onclick={() => showAIMenu = !showAIMenu}
+                  disabled={aiLoading}
+                  class="p-1.5 rounded-md transition-colors {showAIMenu ? 'text-purple-400 bg-purple-900/20' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'}"
+                  title={i18n.t.compose.aiAssist}
+                >
+                  {#if aiLoading}<Loader2 size={16} class="animate-spin" />{:else}<Sparkles size={16} />{/if}
+                </button>
+                {#if showAIMenu}
+                  <div class="absolute bottom-full left-0 mb-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl z-50 w-44 py-1">
+                    <button onclick={() => handleAIAction('correct')} disabled={!text.trim()} class="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)] disabled:opacity-30">
+                      {i18n.t.compose.aiCorrect}
+                    </button>
+                    <button onclick={() => handleAIAction('shorten')} disabled={!text.trim()} class="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)] disabled:opacity-30">
+                      {i18n.t.compose.aiShorten}
+                    </button>
+                    <button onclick={() => handleAIAction('hashtags')} disabled={!text.trim()} class="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)] disabled:opacity-30">
+                      {i18n.t.compose.aiHashtags}
+                    </button>
+                    {#if mediaFiles.length > 0}
+                      <button onclick={() => handleAIAction('alt-text')} class="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)]">
+                        {i18n.t.compose.aiAltText}
+                      </button>
+                    {/if}
+                  </div>
+                {/if}
+              </div>
+            {/if}
+            {#if aiError}
+              <span class="text-[10px] text-red-400 max-w-[150px] truncate" title={aiError}>{aiError}</span>
+            {/if}
 
             <!-- Templates -->
             <div class="relative">

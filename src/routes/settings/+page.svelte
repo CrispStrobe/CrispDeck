@@ -10,6 +10,10 @@
   import { i18n, type Language } from '$lib/i18n.svelte';
   import { requestPermission, getPermission, isSupported as notifSupported } from '$lib/push-notifications';
   import { getTranslateConfig, setTranslateConfig, type TranslateProvider } from '$lib/translate';
+  import { jetstream } from '$lib/jetstream';
+  import { getAIComposeConfig, setAIComposeConfig } from '$lib/compose/ai';
+  import { listTagGroups, saveTagGroup, deleteTagGroup, type TagGroup } from '$lib/tag-groups';
+  import { listFeeds, addFeed, removeFeed, importOPML, type RssFeed } from '$lib/rss';
   import type { Account } from '$lib/types';
 
   let uiLanguage = $state<Language>(i18n.lang);
@@ -22,6 +26,15 @@
   let openaiApiKey = $state(txConfig.openaiApiKey ?? '');
   let openaiModel = $state(txConfig.openaiModel ?? 'gpt-4o-mini');
   let crispasrModel = $state(txConfig.crispasrModel ?? 'm2m100');
+
+  // AI compose config
+  const aiConfig = getAIComposeConfig();
+  let aiBaseUrl = $state(aiConfig.baseUrl);
+  let aiApiKey = $state(aiConfig.apiKey);
+  let aiModel = $state(aiConfig.model);
+  function saveAIConfig() {
+    setAIComposeConfig({ baseUrl: aiBaseUrl || 'https://api.openai.com/v1', apiKey: aiApiKey, model: aiModel || 'gpt-4o-mini' });
+  }
 
   // TTS + STT model + engine settings (stored in localStorage)
   let ttsModel = $state(localStorage.getItem('crispdeck-tts-model') ?? 'kokoro');
@@ -93,6 +106,25 @@
 
   function handleAltTextModeChange() {
     localStorage.setItem('crispdeck-alt-text-mode', altTextMode);
+  }
+
+  let hideEngagement = $state(localStorage.getItem('crispdeck-hide-engagement') === 'true');
+  let liveCounters = $state(localStorage.getItem('crispdeck-live-counters') === 'true');
+  function handleLiveCountersChange() {
+    localStorage.setItem('crispdeck-live-counters', String(liveCounters));
+    jetstream.setEnabled(liveCounters);
+  }
+
+  // Tag groups
+  let tagGroups: TagGroup[] = $state(listTagGroups());
+  let newGroupName = $state('');
+  let newGroupTags = $state('');
+
+  // RSS feeds
+  let rssFeeds: RssFeed[] = $state(listFeeds());
+  let newFeedUrl = $state('');
+  function handleHideEngagementChange() {
+    localStorage.setItem('crispdeck-hide-engagement', String(hideEngagement));
   }
 
   let accounts: Account[] = $state([]);
@@ -579,6 +611,157 @@
           <option value="require">{i18n.t.settings.altTextRequire}</option>
         </select>
       </div>
+
+      <!-- Hide engagement counts -->
+      <div class="flex items-center justify-between">
+        <label for="hide-engagement" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.hideEngagement}</label>
+        <input
+          id="hide-engagement"
+          type="checkbox"
+          bind:checked={hideEngagement}
+          onchange={handleHideEngagementChange}
+          class="w-4 h-4 accent-[var(--color-primary)]"
+        />
+      </div>
+
+      <!-- Live counters -->
+      <div class="flex items-center justify-between">
+        <div>
+          <label for="live-counters" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.liveCounters}</label>
+          <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.liveCountersHint}</p>
+        </div>
+        <input
+          id="live-counters"
+          type="checkbox"
+          bind:checked={liveCounters}
+          onchange={handleLiveCountersChange}
+          class="w-4 h-4 accent-[var(--color-primary)]"
+        />
+      </div>
+    </div>
+  </section>
+
+  <!-- Tag Groups -->
+  <section class="mb-8">
+    <h2 class="text-lg font-semibold mb-3">{i18n.t.settings.tagGroupsTitle}</h2>
+    <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+      <p class="text-[11px] text-[var(--color-text-muted)]">{i18n.t.settings.tagGroupsHint}</p>
+
+      {#if tagGroups.length > 0}
+        <div class="space-y-2">
+          {#each tagGroups as group}
+            <div class="flex items-center justify-between p-2 bg-[var(--color-bg)] rounded-md">
+              <div>
+                <span class="text-sm font-medium">{group.name}</span>
+                <span class="text-[10px] text-[var(--color-text-muted)] ml-2">{group.tags.map(t => `#${t}`).join(' ')}</span>
+              </div>
+              <button
+                onclick={() => { deleteTagGroup(group.id); tagGroups = listTagGroups(); }}
+                class="text-[var(--color-text-muted)] hover:text-[var(--color-danger)] p-1"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          {/each}
+        </div>
+      {/if}
+
+      <div class="flex gap-2">
+        <input
+          type="text"
+          bind:value={newGroupName}
+          placeholder="Group name"
+          class="flex-1 px-2 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
+        />
+        <input
+          type="text"
+          bind:value={newGroupTags}
+          placeholder="tag1, tag2, tag3"
+          class="flex-2 px-2 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
+        />
+        <button
+          onclick={() => {
+            if (newGroupName.trim() && newGroupTags.trim()) {
+              saveTagGroup({ name: newGroupName.trim(), tags: newGroupTags.split(',').map(t => t.trim().replace(/^#/, '')).filter(Boolean) });
+              tagGroups = listTagGroups();
+              newGroupName = '';
+              newGroupTags = '';
+            }
+          }}
+          disabled={!newGroupName.trim() || !newGroupTags.trim()}
+          class="px-3 py-1.5 text-xs bg-[var(--color-primary)] text-white rounded-md disabled:opacity-30"
+        >
+          <Plus size={12} />
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- RSS Feeds -->
+  <section class="mb-8">
+    <h2 class="text-lg font-semibold mb-3">{i18n.t.settings.rssFeedsTitle}</h2>
+    <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+      <p class="text-[11px] text-[var(--color-text-muted)]">{i18n.t.settings.rssFeedsHint}</p>
+
+      {#if rssFeeds.length > 0}
+        <div class="space-y-2">
+          {#each rssFeeds as feed}
+            <div class="flex items-center justify-between p-2 bg-[var(--color-bg)] rounded-md">
+              <div class="min-w-0">
+                <span class="text-sm font-medium">{feed.title}</span>
+                <span class="text-[10px] text-[var(--color-text-muted)] block truncate">{feed.url}</span>
+              </div>
+              <button
+                onclick={() => { removeFeed(feed.id); rssFeeds = listFeeds(); }}
+                class="text-[var(--color-text-muted)] hover:text-[var(--color-danger)] p-1 flex-shrink-0"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          {/each}
+        </div>
+      {/if}
+
+      <div class="flex gap-2">
+        <input
+          type="url"
+          bind:value={newFeedUrl}
+          placeholder="https://example.com/feed.xml"
+          class="flex-1 px-2 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
+        />
+        <button
+          onclick={() => {
+            if (newFeedUrl.trim()) {
+              try { addFeed(newFeedUrl.trim()); rssFeeds = listFeeds(); newFeedUrl = ''; } catch {}
+            }
+          }}
+          disabled={!newFeedUrl.trim()}
+          class="px-3 py-1.5 text-xs bg-[var(--color-primary)] text-white rounded-md disabled:opacity-30"
+        >
+          <Plus size={12} />
+        </button>
+      </div>
+
+      <label class="flex items-center gap-2 text-xs text-[var(--color-text-muted)] cursor-pointer">
+        <input
+          type="file"
+          accept=".opml,.xml"
+          class="hidden"
+          onchange={(e) => {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            if (file) {
+              const reader = new FileReader();
+              reader.onload = () => {
+                const imported = importOPML(reader.result as string);
+                rssFeeds = listFeeds();
+                alert(`Imported ${imported.length} feeds.`);
+              };
+              reader.readAsText(file);
+            }
+          }}
+        />
+        {i18n.t.settings.importOPML}
+      </label>
     </div>
   </section>
 
@@ -670,7 +853,7 @@
             </select>
           </div>
           <p class="text-[10px] text-[var(--color-text-muted)]">
-            M2M-100 is recommended for most use cases. WMT21 is higher quality for EN↔{zh,de,fr,ja,ru,is,ha}. MADLAD covers 419 languages. All models are commercially licensed (MIT / Apache-2.0).
+            M2M-100 is recommended for most use cases. WMT21 is higher quality for EN↔zh,de,fr,ja,ru,is,ha. MADLAD covers 419 languages. All models are commercially licensed (MIT / Apache-2.0).
           </p>
         </div>
       {/if}
@@ -718,6 +901,33 @@
           </div>
         </div>
       {/if}
+    </div>
+  </section>
+
+  <!-- AI Compose -->
+  <section class="mb-8">
+    <h2 class="text-lg font-semibold mb-3">{i18n.t.settings.aiComposeTitle}</h2>
+    <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+      <p class="text-[11px] text-[var(--color-text-muted)]">{i18n.t.settings.aiComposeHint}</p>
+      <div>
+        <label for="ai-base-url" class="block text-xs text-[var(--color-text-muted)] mb-1">{i18n.t.translation.apiBaseUrl}</label>
+        <input id="ai-base-url" type="text" bind:value={aiBaseUrl} onchange={saveAIConfig}
+          placeholder="https://api.openai.com/v1"
+          class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]" />
+      </div>
+      <div>
+        <label for="ai-api-key" class="block text-xs text-[var(--color-text-muted)] mb-1">{i18n.t.translation.apiKey}</label>
+        <input id="ai-api-key" type="password" bind:value={aiApiKey} onchange={saveAIConfig}
+          placeholder="sk-..."
+          class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]" />
+      </div>
+      <div>
+        <label for="ai-model" class="block text-xs text-[var(--color-text-muted)] mb-1">{i18n.t.translation.modelName}</label>
+        <input id="ai-model" type="text" bind:value={aiModel} onchange={saveAIConfig}
+          placeholder="gpt-4o-mini"
+          class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]" />
+      </div>
+      <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.translation.ollamaHint}</p>
     </div>
   </section>
 

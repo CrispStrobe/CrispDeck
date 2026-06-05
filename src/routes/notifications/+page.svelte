@@ -1,26 +1,18 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { Bell, Heart, Repeat, UserPlus, MessageCircle, AtSign, Loader2, Quote } from '@lucide/svelte';
+  import { Bell, Heart, Repeat, UserPlus, MessageCircle, AtSign, Loader2, Quote, ChevronDown, ChevronUp } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import type { Account } from '$lib/types';
-
-  interface UnifiedNotification {
-    id: string;
-    platform: 'bluesky' | 'mastodon';
-    type: string;
-    createdAt: string;
-    author: { handle: string; displayName?: string; avatar?: string };
-    text?: string;
-    postUri?: string;
-  }
+  import { groupNotifications, type UnifiedNotification, type NotificationGroup } from '$lib/notification-grouping';
 
   let accounts: Account[] = $state([]);
-  let notifications: UnifiedNotification[] = $state([]);
+  let groups: NotificationGroup[] = $state([]);
   let loading = $state(true);
   let error = $state('');
+  let expandedGroups: Set<string> = $state(new Set());
 
   let clientEntries: Map<number, ClientEntry> = new Map();
 
@@ -94,9 +86,14 @@
       }
     }
 
-    notifications = all.sort((a, b) =>
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
+    groups = groupNotifications(all);
+  }
+
+  function toggleGroup(groupId: string) {
+    const next = new Set(expandedGroups);
+    if (next.has(groupId)) next.delete(groupId);
+    else next.add(groupId);
+    expandedGroups = next;
   }
 
   function getIcon(type: string) {
@@ -126,11 +123,35 @@
     const d = new Date(dateStr);
     const now = Date.now();
     const diff = now - d.getTime();
-    if (diff < 60000) return 'just now';
+    if (diff < 60000) return i18n.t.notifications.justNow;
     if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
     if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
+
+  function getActionText(type: string, count: number): string {
+    if (count === 1) {
+      switch (type) {
+        case 'like': return i18n.t.notifications.liked;
+        case 'repost': return i18n.t.notifications.boosted;
+        case 'follow': return i18n.t.notifications.followed;
+        case 'mention': return i18n.t.notifications.mentioned;
+        case 'reply': return i18n.t.notifications.replied;
+        case 'quote': return i18n.t.notifications.quoted;
+        default: return type;
+      }
+    }
+    // Grouped — use the grouped i18n strings
+    switch (type) {
+      case 'like': return i18n.t.notifications.likedGroup.replace('{count}', String(count));
+      case 'repost': return i18n.t.notifications.boostedGroup.replace('{count}', String(count));
+      case 'follow': return i18n.t.notifications.followedGroup.replace('{count}', String(count));
+      default: return type;
+    }
+  }
+
+  /** Max avatars to show inline before "+N more" */
+  const MAX_AVATARS = 5;
 </script>
 
 <svelte:head><title>CrispDeck — Notifications</title><meta name="description" content="Unified notifications from all your accounts" /></svelte:head>
@@ -149,7 +170,7 @@
     <div class="text-center py-12">
       <Loader2 size={32} class="text-[var(--color-text-muted)] animate-spin mx-auto" />
     </div>
-  {:else if notifications.length === 0}
+  {:else if groups.length === 0}
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <Bell size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
       <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">{i18n.t.notifications.noNotifications}</h3>
@@ -159,43 +180,110 @@
     </div>
   {:else}
     <div class="space-y-1">
-      {#each notifications as notif (notif.id)}
-        {@const Icon = getIcon(notif.type)}
-        <div class="flex items-start gap-3 p-3 rounded-lg hover:bg-[var(--color-surface)] transition-colors">
-          <div class="flex-shrink-0 mt-0.5 {getColor(notif.type)}">
-            <Icon size={16} />
-          </div>
-          <div class="flex items-start gap-2 flex-1 min-w-0">
-            {#if notif.author.avatar}
-              <a href="/profile?handle={encodeURIComponent(notif.author.handle)}&platform={notif.platform}">
-                <img loading="lazy" src={notif.author.avatar} alt="" class="w-8 h-8 rounded-full flex-shrink-0" />
-              </a>
-            {/if}
-            <div class="flex-1 min-w-0">
-              <p class="text-sm">
-                <a href="/profile?handle={encodeURIComponent(notif.author.handle)}&platform={notif.platform}" class="font-semibold hover:underline">
-                  {notif.author.displayName || notif.author.handle}
-                </a>
-                <span class="text-[var(--color-text-muted)]">
-                  {#if notif.type === 'like' || notif.type === 'favourite'}{i18n.t.notifications.liked}
-                  {:else if notif.type === 'repost' || notif.type === 'reblog'}{i18n.t.notifications.boosted}
-                  {:else if notif.type === 'follow'}{i18n.t.notifications.followed}
-                  {:else if notif.type === 'mention'}{i18n.t.notifications.mentioned}
-                  {:else if notif.type === 'reply'}{i18n.t.notifications.replied}
-                  {:else if notif.type === 'quote'}{i18n.t.notifications.quoted}
-                  {:else}{notif.type}
+      {#each groups as group (group.id)}
+        {@const Icon = getIcon(group.type)}
+        {@const isGrouped = group.actors.length > 1}
+        {@const isExpanded = expandedGroups.has(group.id)}
+        <div class="rounded-lg hover:bg-[var(--color-surface)] transition-colors">
+          <!-- Main notification row -->
+          <div class="flex items-start gap-3 p-3">
+            <div class="flex-shrink-0 mt-0.5 {getColor(group.type)}">
+              <Icon size={16} />
+            </div>
+            <div class="flex items-start gap-2 flex-1 min-w-0">
+              <!-- Avatar stack for grouped, single avatar otherwise -->
+              <div class="flex items-center flex-shrink-0">
+                {#if isGrouped}
+                  <div class="flex -space-x-2">
+                    {#each group.actors.slice(0, MAX_AVATARS) as actor}
+                      {#if actor.avatar}
+                        <a href="/profile?handle={encodeURIComponent(actor.handle)}&platform={actor.platform}" title={actor.displayName || actor.handle}>
+                          <img loading="lazy" src={actor.avatar} alt="" class="w-7 h-7 rounded-full border-2 border-[var(--color-bg)]" />
+                        </a>
+                      {/if}
+                    {/each}
+                    {#if group.actors.length > MAX_AVATARS}
+                      <span class="w-7 h-7 rounded-full bg-[var(--color-surface)] border-2 border-[var(--color-bg)] flex items-center justify-center text-[9px] font-bold text-[var(--color-text-muted)]">
+                        +{group.actors.length - MAX_AVATARS}
+                      </span>
+                    {/if}
+                  </div>
+                {:else if group.actors[0]?.avatar}
+                  <a href="/profile?handle={encodeURIComponent(group.actors[0].handle)}&platform={group.actors[0].platform}">
+                    <img loading="lazy" src={group.actors[0].avatar} alt="" class="w-8 h-8 rounded-full flex-shrink-0" />
+                  </a>
+                {/if}
+              </div>
+
+              <div class="flex-1 min-w-0">
+                <p class="text-sm">
+                  {#if isGrouped}
+                    <!-- Grouped: show first actor name + "and N others" -->
+                    <a href="/profile?handle={encodeURIComponent(group.actors[0].handle)}&platform={group.actors[0].platform}" class="font-semibold hover:underline">
+                      {group.actors[0].displayName || group.actors[0].handle}
+                    </a>
+                    <span class="text-[var(--color-text-muted)]">
+                      {getActionText(group.type, group.actors.length)}
+                    </span>
+                    <!-- Expand/collapse toggle -->
+                    <button
+                      onclick={() => toggleGroup(group.id)}
+                      class="inline-flex items-center ml-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
+                      aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                    >
+                      {#if isExpanded}
+                        <ChevronUp size={12} />
+                      {:else}
+                        <ChevronDown size={12} />
+                      {/if}
+                    </button>
+                  {:else}
+                    <!-- Single notification -->
+                    <a href="/profile?handle={encodeURIComponent(group.actors[0].handle)}&platform={group.actors[0].platform}" class="font-semibold hover:underline">
+                      {group.actors[0].displayName || group.actors[0].handle}
+                    </a>
+                    <span class="text-[var(--color-text-muted)]">
+                      {getActionText(group.type, 1)}
+                    </span>
                   {/if}
+                </p>
+                {#if group.text}
+                  <p class="text-xs text-[var(--color-text-muted)] mt-1 line-clamp-2">{group.text}</p>
+                {/if}
+              </div>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              {#if group.platforms.size === 1}
+                <span class="w-2 h-2 rounded-full" style="background: {[...group.platforms][0] === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"></span>
+              {:else}
+                <!-- Both platforms -->
+                <span class="flex -space-x-1">
+                  <span class="w-2 h-2 rounded-full" style="background: var(--color-bluesky)"></span>
+                  <span class="w-2 h-2 rounded-full" style="background: var(--color-mastodon)"></span>
                 </span>
-              </p>
-              {#if notif.text}
-                <p class="text-xs text-[var(--color-text-muted)] mt-1 line-clamp-2">{notif.text}</p>
               {/if}
+              <span class="text-[10px] text-[var(--color-text-muted)]">{formatTime(group.latestAt)}</span>
             </div>
           </div>
-          <div class="flex items-center gap-2 flex-shrink-0">
-            <span class="w-2 h-2 rounded-full" style="background: {notif.platform === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"></span>
-            <span class="text-[10px] text-[var(--color-text-muted)]">{formatTime(notif.createdAt)}</span>
-          </div>
+
+          <!-- Expanded actor list -->
+          {#if isGrouped && isExpanded}
+            <div class="pl-10 pr-3 pb-3 space-y-1">
+              {#each group.actors as actor}
+                <a
+                  href="/profile?handle={encodeURIComponent(actor.handle)}&platform={actor.platform}"
+                  class="flex items-center gap-2 p-1.5 rounded hover:bg-[var(--color-bg)] transition-colors"
+                >
+                  {#if actor.avatar}
+                    <img loading="lazy" src={actor.avatar} alt="" class="w-5 h-5 rounded-full" />
+                  {/if}
+                  <span class="text-xs font-medium">{actor.displayName || actor.handle}</span>
+                  <span class="text-[10px] text-[var(--color-text-muted)]">@{actor.handle}</span>
+                  <span class="w-1.5 h-1.5 rounded-full ml-auto" style="background: {actor.platform === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"></span>
+                </a>
+              {/each}
+            </div>
+          {/if}
         </div>
       {/each}
     </div>

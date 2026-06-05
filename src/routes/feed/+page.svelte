@@ -9,10 +9,14 @@
   import { MastodonClient } from '$lib/api/mastodon';
   import { notifyNewPosts, getPermission } from '$lib/push-notifications';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { normalizePost, filterPosts, sortPosts, detectCrossposts } from '$lib/api/unified';
+  import { normalizePost, filterPosts, sortPosts, detectCrossposts, buildIdentityPairs } from '$lib/api/unified';
+  import { listIdentities } from '$lib/db';
   import type { UnifiedPost, FeedItem, Filters, Account, CrosspostGroup as CrosspostGroupType } from '$lib/types';
+  import { buildAffinityMap, rankForYou } from '$lib/for-you';
+  import { searchArchive } from '$lib/archive';
+  import { jetstream } from '$lib/jetstream';
 
-  type FeedMode = 'timeline' | 'my-posts';
+  type FeedMode = 'timeline' | 'my-posts' | 'for-you';
 
   let accounts: Account[] = $state([]);
   let posts: UnifiedPost[] = $state([]);
@@ -38,6 +42,8 @@
   });
 
   let clientEntries: Map<number, ClientEntry> = new Map();
+  let identityPairs: Set<string> = $state(new Set());
+  let affinityMap: Map<string, number> = $state(new Map());
 
   // Infinite scroll
   let scrollSentinel: HTMLDivElement | undefined = $state();
@@ -56,6 +62,23 @@
       const result = await initAllClients();
       accounts = result.accounts;
       clientEntries = result.clients;
+      // Load confirmed identities for crosspost dedup + affinity for "For You"
+      try {
+        const ids = await listIdentities({ confirmed_only: true });
+        identityPairs = buildIdentityPairs(ids);
+      } catch { /* non-critical */ }
+      try {
+        const [liked, reposted, replied] = await Promise.all([
+          searchArchive({ type: 'like', limit: 500 }),
+          searchArchive({ type: 'repost', limit: 500 }),
+          searchArchive({ type: 'reply', limit: 500 }),
+        ]);
+        affinityMap = buildAffinityMap(liked, reposted, replied);
+      } catch { /* archive may not exist yet */ }
+      // Start Jetstream if enabled
+      if (localStorage.getItem('crispdeck-live-counters') === 'true') {
+        jetstream.setEnabled(true);
+      }
       if (accounts.length > 0) {
         await loadFeed();
       }
@@ -348,8 +371,12 @@
     platformFilter === 'all' ? posts : posts.filter(p => p.platform === platformFilter)
   );
   const filtered = $derived(filterPosts(platformFiltered, filters));
-  const sorted = $derived(sortPosts(filtered, filters.sortBy));
-  const finalFeed = $derived(detectCrossposts(sorted));
+  const sorted = $derived(
+    feedMode === 'for-you'
+      ? rankForYou(filtered, affinityMap)
+      : sortPosts(filtered, filters.sortBy)
+  );
+  const finalFeed = $derived(detectCrossposts(sorted, identityPairs.size > 0 ? identityPairs : undefined));
   const hasMoreContent = $derived(Object.values(cursors).some(c => !!c));
   const isLoading = $derived(loading || loadingMore);
 
@@ -399,6 +426,12 @@
         >
           <Globe size={12} />
           {i18n.t.feed.timeline}
+        </button>
+        <button
+          onclick={() => switchMode('for-you')}
+          class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {feedMode === 'for-you' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+        >
+          {i18n.t.feed.forYou}
         </button>
         <button
           onclick={() => switchMode('my-posts')}

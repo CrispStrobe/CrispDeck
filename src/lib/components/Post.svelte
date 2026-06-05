@@ -2,7 +2,8 @@
   import { Heart, Repeat, MessageCircle, Quote, Bookmark, Share, Flag, Languages, Camera, Loader2, Volume2, VolumeOff } from '@lucide/svelte';
   import { addBookmark, removeBookmark, isBookmarked } from '$lib/bookmarks';
   import { translateText, type TranslationResult } from '$lib/translate';
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import { jetstream } from '$lib/jetstream';
   import type { UnifiedPost } from '$lib/types';
 
   let { post, hideMedia = false, onlike, onboost, onreply, onquote }: {
@@ -17,9 +18,29 @@
   let liked = $state(false);
   let boosted = $state(false);
   let bookmarked = $state(false);
+  let hideEngagement = $state(false);
+  let unsubJetstream: (() => void) | null = null;
 
   onMount(async () => {
     bookmarked = await isBookmarked(post.uri);
+    hideEngagement = localStorage.getItem('crispdeck-hide-engagement') === 'true';
+
+    // Subscribe to real-time count updates for this post
+    if (post.platform === 'bluesky') {
+      jetstream.watchPost(post.uri);
+      unsubJetstream = jetstream.subscribe((update) => {
+        if (update.uri !== post.uri) return;
+        if (update.type === 'like') localLikeCount += update.delta;
+        if (update.type === 'repost') localBoostCount += update.delta;
+      });
+    }
+  });
+
+  onDestroy(() => {
+    if (post.platform === 'bluesky') {
+      jetstream.unwatchPost(post.uri);
+    }
+    unsubJetstream?.();
   });
 
   let copied = $state(false);
@@ -321,21 +342,83 @@
     if (embed.$type === 'app.bsky.embed.images#view' && embed.images) {
       return embed.images;
     }
+    // Images inside recordWithMedia (quote + images)
+    if (embed.$type === 'app.bsky.embed.recordWithMedia#view' && embed.media) {
+      if (embed.media.$type === 'app.bsky.embed.images#view' && embed.media.images) {
+        return embed.media.images;
+      }
+    }
     return [];
   }
 
   function getBskyExternal(): any | null {
     if (post.platform !== 'bluesky' || !post.embeds) return null;
     const embed = post.embeds as any;
+    // Direct external link
     if (embed.$type === 'app.bsky.embed.external#view' && embed.external) {
       return embed.external;
+    }
+    // External link inside recordWithMedia (quote + link card)
+    if (embed.$type === 'app.bsky.embed.recordWithMedia#view' && embed.media) {
+      if (embed.media.$type === 'app.bsky.embed.external#view' && embed.media.external) {
+        return embed.media.external;
+      }
     }
     return null;
   }
 
+  function getBskyQuote(): any | null {
+    if (post.platform !== 'bluesky' || !post.embeds) return null;
+    const embed = post.embeds as any;
+    // Direct quote
+    if (embed.$type === 'app.bsky.embed.record#view' && embed.record) {
+      const rec = embed.record;
+      if (rec.$type === 'app.bsky.embed.record#viewRecord') {
+        return rec;
+      }
+    }
+    // Quote inside recordWithMedia
+    if (embed.$type === 'app.bsky.embed.recordWithMedia#view' && embed.record) {
+      const rec = embed.record?.record;
+      if (rec?.$type === 'app.bsky.embed.record#viewRecord') {
+        return rec;
+      }
+    }
+    return null;
+  }
+
+  function getBskyVideo(): any | null {
+    if (post.platform !== 'bluesky' || !post.embeds) return null;
+    const embed = post.embeds as any;
+    if (embed.$type === 'app.bsky.embed.video#view') {
+      return embed;
+    }
+    if (embed.$type === 'app.bsky.embed.recordWithMedia#view' && embed.media) {
+      if (embed.media.$type === 'app.bsky.embed.video#view') {
+        return embed.media;
+      }
+    }
+    return null;
+  }
+
+  function getMastodonCard(): any | null {
+    if (post.platform !== 'mastodon') return null;
+    const raw = post.raw as any;
+    const target = raw.reblog ?? raw;
+    const card = target.card ?? target.preview_card;
+    if (!card || !card.url) return null;
+    // Don't show card if there are media attachments (images take priority)
+    const media = target.mediaAttachments ?? target.media_attachments ?? [];
+    if (Array.isArray(media) && media.length > 0) return null;
+    return card;
+  }
+
+  const mastodonCard = $derived(getMastodonCard());
   const mastodonMedia = $derived(getMastodonMedia());
   const bskyImages = $derived(getBskyImages());
   const bskyExternal = $derived(getBskyExternal());
+  const bskyQuote = $derived(getBskyQuote());
+  const bskyVideo = $derived(getBskyVideo());
   const mastodonHtml = $derived(getMastodonHtml());
   const platformColor = $derived(post.platform === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)');
 
@@ -465,6 +548,56 @@
         </a>
       {/if}
 
+      <!-- Bluesky quoted post -->
+      {#if bskyQuote}
+        <div class="mt-2 border border-[var(--color-border)] rounded-lg p-3 bg-[var(--color-bg)]">
+          <div class="flex items-center gap-2 mb-1">
+            {#if bskyQuote.author?.avatar}
+              <img loading="lazy" src={bskyQuote.author.avatar} alt="" class="w-4 h-4 rounded-full" />
+            {/if}
+            <span class="text-xs font-medium">{bskyQuote.author?.displayName || bskyQuote.author?.handle}</span>
+            <span class="text-[10px] text-[var(--color-text-muted)]">@{bskyQuote.author?.handle}</span>
+          </div>
+          <p class="text-xs text-[var(--color-text-muted)] line-clamp-3">{(bskyQuote.value as any)?.text ?? ''}</p>
+          {#if bskyQuote.embeds?.[0]}
+            {@const qEmbed = bskyQuote.embeds[0]}
+            {#if qEmbed.$type === 'app.bsky.embed.images#view' && qEmbed.images?.[0]}
+              <img loading="lazy" src={qEmbed.images[0].thumb} alt={qEmbed.images[0].alt || ''} class="mt-1.5 rounded w-full h-24 object-cover" />
+            {/if}
+            {#if qEmbed.$type === 'app.bsky.embed.external#view' && qEmbed.external}
+              <div class="mt-1.5 flex items-center gap-2 text-[10px] text-[var(--color-text-muted)]">
+                {#if qEmbed.external.thumb}
+                  <img loading="lazy" src={qEmbed.external.thumb} alt="" class="w-10 h-10 rounded object-cover" />
+                {/if}
+                <div class="min-w-0">
+                  <p class="font-medium truncate">{qEmbed.external.title}</p>
+                  <p class="truncate">{new URL(qEmbed.external.uri).hostname}</p>
+                </div>
+              </div>
+            {/if}
+          {/if}
+        </div>
+      {/if}
+
+      <!-- Bluesky video -->
+      {#if bskyVideo}
+        <div class="mt-2 rounded-lg overflow-hidden border border-[var(--color-border)]">
+          {#if bskyVideo.thumbnail}
+            <div class="relative">
+              <img loading="lazy" src={bskyVideo.thumbnail} alt={bskyVideo.alt || 'Video'} class="w-full aspect-video object-cover" />
+              <div class="absolute inset-0 flex items-center justify-center">
+                <div class="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center">
+                  <svg class="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                </div>
+              </div>
+            </div>
+          {/if}
+          {#if bskyVideo.alt}
+            <p class="px-3 py-1.5 text-[10px] text-[var(--color-text-muted)]">{bskyVideo.alt}</p>
+          {/if}
+        </div>
+      {/if}
+
       <!-- Mastodon images -->
       {#if mastodonMedia.length > 0}
         <div class="grid grid-cols-2 gap-2 pt-2">
@@ -477,6 +610,22 @@
             {/if}
           {/each}
         </div>
+      {/if}
+
+      <!-- Mastodon link card -->
+      {#if mastodonCard}
+        <a href={mastodonCard.url} target="_blank" rel="noopener noreferrer" class="mt-2 block border border-[var(--color-border)] rounded-lg overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
+          {#if mastodonCard.image}
+            <img loading="lazy" src={mastodonCard.image} alt="" class="w-full h-32 object-cover" />
+          {/if}
+          <div class="p-3">
+            <p class="text-xs text-[var(--color-text-muted)]">{mastodonCard.provider_name || new URL(mastodonCard.url).hostname}</p>
+            <p class="font-semibold text-sm text-[var(--color-text)]">{mastodonCard.title}</p>
+            {#if mastodonCard.description}
+              <p class="text-xs text-[var(--color-text-muted)] line-clamp-2">{mastodonCard.description}</p>
+            {/if}
+          </div>
+        </a>
       {/if}
 
       <!-- Mastodon poll -->
@@ -518,12 +667,12 @@
       {#if onreply}
         <button onclick={() => onreply?.(post)} class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-blue-400 transition-colors" title="Reply" aria-label="Reply ({post.replyCount ?? 0} replies)">
           <MessageCircle size={14} />
-          <span class="text-xs">{post.replyCount ?? 0}</span>
+          {#if !hideEngagement}<span class="text-xs">{post.replyCount ?? 0}</span>{/if}
         </button>
       {:else}
         <div class="flex items-center gap-1.5 text-[var(--color-text-muted)]" aria-label="{post.replyCount ?? 0} replies">
           <MessageCircle size={14} />
-          <span class="text-xs">{post.replyCount ?? 0}</span>
+          {#if !hideEngagement}<span class="text-xs">{post.replyCount ?? 0}</span>{/if}
         </div>
       {/if}
 
@@ -536,7 +685,7 @@
         aria-pressed={boosted}
       >
         <Repeat size={14} />
-        <span class="text-xs">{localBoostCount}</span>
+        {#if !hideEngagement}<span class="text-xs">{localBoostCount}</span>{/if}
       </button>
 
       {#if onquote}
@@ -559,7 +708,7 @@
         aria-pressed={liked}
       >
         <Heart size={14} class={liked ? 'fill-current' : ''} />
-        <span class="text-xs">{localLikeCount}</span>
+        {#if !hideEngagement}<span class="text-xs">{localLikeCount}</span>{/if}
       </button>
 
       <button
