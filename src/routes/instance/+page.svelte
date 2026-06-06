@@ -159,7 +159,7 @@
       <div class="p-5">
         <h2 class="text-xl font-bold">{instance.title}</h2>
         <p class="text-xs text-[var(--color-text-muted)] mt-1">
-          {instance.uri} · v{instance.version} · {instance.registrations ? 'Open registrations' : 'Closed registrations'}
+          {instance.uri} · v{instance.version} · {instance.registrations ? i18n.t.instance.openRegistrations : i18n.t.instance.closedRegistrations}
         </p>
         {#if instance.shortDescription}
           <p class="text-sm text-[var(--color-text)] mt-3">{instance.shortDescription}</p>

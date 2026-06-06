@@ -51,7 +51,7 @@
         </div>
         <p class="text-2xl font-bold">{bskyAccounts.length}</p>
         <p class="text-xs text-[var(--color-text-muted)]">
-          {bskyAccounts.length === 1 ? 'account' : 'accounts'} connected
+          {i18n.t.dashboard.accountsConnected.replace('{count}', String(bskyAccounts.length))}
         </p>
       </div>
       <div class="bg-[var(--color-surface)] rounded-lg p-4 border border-[var(--color-border)]">
@@ -61,13 +61,13 @@
         </div>
         <p class="text-2xl font-bold">{mastoAccounts.length}</p>
         <p class="text-xs text-[var(--color-text-muted)]">
-          {mastoAccounts.length === 1 ? 'account' : 'accounts'} connected
+          {i18n.t.dashboard.accountsConnected.replace('{count}', String(mastoAccounts.length))}
         </p>
       </div>
     </div>
 
     <!-- Quick actions -->
-    <h2 class="text-lg font-semibold mb-3">Quick Actions</h2>
+    <h2 class="text-lg font-semibold mb-3">{i18n.t.dashboard.quickActions}</h2>
     <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
       <a href="/feed" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
         <Rss size={20} />
@@ -103,7 +103,7 @@
       </a>
       <a href="/identities?scan=1" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
         <ScanSearch size={20} />
-        <span>Scan Identities</span>
+        <span>{i18n.t.dashboard.scanIdentities}</span>
       </a>
     </div>
 

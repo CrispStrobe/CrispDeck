@@ -218,7 +218,7 @@
     </button>
     {#if modLists.length > 0}
       <button onclick={() => activeTab = 'lists'} class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors {activeTab === 'lists' ? 'border-[var(--color-bluesky)] text-[var(--color-bluesky)]' : 'border-transparent text-[var(--color-text-muted)]'}">
-        <Shield size={14} class="inline mr-1" /> Lists ({modLists.length})
+        <Shield size={14} class="inline mr-1" /> {i18n.t.lists.title} ({modLists.length})
       </button>
     {/if}
   </div>

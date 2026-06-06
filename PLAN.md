@@ -1,10 +1,10 @@
 # CrispDeck Development Plan
 
-## Current State (2026-06-05)
+## Current State (2026-06-06)
 
-v0.4.0 — 518 tests, 24 pages, live at https://crispdeck.vercel.app
+v0.4.1 — 524 tests, 24 pages, live at https://crispdeck.vercel.app
 
-Items 1–29, 31, 33–40 are **done**. Item 32 (DeepL) was reverted — prefer own services. Remaining: 30, 41–43, and polish items 44–48.
+Items 1–29, 31, 33–48 are **done** (except 32 DeepL — reverted, prefer own services). Remaining: 30 (visual feed builder) and 43 (Nostr/Threads).
 
 ---
 

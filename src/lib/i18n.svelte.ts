@@ -419,6 +419,15 @@ export const translations = {
       readAsArticle: 'Read as article',
       parts: 'parts',
     },
+    instance: {
+      openRegistrations: 'Open registrations',
+      closedRegistrations: 'Closed registrations',
+    },
+    dashboard: {
+      accountsConnected: '{count} connected',
+      quickActions: 'Quick Actions',
+      scanIdentities: 'Scan Identities',
+    },
     common: {
       dismiss: 'dismiss',
       loading: 'Loading...',
@@ -837,6 +846,15 @@ export const translations = {
     thread: {
       readAsArticle: 'Als Artikel lesen',
       parts: 'Teile',
+    },
+    instance: {
+      openRegistrations: 'Offene Registrierung',
+      closedRegistrations: 'Geschlossene Registrierung',
+    },
+    dashboard: {
+      accountsConnected: '{count} verbunden',
+      quickActions: 'Schnellaktionen',
+      scanIdentities: 'Identitäten scannen',
     },
     common: {
       dismiss: 'schließen',
