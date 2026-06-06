@@ -13,13 +13,13 @@ A unified Mastodon + Bluesky social media client with:
 
 ## Current State (2026-06-06)
 
-v0.5.0 — 566 tests (47 test files), 25 pages, live at https://crispdeck.vercel.app
+v0.5.1 — 602 tests (48 test files), 26 pages, live at https://crispdeck.vercel.app
 
 **License**: AGPL-3.0-only
 
 ---
 
-## Completed Items (1–48, except 32 and 30)
+## Completed Items (1–48, except 32)
 
 All items below are **done** and committed. This section exists as reference for context only.
 
@@ -54,14 +54,15 @@ Analytics with full pagination, local post archive (IndexedDB), deck columns (11
 ## Remaining Work
 
 ### 30. Visual Bluesky feed builder
-- **Status**: Not started
-- **Effort**: Large
+- **Status**: Done (client-side preview + deck integration; network publishing deferred)
+- **Effort**: Medium
 - **Description**: GUI for creating custom Bluesky algorithmic feeds without coding
-- Filter by: keywords, language, has-media, min-likes, author list, exclude terms
-- Preview feed results before publishing
-- Publish feed to Bluesky network via `app.bsky.feed.generator`
-- Manage/edit/delete own published feeds
-- **Note**: Publishing requires a running feed generator service. A client-side preview + rule editor is doable; actual network publishing needs a server component.
+- Filter by: keywords, exact phrases, language, has-media, author list, exclude terms, domain, mentions, date range
+- Live preview using `app.bsky.feed.searchPosts` (Lucene-like query syntax)
+- Save/load/duplicate/delete feed definitions (localStorage)
+- Add custom feeds as deck columns
+- **Key files**: `src/lib/feed-builder.ts`, `src/routes/feed-builder/+page.svelte`
+- **Note**: Publishing to the Bluesky network via `app.bsky.feed.generator` requires a running feed generator server (implements `getFeedSkeleton`). The client-side preview and deck column integration work fully without a server. Network publishing is a future enhancement.
 
 ### 43. Threads support (hybrid: official API + ActivityPub federation)
 - **Status**: Done
