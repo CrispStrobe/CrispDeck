@@ -2,9 +2,9 @@
 
 ## Current State (2026-06-05)
 
-v0.3.0 → v0.4.0 in progress — 491 tests, 24 pages, live at https://crispdeck.vercel.app
+v0.4.0 — 518 tests, 24 pages, live at https://crispdeck.vercel.app
 
-Items 1–25 from the original plan are **done**. Items 26–29, 31, 33–40 are **done**. Item 32 (DeepL) was reverted — prefer own services. Remaining: 30 (visual feed builder) and blue ocean items 41–43.
+Items 1–29, 31, 33–40 are **done**. Item 32 (DeepL) was reverted — prefer own services. Remaining: 30, 41–43, and polish items 44–48.
 
 ---
 
@@ -208,3 +208,27 @@ Route: /catchup?hours=6
 5. Mark as read when user reaches bottom
 6. Badge in sidebar: "Catch up (42 posts)"
 ```
+
+---
+
+## Phase 5: Polish & Robustness (v0.4.1)
+
+#### 44. Fix Mastodon snake_case media properties
+- Raw `fetch()` responses use `media_attachments`, `preview_url`, `remote_url` — not camelCase
+- `getMastodonMedia()` in Post.svelte needs to handle both
+- Same for deck columns that construct Mastodon posts from raw fetch
+
+#### 45. Fix Mastodon link card snake_case properties
+- `provider_name` vs `providerName` in card rendering
+- Ensure `getMastodonCard()` handles both formats
+
+#### 46. Add `g+u` (catch-up) to keyboard shortcuts dialog
+- The `?` overlay lists all shortcuts but doesn't include the new catch-up shortcut
+
+#### 47. Show hint in "For You" mode when archive is empty
+- Currently shows empty feed with no explanation
+- Should show: "Build your archive first to enable personalized ranking" with link to /archive
+
+#### 48. Close AI compose menu on click-outside
+- Currently the Sparkles dropdown stays open when clicking elsewhere
+- Add click-outside handler (same pattern as other dropdowns in compose)

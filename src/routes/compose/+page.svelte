@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { logCrosspost, saveDraft as dbSaveDraft, listDrafts, deleteDraft as dbDeleteDraft } from '$lib/db';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { PenSquare, Send, Loader2, X, ImagePlus, AlertTriangle, Check, BarChart3, Shield, Mic, MicOff, Sparkles } from '@lucide/svelte';
+  import { PenSquare, Send, Loader2, X, ImagePlus, AlertTriangle, Check, BarChart3, Shield, Mic, MicOff, Sparkles, Clock } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import AccountPicker from '$lib/components/AccountPicker.svelte';
   import MentionAutocomplete from '$lib/components/MentionAutocomplete.svelte';
@@ -16,6 +16,8 @@
   import { validateMediaFile, createPreviewUrl, revokePreviewUrl } from '$lib/compose/media';
   import { tryVoiceCommand, looksLikeCommand } from '$lib/voice-commands';
   import { runAIAction, isAIConfigured, type AIAction } from '$lib/compose/ai';
+  import { computeBestHour, formatHour, type PostingTimeInsight } from '$lib/posting-times';
+  import { searchArchive } from '$lib/archive';
   import type { Account, Platform } from '$lib/types';
 
   let accounts: Account[] = $state([]);
@@ -84,6 +86,9 @@
     }
   }
 
+  // Posting time insights
+  let timingInsights: PostingTimeInsight[] = $state([]);
+
   // Quote context
   let quoteUri = $state('');
   let quoteCid = $state('');
@@ -143,6 +148,23 @@
     } finally {
       loading = false;
       templates = listTemplates();
+
+      // Load posting time insights from archive
+      try {
+        const archived = await searchArchive({ type: 'post', limit: 1000 });
+        const postData = archived.map(p => ({
+          createdAt: p.createdAt,
+          likeCount: p.likeCount,
+          repostCount: p.repostCount,
+          platform: p.platform,
+        }));
+        const insights: PostingTimeInsight[] = [];
+        const bsky = computeBestHour(postData, 'bluesky');
+        const masto = computeBestHour(postData, 'mastodon');
+        if (bsky) insights.push(bsky);
+        if (masto) insights.push(masto);
+        timingInsights = insights;
+      } catch { /* archive may not exist */ }
     }
   });
 
@@ -640,6 +662,9 @@
                   {#if aiLoading}<Loader2 size={16} class="animate-spin" />{:else}<Sparkles size={16} />{/if}
                 </button>
                 {#if showAIMenu}
+                  <!-- Click-outside backdrop -->
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <div class="fixed inset-0 z-40" onclick={() => showAIMenu = false} onkeydown={() => {}}></div>
                   <div class="absolute bottom-full left-0 mb-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl z-50 w-44 py-1">
                     <button onclick={() => handleAIAction('correct')} disabled={!text.trim()} class="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)] disabled:opacity-30">
                       {i18n.t.compose.aiCorrect}
@@ -735,6 +760,18 @@
               </select>
             {/if}
           </div>
+
+          {#if timingInsights.length > 0}
+            <div class="flex items-center gap-3 text-[10px] text-[var(--color-text-muted)]">
+              <Clock size={10} />
+              {#each timingInsights as insight}
+                <span>
+                  <span class="w-1.5 h-1.5 rounded-full inline-block" style="background: {insight.platform === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"></span>
+                  {i18n.t.compose.bestTime} {formatHour(insight.bestHour)}
+                </span>
+              {/each}
+            </div>
+          {/if}
 
           <div class="flex items-center gap-2">
             <button

@@ -217,6 +217,19 @@
 
   const confirmedCount = $derived(identities.filter(i => i.confirmed).length);
   const pendingCount = $derived(identities.filter(i => !i.confirmed).length);
+
+  // Follower overlap visualization
+  const confirmedIdentities = $derived(identities.filter(i => i.confirmed));
+  const bothPlatforms = $derived(confirmedIdentities.filter(i =>
+    i.links.some(l => l.platform === 'bluesky') && i.links.some(l => l.platform === 'mastodon')
+  ).length);
+  const bskyOnly = $derived(confirmedIdentities.filter(i =>
+    i.links.some(l => l.platform === 'bluesky') && !i.links.some(l => l.platform === 'mastodon')
+  ).length);
+  const mastoOnly = $derived(confirmedIdentities.filter(i =>
+    !i.links.some(l => l.platform === 'bluesky') && i.links.some(l => l.platform === 'mastodon')
+  ).length);
+  const overlapTotal = $derived(bothPlatforms + bskyOnly + mastoOnly);
 </script>
 
 <svelte:head><title>CrispDeck — Identities</title></svelte:head>
@@ -250,6 +263,39 @@
       </button>
     </div>
   </div>
+
+  <!-- Follower overlap chart -->
+  {#if overlapTotal > 0}
+    <div class="mb-6 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-4">
+      <h3 class="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-3">{i18n.t.identities.followerOverlap}</h3>
+      <div class="flex items-center gap-4">
+        <!-- Bar chart -->
+        <div class="flex-1">
+          <div class="flex h-6 rounded-full overflow-hidden">
+            {#if bskyOnly > 0}
+              <div class="bg-[var(--color-bluesky)]" style="width: {(bskyOnly / overlapTotal) * 100}%" title="Bluesky only: {bskyOnly}"></div>
+            {/if}
+            {#if bothPlatforms > 0}
+              <div class="bg-gradient-to-r from-[var(--color-bluesky)] to-[var(--color-mastodon)]" style="width: {(bothPlatforms / overlapTotal) * 100}%" title="Both: {bothPlatforms}"></div>
+            {/if}
+            {#if mastoOnly > 0}
+              <div class="bg-[var(--color-mastodon)]" style="width: {(mastoOnly / overlapTotal) * 100}%" title="Mastodon only: {mastoOnly}"></div>
+            {/if}
+          </div>
+          <div class="flex justify-between mt-2 text-[10px] text-[var(--color-text-muted)]">
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded bg-[var(--color-bluesky)]"></span> {i18n.t.identities.bskyOnly} ({bskyOnly})</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded bg-gradient-to-r from-[var(--color-bluesky)] to-[var(--color-mastodon)]"></span> {i18n.t.identities.bothPlatforms} ({bothPlatforms})</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded bg-[var(--color-mastodon)]"></span> {i18n.t.identities.mastoOnly} ({mastoOnly})</span>
+          </div>
+        </div>
+        <!-- Summary -->
+        <div class="text-right flex-shrink-0">
+          <div class="text-2xl font-bold text-[var(--color-text)]">{overlapTotal}</div>
+          <div class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.identities.totalMatched}</div>
+        </div>
+      </div>
+    </div>
+  {/if}
 
   {#if error}
     <div class="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">

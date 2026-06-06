@@ -56,6 +56,8 @@ export const translations = {
       noTemplates: 'No templates saved',
       preview: 'Preview',
       altTextPlaceholder: 'Describe this image for accessibility...',
+      // Posting time
+      bestTime: 'Best time:',
       // AI compose
       aiAssist: 'AI assist',
       aiCorrect: 'Fix grammar & typos',
@@ -273,6 +275,8 @@ export const translations = {
       posts: '{count} posts',
       timeline: 'Timeline',
       forYou: 'For You',
+      forYouHint: 'Build your archive first to enable personalized ranking based on who you interact with most.',
+      buildArchive: 'Build Archive',
       myPosts: 'My Posts',
       all: 'All',
       filtersSort: 'Filters & Sort',
@@ -404,6 +408,13 @@ export const translations = {
       blocked: 'User blocked.',
       muted: 'User muted.',
     },
+    identities: {
+      followerOverlap: 'Follower Overlap',
+      bskyOnly: 'Bluesky only',
+      mastoOnly: 'Mastodon only',
+      bothPlatforms: 'Both',
+      totalMatched: 'matched identities',
+    },
     thread: {
       readAsArticle: 'Read as article',
       parts: 'parts',
@@ -470,6 +481,7 @@ export const translations = {
       noTemplates: 'Keine Vorlagen gespeichert',
       preview: 'Vorschau',
       altTextPlaceholder: 'Beschreibe dieses Bild für Barrierefreiheit...',
+      bestTime: 'Beste Zeit:',
       aiAssist: 'KI-Assistent',
       aiCorrect: 'Grammatik & Tippfehler korrigieren',
       aiShorten: 'Text kürzen',
@@ -682,6 +694,8 @@ export const translations = {
       posts: '{count} Beiträge',
       timeline: 'Zeitleiste',
       forYou: 'Für dich',
+      forYouHint: 'Erstellen Sie zuerst Ihr Archiv, um personalisiertes Ranking basierend auf Ihren Interaktionen zu aktivieren.',
+      buildArchive: 'Archiv erstellen',
       myPosts: 'Meine Beiträge',
       all: 'Alle',
       filtersSort: 'Filter & Sortierung',
@@ -812,6 +826,13 @@ export const translations = {
       noAccount: 'Kein {platform}-Konto verbunden',
       blocked: 'Benutzer blockiert.',
       muted: 'Benutzer stummgeschaltet.',
+    },
+    identities: {
+      followerOverlap: 'Follower-Überschneidung',
+      bskyOnly: 'Nur Bluesky',
+      mastoOnly: 'Nur Mastodon',
+      bothPlatforms: 'Beide',
+      totalMatched: 'erkannte Identitäten',
     },
     thread: {
       readAsArticle: 'Als Artikel lesen',

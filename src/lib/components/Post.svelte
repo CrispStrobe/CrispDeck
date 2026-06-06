@@ -327,10 +327,20 @@
   function getMastodonMedia(): any[] {
     if (post.platform !== 'mastodon') return [];
     const raw = post.raw as any;
-    const sources = [post.embeds, raw.mediaAttachments, raw.reblog?.mediaAttachments];
+    const target = raw.reblog ?? raw;
+    // Handle both camelCase (masto library) and snake_case (raw fetch)
+    const sources = [
+      post.embeds,
+      target.mediaAttachments ?? target.media_attachments,
+    ];
     for (const source of sources) {
       if (Array.isArray(source) && source.length > 0) {
-        return source.filter((item: any) => item && item.type === 'image');
+        return source.filter((item: any) => item && item.type === 'image').map((item: any) => ({
+          ...item,
+          // Normalize to camelCase for template
+          previewUrl: item.previewUrl ?? item.preview_url,
+          remoteUrl: item.remoteUrl ?? item.remote_url,
+        }));
       }
     }
     return [];
@@ -410,7 +420,11 @@
     // Don't show card if there are media attachments (images take priority)
     const media = target.mediaAttachments ?? target.media_attachments ?? [];
     if (Array.isArray(media) && media.length > 0) return null;
-    return card;
+    // Normalize snake_case to camelCase
+    return {
+      ...card,
+      provider_name: card.provider_name ?? card.providerName,
+    };
   }
 
   const mastodonCard = $derived(getMastodonCard());

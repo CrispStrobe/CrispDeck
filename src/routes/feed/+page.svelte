@@ -528,6 +528,12 @@
         <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">
           {posts.length > 0 ? i18n.t.feed.noPostsMatch : i18n.t.feed.noPostsFound}
         </h3>
+        {#if feedMode === 'for-you' && affinityMap.size === 0}
+          <p class="text-sm text-[var(--color-text-muted)] mt-2">
+            {i18n.t.feed.forYouHint}
+          </p>
+          <a href="/archive" class="inline-block mt-3 px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-md">{i18n.t.feed.buildArchive}</a>
+        {/if}
       </div>
     {:else}
       <div class="space-y-3">

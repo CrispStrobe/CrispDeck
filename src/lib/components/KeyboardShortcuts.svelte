@@ -17,6 +17,7 @@
       { key: 'g b', desc: 'Go to Bookmarks' },
       { key: 'g p', desc: 'Go to Settings' },
       { key: 'g i', desc: 'Go to Identities' },
+      { key: 'g u', desc: 'Go to Catch Up' },
     ]},
     { section: 'Compose', items: [
       { key: 'Ctrl+Enter', desc: 'Submit post' },
