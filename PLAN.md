@@ -13,7 +13,7 @@ A unified Mastodon + Bluesky social media client with:
 
 ## Current State (2026-06-06)
 
-v0.5.4 — 626 tests (50 test files), 26 pages, live at https://crispdeck.vercel.app
+v0.6.0 — 642 tests (53 test files), 26 pages, live at https://crispdeck.vercel.app
 
 **License**: AGPL-3.0-only
 
@@ -185,6 +185,41 @@ Analytics with full pagination, local post archive (IndexedDB), deck columns (11
 - Includes: deck layouts, tag groups, RSS feeds, feed builder definitions, custom feeds, preferences
 - Excludes: account credentials (security)
 - Useful for device migration or backup
+
+### 57. Muted words wired into feed/deck pipelines
+- **Status**: Done
+- **Effort**: Small
+- **Description**: applyMuteFilter() integrated into feed page and deck column rendering
+
+### 58. Quick-follow API callback
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Follow button on Post avatar calls onfollow callback prop for API integration
+
+### 59. Pinned posts
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Pin/unpin posts to top via localStorage, pin button on Post component
+
+### 60. Read position sync
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Remember scroll position per context (feed, deck columns), find "left off" marker
+
+### 61. Notification sounds + desktop alerts
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Web Audio API beep + Notification API, toggle in settings
+
+### 62. Threads media posting
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Support image/video URLs + carousel in Threads container-then-publish flow
+
+### 63. Post analytics history (engagement snapshots)
+- **Status**: Done
+- **Effort**: Medium
+- **Description**: IndexedDB storage for periodic engagement snapshots, growth curve data per post
 
 ---
 

@@ -16,6 +16,7 @@
   import { listFeeds, addFeed, removeFeed, importOPML, type RssFeed } from '$lib/rss';
   import { getThreadsConfig, setThreadsConfig, getThreadsAuthUrl, exchangeCodeForToken, exchangeForLongLivedToken, ThreadsClient } from '$lib/api/threads';
   import { listMutedWords, addMutedWord, removeMutedWord, toggleMutedWord, type MutedWord } from '$lib/muted-words';
+  import { getAlertSettings, setAlertSettings } from '$lib/notification-alerts';
   import { exportSettings, importSettings, type SettingsExport } from '$lib/settings-export';
   import type { Account } from '$lib/types';
 
@@ -126,6 +127,12 @@
   // RSS feeds
   let rssFeeds: RssFeed[] = $state(listFeeds());
   let newFeedUrl = $state('');
+
+  // Notification alerts
+  const alertConfig = getAlertSettings();
+  let alertSound = $state(alertConfig.soundEnabled);
+  let alertDesktop = $state(alertConfig.desktopEnabled);
+  function saveAlerts() { setAlertSettings({ soundEnabled: alertSound, desktopEnabled: alertDesktop }); }
 
   // Muted words
   let mutedWords: MutedWord[] = $state(listMutedWords());
@@ -775,6 +782,24 @@
           onchange={handleLiveCountersChange}
           class="w-4 h-4 accent-[var(--color-primary)]"
         />
+      </div>
+
+      <!-- Notification sound -->
+      <div class="flex items-center justify-between">
+        <div>
+          <label for="alert-sound" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.alertSound}</label>
+          <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.alertSoundHint}</p>
+        </div>
+        <input id="alert-sound" type="checkbox" bind:checked={alertSound} onchange={saveAlerts} class="w-4 h-4 accent-[var(--color-primary)]" />
+      </div>
+
+      <!-- Desktop notifications -->
+      <div class="flex items-center justify-between">
+        <div>
+          <label for="alert-desktop" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.alertDesktop}</label>
+          <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.alertDesktopHint}</p>
+        </div>
+        <input id="alert-desktop" type="checkbox" bind:checked={alertDesktop} onchange={saveAlerts} class="w-4 h-4 accent-[var(--color-primary)]" />
       </div>
     </div>
   </section>

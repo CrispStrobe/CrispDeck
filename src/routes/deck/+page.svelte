@@ -13,6 +13,7 @@
   import { groupNotifications, type UnifiedNotification, type NotificationGroup } from '$lib/notification-grouping';
   import { listTagGroups } from '$lib/tag-groups';
   import { listFeeds, fetchFeed, rssItemToPost } from '$lib/rss';
+  import { applyMuteFilter } from '$lib/muted-words';
 
   interface DeckColumnConfig {
     id: string;
@@ -292,7 +293,7 @@
       console.error(`Failed to load column ${col.id}:`, e);
     }
 
-    columnPosts[col.id] = sortPosts(posts, 'newest');
+    columnPosts[col.id] = applyMuteFilter(sortPosts(posts, 'newest'));
     columnLoading[col.id] = false;
   }
 

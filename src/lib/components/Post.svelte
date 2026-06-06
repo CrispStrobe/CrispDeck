@@ -1,18 +1,21 @@
 <script lang="ts">
-  import { Heart, Repeat, MessageCircle, Quote, Bookmark, Share, Flag, Languages, Camera, Loader2, Volume2, VolumeOff, BarChart3, UserPlus, UserCheck } from '@lucide/svelte';
+  import { Heart, Repeat, MessageCircle, Quote, Bookmark, Share, Flag, Languages, Camera, Loader2, Volume2, VolumeOff, BarChart3, UserPlus, UserCheck, Pin } from '@lucide/svelte';
+  import { isPinned, pinPost, unpinPost } from '$lib/pinned-posts';
   import { addBookmark, removeBookmark, isBookmarked } from '$lib/bookmarks';
   import { translateText, type TranslationResult } from '$lib/translate';
   import { onMount, onDestroy } from 'svelte';
   import { jetstream } from '$lib/jetstream';
   import type { UnifiedPost } from '$lib/types';
 
-  let { post, hideMedia = false, onlike, onboost, onreply, onquote }: {
+  let { post, hideMedia = false, compact = false, onlike, onboost, onreply, onquote, onfollow }: {
     post: UnifiedPost;
     hideMedia?: boolean;
+    compact?: boolean;
     onlike?: (post: UnifiedPost) => void;
     onboost?: (post: UnifiedPost) => void;
     onreply?: (post: UnifiedPost) => void;
     onquote?: (post: UnifiedPost) => void;
+    onfollow?: (post: UnifiedPost, following: boolean) => void;
   } = $props();
 
   let liked = $state(false);
@@ -21,10 +24,17 @@
   let hideEngagement = $state(false);
   let showStats = $state(false);
   let following = $state(false);
+  let pinned = $state(false);
+
+  function handlePin() {
+    if (pinned) { unpinPost(post.uri); pinned = false; }
+    else { pinPost(post); pinned = true; }
+  }
   let unsubJetstream: (() => void) | null = null;
 
   onMount(async () => {
     bookmarked = await isBookmarked(post.uri);
+    pinned = isPinned(post.uri);
     hideEngagement = localStorage.getItem('crispdeck-hide-engagement') === 'true';
 
     // Subscribe to real-time count updates for this post
@@ -504,7 +514,7 @@
         {/if}
       </a>
       <button
-        onclick={(e) => { e.stopPropagation(); following = !following; }}
+        onclick={(e) => { e.stopPropagation(); following = !following; onfollow?.(post, following); }}
         class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center transition-all opacity-0 group-hover/avatar:opacity-100 {following ? 'bg-[var(--color-success)] text-white' : 'bg-[var(--color-primary)] text-white'}"
         title={following ? 'Following' : 'Follow'}
         aria-label={following ? `Unfollow ${post.author.handle}` : `Follow ${post.author.handle}`}
@@ -745,6 +755,16 @@
         aria-pressed={bookmarked}
       >
         <Bookmark size={14} class={bookmarked ? 'fill-current' : ''} />
+      </button>
+
+      <button
+        onclick={handlePin}
+        class="flex items-center gap-1.5 transition-colors {pinned ? 'text-orange-400' : 'text-[var(--color-text-muted)]'} hover:text-orange-400 opacity-0 group-hover:opacity-100"
+        title={pinned ? 'Unpin' : 'Pin to top'}
+        aria-label={pinned ? 'Unpin post' : 'Pin post to top'}
+        aria-pressed={pinned}
+      >
+        <Pin size={12} class={pinned ? 'fill-current' : ''} />
       </button>
 
       <button

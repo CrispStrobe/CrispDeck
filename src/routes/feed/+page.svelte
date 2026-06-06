@@ -15,6 +15,7 @@
   import { buildAffinityMap, rankForYou } from '$lib/for-you';
   import { searchArchive } from '$lib/archive';
   import { jetstream } from '$lib/jetstream';
+  import { applyMuteFilter } from '$lib/muted-words';
 
   type FeedMode = 'timeline' | 'my-posts' | 'for-you';
 
@@ -370,7 +371,7 @@
   const platformFiltered = $derived(
     platformFilter === 'all' ? posts : posts.filter(p => p.platform === platformFilter)
   );
-  const filtered = $derived(filterPosts(platformFiltered, filters));
+  const filtered = $derived(applyMuteFilter(filterPosts(platformFiltered, filters)));
   const sorted = $derived(
     feedMode === 'for-you'
       ? rankForYou(filtered, affinityMap)

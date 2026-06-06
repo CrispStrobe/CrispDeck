@@ -20,6 +20,7 @@ export interface ComposeOptions {
   visibility?: 'public' | 'unlisted' | 'private' | 'direct';
   contentWarning?: string;
   mediaFiles?: File[];
+  mediaUrls?: string[]; // Publicly accessible HTTPS URLs (for Threads)
   altTexts?: string[];  // Alt text per media file
   quoteUri?: string;   // AT Protocol URI of quoted post
   quoteCid?: string;   // CID of quoted post
@@ -230,7 +231,35 @@ export async function postToThreads(
   options: ComposeOptions,
 ): Promise<PostResult> {
   try {
-    const result = await client.publishText(options.text);
+    let containerId: string;
+
+    // Check for media URLs (Threads requires publicly accessible HTTPS URLs)
+    const mediaUrls = options.mediaUrls?.filter(u => u.startsWith('https://'));
+
+    if (mediaUrls && mediaUrls.length > 1) {
+      // Carousel (multiple images)
+      const childIds: string[] = [];
+      for (const url of mediaUrls.slice(0, 10)) {
+        const isVideo = /\.(mp4|mov)$/i.test(url);
+        const id = await client.createCarouselItemContainer(isVideo ? 'VIDEO' : 'IMAGE', url);
+        await client.waitForContainer(id);
+        childIds.push(id);
+      }
+      containerId = await client.createCarouselContainer(childIds, options.text);
+    } else if (mediaUrls && mediaUrls.length === 1) {
+      // Single image or video
+      const url = mediaUrls[0];
+      const isVideo = /\.(mp4|mov)$/i.test(url);
+      containerId = isVideo
+        ? await client.createVideoContainer(url, options.text)
+        : await client.createImageContainer(url, options.text);
+    } else {
+      // Text-only
+      containerId = await client.createTextContainer(options.text);
+    }
+
+    await client.waitForContainer(containerId);
+    const result = await client.publishContainer(containerId);
 
     return {
       platform: 'threads',
