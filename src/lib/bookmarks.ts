@@ -110,3 +110,20 @@ export async function getBookmarkCount(): Promise<number> {
     req.onerror = () => reject(req.error);
   });
 }
+
+/**
+ * Import bookmarks from platform APIs into local IndexedDB.
+ * Skips posts that are already bookmarked locally (by URI).
+ * Returns the number of newly imported bookmarks.
+ */
+export async function importPlatformBookmarks(posts: UnifiedPost[]): Promise<number> {
+  let imported = 0;
+  for (const post of posts) {
+    const already = await isBookmarked(post.uri);
+    if (!already) {
+      await addBookmark(post);
+      imported++;
+    }
+  }
+  return imported;
+}

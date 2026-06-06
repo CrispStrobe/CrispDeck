@@ -13,7 +13,7 @@ A unified Mastodon + Bluesky social media client with:
 
 ## Current State (2026-06-06)
 
-v0.5.2 — 626 tests (50 test files), 26 pages, live at https://crispdeck.vercel.app
+v0.5.3 — 626 tests (50 test files), 26 pages, live at https://crispdeck.vercel.app
 
 **License**: AGPL-3.0-only
 
@@ -130,7 +130,7 @@ Analytics with full pagination, local post archive (IndexedDB), deck columns (11
 - Support regex patterns for advanced users
 
 ### 50. Platform bookmarks sync
-- **Status**: Not started
+- **Status**: Done (Mastodon import; Bluesky lacks public bookmarks API)
 - **Effort**: Medium
 - **Description**: Sync local bookmarks with platform-native bookmarks
 - Import from Bluesky bookmarks API and Mastodon bookmarks API
@@ -155,7 +155,7 @@ Analytics with full pagination, local post archive (IndexedDB), deck columns (11
 - Differentiates from mobile-first competitors
 
 ### 53. Post statistics overlay
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Small
 - **Description**: Click a post to see detailed engagement breakdown
 - Historical engagement curve if archive data exists
@@ -171,7 +171,7 @@ Analytics with full pagination, local post archive (IndexedDB), deck columns (11
 - Clear on successful post
 
 ### 55. Quick-follow from anywhere
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Small
 - **Description**: One-click follow button on post author avatars
 - Available in feed, deck, search, trending — not just profile pages

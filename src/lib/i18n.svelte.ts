@@ -364,6 +364,7 @@ export const translations = {
       title: 'Bookmarks',
       noBookmarks: 'No Bookmarks',
       hint: 'Click the bookmark icon on any post to save it here.',
+      sync: 'Sync from Mastodon',
     },
     drafts: {
       title: 'Drafts',
@@ -823,6 +824,7 @@ export const translations = {
       title: 'Lesezeichen',
       noBookmarks: 'Keine Lesezeichen',
       hint: 'Klicken Sie auf das Lesezeichen-Symbol bei einem Beitrag.',
+      sync: 'Von Mastodon synchronisieren',
     },
     drafts: {
       title: 'Entwürfe',

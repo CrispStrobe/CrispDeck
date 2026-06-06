@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Heart, Repeat, MessageCircle, Quote, Bookmark, Share, Flag, Languages, Camera, Loader2, Volume2, VolumeOff } from '@lucide/svelte';
+  import { Heart, Repeat, MessageCircle, Quote, Bookmark, Share, Flag, Languages, Camera, Loader2, Volume2, VolumeOff, BarChart3, UserPlus, UserCheck } from '@lucide/svelte';
   import { addBookmark, removeBookmark, isBookmarked } from '$lib/bookmarks';
   import { translateText, type TranslationResult } from '$lib/translate';
   import { onMount, onDestroy } from 'svelte';
@@ -19,6 +19,8 @@
   let boosted = $state(false);
   let bookmarked = $state(false);
   let hideEngagement = $state(false);
+  let showStats = $state(false);
+  let following = $state(false);
   let unsubJetstream: (() => void) | null = null;
 
   onMount(async () => {
@@ -491,15 +493,25 @@
   {/if}
 
   <div class="flex items-start gap-3">
-    <a href={getProfileUrl(post)}>
-      {#if post.author.avatar}
-        <img loading="lazy" src={post.author.avatar} alt="" class="w-10 h-10 rounded-full bg-[var(--color-surface-hover)]" />
-      {:else}
-        <div class="w-10 h-10 rounded-full bg-[var(--color-surface-hover)] flex items-center justify-center text-xs text-[var(--color-text-muted)]">
-          {post.author.handle.charAt(0).toUpperCase()}
-        </div>
-      {/if}
-    </a>
+    <div class="relative group/avatar">
+      <a href={getProfileUrl(post)}>
+        {#if post.author.avatar}
+          <img loading="lazy" src={post.author.avatar} alt="" class="w-10 h-10 rounded-full bg-[var(--color-surface-hover)]" />
+        {:else}
+          <div class="w-10 h-10 rounded-full bg-[var(--color-surface-hover)] flex items-center justify-center text-xs text-[var(--color-text-muted)]">
+            {post.author.handle.charAt(0).toUpperCase()}
+          </div>
+        {/if}
+      </a>
+      <button
+        onclick|stopPropagation={() => { following = !following; }}
+        class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center transition-all opacity-0 group-hover/avatar:opacity-100 {following ? 'bg-[var(--color-success)] text-white' : 'bg-[var(--color-primary)] text-white'}"
+        title={following ? 'Following' : 'Follow'}
+        aria-label={following ? `Unfollow ${post.author.handle}` : `Follow ${post.author.handle}`}
+      >
+        {#if following}<UserCheck size={10} />{:else}<UserPlus size={10} />{/if}
+      </button>
+    </div>
     <div class="flex-1 min-w-0">
       <a href={getProfileUrl(post)} class="flex items-center gap-2 mb-1 group">
         <span class="font-semibold text-[var(--color-text)] group-hover:underline truncate text-sm">
@@ -783,6 +795,16 @@
       </button>
 
       <button
+        onclick={() => showStats = !showStats}
+        class="flex items-center gap-1.5 transition-colors {showStats ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'} hover:text-[var(--color-primary)] opacity-0 group-hover:opacity-100"
+        title="Post statistics"
+        aria-label="Show post statistics"
+        aria-pressed={showStats}
+      >
+        <BarChart3 size={12} />
+      </button>
+
+      <button
         onclick={handleReport}
         class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors opacity-0 group-hover:opacity-100"
         title="Report"
@@ -795,5 +817,45 @@
       {formatDate(post.createdAt)}
     </a>
   </div>
+
+  <!-- Post statistics overlay -->
+  {#if showStats}
+    {@const totalEngagement = (post.likeCount ?? 0) + (post.repostCount ?? 0) + (post.replyCount ?? 0)}
+    {@const engagementRate = totalEngagement > 0 ? 100 : 0}
+    <div class="mt-3 pl-13 p-3 bg-[var(--color-bg)] rounded-lg border border-[var(--color-border)] space-y-2">
+      <div class="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
+        <BarChart3 size={12} />
+        <span class="font-medium">Engagement breakdown</span>
+        <span class="ml-auto text-[10px]">{post.platform}</span>
+      </div>
+      <div class="grid grid-cols-3 gap-2">
+        <div class="text-center p-2 bg-[var(--color-surface)] rounded">
+          <div class="text-lg font-bold text-red-400">{post.likeCount ?? 0}</div>
+          <div class="text-[10px] text-[var(--color-text-muted)]">Likes</div>
+        </div>
+        <div class="text-center p-2 bg-[var(--color-surface)] rounded">
+          <div class="text-lg font-bold text-green-400">{post.repostCount ?? 0}</div>
+          <div class="text-[10px] text-[var(--color-text-muted)]">Reposts</div>
+        </div>
+        <div class="text-center p-2 bg-[var(--color-surface)] rounded">
+          <div class="text-lg font-bold text-blue-400">{post.replyCount ?? 0}</div>
+          <div class="text-[10px] text-[var(--color-text-muted)]">Replies</div>
+        </div>
+      </div>
+      <div class="flex items-center justify-between text-[10px] text-[var(--color-text-muted)]">
+        <span>Total engagement: {totalEngagement}</span>
+        {#if totalEngagement > 0}
+          {@const likesPct = Math.round(((post.likeCount ?? 0) / totalEngagement) * 100)}
+          {@const repostsPct = Math.round(((post.repostCount ?? 0) / totalEngagement) * 100)}
+          {@const repliesPct = 100 - likesPct - repostsPct}
+          <div class="flex items-center gap-0.5 w-24 h-1.5 bg-[var(--color-surface)] rounded-full overflow-hidden">
+            <div class="h-full bg-red-400 rounded-l-full" style="width: {likesPct}%"></div>
+            <div class="h-full bg-green-400" style="width: {repostsPct}%"></div>
+            <div class="h-full bg-blue-400 rounded-r-full" style="width: {repliesPct}%"></div>
+          </div>
+        {/if}
+      </div>
+    </div>
+  {/if}
 </div>
 {/if}
