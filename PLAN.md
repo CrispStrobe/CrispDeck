@@ -13,7 +13,7 @@ A unified Mastodon + Bluesky social media client with:
 
 ## Current State (2026-06-06)
 
-v0.5.1 — 602 tests (48 test files), 26 pages, live at https://crispdeck.vercel.app
+v0.5.2 — 626 tests (50 test files), 26 pages, live at https://crispdeck.vercel.app
 
 **License**: AGPL-3.0-only
 
@@ -121,7 +121,7 @@ Analytics with full pagination, local post archive (IndexedDB), deck columns (11
 ## Phase 5: New Features
 
 ### 49. Muted words / content filters
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Small
 - **Description**: User-defined keyword mute list that hides posts containing those words across all platforms
 - localStorage list of muted words/phrases
@@ -163,7 +163,7 @@ Analytics with full pagination, local post archive (IndexedDB), deck columns (11
 - Engagement rate calculation
 
 ### 54. Draft auto-save
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Small
 - **Description**: Periodically save compose text to localStorage
 - Survives page reloads and browser crashes
@@ -179,7 +179,7 @@ Analytics with full pagination, local post archive (IndexedDB), deck columns (11
 - Works across all platforms
 
 ### 56. Export/import settings
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Small
 - **Description**: Backup all localStorage config to JSON file and restore
 - Includes: deck layouts, tag groups, RSS feeds, feed builder definitions, custom feeds, preferences

@@ -27,12 +27,17 @@
   let error = $state('');
   let results: PostResult[] = $state([]);
 
+  // Auto-save key
+  const AUTOSAVE_KEY = 'crispdeck-compose-autosave';
+
   // Compose state
   let text = $state('');
   let visibility = $state<'public' | 'unlisted' | 'private' | 'direct'>('public');
   let contentWarning = $state('');
   let showCW = $state(false);
   let mediaFiles: File[] = $state([]);
+  let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  let autoSaveRestoredFrom: string | null = $state(null);
 
   // Reply context
   let replyTo = $state('');
@@ -84,6 +89,25 @@
     } finally {
       aiLoading = false;
     }
+  }
+
+  function scheduleAutoSave() {
+    if (autoSaveTimer) clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(() => {
+      if (text.trim()) {
+        localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({
+          text, cw: showCW ? contentWarning : '', savedAt: new Date().toISOString(),
+        }));
+      } else {
+        localStorage.removeItem(AUTOSAVE_KEY);
+      }
+    }, 2000);
+  }
+
+  function clearAutoSave() {
+    if (autoSaveTimer) clearTimeout(autoSaveTimer);
+    localStorage.removeItem(AUTOSAVE_KEY);
+    autoSaveRestoredFrom = null;
   }
 
   // Posting time insights
@@ -143,6 +167,21 @@
       quoteCid = params.get('quoteCid') ?? '';
       quoteAuthor = params.get('quoteAuthor') ?? '';
       quoteText = params.get('quoteText') ?? '';
+
+      // Auto-restore unsent text (only if no draft/reply/quote context)
+      if (!text && !replyTo && !quoteUri && !draftId) {
+        const saved = localStorage.getItem(AUTOSAVE_KEY);
+        if (saved) {
+          try {
+            const data = JSON.parse(saved);
+            if (data.text?.trim()) {
+              text = data.text;
+              if (data.cw) { contentWarning = data.cw; showCW = true; }
+              autoSaveRestoredFrom = data.savedAt ?? 'earlier';
+            }
+          } catch {}
+        }
+      }
     } catch (e) {
       error = String(e);
     } finally {
@@ -287,6 +326,7 @@
         mediaFiles = [];
         mediaPreviews = [];
         altTexts = [];
+        clearAutoSave();
       }
     } catch (e) {
       error = String(e);
@@ -492,6 +532,13 @@
     </div>
   {/if}
 
+  {#if autoSaveRestoredFrom}
+    <div class="mb-4 p-2 bg-blue-900/30 border border-blue-800 rounded-lg text-blue-200 text-xs flex items-center justify-between">
+      <span>{i18n.t.compose.autoSaveRestored}</span>
+      <button onclick={() => { text = ''; contentWarning = ''; showCW = false; clearAutoSave(); }} class="underline ml-2">{i18n.t.compose.discard}</button>
+    </div>
+  {/if}
+
   {#if results.length > 0}
     <div class="mb-4 space-y-2">
       {#each results as result}
@@ -568,7 +615,7 @@
             bind:value={text}
             placeholder={i18n.t.compose.placeholder}
             rows="8"
-            oninput={() => mentionAutocomplete?.handleInput()}
+            oninput={() => { mentionAutocomplete?.handleInput(); scheduleAutoSave(); }}
             onkeydown={(e) => {
               mentionAutocomplete?.handleKeydown(e);
               if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handlePost(); }
