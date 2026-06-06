@@ -504,7 +504,7 @@
         {/if}
       </a>
       <button
-        onclick|stopPropagation={() => { following = !following; }}
+        onclick={(e) => { e.stopPropagation(); following = !following; }}
         class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center transition-all opacity-0 group-hover/avatar:opacity-100 {following ? 'bg-[var(--color-success)] text-white' : 'bg-[var(--color-primary)] text-white'}"
         title={following ? 'Following' : 'Follow'}
         aria-label={following ? `Unfollow ${post.author.handle}` : `Follow ${post.author.handle}`}

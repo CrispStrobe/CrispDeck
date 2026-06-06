@@ -52,9 +52,11 @@
 </script>
 
 {#if show}
-  <div class="fixed inset-0 z-[100] flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" onclick={() => show = false} onkeydown={(e) => { if (e.key === 'Escape') show = false; }}>
+  <!-- svelte-ignore a11y_interactive_supports_focus -->
+  <div class="fixed inset-0 z-[100] flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" tabindex="-1" onclick={() => show = false} onkeydown={(e) => { if (e.key === 'Escape') show = false; }}>
     <div class="absolute inset-0 bg-black/60"></div>
-    <div class="relative bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] shadow-2xl p-6 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto" role="document" onclick={(e) => e.stopPropagation()}>
+    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
+    <div class="relative bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] shadow-2xl p-6 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto" onclick={(e) => e.stopPropagation()}>
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-bold">Keyboard Shortcuts</h2>
         <button onclick={() => show = false} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
