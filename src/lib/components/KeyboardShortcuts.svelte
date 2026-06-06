@@ -19,6 +19,14 @@
       { key: 'g i', desc: 'Go to Identities' },
       { key: 'g u', desc: 'Go to Catch Up' },
     ]},
+    { section: 'Posts (vim-style)', items: [
+      { key: 'j', desc: 'Next post' },
+      { key: 'k', desc: 'Previous post' },
+      { key: 'o', desc: 'Open post / thread' },
+      { key: 'l', desc: 'Like post' },
+      { key: 'r', desc: 'Reply to post' },
+      { key: 'b', desc: 'Boost / repost' },
+    ]},
     { section: 'Compose', items: [
       { key: 'Ctrl+Enter', desc: 'Submit post' },
       { key: 'Esc', desc: 'Close popups' },

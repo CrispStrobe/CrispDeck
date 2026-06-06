@@ -13,7 +13,7 @@ A unified Mastodon + Bluesky social media client with:
 
 ## Current State (2026-06-06)
 
-v0.5.3 — 626 tests (50 test files), 26 pages, live at https://crispdeck.vercel.app
+v0.5.4 — 626 tests (50 test files), 26 pages, live at https://crispdeck.vercel.app
 
 **License**: AGPL-3.0-only
 
@@ -138,7 +138,7 @@ Analytics with full pagination, local post archive (IndexedDB), deck columns (11
 - Currently bookmarks are local-only IndexedDB
 
 ### 51. Multi-account timeline merge
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Medium
 - **Description**: Merge timelines from multiple accounts of the same platform
 - If user has 2 Mastodon accounts or 2 Bluesky accounts, merge their timelines
@@ -146,7 +146,7 @@ Analytics with full pagination, local post archive (IndexedDB), deck columns (11
 - Currently picks one client per platform in deck/feed
 
 ### 52. Keyboard navigation (vim-style)
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Medium
 - **Description**: Power-user keyboard navigation for posts and deck
 - j/k to scroll through posts, n/p for next/previous column in deck

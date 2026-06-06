@@ -93,6 +93,39 @@
       const routes: Record<string, string> = { h: '/', f: '/feed', c: '/compose', n: '/notifications', s: '/search', d: '/deck', m: '/messages', a: '/archive', t: '/trending', b: '/bookmarks', p: '/settings', i: '/identities', u: '/catchup' };
       if (routes[e.key]) { goto(routes[e.key]); return; }
     }
+
+    // Vim-style post navigation (j/k/o/l)
+    const postEls = document.querySelectorAll('[data-post-uri]');
+    if (postEls.length === 0) return;
+    const focused = document.querySelector('[data-post-uri].ring-2') as HTMLElement;
+    const currentIdx = focused ? [...postEls].indexOf(focused) : -1;
+
+    if (e.key === 'j' || e.key === 'k') {
+      e.preventDefault();
+      const nextIdx = e.key === 'j'
+        ? Math.min(currentIdx + 1, postEls.length - 1)
+        : Math.max(currentIdx - 1, 0);
+      focused?.classList.remove('ring-2', 'ring-[var(--color-primary)]');
+      const next = postEls[nextIdx] as HTMLElement;
+      next.classList.add('ring-2', 'ring-[var(--color-primary)]');
+      next.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    if (focused) {
+      if (e.key === 'o') {
+        const link = focused.querySelector('a[href*="/thread"], a[href*="/post"]') as HTMLAnchorElement;
+        if (link) link.click();
+      } else if (e.key === 'l') {
+        const likeBtn = focused.querySelector('[title="Like"]') as HTMLButtonElement;
+        likeBtn?.click();
+      } else if (e.key === 'r') {
+        const replyBtn = focused.querySelector('[title="Reply"]') as HTMLButtonElement;
+        replyBtn?.click();
+      } else if (e.key === 'b' && !pendingG) {
+        const boostBtn = focused.querySelector('[title="Boost"]') as HTMLButtonElement;
+        boostBtn?.click();
+      }
+    }
   }
 
   const navItems = $derived([

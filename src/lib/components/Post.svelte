@@ -468,7 +468,7 @@
     <button onclick={() => labelRevealed = true} class="text-xs text-[var(--color-primary)] hover:underline mt-1">Show anyway</button>
   </div>
 {:else}
-<div bind:this={postEl} class="group p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+<div bind:this={postEl} data-post-uri={post.uri} class="group p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] transition-shadow">
   <!-- Label warnings -->
   {#if warnedLabels.length > 0 && !labelRevealed}
     <div class="mb-2 p-2 bg-yellow-900/20 border border-yellow-700/30 rounded text-xs text-yellow-300 flex items-center justify-between">
