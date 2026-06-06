@@ -3,7 +3,7 @@
  * Works independently of platform-specific bookmarks.
  */
 
-import type { UnifiedPost } from './types';
+import type { UnifiedPost, Platform } from './types';
 
 const DB_NAME = 'crispdeck-bookmarks';
 const DB_VERSION = 1;
@@ -94,7 +94,7 @@ export async function listBookmarks(): Promise<UnifiedPost[]> {
       text: b.text,
       author: { handle: b.authorHandle, displayName: b.authorName, avatar: b.authorAvatar },
       createdAt: b.createdAt,
-      platform: b.platform as 'bluesky' | 'mastodon',
+      platform: b.platform as Platform,
       likeCount: b.likeCount,
       repostCount: b.repostCount,
       isRepost: false,

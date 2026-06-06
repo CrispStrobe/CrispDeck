@@ -434,7 +434,7 @@
   const bskyQuote = $derived(getBskyQuote());
   const bskyVideo = $derived(getBskyVideo());
   const mastodonHtml = $derived(getMastodonHtml());
-  const platformColor = $derived(post.platform === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)');
+  const platformColor = $derived(`var(--color-${post.platform})`);
 
   // Labels on Bluesky posts
   const postLabels = $derived(() => {

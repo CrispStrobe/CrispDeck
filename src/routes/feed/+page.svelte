@@ -11,7 +11,7 @@
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { normalizePost, filterPosts, sortPosts, detectCrossposts, buildIdentityPairs } from '$lib/api/unified';
   import { listIdentities } from '$lib/db';
-  import type { UnifiedPost, FeedItem, Filters, Account, CrosspostGroup as CrosspostGroupType } from '$lib/types';
+  import type { UnifiedPost, FeedItem, Filters, Account, Platform, CrosspostGroup as CrosspostGroupType } from '$lib/types';
   import { buildAffinityMap, rankForYou } from '$lib/for-you';
   import { searchArchive } from '$lib/archive';
   import { jetstream } from '$lib/jetstream';
@@ -26,7 +26,7 @@
   let progress = $state(0);
   let hideMedia = $state(false);
   let feedMode: FeedMode = $state('timeline');
-  let platformFilter: 'all' | 'bluesky' | 'mastodon' = $state('all');
+  let platformFilter: 'all' | Platform = $state('all');
   let showFilters = $state(false);
 
   let cursors: Record<number, string | undefined> = $state({});
@@ -456,6 +456,10 @@
           onclick={() => platformFilter = 'mastodon'}
           class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1 {platformFilter === 'mastodon' ? 'bg-[var(--color-mastodon)] text-white' : 'text-[var(--color-text-muted)]'}"
         ><span class="w-1.5 h-1.5 rounded-full bg-[var(--color-mastodon)]"></span> Masto</button>
+        <button
+          onclick={() => platformFilter = 'threads'}
+          class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1 {platformFilter === 'threads' ? 'bg-[var(--color-threads)] text-white' : 'text-[var(--color-text-muted)]'}"
+        ><span class="w-1.5 h-1.5 rounded-full bg-[var(--color-threads)]"></span> Threads</button>
       </div>
 
       <button

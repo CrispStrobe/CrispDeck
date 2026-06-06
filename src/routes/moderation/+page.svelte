@@ -5,10 +5,10 @@
   import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
-  import type { Account } from '$lib/types';
+  import type { Account, Platform } from '$lib/types';
 
   interface BlockedAccount {
-    platform: 'bluesky' | 'mastodon';
+    platform: Platform;
     handle: string;
     displayName?: string;
     avatar?: string;
@@ -265,7 +265,7 @@
         {#each items as item}
           <div class="flex items-center justify-between p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
             <div class="flex items-center gap-3">
-              <span class="w-2 h-2 rounded-full" style="background: {item.platform === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"></span>
+              <span class="w-2 h-2 rounded-full" style="background: var(--color-{item.platform})"></span>
               {#if item.avatar}
                 <img loading="lazy" src={item.avatar} alt="" class="w-8 h-8 rounded-full" />
               {:else}

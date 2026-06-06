@@ -7,11 +7,11 @@
   import { MastodonClient } from '$lib/api/mastodon';
   import { resumeBlueskyOAuthSession } from '$lib/api/bluesky-oauth';
   import { Agent } from '@atproto/api';
-  import type { Account } from '$lib/types';
+  import type { Account, Platform } from '$lib/types';
 
   interface Conversation {
     id: string;
-    platform: 'bluesky' | 'mastodon';
+    platform: Platform;
     participant: { handle: string; displayName?: string; avatar?: string };
     lastMessage?: string;
     lastDate?: string;
@@ -349,7 +349,7 @@
                 <div class="flex items-center justify-between">
                   <span class="text-sm font-medium truncate">{convo.participant.displayName || convo.participant.handle}</span>
                   <div class="flex items-center gap-1">
-                    <span class="w-2 h-2 rounded-full" style="background: {convo.platform === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"></span>
+                    <span class="w-2 h-2 rounded-full" style="background: var(--color-{convo.platform})"></span>
                     {#if convo.lastDate}<span class="text-[10px] text-[var(--color-text-muted)]">{formatTime(convo.lastDate)}</span>{/if}
                   </div>
                 </div>

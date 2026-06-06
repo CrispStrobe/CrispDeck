@@ -172,7 +172,7 @@
           <p class="font-semibold">{mainPost.author.displayName || mainPost.author.handle}</p>
           <p class="text-xs text-[var(--color-text-muted)]">@{mainPost.author.handle} · {articlePosts.length} {i18n.t.thread.parts}</p>
         </div>
-        <span class="ml-auto w-2 h-2 rounded-full" style="background: {platform === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"></span>
+        <span class="ml-auto w-2 h-2 rounded-full" style="background: var(--color-{platform})"></span>
       </div>
       <div class="prose prose-invert max-w-none text-[var(--color-text)] leading-relaxed text-[15px] space-y-4">
         {#each articleText.split('\n\n') as paragraph}

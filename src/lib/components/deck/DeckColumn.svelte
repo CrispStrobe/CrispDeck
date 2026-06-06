@@ -234,7 +234,7 @@
                     <div class="flex items-center gap-1 text-[10px] py-0.5">
                       {#if actor.avatar}<img loading="lazy" src={actor.avatar} alt="" class="w-4 h-4 rounded-full" />{/if}
                       <span>{actor.displayName || actor.handle}</span>
-                      <span class="w-1.5 h-1.5 rounded-full ml-auto" style="background: {actor.platform === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"></span>
+                      <span class="w-1.5 h-1.5 rounded-full ml-auto" style="background: var(--color-{actor.platform})"></span>
                     </div>
                   {/each}
                 </div>

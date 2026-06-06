@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 
 interface Conversation {
   id: string;
-  platform: 'bluesky' | 'mastodon';
+  platform: 'bluesky' | 'mastodon' | 'threads';
   participant: { handle: string; displayName?: string; avatar?: string };
   lastMessage?: string;
   lastDate?: string;

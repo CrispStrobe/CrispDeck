@@ -1,10 +1,10 @@
 import { AppBskyFeedDefs } from '@atproto/api';
 import type { mastodon } from 'masto';
-import type { UnifiedPost, FeedItem, CrosspostGroup } from '$lib/types';
+import type { UnifiedPost, FeedItem, CrosspostGroup, Platform } from '$lib/types';
 
 type PlatformPost = AppBskyFeedDefs.FeedViewPost | mastodon.v1.Status;
 
-export function normalizePost(post: PlatformPost, platform: 'bluesky' | 'mastodon'): UnifiedPost {
+export function normalizePost(post: PlatformPost, platform: Platform): UnifiedPost {
   if (platform === 'bluesky') {
     const item = post as AppBskyFeedDefs.FeedViewPost;
     const p = item.post;

@@ -254,7 +254,7 @@
             </div>
             <div class="flex items-center gap-2 flex-shrink-0">
               {#if group.platforms.size === 1}
-                <span class="w-2 h-2 rounded-full" style="background: {[...group.platforms][0] === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"></span>
+                <span class="w-2 h-2 rounded-full" style="background: var(--color-{[...group.platforms][0]})"></span>
               {:else}
                 <!-- Both platforms -->
                 <span class="flex -space-x-1">
@@ -279,7 +279,7 @@
                   {/if}
                   <span class="text-xs font-medium">{actor.displayName || actor.handle}</span>
                   <span class="text-[10px] text-[var(--color-text-muted)]">@{actor.handle}</span>
-                  <span class="w-1.5 h-1.5 rounded-full ml-auto" style="background: {actor.platform === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"></span>
+                  <span class="w-1.5 h-1.5 rounded-full ml-auto" style="background: var(--color-{actor.platform})"></span>
                 </a>
               {/each}
             </div>

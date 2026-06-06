@@ -454,7 +454,7 @@
               <div class="flex items-center gap-2 p-2 bg-[var(--color-bg)] rounded-md">
                 <div
                   class="w-2 h-2 rounded-full flex-shrink-0"
-                  style="background: {link.platform === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"
+                  style="background: var(--color-{link.platform})"
                 ></div>
                 {#if link.avatar_url}
                   <img loading="lazy" src={link.avatar_url} alt="" class="w-6 h-6 rounded-full" />

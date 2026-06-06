@@ -118,6 +118,76 @@ Analytics with full pagination, local post archive (IndexedDB), deck columns (11
 
 ---
 
+## Phase 5: New Features
+
+### 49. Muted words / content filters
+- **Status**: Not started
+- **Effort**: Small
+- **Description**: User-defined keyword mute list that hides posts containing those words across all platforms
+- localStorage list of muted words/phrases
+- Filter applied in feed rendering pipeline (filterPosts in unified.ts)
+- Settings UI to manage muted words
+- Support regex patterns for advanced users
+
+### 50. Platform bookmarks sync
+- **Status**: Not started
+- **Effort**: Medium
+- **Description**: Sync local bookmarks with platform-native bookmarks
+- Import from Bluesky bookmarks API and Mastodon bookmarks API
+- Two-way sync or at least import/export
+- Currently bookmarks are local-only IndexedDB
+
+### 51. Multi-account timeline merge
+- **Status**: Not started
+- **Effort**: Medium
+- **Description**: Merge timelines from multiple accounts of the same platform
+- If user has 2 Mastodon accounts or 2 Bluesky accounts, merge their timelines
+- Account-source indicator on each post
+- Currently picks one client per platform in deck/feed
+
+### 52. Keyboard navigation (vim-style)
+- **Status**: Not started
+- **Effort**: Medium
+- **Description**: Power-user keyboard navigation for posts and deck
+- j/k to scroll through posts, n/p for next/previous column in deck
+- o to open post, r to reply, l to like, b to boost/repost
+- ? to show keyboard shortcut overlay
+- Differentiates from mobile-first competitors
+
+### 53. Post statistics overlay
+- **Status**: Not started
+- **Effort**: Small
+- **Description**: Click a post to see detailed engagement breakdown
+- Historical engagement curve if archive data exists
+- Per-platform comparison for crossposts
+- Engagement rate calculation
+
+### 54. Draft auto-save
+- **Status**: Not started
+- **Effort**: Small
+- **Description**: Periodically save compose text to localStorage
+- Survives page reloads and browser crashes
+- Restore prompt on compose page load if unsent draft exists
+- Clear on successful post
+
+### 55. Quick-follow from anywhere
+- **Status**: Not started
+- **Effort**: Small
+- **Description**: One-click follow button on post author avatars
+- Available in feed, deck, search, trending — not just profile pages
+- Shows follow/unfollow state
+- Works across all platforms
+
+### 56. Export/import settings
+- **Status**: Not started
+- **Effort**: Small
+- **Description**: Backup all localStorage config to JSON file and restore
+- Includes: deck layouts, tag groups, RSS feeds, feed builder definitions, custom feeds, preferences
+- Excludes: account credentials (security)
+- Useful for device migration or backup
+
+---
+
 ## Known Issues / Future Polish
 
 ### i18n coverage

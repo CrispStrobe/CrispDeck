@@ -60,9 +60,11 @@ export function createRule(type: RuleType, value = ''): FeedRule {
   };
 }
 
+let feedCounter = 0;
+
 export function createFeedDefinition(name = 'New Feed'): FeedDefinition {
   return {
-    id: `feed-${Date.now()}`,
+    id: `feed-${Date.now()}-${feedCounter++}`,
     name,
     description: '',
     rules: [],

@@ -66,7 +66,7 @@
         const entry = clientEntries.get(id);
         if (!acct || !entry) return null;
         const plan = splitForPlatform(draft.text.trim(), acct.platform as Platform);
-        return { platform: acct.platform as 'bluesky' | 'mastodon', client: entry.client, parts: plan.parts.map(p => p.text) };
+        return { platform: acct.platform as Platform, client: entry.client, parts: plan.parts.map(p => p.text) };
       })
       .filter((t): t is NonNullable<typeof t> => t !== null);
 
@@ -309,7 +309,7 @@
                   {@const plan = splitForPlatform(draft.text.trim(), plat)}
                   <div class="p-2 bg-[var(--color-bg)] rounded border border-[var(--color-border)]">
                     <div class="flex items-center gap-1.5 mb-1.5">
-                      <span class="w-2 h-2 rounded-full" style="background: {plat === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"></span>
+                      <span class="w-2 h-2 rounded-full" style="background: var(--color-{plat})"></span>
                       <span class="text-[10px] font-medium text-[var(--color-text-muted)] capitalize">{plat}</span>
                       {#if plan.parts.length > 1}
                         <span class="text-[10px] px-1 py-0.5 bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded">{plan.parts.length}-post thread</span>
@@ -420,7 +420,7 @@
                   {@const plan = splitForPlatform(draft.text.trim(), plat)}
                   <div class="p-2 bg-[var(--color-bg)] rounded border border-[var(--color-border)]">
                     <div class="flex items-center gap-1.5 mb-1.5">
-                      <span class="w-2 h-2 rounded-full" style="background: {plat === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"></span>
+                      <span class="w-2 h-2 rounded-full" style="background: var(--color-{plat})"></span>
                       <span class="text-[10px] font-medium text-[var(--color-text-muted)] capitalize">{plat}</span>
                       {#if plan.parts.length > 1}
                         <span class="text-[10px] px-1 py-0.5 bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded">{plan.parts.length}-post thread</span>

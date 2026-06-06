@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 
 interface ArchiveEntry {
   uri: string;
-  platform: 'bluesky' | 'mastodon';
+  platform: 'bluesky' | 'mastodon' | 'threads';
   type: 'post' | 'like' | 'repost' | 'reply';
   text: string;
   author_handle: string;

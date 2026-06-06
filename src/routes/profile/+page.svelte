@@ -309,7 +309,7 @@
             <h1 class="text-xl font-bold">{profile.displayName || handle}</h1>
             <p class="text-sm text-[var(--color-text-muted)]">
               {profile.handle ?? handle}
-              <span class="inline-block w-2 h-2 rounded-full ml-1" style="background: {platform === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"></span>
+              <span class="inline-block w-2 h-2 rounded-full ml-1" style="background: var(--color-{platform})"></span>
               {#if followsYou}
                 <span class="ml-2 text-[10px] px-1.5 py-0.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[var(--color-text-muted)]">Follows you</span>
               {/if}

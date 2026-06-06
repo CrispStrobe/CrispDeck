@@ -131,7 +131,7 @@
     </div>
     {#if accounts.length > 0}
       <p class="text-xs text-[var(--color-text-muted)] mt-2">
-        Searching across {accounts.length} connected account{accounts.length > 1 ? 's' : ''} ({accounts.map(a => a.platform === 'bluesky' ? 'Bluesky' : 'Mastodon').join(', ')})
+        Searching across {accounts.length} connected account{accounts.length > 1 ? 's' : ''} ({accounts.map(a => i18n.t.common[a.platform] ?? a.platform).join(', ')})
       </p>
     {/if}
   </form>
