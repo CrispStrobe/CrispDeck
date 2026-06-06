@@ -77,6 +77,30 @@ describe('splitForPlatform', () => {
     expect(plan.parts[0].text).toBe('');
   });
 
+  it('returns single part for short text on Threads', () => {
+    const plan = splitForPlatform('Hello Threads!', 'threads');
+    expect(plan.needsThread).toBe(false);
+    expect(plan.parts).toHaveLength(1);
+    expect(plan.parts[0].charLimit).toBe(500);
+  });
+
+  it('splits text at 500 chars for Threads', () => {
+    const text = 'T'.repeat(1000);
+    const plan = splitForPlatform(text, 'threads');
+    expect(plan.needsThread).toBe(true);
+    expect(plan.parts.length).toBeGreaterThan(1);
+    for (const part of plan.parts) {
+      expect(part.charCount).toBeLessThanOrEqual(500);
+    }
+  });
+
+  it('Threads and Mastodon have same limit', () => {
+    const text = 'Word '.repeat(120).trim();
+    const threads = splitForPlatform(text, 'threads');
+    const masto = splitForPlatform(text, 'mastodon');
+    expect(threads.parts.length).toBe(masto.parts.length);
+  });
+
   it('handles text exactly at limit', () => {
     const text = 'A'.repeat(300);
     const plan = splitForPlatform(text, 'bluesky');
@@ -119,5 +143,14 @@ describe('planThread', () => {
     const { perPlatform, unified } = planThread(text, ['bluesky', 'mastodon']);
     const maxParts = Math.max(...perPlatform.map(p => p.parts.length));
     expect(unified.length).toBe(maxParts);
+  });
+
+  it('includes Threads in per-platform plans', () => {
+    const text = 'W'.repeat(400);
+    const { perPlatform } = planThread(text, ['bluesky', 'mastodon', 'threads']);
+    expect(perPlatform).toHaveLength(3);
+    const threadsPlan = perPlatform.find(p => p.platform === 'threads');
+    expect(threadsPlan).toBeDefined();
+    expect(threadsPlan!.needsThread).toBe(false); // 400 < 500
   });
 });

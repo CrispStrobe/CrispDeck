@@ -7,6 +7,7 @@
   import type { ColumnType } from '$lib/components/deck/DeckColumn.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
+  import { ThreadsClient } from '$lib/api/threads';
   import { normalizePost, sortPosts } from '$lib/api/unified';
   import type { UnifiedPost, Account } from '$lib/types';
   import { groupNotifications, type UnifiedNotification, type NotificationGroup } from '$lib/notification-grouping';
@@ -17,7 +18,7 @@
     id: string;
     title: string;
     type: ColumnType;
-    platform?: 'bluesky' | 'mastodon';
+    platform?: 'bluesky' | 'mastodon' | 'threads';
     query?: string; // for search/hashtag columns
     width?: number; // column width in pixels
   }
@@ -111,8 +112,10 @@
     // Pick ONE client per platform (no need to loop all accounts for each column)
     const bskyEntry = [...clientEntries.entries()].find(([id]) => accounts.find(a => a.id === id)?.platform === 'bluesky')?.[1];
     const mastoEntry = [...clientEntries.entries()].find(([id]) => accounts.find(a => a.id === id)?.platform === 'mastodon')?.[1];
+    const threadsEntry = [...clientEntries.entries()].find(([id]) => accounts.find(a => a.id === id)?.platform === 'threads')?.[1];
     const bskyClient = bskyEntry?.client as BlueskyClient | undefined;
     const mastoClient = mastoEntry?.client as MastodonClient | undefined;
+    const threadsClient = threadsEntry?.client as ThreadsClient | undefined;
     const bskyAcct = accounts.find(a => a.platform === 'bluesky');
     const mastoAcct = accounts.find(a => a.platform === 'mastodon');
 
@@ -126,6 +129,10 @@
         if (mastoClient && mastoAcct) try {
           const a = await mastoClient.getAccountByHandle(mastoAcct.handle);
           posts.push(...(await mastoClient.getAccountStatuses(a.id)).map(s => normalizePost(s, 'mastodon')));
+        } catch {}
+        if (threadsClient) try {
+          const threadsPosts = await threadsClient.getOwnPosts(25);
+          posts.push(...threadsPosts.map(p => threadsClient.normalizePost(p)));
         } catch {}
       } else if (col.type === 'mentions') {
         if (bskyClient) try {

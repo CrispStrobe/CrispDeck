@@ -3,6 +3,7 @@ import type { Platform } from '$lib/types';
 const CHAR_LIMITS: Record<Platform, number> = {
   bluesky: 300,
   mastodon: 500,
+  threads: 500,
 };
 
 /** Count graphemes (Bluesky uses grapheme length, Mastodon uses codepoint length) */

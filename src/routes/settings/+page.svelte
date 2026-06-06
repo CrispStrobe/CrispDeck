@@ -14,6 +14,7 @@
   import { getAIComposeConfig, setAIComposeConfig } from '$lib/compose/ai';
   import { listTagGroups, saveTagGroup, deleteTagGroup, type TagGroup } from '$lib/tag-groups';
   import { listFeeds, addFeed, removeFeed, importOPML, type RssFeed } from '$lib/rss';
+  import { getThreadsConfig, setThreadsConfig, getThreadsAuthUrl, exchangeCodeForToken, exchangeForLongLivedToken, ThreadsClient } from '$lib/api/threads';
   import type { Account } from '$lib/types';
 
   let uiLanguage = $state<Language>(i18n.lang);
@@ -271,8 +272,36 @@
     }
   }
 
+  // Add Threads form
+  let showThreadsForm = $state(false);
+  let threadsClientId = $state('');
+  let threadsClientSecret = $state('');
+  let threadsLoading = $state(false);
+
+  function handleStartThreadsOAuth() {
+    if (!threadsClientId.trim() || !threadsClientSecret.trim()) return;
+    threadsLoading = true;
+    error = '';
+
+    const redirectUri = `${window.location.origin}/oauth/threads-callback`;
+
+    // Save config for callback to use
+    setThreadsConfig({
+      client_id: threadsClientId.trim(),
+      client_secret: threadsClientSecret.trim(),
+      redirect_uri: redirectUri,
+    });
+
+    const state = crypto.randomUUID();
+    localStorage.setItem('crispdeck-threads-oauth-state', state);
+
+    const authUrl = getThreadsAuthUrl(threadsClientId.trim(), redirectUri, state);
+    window.location.href = authUrl;
+  }
+
   const bskyAccounts = $derived(accounts.filter(a => a.platform === 'bluesky'));
   const mastoAccounts = $derived(accounts.filter(a => a.platform === 'mastodon'));
+  const threadsAccounts = $derived(accounts.filter(a => a.platform === 'threads'));
 </script>
 
 <svelte:head><title>CrispDeck — Settings</title><meta name="description" content="Account management and app preferences" /></svelte:head>
@@ -516,6 +545,108 @@
                 {:else}
                   <span class="text-xs text-[var(--color-text-muted)] ml-1">{account.handle}</span>
                 {/if}
+                {#if account.is_primary}
+                  <span class="ml-2 text-xs text-yellow-400">★ {i18n.t.settings.primary}</span>
+                {/if}
+              </div>
+            </div>
+            <div class="flex items-center gap-1">
+              {#if !account.is_primary}
+                <button onclick={() => setPrimary(account.id)} title="Set as primary" class="p-1.5 text-[var(--color-text-muted)] hover:text-yellow-400 transition-colors">
+                  <Star size={14} />
+                </button>
+              {/if}
+              <button onclick={() => removeAccount(account.id)} title="Remove account" class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors">
+                <Trash2 size={14} />
+              </button>
+            </div>
+          </div>
+        {/each}
+      </div>
+    {/if}
+  </section>
+
+  <!-- Threads Accounts -->
+  <section class="mb-8">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-lg font-semibold flex items-center gap-2">
+        <div class="w-3 h-3 rounded-full bg-[var(--color-threads,#000)]"></div>
+        Threads Accounts
+      </h2>
+      <button
+        onclick={() => showThreadsForm = !showThreadsForm}
+        class="flex items-center gap-1 px-3 py-1.5 text-sm bg-[var(--color-threads,#000)] hover:opacity-90 rounded-md transition-opacity"
+      >
+        <Plus size={14} />
+        Add
+      </button>
+    </div>
+
+    {#if showThreadsForm}
+      <div class="mb-4 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+        <div class="space-y-3">
+          <p class="text-xs text-[var(--color-text-muted)]">
+            Threads uses Meta OAuth. You need a Meta Developer App with the Threads API enabled.
+            Create one at <a href="https://developers.facebook.com" target="_blank" rel="noopener" class="underline">developers.facebook.com</a>.
+          </p>
+          <div>
+            <label for="threads-client-id" class="block text-sm text-[var(--color-text-muted)] mb-1">App ID (Client ID)</label>
+            <input
+              id="threads-client-id"
+              type="text"
+              bind:value={threadsClientId}
+              placeholder="123456789..."
+              class="w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]"
+            />
+          </div>
+          <div>
+            <label for="threads-client-secret" class="block text-sm text-[var(--color-text-muted)] mb-1">App Secret</label>
+            <input
+              id="threads-client-secret"
+              type="password"
+              bind:value={threadsClientSecret}
+              placeholder="abc123..."
+              class="w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]"
+            />
+          </div>
+          <div class="flex gap-2">
+            <button
+              onclick={handleStartThreadsOAuth}
+              disabled={threadsLoading || !threadsClientId.trim() || !threadsClientSecret.trim()}
+              class="flex items-center gap-1 px-4 py-2 bg-[var(--color-primary)] hover:opacity-90 rounded-md text-sm font-medium transition-opacity disabled:opacity-50"
+            >
+              {#if threadsLoading}<Loader2 size={14} class="animate-spin" />{/if}
+              <Shield size={14} />
+              Connect with Threads
+            </button>
+            <button
+              onclick={() => showThreadsForm = false}
+              class="px-4 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    {/if}
+
+    {#if threadsAccounts.length === 0}
+      <p class="text-sm text-[var(--color-text-muted)] p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+        No Threads accounts connected.
+      </p>
+    {:else}
+      <div class="space-y-2">
+        {#each threadsAccounts as account}
+          <div class="flex items-center justify-between p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+            <div class="flex items-center gap-3">
+              {#if account.avatar_url}
+                <img loading="lazy" src={account.avatar_url} alt="" class="w-8 h-8 rounded-full" />
+              {:else}
+                <div class="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-xs">T</div>
+              {/if}
+              <div>
+                <span class="text-sm font-medium">{account.display_name || account.handle}</span>
+                <span class="text-xs text-[var(--color-text-muted)] ml-1">{account.handle}</span>
                 {#if account.is_primary}
                   <span class="ml-2 text-xs text-yellow-400">★ {i18n.t.settings.primary}</span>
                 {/if}

@@ -5,16 +5,17 @@
 
 import { BlueskyClient } from './bluesky';
 import { MastodonClient } from './mastodon';
+import { ThreadsClient } from './threads';
 import { initBlueskyOAuth } from './bluesky-oauth';
 import { listAccounts, getDecryptedCredentials } from '$lib/db';
 import { Agent } from '@atproto/api';
-import type { Account } from '$lib/types';
+import type { Account, Platform } from '$lib/types';
 
 export interface ClientEntry {
   accountId: number;
-  platform: 'bluesky' | 'mastodon';
+  platform: Platform;
   handle: string;
-  client: BlueskyClient | MastodonClient;
+  client: BlueskyClient | MastodonClient | ThreadsClient;
   /** For OAuth Bluesky accounts — the Agent with full access including DMs */
   oauthAgent?: Agent;
 }
@@ -72,6 +73,14 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
             client,
           });
         }
+      } else if (acct.platform === 'threads') {
+        const client = new ThreadsClient(creds.access_token, creds.user_id ?? acct.threads_user_id ?? '');
+        clients.set(acct.id, {
+          accountId: acct.id,
+          platform: 'threads',
+          handle: acct.handle,
+          client,
+        });
       } else {
         const client = new MastodonClient(
           acct.instance_url ?? `https://${acct.handle.split('@').pop()}`,
@@ -121,6 +130,16 @@ export function getBskyClient(clients: Map<number, ClientEntry>): BlueskyClient 
 export function getMastoClient(clients: Map<number, ClientEntry>): MastodonClient | null {
   for (const entry of clients.values()) {
     if (entry.platform === 'mastodon') return entry.client as MastodonClient;
+  }
+  return null;
+}
+
+/**
+ * Get the Threads client.
+ */
+export function getThreadsClient(clients: Map<number, ClientEntry>): ThreadsClient | null {
+  for (const entry of clients.values()) {
+    if (entry.platform === 'threads') return entry.client as ThreadsClient;
   }
   return null;
 }

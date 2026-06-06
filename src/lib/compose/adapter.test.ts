@@ -9,6 +9,10 @@ describe('getCharLimit', () => {
   it('returns 500 for mastodon', () => {
     expect(getCharLimit('mastodon')).toBe(500);
   });
+
+  it('returns 500 for threads', () => {
+    expect(getCharLimit('threads')).toBe(500);
+  });
 });
 
 describe('graphemeLength', () => {

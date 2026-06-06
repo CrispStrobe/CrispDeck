@@ -1,6 +1,6 @@
 // ── Platform types ──────────────────────────────────────────────────────────
 
-export type Platform = 'bluesky' | 'mastodon';
+export type Platform = 'bluesky' | 'mastodon' | 'threads';
 
 // ── Account (mirrors SQLite `accounts` table) ──────────────────────────────
 
@@ -12,6 +12,7 @@ export interface Account {
   avatar_url: string | null;
   did: string | null;
   mastodon_id: string | null;
+  threads_user_id: string | null;
   instance_url: string | null;
   is_primary: boolean;
   created_at: string;
@@ -118,6 +119,8 @@ export interface CrosspostEntry {
   bluesky_cid: string | null;
   mastodon_uri: string | null;
   mastodon_id: string | null;
+  threads_uri: string | null;
+  threads_id: string | null;
   text_preview: string | null;
   media_count: number;
   posted_at: string;

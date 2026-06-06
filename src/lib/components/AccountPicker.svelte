@@ -37,13 +37,13 @@
     >
       <div
         class="w-3 h-3 rounded-full flex-shrink-0"
-        style="background: {acct.platform === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"
+        style="background: var(--color-{acct.platform})"
       ></div>
       {#if acct.avatar_url}
         <img loading="lazy" src={acct.avatar_url} alt="" class="w-6 h-6 rounded-full" />
       {:else}
         <div class="w-6 h-6 rounded-full bg-[var(--color-surface-hover)] flex items-center justify-center text-[10px]">
-          {acct.platform === 'bluesky' ? 'BS' : 'M'}
+          {acct.platform === 'bluesky' ? 'BS' : acct.platform === 'threads' ? 'T' : 'M'}
         </div>
       {/if}
       <div class="flex-1 min-w-0">

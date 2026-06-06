@@ -265,7 +265,8 @@ export function filterPosts(
         post.platform === 'mastodon' &&
         Array.isArray(post.embeds) &&
         (post.embeds as unknown[]).length > 0;
-      if (!hasBskyMedia && !hasMastoMedia) return false;
+      const hasThreadsMedia = post.platform === 'threads' && post.embeds;
+      if (!hasBskyMedia && !hasMastoMedia && !hasThreadsMedia) return false;
     }
     if (filters.minLikes > 0 && (post.likeCount ?? 0) < filters.minLikes)
       return false;

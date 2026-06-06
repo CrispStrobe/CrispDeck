@@ -13,13 +13,13 @@ A unified Mastodon + Bluesky social media client with:
 
 ## Current State (2026-06-06)
 
-v0.4.1 — 552 tests (46 test files), 24 pages, live at https://crispdeck.vercel.app
+v0.5.0 — 566 tests (47 test files), 25 pages, live at https://crispdeck.vercel.app
 
 **License**: AGPL-3.0-only
 
 ---
 
-## Completed Items (1–48, except 32)
+## Completed Items (1–48, except 32 and 30)
 
 All items below are **done** and committed. This section exists as reference for context only.
 
@@ -63,12 +63,57 @@ Analytics with full pagination, local post archive (IndexedDB), deck columns (11
 - Manage/edit/delete own published feeds
 - **Note**: Publishing requires a running feed generator service. A client-side preview + rule editor is doable; actual network publishing needs a server component.
 
-### 43. Nostr and Threads support
+### 43. Threads support (hybrid: official API + ActivityPub federation)
+- **Status**: Done
+- **Effort**: Medium (single session)
+- **Description**: Add Threads as a third network using a hybrid approach
+
+#### Why hybrid?
+- The official Threads API has **no home timeline/feed endpoint** — you can post, read your own posts, search, and get insights, but cannot scroll a feed
+- However, Threads has opt-in ActivityPub federation — Threads users appear as `@user@threads.net` and their posts flow through Mastodon instances
+- **Reading**: Already works via existing Mastodon columns (federated Threads posts). Add UI to discover/follow `@user@threads.net` accounts
+- **Writing**: Use the official Threads API for crossposting from compose
+
+#### Official Threads API details
+- **Free**, no paid tiers — just rate limits
+- **Auth**: OAuth 2.0 via `threads.net/oauth/authorize`, token exchange at `graph.threads.net`
+- **Token management**: Short-lived token → immediately swap for long-lived (58-day). Refresh via `th_refresh_token` grant type (uses access token itself, no separate refresh token)
+- **Scopes**: `threads_basic`, `threads_content_publish`, `threads_manage_replies`, `threads_manage_insights`
+- **Publishing**: Container-then-publish flow (all major clients use this pattern):
+  1. Create container: `POST /{user_id}/threads` with text/media/reply context
+  2. Poll status until "FINISHED" / "PUBLISHED"
+  3. Trigger publication: `POST /{user_id}/threads_publish`
+- **Carousel posts**: Create individual item containers with `is_carousel_item=true`, then parent CAROUSEL container referencing children IDs, then publish
+- **Media**: Threads does NOT accept direct uploads — requires publicly accessible HTTPS URLs
+- **Rate limits**: 250 posts/day, 1000 replies/day, 200 requests/hour
+- **Limits**: 500-char caption max
+- **Analytics**: Per-post insights (views, likes, replies, reposts, quotes) via `/{post_id}/insights`
+
+#### Implementation plan
+1. **Threads OAuth login** — new provider in auth, store long-lived token in localStorage
+2. **Threads API client** — `src/lib/api/threads.ts` wrapping official REST API directly (existing TS SDKs are thin/unmaintained)
+3. **Crosspost adapter** — add Threads to compose page alongside Mastodon + Bluesky, handle 500-char limit, container publish flow
+4. **Identity matching** — detect `@user@threads.net` in Mastodon federation, link to Threads identity for dedup
+5. **"Find on Threads" helper** — UI to search/follow Threads users via their federated ActivityPub address
+6. **Analytics integration** — Threads post insights in analytics page alongside Mastodon + Bluesky metrics
+7. **Deck column** — "Threads" column type showing user's own Threads posts (via API) and federated Threads content (via Mastodon)
+
+#### Meta error codes to handle
+- Error code 24: API propagation delay (retry with exponential backoff)
+- Error 2207051: Community restriction
+- Error 4279013: Account block
+
+#### Reference implementations (all AGPL-3.0, license-compatible)
+- **OpenPost** (SvelteKit + Go) — cleanest adapter pattern, 3-step container flow
+- **BrightBean Studio** (Django/Python) — best carousel implementation, clean provider abstraction
+- **Postiz** (Next.js + NestJS, 31.5k stars) — most complete Threads integration with account-level + per-post analytics, 30+ platforms
+
+### Future: Nostr support
 - **Status**: Not started
-- **Effort**: Very large (multi-week per protocol)
-- **Description**: Extend multi-network architecture to Nostr (NIP-01 relay protocol) and Threads (ActivityPub)
-- Would make CrispDeck the most comprehensive open-social client with a deck view
-- Requires new API clients, auth flows, post normalization, compose adapters
+- **Effort**: Very large (multi-week)
+- **Description**: Extend to Nostr (NIP-01 relay protocol)
+- Requires new crypto-based auth (nsec/npub keys), relay connections, event normalization
+- Deferred — evaluate after Threads ships
 
 ---
 
@@ -116,11 +161,11 @@ CrispDeck is the only client combining multi-column deck view + multi-network (B
 
 | | CrispDeck | Indigo (May 2026) | Openvibe | deck.blue | Ivory |
 |---|---|---|---|---|---|
-| Bluesky + Mastodon | Yes | Yes | Yes + Nostr + Threads | Bluesky only | Mastodon only |
+| Bluesky + Mastodon + Threads | Yes (3 networks) | Yes (2) | Yes + Nostr + Threads | Bluesky only | Mastodon only |
 | Column/deck view | Yes | No | No | Yes | Mac only |
 | Web + desktop + mobile | Yes | Apple only | Mobile only | Web only | Apple only |
 | Analytics | Yes | No | No | No | Basic |
 | Free to post | Yes | No ($5/mo) | 2 accts free | Yes | No ($2/mo) |
 | Open source | Yes (AGPL) | No | No | No | No |
 
-Key competitive advantages: deck+multi-network (unique combo), cross-platform analytics (no competitor), catch-up mode, AI compose, "For You" local algorithm, thread un-rolling, real-time Jetstream counters.
+Key competitive advantages: deck+multi-network+Threads (unique combo), cross-platform analytics (no competitor), catch-up mode, AI compose, "For You" local algorithm, thread un-rolling, real-time Jetstream counters, Threads hybrid reading via ActivityPub.

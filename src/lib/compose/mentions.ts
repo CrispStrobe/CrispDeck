@@ -34,6 +34,7 @@ export async function searchMentions(query: string): Promise<MentionSuggestion[]
         const handles: Record<Platform, string | null> = {
           bluesky: null,
           mastodon: null,
+          threads: null,
         };
 
         for (const link of identity.links) {

@@ -1,10 +1,12 @@
 import { RichText, BskyAgent } from '@atproto/api';
 import type { BlueskyClient } from '$lib/api/bluesky';
 import type { MastodonClient } from '$lib/api/mastodon';
+import type { ThreadsClient } from '$lib/api/threads';
+import type { Platform } from '$lib/types';
 import { resolveMentionsForPlatform } from './mentions';
 
 export interface PostResult {
-  platform: 'bluesky' | 'mastodon';
+  platform: Platform;
   success: boolean;
   uri?: string;
   cid?: string;
@@ -222,11 +224,33 @@ export async function postToMastodon(
   }
 }
 
+/** Post to Threads using the container-then-publish flow */
+export async function postToThreads(
+  client: ThreadsClient,
+  options: ComposeOptions,
+): Promise<PostResult> {
+  try {
+    const result = await client.publishText(options.text);
+
+    return {
+      platform: 'threads',
+      success: true,
+      uri: `https://www.threads.net/post/${result.id}`,
+    };
+  } catch (e) {
+    return {
+      platform: 'threads',
+      success: false,
+      error: String(e),
+    };
+  }
+}
+
 /** Crosspost to multiple platforms */
 export async function crosspost(
   targets: Array<{
-    platform: 'bluesky' | 'mastodon';
-    client: BlueskyClient | MastodonClient;
+    platform: Platform;
+    client: BlueskyClient | MastodonClient | ThreadsClient;
   }>,
   options: ComposeOptions,
 ): Promise<PostResult[]> {
@@ -235,6 +259,8 @@ export async function crosspost(
   for (const target of targets) {
     if (target.platform === 'bluesky') {
       results.push(await postToBluesky(target.client as BlueskyClient, options));
+    } else if (target.platform === 'threads') {
+      results.push(await postToThreads(target.client as ThreadsClient, options));
     } else {
       results.push(await postToMastodon(target.client as MastodonClient, options));
     }
@@ -394,11 +420,37 @@ export async function postThreadToMastodon(
   return results;
 }
 
+/** Post a thread (reply chain) to Threads */
+export async function postThreadToThreads(
+  client: ThreadsClient,
+  parts: string[],
+): Promise<PostResult[]> {
+  const results: PostResult[] = [];
+  let parentId: string | undefined;
+
+  for (let i = 0; i < parts.length; i++) {
+    try {
+      const result = await client.publishText(parts[i], parentId);
+      parentId = result.id;
+
+      results.push({
+        platform: 'threads',
+        success: true,
+        uri: `https://www.threads.net/post/${result.id}`,
+      });
+    } catch (e) {
+      results.push({ platform: 'threads', success: false, error: `Part ${i + 1}: ${e}` });
+      break;
+    }
+  }
+  return results;
+}
+
 /** Crosspost a thread — splits per platform's limits, posts reply chains */
 export async function crosspostThread(
   targets: Array<{
-    platform: 'bluesky' | 'mastodon';
-    client: BlueskyClient | MastodonClient;
+    platform: Platform;
+    client: BlueskyClient | MastodonClient | ThreadsClient;
     parts: string[]; // Pre-split text parts for this platform
   }>,
   options: Omit<ComposeOptions, 'text'>,
@@ -416,6 +468,8 @@ export async function crosspostThread(
       // Single post, no thread needed
       if (target.platform === 'bluesky') {
         results.push(await postToBluesky(target.client as BlueskyClient, { ...options, text: resolvedParts[0] }));
+      } else if (target.platform === 'threads') {
+        results.push(await postToThreads(target.client as ThreadsClient, { ...options, text: resolvedParts[0] }));
       } else {
         results.push(await postToMastodon(target.client as MastodonClient, { ...options, text: resolvedParts[0] }));
       }
@@ -423,6 +477,8 @@ export async function crosspostThread(
       // Thread
       if (target.platform === 'bluesky') {
         results.push(...await postThreadToBluesky(target.client as BlueskyClient, resolvedParts, options));
+      } else if (target.platform === 'threads') {
+        results.push(...await postThreadToThreads(target.client as ThreadsClient, resolvedParts));
       } else {
         results.push(...await postThreadToMastodon(target.client as MastodonClient, resolvedParts, options));
       }
@@ -433,8 +489,9 @@ export async function crosspostThread(
 }
 
 /** Get the character limit for a platform */
-export function getCharLimit(platform: 'bluesky' | 'mastodon'): number {
-  return platform === 'bluesky' ? 300 : 500;
+export function getCharLimit(platform: Platform): number {
+  if (platform === 'bluesky') return 300;
+  return 500; // mastodon + threads
 }
 
 /** Count graphemes (what Bluesky uses for character counting) */

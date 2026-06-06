@@ -113,6 +113,7 @@ export const translations = {
       title: 'Settings',
       blueskyAccounts: 'Bluesky Accounts',
       mastodonAccounts: 'Mastodon Accounts',
+      threadsAccounts: 'Threads Accounts',
       add: 'Add',
       oauthRecommended: 'OAuth (recommended)',
       appPassword: 'App Password',
@@ -126,6 +127,8 @@ export const translations = {
       cancel: 'Cancel',
       noBluesky: 'No Bluesky accounts connected.',
       noMastodon: 'No Mastodon accounts connected.',
+      noThreads: 'No Threads accounts connected.',
+      threadsHint: 'Threads uses Meta OAuth. You need a Meta Developer App with the Threads API enabled.',
       instance: 'Instance',
       instancePlaceholder: 'mastodon.social',
       authorizeOAuth: 'Authorize with OAuth',
@@ -436,6 +439,7 @@ export const translations = {
       view: 'View',
       bluesky: 'Bluesky',
       mastodon: 'Mastodon',
+      threads: 'Threads',
     },
   },
   de: {
@@ -542,6 +546,7 @@ export const translations = {
       title: 'Einstellungen',
       blueskyAccounts: 'Bluesky-Konten',
       mastodonAccounts: 'Mastodon-Konten',
+      threadsAccounts: 'Threads-Konten',
       add: 'Hinzufügen',
       oauthRecommended: 'OAuth (empfohlen)',
       appPassword: 'App-Passwort',
@@ -555,6 +560,8 @@ export const translations = {
       cancel: 'Abbrechen',
       noBluesky: 'Keine Bluesky-Konten verbunden.',
       noMastodon: 'Keine Mastodon-Konten verbunden.',
+      noThreads: 'Keine Threads-Konten verbunden.',
+      threadsHint: 'Threads verwendet Meta OAuth. Sie benötigen eine Meta-Entwickler-App mit aktivierter Threads-API.',
       instance: 'Instanz',
       instancePlaceholder: 'mastodon.social',
       authorizeOAuth: 'Mit OAuth autorisieren',
@@ -864,6 +871,7 @@ export const translations = {
       view: 'Anzeigen',
       bluesky: 'Bluesky',
       mastodon: 'Mastodon',
+      threads: 'Threads',
     },
   },
   fr: {
@@ -931,7 +939,7 @@ export const translations = {
       waitingAuth: "En attente d'autorisation...", authHint: 'Autorisez l\'application dans le navigateur.',
       setupIncomplete: 'configuration incomplète — supprimer et réajouter',
     },
-    common: { dismiss: 'fermer', loading: 'Chargement...', error: 'Erreur', postedTo: 'Publié sur {platform}', view: 'Voir', bluesky: 'Bluesky', mastodon: 'Mastodon' },
+    common: { dismiss: 'fermer', loading: 'Chargement...', error: 'Erreur', postedTo: 'Publié sur {platform}', view: 'Voir', bluesky: 'Bluesky', mastodon: 'Mastodon', threads: 'Threads' },
   },
   es: {
     nav: {
@@ -985,11 +993,12 @@ export const translations = {
       title: 'Configuración', preferences: 'Preferencias', language: 'Idioma',
       translateTarget: 'Idioma de traducción', altTextMode: 'Aplicación de texto alt',
       altTextOff: 'Desactivado', altTextWarn: 'Advertir si falta', altTextRequire: 'Requerir para todas',
-      blueskyAccounts: 'Cuentas Bluesky', mastodonAccounts: 'Cuentas Mastodon',
+      blueskyAccounts: 'Cuentas Bluesky', mastodonAccounts: 'Cuentas Mastodon', threadsAccounts: 'Cuentas Threads',
       add: 'Agregar', cancel: 'Cancelar', primary: 'principal',
       oauthRecommended: 'OAuth (recomendado)', appPassword: 'Contraseña de app',
       handle: 'Handle', connectOAuth: 'Conectar con OAuth', addAccount: 'Agregar cuenta',
-      noBluesky: 'Sin cuentas Bluesky.', noMastodon: 'Sin cuentas Mastodon.',
+      noBluesky: 'Sin cuentas Bluesky.', noMastodon: 'Sin cuentas Mastodon.', noThreads: 'Sin cuentas Threads.',
+      threadsHint: 'Threads usa Meta OAuth. Necesitas una app de desarrollador Meta con la API de Threads habilitada.',
       instance: 'Instancia', authorizeOAuth: 'Autorizar con OAuth',
       handlePlaceholder: 'tu-handle.bsky.social', instancePlaceholder: 'mastodon.social',
       appPasswordPlaceholder: 'xxxx-xxxx-xxxx-xxxx',
@@ -998,7 +1007,7 @@ export const translations = {
       waitingAuth: 'Esperando autorización...', authHint: 'Autoriza la app en el navegador.',
       setupIncomplete: 'configuración incompleta — eliminar y volver a agregar',
     },
-    common: { dismiss: 'cerrar', loading: 'Cargando...', error: 'Error', postedTo: 'Publicado en {platform}', view: 'Ver', bluesky: 'Bluesky', mastodon: 'Mastodon' },
+    common: { dismiss: 'cerrar', loading: 'Cargando...', error: 'Error', postedTo: 'Publicado en {platform}', view: 'Ver', bluesky: 'Bluesky', mastodon: 'Mastodon', threads: 'Threads' },
   },
   ja: {
     nav: {
@@ -1065,7 +1074,7 @@ export const translations = {
       waitingAuth: '認証待ち...', authHint: 'ブラウザでアプリを認証してください。',
       setupIncomplete: '設定未完了 — 削除して再追加してください',
     },
-    common: { dismiss: '閉じる', loading: '読み込み中...', error: 'エラー', postedTo: '{platform}に投稿', view: '表示', bluesky: 'Bluesky', mastodon: 'Mastodon' },
+    common: { dismiss: '閉じる', loading: '読み込み中...', error: 'エラー', postedTo: '{platform}に投稿', view: '表示', bluesky: 'Bluesky', mastodon: 'Mastodon', threads: 'Threads' },
   },
   pt: {
     nav: {
@@ -1131,7 +1140,7 @@ export const translations = {
       waitingAuth: 'Aguardando autorização...', authHint: 'Autorize o app no navegador.',
       setupIncomplete: 'configuração incompleta — excluir e readicionar',
     },
-    common: { dismiss: 'fechar', loading: 'Carregando...', error: 'Erro', postedTo: 'Publicado em {platform}', view: 'Ver', bluesky: 'Bluesky', mastodon: 'Mastodon' },
+    common: { dismiss: 'fechar', loading: 'Carregando...', error: 'Erro', postedTo: 'Publicado em {platform}', view: 'Ver', bluesky: 'Bluesky', mastodon: 'Mastodon', threads: 'Threads' },
   },
   zh: {
     nav: {
@@ -1197,7 +1206,7 @@ export const translations = {
       waitingAuth: '等待授权...', authHint: '请在浏览器中授权应用。',
       setupIncomplete: '设置未完成 — 删除后重新添加',
     },
-    common: { dismiss: '关闭', loading: '加载中...', error: '错误', postedTo: '已发布到{platform}', view: '查看', bluesky: 'Bluesky', mastodon: 'Mastodon' },
+    common: { dismiss: '关闭', loading: '加载中...', error: '错误', postedTo: '已发布到{platform}', view: '查看', bluesky: 'Bluesky', mastodon: 'Mastodon', threads: 'Threads' },
   },
   ar: {
     nav: {
@@ -1233,7 +1242,7 @@ export const translations = {
       posts: 'منشورات', likes: 'إعجابات', reposts: 'إعادة نشر', replies: 'ردود',
       allPlatforms: 'كل المنصات', noArchive: 'لا يوجد أرشيف',
     },
-    common: { dismiss: 'إغلاق', loading: 'جاري التحميل...', error: 'خطأ', postedTo: 'تم النشر على {platform}', view: 'عرض', bluesky: 'بلوسكاي', mastodon: 'ماستودون' },
+    common: { dismiss: 'إغلاق', loading: 'جاري التحميل...', error: 'خطأ', postedTo: 'تم النشر على {platform}', view: 'عرض', bluesky: 'بلوسكاي', mastodon: 'ماستودون', threads: 'ثريدز' },
   },
 };
 

@@ -228,7 +228,7 @@
         // Split text per platform's char limits
         const plan = splitForPlatform(text.trim(), acct.platform as Platform);
         return {
-          platform: acct.platform as 'bluesky' | 'mastodon',
+          platform: acct.platform as Platform,
           client: entry.client,
           parts: plan.parts.map(p => p.text),
         };
@@ -263,6 +263,7 @@
       // Log to crosspost history
       const bskyResult = results.find(r => r.platform === 'bluesky');
       const mastoResult = results.find(r => r.platform === 'mastodon');
+      const threadsResult = results.find(r => r.platform === 'threads');
       const allSuccess = results.every(r => r.success);
 
       await logCrosspost({
@@ -270,6 +271,8 @@
         bluesky_cid: bskyResult?.cid ?? null,
         mastodon_uri: mastoResult?.uri ?? null,
         mastodon_id: null,
+        threads_uri: threadsResult?.uri ?? null,
+        threads_id: null,
         text_preview: text.trim().substring(0, 280),
         media_count: mediaFiles.length,
         status: allSuccess ? 'success' : results.some(r => r.success) ? 'partial' : 'failed',
@@ -464,11 +467,14 @@
   const selectedAccounts = $derived(accounts.filter(a => selectedAccountIds.includes(a.id)));
   const hasBsky = $derived(selectedAccounts.some(a => a.platform === 'bluesky'));
   const hasMasto = $derived(selectedAccounts.some(a => a.platform === 'mastodon'));
+  const hasThreads = $derived(selectedAccounts.some(a => a.platform === 'threads'));
   const bskyLen = $derived(graphemeLength(text));
   const mastoLen = $derived(text.length);
+  const threadsLen = $derived(text.length);
   const bskyNeedsThread = $derived(hasBsky && bskyLen > 300);
   const mastoNeedsThread = $derived(hasMasto && mastoLen > 500);
-  const needsThread = $derived(bskyNeedsThread || mastoNeedsThread);
+  const threadsNeedsThread = $derived(hasThreads && threadsLen > 500);
+  const needsThread = $derived(bskyNeedsThread || mastoNeedsThread || threadsNeedsThread);
 </script>
 
 <svelte:head><title>CrispDeck — Compose</title><meta name="description" content="Write and crosspost to Mastodon and Bluesky" /></svelte:head>
@@ -585,6 +591,13 @@
               <span class="{pct >= 1 ? 'text-yellow-400 font-bold' : pct >= 0.9 ? 'text-red-400' : pct >= 0.8 ? 'text-orange-400' : 'text-[var(--color-text-muted)]'}">
                 <span class="inline-block w-2 h-2 rounded-full bg-[var(--color-mastodon)] mr-1"></span>
                 {mastoLen}/500{mastoNeedsThread ? ' →thread' : ''}
+              </span>
+            {/if}
+            {#if hasThreads}
+              {@const pct = threadsLen / 500}
+              <span class="{pct >= 1 ? 'text-yellow-400 font-bold' : pct >= 0.9 ? 'text-red-400' : pct >= 0.8 ? 'text-orange-400' : 'text-[var(--color-text-muted)]'}">
+                <span class="inline-block w-2 h-2 rounded-full bg-[var(--color-threads,#000)] mr-1"></span>
+                {threadsLen}/500{threadsNeedsThread ? ' →thread' : ''}
               </span>
             {/if}
           </div>
@@ -766,7 +779,7 @@
               <Clock size={10} />
               {#each timingInsights as insight}
                 <span>
-                  <span class="w-1.5 h-1.5 rounded-full inline-block" style="background: {insight.platform === 'bluesky' ? 'var(--color-bluesky)' : 'var(--color-mastodon)'}"></span>
+                  <span class="w-1.5 h-1.5 rounded-full inline-block" style="background: {insight.platform === 'bluesky' ? 'var(--color-bluesky)' : insight.platform === 'threads' ? 'var(--color-threads, #000)' : 'var(--color-mastodon)'}"></span>
                   {i18n.t.compose.bestTime} {formatHour(insight.bestHour)}
                 </span>
               {/each}
@@ -893,6 +906,26 @@
                   <p class="text-xs text-yellow-400 mb-1">⚠ {contentWarning}</p>
                 {/if}
                 {#each mastoPlan.parts as part, i}
+                  <div class="text-sm text-[var(--color-text)] whitespace-pre-wrap break-words {i > 0 ? 'mt-2 pt-2 border-t border-[var(--color-border)]' : ''}">
+                    {part.text}
+                    <span class="text-[10px] text-[var(--color-text-muted)] ml-1">{part.charCount}/{part.charLimit}</span>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+            {#if hasThreads}
+              {@const threadsPlan = splitForPlatform(text.trim(), 'threads')}
+              <div class="p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+                <div class="flex items-center justify-between mb-2">
+                  <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-[var(--color-threads,#000)]"></span>
+                    <span class="text-xs font-medium text-[var(--color-text-muted)]">Threads</span>
+                  </div>
+                  {#if threadsPlan.needsThread}
+                    <span class="text-[10px] px-1.5 py-0.5 bg-gray-800/50 rounded text-gray-300">{threadsPlan.parts.length} posts</span>
+                  {/if}
+                </div>
+                {#each threadsPlan.parts as part, i}
                   <div class="text-sm text-[var(--color-text)] whitespace-pre-wrap break-words {i > 0 ? 'mt-2 pt-2 border-t border-[var(--color-border)]' : ''}">
                     {part.text}
                     <span class="text-[10px] text-[var(--color-text-muted)] ml-1">{part.charCount}/{part.charLimit}</span>

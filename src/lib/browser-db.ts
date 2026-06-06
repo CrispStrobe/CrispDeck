@@ -457,10 +457,12 @@ export async function getCachedFollows(ownerAccountId: number): Promise<FollowEn
 
 export async function logCrosspost(params: {
   draft_id?: number;
-  bluesky_uri?: string;
-  bluesky_cid?: string;
-  mastodon_uri?: string;
-  mastodon_id?: string;
+  bluesky_uri?: string | null;
+  bluesky_cid?: string | null;
+  mastodon_uri?: string | null;
+  mastodon_id?: string | null;
+  threads_uri?: string | null;
+  threads_id?: string | null;
   text_preview?: string;
   media_count?: number;
   status: string;

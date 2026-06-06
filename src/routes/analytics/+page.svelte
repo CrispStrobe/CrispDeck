@@ -5,6 +5,7 @@
   import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
+  import { ThreadsClient } from '$lib/api/threads';
   import { normalizePost, sortPosts } from '$lib/api/unified';
   import { exportAsJson, exportAsCsv, exportAsMarkdown } from '$lib/utils/export';
   import Post from '$lib/components/Post.svelte';
@@ -60,6 +61,14 @@
             // Estimate progress: accounts proportion + within-account proportion (assume ~20 pages max)
             loadingPercent = Math.min(99, Math.round(((loadingAccountIndex - 1) / accounts.length + (1 / accounts.length) * Math.min(pages / 20, 0.95)) * 100));
           } while (cursor);
+        } else if (acct.platform === 'threads') {
+          const client = entry.client as ThreadsClient;
+          const threadsPosts = await client.getOwnPosts(100);
+          const normalized = threadsPosts.map(p => client.normalizePost(p));
+          posts = [...posts, ...normalized];
+          total += normalized.length;
+          loadingProgress = `${acct.handle}: ${total} posts`;
+          loadingPercent = Math.min(99, Math.round((loadingAccountIndex / accounts.length) * 100));
         } else {
           const client = entry.client as MastodonClient;
           const account = await client.getAccountByHandle(acct.handle);
