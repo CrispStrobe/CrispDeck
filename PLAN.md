@@ -11,9 +11,9 @@ A unified Mastodon + Bluesky social media client with:
 
 **Tech stack**: SvelteKit 2, Svelte 5 (runes), Tailwind CSS 4, Vite 6, Tauri 2, TypeScript + Rust, Vitest
 
-## Current State (2026-06-06)
+## Current State (2026-06-07)
 
-v0.8.0 — 674 tests (57 test files), 29 pages, live at https://crispdeck.vercel.app
+v0.9.0 — 800 tests (63 test files), 29 pages, live at https://crispdeck.vercel.app
 
 **License**: AGPL-3.0-only
 
@@ -304,6 +304,72 @@ Analytics with full pagination, local post archive (IndexedDB), deck columns (11
 
 ---
 
+## Phase 9: Power-User & Real-Time Features
+
+### 76. Saved deck layouts / workspaces
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Name, save, switch between, rename, duplicate, and delete column layouts
+- Quick workspace switching between e.g. "Work", "Personal", "Monitoring"
+- Active layout persisted across reloads
+- Deep-cloned columns prevent mutation bugs
+- **Key files**: `src/lib/deck-layouts.ts`
+
+### 77. AI alt-text generation (multi-provider)
+- **Status**: Done
+- **Effort**: Medium
+- **Description**: Generate image alt-text at compose time with 3 provider backends
+- **BYOK (OpenAI-compatible)**: Uses vision API format (image_url content type), works with GPT-4o, Ollama, llama.cpp server, etc.
+- **CrispASR (bundled llama.cpp)**: Tauri desktop only, runs LLaVA/multimodal models locally via CrispASR FFI, no API key needed
+- **mistral.rs (Rust-native)**: Tauri desktop only, Rust inference engine supporting Phi-3-Vision and similar, no API key needed
+- Also refactored AI compose to support provider selection for all actions (correct, shorten, hashtags, alt-text)
+- **Key files**: `src/lib/compose/ai.ts`
+
+### 78. Hashtag bank for compose
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Save named sets of hashtags for one-click insertion into compose
+- Auto-prefixes # on bare tags
+- Format sets as space-separated strings for insertion
+- CRUD with localStorage persistence
+- **Key files**: `src/lib/hashtag-bank.ts`
+
+### 79. Universal cross-network search
+- **Status**: Done
+- **Effort**: Medium
+- **Description**: Single search querying Bluesky + Mastodon + Threads simultaneously
+- Bluesky: `app.bsky.feed.searchPosts` API
+- Mastodon: `/api/v2/search?type=statuses`
+- Threads: `graph.threads.net/search`
+- Merges results with engagement/recency scoring, URI-based dedup
+- Crosspost grouping via existing `detectCrossposts` at UI layer
+- **Key files**: `src/lib/universal-search.ts`
+
+### 80. Streaming timelines for deck columns
+- **Status**: Done
+- **Effort**: Medium-Large
+- **Description**: Real-time live-push of new posts in deck columns
+- Bluesky: Extends Jetstream WebSocket for `app.bsky.feed.post` events, filters by followed DIDs
+- Mastodon: `/api/v1/streaming` WebSocket (user, public, local, hashtag, list streams)
+- Stream manager coordinates per-column streams with shared connections
+- Opt-in toggle per column via `streaming` flag
+- Auto-reconnect with 5s backoff
+- **Key files**: `src/lib/streaming.ts`
+
+### 81. BYOK provider presets with model discovery
+- **Status**: Done
+- **Effort**: Medium
+- **Description**: Provider preset system with /models endpoint polling for model selection
+- 10 presets: OpenRouter, Scaleway, Nebius, Mistral, Poe, Groq, Ollama, llama.cpp, OpenAI, Custom
+- Each preset stores: base URL, models endpoint, default model, default vision model, auth config, docs URL
+- `fetchAvailableModels()` polls `/models` endpoint and parses OpenAI-format response
+- Session-scoped model cache (5 min TTL) avoids re-fetching on settings revisit
+- Vision model selection for alt-text (e.g. GPT-4o, Pixtral, LLaVA, Phi-3-Vision)
+- Wired into AI compose config: `presetId` + `visionModel` fields
+- **Key files**: `src/lib/byok-providers.ts`, `src/lib/compose/ai.ts`
+
+---
+
 ## Known Issues / Future Polish
 
 ### i18n coverage
@@ -355,4 +421,4 @@ CrispDeck is the only client combining multi-column deck view + multi-network (B
 | Free to post | Yes | No ($5/mo) | 2 accts free | Yes | No ($2/mo) |
 | Open source | Yes (AGPL) | No | No | No | No |
 
-Key competitive advantages: deck+multi-network+Threads (unique combo), cross-platform analytics (no competitor), catch-up mode, AI compose, "For You" local algorithm, thread un-rolling, real-time Jetstream counters, Threads hybrid reading via ActivityPub.
+Key competitive advantages: deck+multi-network+Threads (unique combo), cross-platform analytics (no competitor), catch-up mode, AI compose (3 providers incl. local), "For You" local algorithm, thread un-rolling, real-time Jetstream counters, Threads hybrid reading via ActivityPub, saved deck workspaces, universal cross-network search, streaming timelines, hashtag bank, AI alt-text generation (BYOK + CrispASR/llama.cpp + mistral.rs).
