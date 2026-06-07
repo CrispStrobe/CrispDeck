@@ -3,7 +3,17 @@
   "framework": "sveltekit",
   "buildCommand": "npx svelte-kit sync && npx vite build",
   "outputDirectory": "build",
+  "headers": [
+    {
+      "source": "/client-metadata.json",
+      "headers": [
+        { "key": "Content-Type", "value": "application/json" },
+        { "key": "Access-Control-Allow-Origin", "value": "*" }
+      ]
+    }
+  ],
   "rewrites": [
+    { "source": "/client-metadata.json", "destination": "/client-metadata.json" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

@@ -15,16 +15,33 @@ import { Agent } from '@atproto/api';
 
 let oauthClient: BrowserOAuthClient | null = null;
 
+/**
+ * The production origin where client-metadata.json is publicly served.
+ * AT Protocol OAuth requires the auth server to fetch client_id as a URL.
+ * On preview deployments the SPA rewrite or Vercel auth can block this,
+ * so we always point client_id to the production origin.
+ * Localhost uses the AT Protocol loopback client_id format instead.
+ */
+const PROD_ORIGIN = 'https://crispdeck.vercel.app';
+
 /** Get or create the OAuth client singleton */
 export function getOAuthClient(): BrowserOAuthClient {
   if (!oauthClient) {
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://crispdeck.vercel.app';
+    const currentOrigin = typeof window !== 'undefined' ? window.location.origin : PROD_ORIGIN;
+    const isLocalhost = currentOrigin.includes('localhost') || currentOrigin.includes('127.0.0.1');
+
+    // For localhost: use AT Protocol loopback client_id (no server fetch needed)
+    // For deployed: always use production origin so the auth server can fetch client-metadata.json
+    const clientId = isLocalhost
+      ? `http://localhost?redirect_uri=${encodeURIComponent(`${currentOrigin}/oauth/bsky-callback`)}&scope=${encodeURIComponent('atproto transition:generic transition:chat.bsky')}`
+      : `${PROD_ORIGIN}/client-metadata.json`;
+
     oauthClient = new BrowserOAuthClient({
       clientMetadata: {
-        client_id: `${origin}/client-metadata.json`,
+        client_id: clientId,
         client_name: 'CrispDeck',
-        client_uri: origin,
-        redirect_uris: [`${origin}/oauth/bsky-callback`],
+        client_uri: PROD_ORIGIN,
+        redirect_uris: [`${PROD_ORIGIN}/oauth/bsky-callback`],
         scope: 'atproto transition:generic transition:chat.bsky',
         grant_types: ['authorization_code', 'refresh_token'],
         response_types: ['code'],
