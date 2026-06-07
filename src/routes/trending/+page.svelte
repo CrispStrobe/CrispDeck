@@ -14,7 +14,7 @@
 
   let loading = $state(true);
   let error = $state('');
-  let activeTab: 'bluesky' | 'tags' | 'links' | 'posts' = $state('bluesky');
+  let activeTab: 'combined' | 'bluesky' | 'tags' | 'links' | 'posts' = $state('combined');
 
   // Bluesky trending
   let bskyTopics: BskyTrendingTopic[] = $state([]);
@@ -54,8 +54,9 @@
         await loadMastoTrending(mastoClient);
       }
 
-      // Default tab: Bluesky if available, else Mastodon tags
+      // Default tab: combined if both available
       if (!hasBsky && hasMasto) activeTab = 'tags';
+      else activeTab = 'combined';
     } catch (e) {
       error = String(e);
     } finally {
@@ -135,6 +136,11 @@
 
   <!-- Tabs -->
   <div class="flex items-center gap-1 border-b border-[var(--color-border)] mb-4">
+    {#if hasBsky && hasMasto}
+      <button onclick={() => activeTab = 'combined'} class="px-4 py-2 text-sm font-medium border-b-2 -mb-px flex items-center gap-1.5 {activeTab === 'combined' ? 'border-[var(--color-primary)] text-[var(--color-text)]' : 'border-transparent text-[var(--color-text-muted)]'}">
+        Combined
+      </button>
+    {/if}
     {#if hasBsky}
       <button onclick={() => activeTab = 'bluesky'} class="px-4 py-2 text-sm font-medium border-b-2 -mb-px flex items-center gap-1.5 {activeTab === 'bluesky' ? 'border-[var(--color-bluesky)] text-[var(--color-text)]' : 'border-transparent text-[var(--color-text-muted)]'}">
         <span class="w-2 h-2 rounded-full bg-[var(--color-bluesky)]"></span> Bluesky ({bskyTopics.length})
@@ -167,8 +173,49 @@
       <p class="text-sm text-[var(--color-text-muted)]">Add a Bluesky or Mastodon account in <a href="/settings" class="text-[var(--color-primary)] underline">Settings</a> to see trending content.</p>
     </div>
   {:else}
+    <!-- Combined trending (unified view) -->
+    {#if activeTab === 'combined'}
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {#if bskyTopics.length > 0}
+          <div>
+            <h3 class="text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-[var(--color-bluesky)]"></span> Bluesky Topics
+            </h3>
+            <div class="space-y-1">
+              {#each bskyTopics.slice(0, 10) as topic}
+                <a href={topic.link} target="_blank" rel="noopener" class="block p-2 bg-[var(--color-surface)] rounded border border-[var(--color-border)] hover:border-[var(--color-bluesky)] text-sm transition-colors">
+                  {topic.displayName || topic.topic}
+                </a>
+              {/each}
+            </div>
+          </div>
+        {/if}
+        {#if filteredTags.length > 0}
+          <div>
+            <h3 class="text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-[var(--color-mastodon)]"></span> Mastodon Tags
+            </h3>
+            <div class="space-y-1">
+              {#each filteredTags.slice(0, 10) as tag}
+                <a href={tag.url} target="_blank" rel="noopener" class="block p-2 bg-[var(--color-surface)] rounded border border-[var(--color-border)] hover:border-[var(--color-mastodon)] text-sm transition-colors">
+                  #{tag.name}
+                </a>
+              {/each}
+            </div>
+          </div>
+        {/if}
+      </div>
+      {#if trendingPosts.length > 0}
+        <h3 class="text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wider mt-4 mb-2">Trending Posts</h3>
+        <div class="space-y-3">
+          {#each trendingPosts.slice(0, 5) as post}
+            <Post {post} />
+          {/each}
+        </div>
+      {/if}
+
     <!-- Bluesky trending topics -->
-    {#if activeTab === 'bluesky'}
+    {:else if activeTab === 'bluesky'}
       <div class="space-y-2">
         {#each bskyTopics as topic, i}
           <a

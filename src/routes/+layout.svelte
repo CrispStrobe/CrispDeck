@@ -28,6 +28,11 @@
   let unreadMessages = $state(0);
 
   onMount(async () => {
+    // Register service worker for PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+
     // Restore theme
     const saved = localStorage.getItem('crispdeck-theme') as 'dark' | 'oled' | 'light' | null;
     if (saved) { theme = saved; document.documentElement.setAttribute('data-theme', saved); }

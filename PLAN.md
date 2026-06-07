@@ -13,7 +13,7 @@ A unified Mastodon + Bluesky social media client with:
 
 ## Current State (2026-06-06)
 
-v0.7.0 — 659 tests (55 test files), 29 pages, live at https://crispdeck.vercel.app
+v0.8.0 — 674 tests (57 test files), 29 pages, live at https://crispdeck.vercel.app
 
 **License**: AGPL-3.0-only
 
@@ -268,37 +268,37 @@ Analytics with full pagination, local post archive (IndexedDB), deck columns (11
 ## Phase 8: Future Enhancements
 
 ### 69. Post templates with variables
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Small
 - **Description**: Extend templates with {date}, {time}, {day}, {handle} interpolation
 
 ### 70. Bluesky starter pack creator
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Medium
 - **Description**: Build and publish starter packs from identity database
 
 ### 71. Unified trending
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Small
 - **Description**: Merge Bluesky + Mastodon trending into one combined view
 
 ### 72. PWA install support
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Small
 - **Description**: manifest.json + service worker for "Add to Home Screen"
 
 ### 73. List management
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Medium
 - **Description**: Create/edit/delete Mastodon lists and Bluesky lists from CrispDeck
 
 ### 74. Post performance insights
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Medium
 - **Description**: Pattern analysis — "image posts get 3x more engagement than text-only"
 
 ### 75. Cross-network thread sync
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Large
 - **Description**: Post thread on one platform, auto-create on others with optimized formatting
 
