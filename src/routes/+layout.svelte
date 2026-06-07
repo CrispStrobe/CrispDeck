@@ -2,7 +2,7 @@
   import '../app.css';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import { Home, Rss, Columns3, PenSquare, FileText, Bell, MessageSquare, Bookmark, Users, Search, List, Package, Shield, Tag, Server, TrendingUp, Archive, BarChart3, Settings, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon, Clock, Smartphone, Wand2 } from '@lucide/svelte';
+  import { Home, Rss, Columns3, PenSquare, FileText, Bell, MessageSquare, Bookmark, Users, Search, List, Package, Shield, Tag, Server, TrendingUp, Archive, BarChart3, Settings, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon, Clock, Smartphone, Wand2, Image, Calendar, BookOpen } from '@lucide/svelte';
   import KeyboardShortcuts from '$lib/components/KeyboardShortcuts.svelte';
   import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
   import { i18n } from '$lib/i18n.svelte';
@@ -144,6 +144,9 @@
     { href: '/identities', icon: Users, label: i18n.t.nav.identities },
     { href: '/search', icon: Search, label: i18n.t.nav.search },
     { href: '/trending', icon: TrendingUp, label: i18n.t.nav.trending },
+    { href: '/gallery', icon: Image, label: i18n.t.nav.gallery },
+    { href: '/calendar', icon: Calendar, label: i18n.t.nav.calendar },
+    { href: '/reading-lists', icon: BookOpen, label: i18n.t.nav.readingLists },
     { href: '/archive', icon: Archive, label: i18n.t.nav.archive },
     { href: '/labelers', icon: Tag, label: i18n.t.nav.labelers },
     { href: '/instance', icon: Server, label: i18n.t.nav.instance },

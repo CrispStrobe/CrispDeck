@@ -13,7 +13,7 @@ A unified Mastodon + Bluesky social media client with:
 
 ## Current State (2026-06-06)
 
-v0.6.0 — 642 tests (53 test files), 26 pages, live at https://crispdeck.vercel.app
+v0.7.0 — 659 tests (55 test files), 29 pages, live at https://crispdeck.vercel.app
 
 **License**: AGPL-3.0-only
 
@@ -220,6 +220,87 @@ Analytics with full pagination, local post archive (IndexedDB), deck columns (11
 - **Status**: Done
 - **Effort**: Medium
 - **Description**: IndexedDB storage for periodic engagement snapshots, growth curve data per post
+
+---
+
+## Phase 7: Analytics & Content Management
+
+### 64. Media gallery view
+- **Status**: Done
+- **Effort**: Medium
+- **Description**: Masonry grid view for browsing all media from a user or hashtag
+- Click to expand, swipe through images
+- Filter by media type (images, video, links)
+- Works with existing post data, new rendering mode
+
+### 65. Content calendar
+- **Status**: Done
+- **Effort**: Medium
+- **Description**: Full month/week calendar showing past posts + scheduled drafts
+- Combines archive data with draft scheduling
+- Color-coded by platform
+- Click day to see posts, click post to open
+
+### 66. Cross-platform analytics comparison
+- **Status**: Done (already existed — best times, day-of-week, hourly charts)
+- **Effort**: Medium
+- **Description**: Side-by-side charts comparing engagement per platform
+- Bar charts for likes/reposts/replies per platform
+- Best-performing content analysis
+- Day-of-week and hourly heatmaps per platform
+
+### 67. Engagement milestones
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Alert when a post hits engagement thresholds
+- Configurable thresholds (10, 50, 100, 500 likes)
+- Uses engagement-history snapshots + notification-alerts system
+- Optional sound + desktop notification
+
+### 68. Reading lists
+- **Status**: Done
+- **Effort**: Medium
+- **Description**: Themed post collections beyond flat bookmarks
+- Create named lists ("AI articles", "Svelte tips", "Read later")
+- Add posts to lists from Post component
+- Browse and manage lists on dedicated page
+
+## Phase 8: Future Enhancements
+
+### 69. Post templates with variables
+- **Status**: Not started
+- **Effort**: Small
+- **Description**: Extend templates with {date}, {time}, {day}, {handle} interpolation
+
+### 70. Bluesky starter pack creator
+- **Status**: Not started
+- **Effort**: Medium
+- **Description**: Build and publish starter packs from identity database
+
+### 71. Unified trending
+- **Status**: Not started
+- **Effort**: Small
+- **Description**: Merge Bluesky + Mastodon trending into one combined view
+
+### 72. PWA install support
+- **Status**: Not started
+- **Effort**: Small
+- **Description**: manifest.json + service worker for "Add to Home Screen"
+
+### 73. List management
+- **Status**: Not started
+- **Effort**: Medium
+- **Description**: Create/edit/delete Mastodon lists and Bluesky lists from CrispDeck
+
+### 74. Post performance insights
+- **Status**: Not started
+- **Effort**: Medium
+- **Description**: Pattern analysis — "image posts get 3x more engagement than text-only"
+
+### 75. Cross-network thread sync
+- **Status**: Not started
+- **Effort**: Large
+- **Description**: Post thread on one platform, auto-create on others with optimized formatting
 
 ---
 
