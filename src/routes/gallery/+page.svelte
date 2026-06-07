@@ -174,7 +174,7 @@
     {#if lightboxIndex < filtered.length - 1}
       <button onclick={(e) => { e.stopPropagation(); nextImage(); }} class="absolute right-4 text-white/70 hover:text-white z-10"><ChevronRight size={32} /></button>
     {/if}
-    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
+    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions a11y_no_static_element_interactions -->
     <div onclick={(e) => e.stopPropagation()} class="max-w-4xl max-h-[90vh] mx-4">
       <img src={item.url} alt={item.alt} class="max-w-full max-h-[85vh] object-contain rounded-lg" />
       <div class="mt-2 text-center">

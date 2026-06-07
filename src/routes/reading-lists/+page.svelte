@@ -92,9 +92,12 @@
       <!-- List sidebar -->
       <div class="space-y-2">
         {#each lists as list}
-          <button
+          <div
+            role="button"
+            tabindex="0"
             onclick={() => selectedListId = selectedListId === list.id ? null : list.id}
-            class="w-full text-left p-3 bg-[var(--color-surface)] rounded-lg border transition-colors {selectedListId === list.id ? 'border-[var(--color-primary)]' : 'border-[var(--color-border)] hover:border-[var(--color-text-muted)]'}"
+            onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectedListId = selectedListId === list.id ? null : list.id; } }}
+            class="w-full text-left p-3 bg-[var(--color-surface)] rounded-lg border transition-colors cursor-pointer {selectedListId === list.id ? 'border-[var(--color-primary)]' : 'border-[var(--color-border)] hover:border-[var(--color-text-muted)]'}"
           >
             <div class="flex items-center justify-between">
               <div class="min-w-0">
@@ -111,7 +114,7 @@
             {#if list.description}
               <p class="text-[10px] text-[var(--color-text-muted)] mt-1 truncate">{list.description}</p>
             {/if}
-          </button>
+          </div>
         {/each}
       </div>
 
