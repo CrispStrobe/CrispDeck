@@ -209,9 +209,9 @@ export async function fetchAvailableModels(
 
   // Navigate the response using the modelsPath
   const path = preset?.modelsPath ?? 'data';
-  let modelList: any[] = json;
+  let modelList: any = json;
   for (const key of path.split('.')) {
-    modelList = modelList?.[key];
+    modelList = modelList?.[key as keyof typeof modelList];
   }
 
   if (!Array.isArray(modelList)) {

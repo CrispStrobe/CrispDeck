@@ -11,7 +11,9 @@
   import { requestPermission, getPermission, isSupported as notifSupported } from '$lib/push-notifications';
   import { getTranslateConfig, setTranslateConfig, type TranslateProvider } from '$lib/translate';
   import { jetstream } from '$lib/jetstream';
-  import { getAIComposeConfig, setAIComposeConfig } from '$lib/compose/ai';
+  import { getAIComposeConfig, setAIComposeConfig, type AIProvider } from '$lib/compose/ai';
+  import { PROVIDER_PRESETS, getPreset, fetchModelsWithCache, type DiscoveredModel } from '$lib/byok-providers';
+  import { listHashtagSets, saveHashtagSet, deleteHashtagSet, type HashtagSet } from '$lib/hashtag-bank';
   import { listTagGroups, saveTagGroup, deleteTagGroup, type TagGroup } from '$lib/tag-groups';
   import { listFeeds, addFeed, removeFeed, importOPML, type RssFeed } from '$lib/rss';
   import { getThreadsConfig, setThreadsConfig, getThreadsAuthUrl, exchangeCodeForToken, exchangeForLongLivedToken, ThreadsClient } from '$lib/api/threads';
@@ -33,12 +35,55 @@
 
   // AI compose config
   const aiConfig = getAIComposeConfig();
+  let aiProvider = $state<AIProvider>(aiConfig.provider);
+  let aiPresetId = $state(aiConfig.presetId ?? 'openai');
   let aiBaseUrl = $state(aiConfig.baseUrl);
   let aiApiKey = $state(aiConfig.apiKey);
   let aiModel = $state(aiConfig.model);
-  function saveAIConfig() {
-    setAIComposeConfig({ baseUrl: aiBaseUrl || 'https://api.openai.com/v1', apiKey: aiApiKey, model: aiModel || 'gpt-4o-mini' });
+  let aiVisionModel = $state(aiConfig.visionModel ?? '');
+  let aiModels: DiscoveredModel[] = $state([]);
+  let aiModelsLoading = $state(false);
+  let aiModelsError = $state('');
+
+  function handlePresetChange() {
+    const preset = getPreset(aiPresetId);
+    if (preset && aiPresetId !== 'custom') {
+      aiBaseUrl = preset.baseUrl;
+      aiModel = preset.defaultModel;
+      aiVisionModel = preset.defaultVisionModel;
+      aiModels = [];
+    }
+    saveAIConfig();
   }
+
+  async function fetchAIModels() {
+    const preset = getPreset(aiPresetId);
+    aiModelsLoading = true;
+    aiModelsError = '';
+    try {
+      aiModels = await fetchModelsWithCache(aiBaseUrl, aiApiKey, preset);
+    } catch (e) {
+      aiModelsError = String(e);
+    } finally {
+      aiModelsLoading = false;
+    }
+  }
+
+  function saveAIConfig() {
+    setAIComposeConfig({
+      provider: aiProvider,
+      presetId: aiPresetId,
+      baseUrl: aiBaseUrl || 'https://api.openai.com/v1',
+      apiKey: aiApiKey,
+      model: aiModel || 'gpt-4o-mini',
+      visionModel: aiVisionModel || undefined,
+    });
+  }
+
+  // Hashtag bank
+  let hashtagSets: HashtagSet[] = $state(listHashtagSets());
+  let newHashtagSetName = $state('');
+  let newHashtagSetTags = $state('');
 
   // TTS + STT model + engine settings (stored in localStorage)
   let ttsModel = $state(localStorage.getItem('crispdeck-tts-model') ?? 'kokoro');
@@ -1185,27 +1230,205 @@
   <!-- AI Compose -->
   <section class="mb-8">
     <h2 class="text-lg font-semibold mb-3">{i18n.t.settings.aiComposeTitle}</h2>
-    <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+    <div class="space-y-4 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
       <p class="text-[11px] text-[var(--color-text-muted)]">{i18n.t.settings.aiComposeHint}</p>
+
+      <!-- Provider type -->
       <div>
-        <label for="ai-base-url" class="block text-xs text-[var(--color-text-muted)] mb-1">{i18n.t.translation.apiBaseUrl}</label>
-        <input id="ai-base-url" type="text" bind:value={aiBaseUrl} onchange={saveAIConfig}
-          placeholder="https://api.openai.com/v1"
-          class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]" />
+        <label class="block text-xs text-[var(--color-text-muted)] mb-2">{i18n.t.compose.aiProvider}</label>
+        <div class="flex items-center bg-[var(--color-bg)] rounded-lg border border-[var(--color-border)] p-0.5">
+          <button
+            onclick={() => { aiProvider = 'openai'; saveAIConfig(); }}
+            class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {aiProvider === 'openai' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)]'}"
+          >
+            {i18n.t.compose.aiProviderByok}
+          </button>
+          <button
+            onclick={() => { aiProvider = 'crispasr'; saveAIConfig(); }}
+            class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {aiProvider === 'crispasr' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)]'}"
+          >
+            {i18n.t.compose.aiProviderCrispasr}
+          </button>
+          <button
+            onclick={() => { aiProvider = 'mistral-rs'; saveAIConfig(); }}
+            class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {aiProvider === 'mistral-rs' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)]'}"
+          >
+            {i18n.t.compose.aiProviderMistralrs}
+          </button>
+        </div>
       </div>
-      <div>
-        <label for="ai-api-key" class="block text-xs text-[var(--color-text-muted)] mb-1">{i18n.t.translation.apiKey}</label>
-        <input id="ai-api-key" type="password" bind:value={aiApiKey} onchange={saveAIConfig}
-          placeholder="sk-..."
-          class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]" />
+
+      {#if aiProvider === 'openai'}
+        <!-- Provider preset -->
+        <div>
+          <label for="ai-preset" class="block text-xs text-[var(--color-text-muted)] mb-1">{i18n.t.compose.aiPreset}</label>
+          <select
+            id="ai-preset"
+            bind:value={aiPresetId}
+            onchange={handlePresetChange}
+            class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
+          >
+            {#each PROVIDER_PRESETS as preset}
+              <option value={preset.id}>{preset.name}</option>
+            {/each}
+          </select>
+        </div>
+
+        <!-- Base URL (editable for custom, shown read-only for presets) -->
+        <div>
+          <label for="ai-base-url" class="block text-xs text-[var(--color-text-muted)] mb-1">{i18n.t.translation.apiBaseUrl}</label>
+          <input id="ai-base-url" type="text" bind:value={aiBaseUrl} onchange={saveAIConfig}
+            placeholder="https://api.openai.com/v1"
+            readonly={aiPresetId !== 'custom'}
+            class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)] {aiPresetId !== 'custom' ? 'opacity-60' : ''}" />
+        </div>
+
+        <!-- API Key -->
+        {#if getPreset(aiPresetId)?.requiresApiKey !== false}
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label for="ai-api-key" class="text-xs text-[var(--color-text-muted)]">{i18n.t.translation.apiKey}</label>
+              {#if getPreset(aiPresetId)?.docsUrl}
+                <a href={getPreset(aiPresetId)?.docsUrl} target="_blank" rel="noopener" class="text-[10px] text-[var(--color-primary)] hover:underline flex items-center gap-0.5">
+                  {i18n.t.compose.aiGetApiKey}
+                  <ExternalLink size={10} />
+                </a>
+              {/if}
+            </div>
+            <input id="ai-api-key" type="password" bind:value={aiApiKey} onchange={saveAIConfig}
+              placeholder="sk-..."
+              class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]" />
+          </div>
+        {/if}
+
+        <!-- Model selection with fetch -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label for="ai-model" class="text-xs text-[var(--color-text-muted)]">{i18n.t.translation.modelName}</label>
+            <button
+              onclick={fetchAIModels}
+              disabled={aiModelsLoading || (!aiApiKey && getPreset(aiPresetId)?.requiresApiKey !== false)}
+              class="flex items-center gap-1 px-2 py-0.5 text-[10px] bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-[var(--color-text-muted)] hover:text-[var(--color-text)] disabled:opacity-30 transition-colors"
+            >
+              {#if aiModelsLoading}
+                <Loader2 size={10} class="animate-spin" />
+                {i18n.t.compose.aiFetchingModels}
+              {:else}
+                {i18n.t.compose.aiFetchModels}
+              {/if}
+            </button>
+          </div>
+          {#if aiModels.length > 0}
+            <select
+              id="ai-model"
+              bind:value={aiModel}
+              onchange={saveAIConfig}
+              class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
+            >
+              {#each aiModels as model}
+                <option value={model.id}>{model.id}</option>
+              {/each}
+            </select>
+          {:else}
+            <input id="ai-model" type="text" bind:value={aiModel} onchange={saveAIConfig}
+              placeholder={getPreset(aiPresetId)?.defaultModel ?? 'gpt-4o-mini'}
+              class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]" />
+          {/if}
+          {#if aiModelsError}
+            <p class="text-[10px] text-red-400 mt-1">{aiModelsError}</p>
+          {/if}
+        </div>
+
+        <!-- Vision model for alt-text -->
+        <div>
+          <label for="ai-vision-model" class="block text-xs text-[var(--color-text-muted)] mb-1">{i18n.t.compose.aiVisionModel}</label>
+          {#if aiModels.length > 0}
+            <select
+              id="ai-vision-model"
+              bind:value={aiVisionModel}
+              onchange={saveAIConfig}
+              class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
+            >
+              <option value="">Same as text model</option>
+              {#each aiModels as model}
+                <option value={model.id}>{model.id}</option>
+              {/each}
+            </select>
+          {:else}
+            <input id="ai-vision-model" type="text" bind:value={aiVisionModel} onchange={saveAIConfig}
+              placeholder={getPreset(aiPresetId)?.defaultVisionModel ?? 'gpt-4o'}
+              class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]" />
+          {/if}
+          <p class="text-[10px] text-[var(--color-text-muted)] mt-1">
+            Used for image alt-text generation. Leave empty to use the text model.
+          </p>
+        </div>
+      {:else}
+        <p class="text-xs text-[var(--color-text-muted)]">
+          {aiProvider === 'crispasr' ? 'CrispASR uses bundled llama.cpp for local inference. No API key needed. Requires desktop app.' : 'mistral.rs uses Rust-native inference. No API key needed. Requires desktop app.'}
+        </p>
+      {/if}
+    </div>
+  </section>
+
+  <!-- Hashtag Bank -->
+  <section class="mb-8">
+    <h2 class="text-lg font-semibold mb-3">{i18n.t.compose.hashtagBank}</h2>
+    <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+      <p class="text-[11px] text-[var(--color-text-muted)]">Save sets of hashtags for quick insertion into compose.</p>
+
+      {#if hashtagSets.length > 0}
+        <div class="space-y-2">
+          {#each hashtagSets as set}
+            <div class="flex items-center justify-between p-2 bg-[var(--color-bg)] rounded-md">
+              <div>
+                <span class="text-sm font-medium">{set.name}</span>
+                <span class="text-[10px] text-[var(--color-text-muted)] ml-2">{set.hashtags.join(' ')}</span>
+              </div>
+              <button
+                onclick={() => { deleteHashtagSet(set.id); hashtagSets = listHashtagSets(); }}
+                class="text-[var(--color-text-muted)] hover:text-[var(--color-danger)] p-1"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <p class="text-xs text-[var(--color-text-muted)]">{i18n.t.compose.noHashtagSets}</p>
+      {/if}
+
+      <div class="flex gap-2">
+        <input
+          type="text"
+          bind:value={newHashtagSetName}
+          placeholder={i18n.t.compose.hashtagSetName}
+          class="flex-1 px-2 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
+        />
+        <input
+          type="text"
+          bind:value={newHashtagSetTags}
+          placeholder={i18n.t.compose.hashtagSetTags}
+          class="flex-2 px-2 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
+        />
+        <button
+          onclick={() => {
+            if (newHashtagSetName.trim() && newHashtagSetTags.trim()) {
+              saveHashtagSet({
+                name: newHashtagSetName.trim(),
+                hashtags: newHashtagSetTags.split(/[\s,]+/).map(t => t.trim()).filter(Boolean),
+              });
+              hashtagSets = listHashtagSets();
+              newHashtagSetName = '';
+              newHashtagSetTags = '';
+            }
+          }}
+          disabled={!newHashtagSetName.trim() || !newHashtagSetTags.trim()}
+          class="px-3 py-1.5 text-xs bg-[var(--color-primary)] text-white rounded-md disabled:opacity-30"
+        >
+          <Plus size={12} />
+        </button>
       </div>
-      <div>
-        <label for="ai-model" class="block text-xs text-[var(--color-text-muted)] mb-1">{i18n.t.translation.modelName}</label>
-        <input id="ai-model" type="text" bind:value={aiModel} onchange={saveAIConfig}
-          placeholder="gpt-4o-mini"
-          class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]" />
-      </div>
-      <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.translation.ollamaHint}</p>
     </div>
   </section>
 
