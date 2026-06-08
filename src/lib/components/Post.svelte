@@ -6,6 +6,8 @@
   import { onMount, onDestroy } from 'svelte';
   import { jetstream } from '$lib/jetstream';
   import type { UnifiedPost } from '$lib/types';
+  import MediaLightbox from '$lib/components/MediaLightbox.svelte';
+  import type { LightboxItem } from '$lib/components/MediaLightbox.svelte';
 
   let { post, hideMedia = false, compact = false, onlike, onboost, onreply, onquote, onfollow }: {
     post: UnifiedPost;
@@ -26,6 +28,25 @@
   let following = $state(false);
   let pinned = $state(false);
 
+  // Media lightbox
+  let lightboxItems: LightboxItem[] = $state([]);
+  let lightboxIndex: number | null = $state(null);
+  let mediaPreviewMode = $state<'lightbox' | 'browser'>('lightbox');
+
+  function openLightbox(items: LightboxItem[], index: number) {
+    if (mediaPreviewMode === 'browser') {
+      window.open(items[index].url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    lightboxItems = items;
+    lightboxIndex = index;
+  }
+
+  function closeLightbox() {
+    lightboxIndex = null;
+    lightboxItems = [];
+  }
+
   function handlePin() {
     if (pinned) { unpinPost(post.uri); pinned = false; }
     else { pinPost(post); pinned = true; }
@@ -36,6 +57,7 @@
     bookmarked = await isBookmarked(post.uri);
     pinned = isPinned(post.uri);
     hideEngagement = localStorage.getItem('crispdeck-hide-engagement') === 'true';
+    mediaPreviewMode = (localStorage.getItem('crispdeck-media-preview') as 'lightbox' | 'browser') || 'lightbox';
 
     // Subscribe to real-time count updates for this post
     if (post.platform === 'bluesky') {
@@ -560,10 +582,14 @@
       <!-- Bluesky images -->
       {#if bskyImages.length > 0}
         <div class="grid grid-cols-2 gap-2 pt-2">
-          {#each bskyImages as image}
-            <a href={image.fullsize} target="_blank" rel="noopener noreferrer">
+          {#each bskyImages as image, i}
+            <button
+              type="button"
+              onclick={() => openLightbox(bskyImages.map(img => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), i)}
+              class="cursor-pointer text-left"
+            >
               <img loading="lazy" src={image.thumb} alt={image.alt || ''} class="rounded-md w-full aspect-video object-cover" />
-            </a>
+            </button>
           {/each}
         </div>
       {/if}
@@ -598,7 +624,9 @@
           {#if bskyQuote.embeds?.[0]}
             {@const qEmbed = bskyQuote.embeds[0]}
             {#if qEmbed.$type === 'app.bsky.embed.images#view' && qEmbed.images?.[0]}
-              <img loading="lazy" src={qEmbed.images[0].thumb} alt={qEmbed.images[0].alt || ''} class="mt-1.5 rounded w-full h-24 object-cover" />
+              <button type="button" onclick={() => openLightbox(qEmbed.images.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0)} class="w-full cursor-pointer text-left">
+                <img loading="lazy" src={qEmbed.images[0].thumb} alt={qEmbed.images[0].alt || ''} class="mt-1.5 rounded w-full h-24 object-cover" />
+              </button>
             {/if}
             {#if qEmbed.$type === 'app.bsky.embed.external#view' && qEmbed.external}
               <div class="mt-1.5 flex items-center gap-2 text-[10px] text-[var(--color-text-muted)]">
@@ -640,9 +668,13 @@
           {#each mastodonMedia as attachment, i}
             {@const imageUrl = attachment.previewUrl || attachment.url || attachment.remoteUrl}
             {#if imageUrl}
-              <a href={attachment.url || imageUrl} target="_blank" rel="noopener noreferrer">
+              <button
+                type="button"
+                onclick={() => openLightbox(mastodonMedia.map(a => ({ url: a.url || a.previewUrl || a.remoteUrl || '', thumb: a.previewUrl || a.url || '', alt: a.description })), i)}
+                class="cursor-pointer text-left"
+              >
                 <img loading="lazy" src={imageUrl} alt={attachment.description || `Image ${i + 1}`} class="rounded-md w-full aspect-video object-cover bg-[var(--color-surface-hover)]" />
-              </a>
+              </button>
             {/if}
           {/each}
         </div>
@@ -878,4 +910,8 @@
     </div>
   {/if}
 </div>
+
+{#if lightboxIndex !== null}
+  <MediaLightbox items={lightboxItems} index={lightboxIndex} onclose={closeLightbox} />
+{/if}
 {/if}

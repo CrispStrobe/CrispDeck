@@ -159,6 +159,7 @@
   }
 
   let hideEngagement = $state(localStorage.getItem('crispdeck-hide-engagement') === 'true');
+  let mediaPreview = $state<'lightbox' | 'browser'>((localStorage.getItem('crispdeck-media-preview') as 'lightbox' | 'browser') || 'lightbox');
   let liveCounters = $state(localStorage.getItem('crispdeck-live-counters') === 'true');
   function handleLiveCountersChange() {
     localStorage.setItem('crispdeck-live-counters', String(liveCounters));
@@ -881,6 +882,23 @@
           onchange={handleHideEngagementChange}
           class="w-4 h-4 accent-[var(--color-primary)]"
         />
+      </div>
+
+      <!-- Media preview mode -->
+      <div class="flex items-center justify-between">
+        <div>
+          <label for="media-preview" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.mediaPreview}</label>
+          <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.mediaPreviewHint}</p>
+        </div>
+        <select
+          id="media-preview"
+          bind:value={mediaPreview}
+          onchange={() => localStorage.setItem('crispdeck-media-preview', mediaPreview)}
+          class="px-2 py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)]"
+        >
+          <option value="lightbox">{i18n.t.settings.mediaPreviewLightbox}</option>
+          <option value="browser">{i18n.t.settings.mediaPreviewBrowser}</option>
+        </select>
       </div>
 
       <!-- Live counters -->
