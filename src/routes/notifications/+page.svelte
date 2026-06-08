@@ -7,6 +7,7 @@
   import { MastodonClient } from '$lib/api/mastodon';
   import type { Account } from '$lib/types';
   import { groupNotifications, type UnifiedNotification, type NotificationGroup } from '$lib/notification-grouping';
+  import { getCached, setCache } from '$lib/view-cache';
 
   let accounts: Account[] = $state([]);
   let groups: NotificationGroup[] = $state([]);
@@ -17,6 +18,10 @@
   let clientEntries: Map<number, ClientEntry> = new Map();
 
   onMount(async () => {
+    // Show cached notifications instantly
+    const cached = getCached<NotificationGroup[]>('notifications');
+    if (cached) { groups = cached.data; loading = false; }
+
     try {
       const result = await initAllClients();
       accounts = result.accounts;
@@ -87,6 +92,7 @@
     }
 
     groups = groupNotifications(all);
+    setCache('notifications', groups);
   }
 
   function toggleGroup(groupId: string) {

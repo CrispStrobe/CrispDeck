@@ -6,6 +6,8 @@
   import KeyboardShortcuts from '$lib/components/KeyboardShortcuts.svelte';
   import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
   import { i18n } from '$lib/i18n.svelte';
+  import { installLogInterceptors } from '$lib/debug-log';
+  installLogInterceptors();
 
   let { children } = $props();
 

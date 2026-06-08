@@ -17,6 +17,7 @@
   import { jetstream } from '$lib/jetstream';
   import { applyMuteFilter } from '$lib/muted-words';
   import { saveReadPosition, getReadPosition } from '$lib/read-position';
+  import { getCached, setCache } from '$lib/view-cache';
 
   type FeedMode = 'timeline' | 'my-posts' | 'for-you';
 
@@ -82,6 +83,12 @@
       // Start Jetstream if enabled
       if (localStorage.getItem('crispdeck-live-counters') === 'true') {
         jetstream.setEnabled(true);
+      }
+      // Show cached feed instantly while fresh data loads
+      const cached = getCached<UnifiedPost[]>('feed-' + feedMode);
+      if (cached) {
+        posts = cached.data;
+        initialLoading = false;
       }
       if (accounts.length > 0) {
         await loadFeed();
@@ -261,6 +268,8 @@
     posts = sortPosts(allPosts, 'newest');
     progress = posts.length;
     loading = false;
+    // Cache for instant display on next visit
+    setCache('feed-' + feedMode, posts.slice(0, 50));
   }
 
   async function loadMore() {

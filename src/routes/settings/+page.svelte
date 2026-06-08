@@ -21,6 +21,7 @@
   import { listKeywordSets, saveKeywordSet, removeKeywordSet, createKeywordSet, parseKeywords, type KeywordSet } from '$lib/keyword-monitor';
   import { getAlertSettings, setAlertSettings } from '$lib/notification-alerts';
   import { exportSettings, importSettings, type SettingsExport } from '$lib/settings-export';
+  import { getLogs, clearLogs, getLogCount, type LogEntry } from '$lib/debug-log';
   import type { Account } from '$lib/types';
 
   let uiLanguage = $state<Language>(i18n.lang);
@@ -184,6 +185,8 @@
 
   // Muted words
   let mutedWords: MutedWord[] = $state(listMutedWords());
+  let showDebugLog = $state(false);
+  let debugLogs: LogEntry[] = $state([]);
   let keywordSets: KeywordSet[] = $state(listKeywordSets());
   let newKeywordSetName = $state('');
   let newKeywordSetWords = $state('');
@@ -1253,7 +1256,9 @@
       <!-- Provider-specific config -->
       {#if translateProvider === 'mymemory'}
         <p class="text-xs text-[var(--color-text-muted)]">
-          Free API, no key needed. 5000 chars/day limit. Auto-detects source language.
+          Free API, no key needed. 5,000 chars/day limit. Auto-detects source language.
+          For personal, non-commercial use only (<a href="https://mymemory.translated.net/doc/usagelimits.php" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">terms</a>).
+          For unlimited translation, configure BYOK with your own API key or use CrispASR (desktop).
         </p>
       {/if}
 
@@ -1737,6 +1742,39 @@
             Load Model Registry
           </button>
         {/if}
+      {/if}
+    </div>
+  </section>
+
+  <!-- Debug Log -->
+  <section class="mb-8">
+    <h2 class="text-lg font-semibold mb-3">Debug Log</h2>
+    <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+      <div class="flex items-center justify-between">
+        <p class="text-[11px] text-[var(--color-text-muted)]">
+          Recent errors and warnings ({getLogCount()} entries). Useful for diagnosing issues.
+        </p>
+        {#if getLogCount() > 0}
+          <button onclick={() => { clearLogs(); debugLogs = []; }} class="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-danger)]">Clear</button>
+        {/if}
+      </div>
+      <button onclick={() => { debugLogs = getLogs(); showDebugLog = !showDebugLog; }} class="text-xs text-[var(--color-primary)] hover:underline">
+        {showDebugLog ? 'Hide log' : `Show log (${getLogCount()} entries)`}
+      </button>
+      {#if showDebugLog}
+        <div class="max-h-64 overflow-y-auto bg-[var(--color-bg)] rounded-md border border-[var(--color-border)] p-2 font-mono text-[10px] space-y-1">
+          {#if debugLogs.length === 0}
+            <p class="text-[var(--color-text-muted)]">No log entries.</p>
+          {:else}
+            {#each debugLogs as entry}
+              <div class="flex gap-2 {entry.level === 'error' ? 'text-red-400' : entry.level === 'warn' ? 'text-yellow-400' : 'text-[var(--color-text-muted)]'}">
+                <span class="flex-shrink-0 opacity-60">{new Date(entry.timestamp).toLocaleTimeString()}</span>
+                <span class="flex-shrink-0 uppercase font-bold w-10">{entry.level}</span>
+                <span class="break-all">{entry.message}</span>
+              </div>
+            {/each}
+          {/if}
+        </div>
       {/if}
     </div>
   </section>

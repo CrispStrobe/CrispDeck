@@ -7,6 +7,7 @@
   import { normalizePost, sortPosts } from '$lib/api/unified';
   import Post from '$lib/components/Post.svelte';
   import type { Account, UnifiedPost } from '$lib/types';
+  import { getCached, setCache } from '$lib/view-cache';
 
   interface MastoList { id: string; title: string; repliesPolicy: string }
   interface BskyFeed { uri: string; displayName: string; description?: string; avatar?: string; likeCount?: number; creator: { handle: string } }
@@ -34,11 +35,21 @@
   let searchingFeeds = $state(false);
 
   onMount(async () => {
+    // Show cached lists instantly
+    const cached = getCached<{ mastoLists: any[]; bskyFeeds: any[]; bskyLists: any[] }>('lists');
+    if (cached) {
+      mastoLists = cached.data.mastoLists;
+      bskyFeeds = cached.data.bskyFeeds;
+      bskyLists = cached.data.bskyLists;
+      loading = false;
+    }
+
     try {
       const result = await initAllClients();
       accounts = result.accounts;
       clientEntries = result.clients;
       await loadLists();
+      setCache('lists', { mastoLists, bskyFeeds, bskyLists });
     } catch (e) {
       error = String(e);
     } finally {
