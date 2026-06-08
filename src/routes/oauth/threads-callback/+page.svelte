@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { addAccount } from '$lib/db';
-  import { getThreadsConfig, exchangeCodeForToken, exchangeForLongLivedToken, ThreadsClient } from '$lib/api/threads';
+  import { getThreadsConfig, exchangeCodeForToken, exchangeForLongLivedToken, proxyExchangeToken, ThreadsClient } from '$lib/api/threads';
   import { Loader2, Check, AlertTriangle } from '@lucide/svelte';
 
   let status: 'loading' | 'success' | 'error' = $state('loading');
@@ -34,31 +34,40 @@
         throw new Error('No Threads OAuth config found. Please try connecting again.');
       }
 
-      // Exchange code for short-lived token
-      const shortLived = await exchangeCodeForToken(
-        config.client_id,
-        config.client_secret,
-        config.redirect_uri,
-        code,
-      );
+      let accessToken: string;
+      let userId: string;
 
-      // Immediately swap for long-lived token (58 days)
-      const longLived = await exchangeForLongLivedToken(
-        config.client_secret,
-        shortLived.access_token,
-      );
+      if (config.useProxy || !config.client_id || !config.client_secret) {
+        // Use server proxy — client_secret stays server-side
+        const result = await proxyExchangeToken(code, config.redirect_uri);
+        accessToken = result.access_token;
+        userId = result.user_id;
+      } else {
+        // Direct flow with custom credentials
+        const shortLived = await exchangeCodeForToken(
+          config.client_id,
+          config.client_secret,
+          config.redirect_uri,
+          code,
+        );
 
-      const userId = shortLived.user_id ?? longLived.user_id ?? '';
+        const longLived = await exchangeForLongLivedToken(
+          config.client_secret,
+          shortLived.access_token,
+        );
+
+        accessToken = longLived.access_token;
+        userId = shortLived.user_id ?? longLived.user_id ?? '';
+      }
 
       // Fetch profile
-      const client = new ThreadsClient(longLived.access_token, userId);
+      const client = new ThreadsClient(accessToken, userId);
       const profile = await client.getProfile();
 
       // Store the account
       const credentials = JSON.stringify({
-        access_token: longLived.access_token,
+        access_token: accessToken,
         user_id: userId,
-        expires_in: longLived.expires_in,
         connected_at: new Date().toISOString(),
       });
 

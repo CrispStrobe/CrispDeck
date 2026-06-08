@@ -16,7 +16,7 @@
   import { listHashtagSets, saveHashtagSet, deleteHashtagSet, type HashtagSet } from '$lib/hashtag-bank';
   import { listTagGroups, saveTagGroup, deleteTagGroup, type TagGroup } from '$lib/tag-groups';
   import { listFeeds, addFeed, removeFeed, importOPML, type RssFeed } from '$lib/rss';
-  import { getThreadsConfig, setThreadsConfig, getThreadsAuthUrl, exchangeCodeForToken, exchangeForLongLivedToken, ThreadsClient } from '$lib/api/threads';
+  import { getThreadsConfig, setThreadsConfig, getThreadsAuthUrl, exchangeCodeForToken, exchangeForLongLivedToken, ThreadsClient, getProxyAuthUrl, isThreadsAvailable } from '$lib/api/threads';
   import { listMutedWords, addMutedWord, removeMutedWord, toggleMutedWord, type MutedWord } from '$lib/muted-words';
   import { getAlertSettings, setAlertSettings } from '$lib/notification-alerts';
   import { exportSettings, importSettings, type SettingsExport } from '$lib/settings-export';
@@ -333,29 +333,58 @@
 
   // Add Threads form
   let showThreadsForm = $state(false);
+  let threadsAdvanced = $state(false);
   let threadsClientId = $state('');
   let threadsClientSecret = $state('');
   let threadsLoading = $state(false);
+  let threadsProxyAvailable = $state(false);
 
-  function handleStartThreadsOAuth() {
-    if (!threadsClientId.trim() || !threadsClientSecret.trim()) return;
+  // Check if server proxy is available on mount
+  onMount(async () => {
+    threadsProxyAvailable = await isThreadsAvailable();
+  });
+
+  async function handleStartThreadsOAuth() {
     threadsLoading = true;
     error = '';
 
     const redirectUri = `${window.location.origin}/oauth/threads-callback`;
-
-    // Save config for callback to use
-    setThreadsConfig({
-      client_id: threadsClientId.trim(),
-      client_secret: threadsClientSecret.trim(),
-      redirect_uri: redirectUri,
-    });
-
     const state = crypto.randomUUID();
     localStorage.setItem('crispdeck-threads-oauth-state', state);
 
-    const authUrl = getThreadsAuthUrl(threadsClientId.trim(), redirectUri, state);
-    window.location.href = authUrl;
+    try {
+      if (threadsAdvanced && threadsClientId.trim() && threadsClientSecret.trim()) {
+        // Advanced: use custom app credentials (direct flow)
+        setThreadsConfig({
+          client_id: threadsClientId.trim(),
+          client_secret: threadsClientSecret.trim(),
+          redirect_uri: redirectUri,
+          useProxy: false,
+        });
+
+        const authUrl = getThreadsAuthUrl(threadsClientId.trim(), redirectUri, state);
+        window.location.href = authUrl;
+        return;
+      }
+
+      // Default: use server proxy
+      const authUrl = await getProxyAuthUrl(redirectUri, state);
+      if (!authUrl) {
+        error = 'Threads proxy not configured on server. Set THREADS_CLIENT_ID and THREADS_CLIENT_SECRET in Vercel env vars, or use Advanced mode with your own Meta App credentials.';
+        threadsLoading = false;
+        return;
+      }
+
+      setThreadsConfig({
+        redirect_uri: redirectUri,
+        useProxy: true,
+      });
+
+      window.location.href = authUrl;
+    } catch (e) {
+      error = String(e);
+      threadsLoading = false;
+    }
   }
 
   const bskyAccounts = $derived(accounts.filter(a => a.platform === 'bluesky'));
@@ -644,47 +673,83 @@
     {#if showThreadsForm}
       <div class="mb-4 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
         <div class="space-y-3">
-          <p class="text-xs text-[var(--color-text-muted)]">
-            Threads uses Meta OAuth. You need a Meta Developer App with the Threads API enabled.
-            Create one at <a href="https://developers.facebook.com" target="_blank" rel="noopener" class="underline">developers.facebook.com</a>.
-          </p>
-          <div>
-            <label for="threads-client-id" class="block text-sm text-[var(--color-text-muted)] mb-1">App ID (Client ID)</label>
-            <input
-              id="threads-client-id"
-              type="text"
-              bind:value={threadsClientId}
-              placeholder="123456789..."
-              class="w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]"
-            />
-          </div>
-          <div>
-            <label for="threads-client-secret" class="block text-sm text-[var(--color-text-muted)] mb-1">App Secret</label>
-            <input
-              id="threads-client-secret"
-              type="password"
-              bind:value={threadsClientSecret}
-              placeholder="abc123..."
-              class="w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]"
-            />
-          </div>
-          <div class="flex gap-2">
+          {#if !threadsAdvanced}
+            <p class="text-xs text-[var(--color-text-muted)]">
+              Connect your Threads account via OAuth. You'll be redirected to Threads to authorize.
+            </p>
+            <div class="flex gap-2">
+              <button
+                onclick={handleStartThreadsOAuth}
+                disabled={threadsLoading}
+                class="flex items-center gap-1 px-4 py-2 bg-[var(--color-primary)] hover:opacity-90 rounded-md text-sm font-medium transition-opacity disabled:opacity-50"
+              >
+                {#if threadsLoading}<Loader2 size={14} class="animate-spin" />{/if}
+                <Shield size={14} />
+                Connect with Threads
+              </button>
+              <button
+                onclick={() => showThreadsForm = false}
+                class="px-4 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+              >
+                Cancel
+              </button>
+            </div>
             <button
-              onclick={handleStartThreadsOAuth}
-              disabled={threadsLoading || !threadsClientId.trim() || !threadsClientSecret.trim()}
-              class="flex items-center gap-1 px-4 py-2 bg-[var(--color-primary)] hover:opacity-90 rounded-md text-sm font-medium transition-opacity disabled:opacity-50"
+              onclick={() => threadsAdvanced = true}
+              class="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] underline"
             >
-              {#if threadsLoading}<Loader2 size={14} class="animate-spin" />{/if}
-              <Shield size={14} />
-              Connect with Threads
+              Advanced: use your own Meta App credentials
             </button>
+          {:else}
+            <p class="text-xs text-[var(--color-text-muted)]">
+              Use your own Meta Developer App. Create one at
+              <a href="https://developers.facebook.com" target="_blank" rel="noopener" class="underline">developers.facebook.com</a>
+              with the Threads API product enabled.
+            </p>
+            <div>
+              <label for="threads-client-id" class="block text-sm text-[var(--color-text-muted)] mb-1">App ID (Client ID)</label>
+              <input
+                id="threads-client-id"
+                type="text"
+                bind:value={threadsClientId}
+                placeholder="123456789..."
+                class="w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]"
+              />
+            </div>
+            <div>
+              <label for="threads-client-secret" class="block text-sm text-[var(--color-text-muted)] mb-1">App Secret</label>
+              <input
+                id="threads-client-secret"
+                type="password"
+                bind:value={threadsClientSecret}
+                placeholder="abc123..."
+                class="w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]"
+              />
+            </div>
+            <div class="flex gap-2">
+              <button
+                onclick={handleStartThreadsOAuth}
+                disabled={threadsLoading || !threadsClientId.trim() || !threadsClientSecret.trim()}
+                class="flex items-center gap-1 px-4 py-2 bg-[var(--color-primary)] hover:opacity-90 rounded-md text-sm font-medium transition-opacity disabled:opacity-50"
+              >
+                {#if threadsLoading}<Loader2 size={14} class="animate-spin" />{/if}
+                <Shield size={14} />
+                Connect with Threads
+              </button>
+              <button
+                onclick={() => showThreadsForm = false}
+                class="px-4 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+              >
+                Cancel
+              </button>
+            </div>
             <button
-              onclick={() => showThreadsForm = false}
-              class="px-4 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+              onclick={() => threadsAdvanced = false}
+              class="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] underline"
             >
-              Cancel
+              Back to simple mode
             </button>
-          </div>
+          {/if}
         </div>
       </div>
     {/if}

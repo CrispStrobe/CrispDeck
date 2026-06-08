@@ -430,9 +430,12 @@ export class ThreadsClient {
 const THREADS_CONFIG_KEY = 'crispdeck-threads-config';
 
 export interface ThreadsConfig {
-  client_id: string;
-  client_secret: string;
+  /** Custom app credentials (advanced users). Omit to use server proxy. */
+  client_id?: string;
+  client_secret?: string;
   redirect_uri: string;
+  /** Whether to use the server proxy (default: true if no client_id) */
+  useProxy?: boolean;
 }
 
 export function getThreadsConfig(): ThreadsConfig | null {
@@ -443,4 +446,83 @@ export function getThreadsConfig(): ThreadsConfig | null {
 
 export function setThreadsConfig(config: ThreadsConfig): void {
   localStorage.setItem(THREADS_CONFIG_KEY, JSON.stringify(config));
+}
+
+// ── Server proxy helpers ────────────────────────────────────────────────────
+
+/**
+ * Check if the server-side Threads proxy is available and configured.
+ * Returns the auth URL if configured, null otherwise.
+ */
+export async function getProxyAuthUrl(redirectUri: string, state: string): Promise<string | null> {
+  try {
+    const resp = await fetch(
+      `/api/threads/auth-url?redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`,
+    );
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    if (!data.configured) return null;
+    return data.auth_url;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Exchange an authorization code for tokens via the server proxy.
+ * The client_secret never leaves the server.
+ */
+export async function proxyExchangeToken(
+  code: string,
+  redirectUri: string,
+): Promise<{ access_token: string; user_id: string; long_lived: boolean }> {
+  const resp = await fetch('/api/threads/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, redirect_uri: redirectUri, action: 'exchange' }),
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error || `Token exchange failed: ${resp.statusText}`);
+  }
+
+  return resp.json();
+}
+
+/**
+ * Refresh a long-lived token via the server proxy.
+ */
+export async function proxyRefreshToken(
+  accessToken: string,
+): Promise<{ access_token: string; expires_in: number }> {
+  const resp = await fetch('/api/threads/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ access_token: accessToken, action: 'refresh' }),
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error || `Token refresh failed: ${resp.statusText}`);
+  }
+
+  return resp.json();
+}
+
+/**
+ * Check if Threads connection is available (either via proxy or custom credentials).
+ */
+export async function isThreadsAvailable(): Promise<boolean> {
+  const config = getThreadsConfig();
+  if (config?.client_id && config?.client_secret) return true;
+  // Check if proxy is configured
+  try {
+    const resp = await fetch('/api/threads/auth-url?redirect_uri=check&state=check');
+    if (!resp.ok) return false;
+    const data = await resp.json();
+    return data.configured === true;
+  } catch {
+    return false;
+  }
 }
