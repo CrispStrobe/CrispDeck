@@ -8,6 +8,7 @@
   import { ThreadsClient } from '$lib/api/threads';
   import { normalizePost, sortPosts } from '$lib/api/unified';
   import { exportAsJson, exportAsCsv, exportAsMarkdown } from '$lib/utils/export';
+  import { analyzePerformance, type PerformanceInsight } from '$lib/performance-insights';
   import Post from '$lib/components/Post.svelte';
   import type { UnifiedPost, Account } from '$lib/types';
 
@@ -257,6 +258,9 @@
     const avg = eng.map((e, i) => cnt[i] > 0 ? e / cnt[i] : 0);
     return avg.indexOf(Math.max(...avg));
   });
+
+  // Performance insights from the module (media, length, hashtag analysis)
+  const insights = $derived(analyzePerformance(originalPosts));
 </script>
 
 <svelte:head><title>CrispDeck — Analytics</title><meta name="description" content="Post analytics and engagement stats" /></svelte:head>
@@ -549,6 +553,30 @@
               <span class="text-[8px] text-[var(--color-text-muted)] flex-1 text-center">{h % 6 === 0 ? h : ''}</span>
             {/each}
           </div>
+        </div>
+      </div>
+    {/if}
+
+    <!-- Performance Insights (media, length, hashtag patterns) -->
+    {#if insights.length > 0}
+      <div class="mt-6">
+        <h3 class="text-sm font-semibold mb-3 flex items-center gap-2">
+          <TrendingUp size={14} />
+          Performance Insights
+        </h3>
+        <div class="space-y-2">
+          {#each insights as insight}
+            <div class="p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-medium text-[var(--color-primary)] px-1.5 py-0.5 bg-[var(--color-primary)]/10 rounded">{insight.category}</span>
+                {#if insight.multiplier && insight.multiplier > 1}
+                  <span class="text-xs font-bold text-green-400">{insight.multiplier.toFixed(1)}x</span>
+                {/if}
+              </div>
+              <p class="text-sm text-[var(--color-text)]">{insight.description}</p>
+              <p class="text-[10px] text-[var(--color-text-muted)] mt-1">{insight.metric}: {typeof insight.value === 'number' ? insight.value.toFixed(1) : insight.value}{insight.comparison ? ` vs ${insight.comparison.toFixed(1)} avg` : ''}</p>
+            </div>
+          {/each}
         </div>
       </div>
     {/if}

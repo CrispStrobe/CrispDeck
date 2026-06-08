@@ -10,6 +10,7 @@ export interface DeckColumnConfig {
   id: string;
   title: string;
   type: string;
+  platform?: string;
   query?: string;
   width?: number;
   streaming?: boolean;

@@ -5,6 +5,7 @@
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import { normalizePost, sortPosts } from '$lib/api/unified';
+  import { getMastodonLists, createMastodonList } from '$lib/list-management';
   import Post from '$lib/components/Post.svelte';
   import type { Account, UnifiedPost } from '$lib/types';
   import { getCached, setCache } from '$lib/view-cache';
@@ -68,10 +69,7 @@
         const token = masto.getAccessToken();
         if (token) {
           try {
-            const resp = await fetch(`${masto.getInstanceUrl()}/api/v1/lists`, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            if (resp.ok) mastoLists = await resp.json();
+            mastoLists = await getMastodonLists(masto.getInstanceUrl(), token) as MastoList[];
           } catch {}
         }
       } else {
@@ -172,11 +170,7 @@
       const token = masto.getAccessToken();
       if (!token) continue;
       try {
-        await fetch(`${masto.getInstanceUrl()}/api/v1/lists`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: newListTitle.trim() }),
-        });
+        await createMastodonList(masto.getInstanceUrl(), token, newListTitle.trim());
         newListTitle = '';
         showCreateForm = false;
         await loadLists();

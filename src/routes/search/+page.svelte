@@ -5,9 +5,11 @@
   import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
+  import { ThreadsClient } from '$lib/api/threads';
   import { normalizePost } from '$lib/api/unified';
+  import { searchMastodon, searchThreads, mergeSearchResults } from '$lib/universal-search';
   import Post from '$lib/components/Post.svelte';
-  import type { UnifiedPost, Account } from '$lib/types';
+  import type { UnifiedPost, Account, Platform } from '$lib/types';
 
   let accounts: Account[] = $state([]);
   let loading = $state(true);
@@ -45,16 +47,15 @@
     results = [];
     hasSearched = true;
 
-    const allResults: UnifiedPost[] = [];
+    const resultsByPlatform = new Map<Platform, UnifiedPost[]>();
 
     for (const acct of accounts) {
       const entry = clientEntries.get(acct.id);
       if (!entry) continue;
-      const client = entry.client;
 
       try {
         if (acct.platform === 'bluesky') {
-          const bsky = client as BlueskyClient;
+          const bsky = entry.client as BlueskyClient;
           const resp = await bsky.searchPosts(query.trim());
           const normalized = resp.posts.map(post => ({
             uri: post.uri,
@@ -73,35 +74,30 @@
             embeds: post.embed,
             raw: post,
           }));
-          allResults.push(...normalized);
-        } else {
-          // Mastodon search uses the instance search API
-          const masto = client as MastodonClient;
-          const instanceUrl = masto.getInstanceUrl();
+          resultsByPlatform.set('bluesky', [...(resultsByPlatform.get('bluesky') ?? []), ...normalized]);
+        } else if (acct.platform === 'mastodon') {
+          const masto = entry.client as MastodonClient;
           const token = masto.getAccessToken();
           if (!token) continue;
-
-          const resp = await fetch(
-            `${instanceUrl}/api/v2/search?q=${encodeURIComponent(query.trim())}&type=statuses&limit=40`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          if (resp.ok) {
-            const data = await resp.json();
-            if (data.statuses) {
-              const normalized = data.statuses.map((s: any) => normalizePost(s, 'mastodon'));
-              allResults.push(...normalized);
-            }
-          }
+          const statuses = await searchMastodon(query.trim(), masto.getInstanceUrl(), token, 40);
+          const normalized = statuses.map((s: any) => normalizePost(s, 'mastodon'));
+          resultsByPlatform.set('mastodon', [...(resultsByPlatform.get('mastodon') ?? []), ...normalized]);
+        } else if (acct.platform === 'threads') {
+          const threads = entry.client as ThreadsClient;
+          const token = threads.getAccessToken?.();
+          if (!token) continue;
+          const threadsPosts = await searchThreads(query.trim(), token, 25);
+          const normalized = threadsPosts.map((p: any) => threads.normalizePost(p));
+          resultsByPlatform.set('threads', [...(resultsByPlatform.get('threads') ?? []), ...normalized]);
         }
       } catch (e) {
         console.error(`Search failed for ${acct.handle}:`, e);
       }
     }
 
-    // Sort by engagement
-    results = allResults.sort((a, b) =>
-      ((b.likeCount ?? 0) + (b.repostCount ?? 0)) - ((a.likeCount ?? 0) + (a.repostCount ?? 0))
-    );
+    // Merge with engagement/recency scoring and URI dedup
+    const merged = mergeSearchResults(resultsByPlatform);
+    results = merged.posts;
     searching = false;
   }
 </script>
@@ -159,7 +155,7 @@
       <p class="text-sm text-[var(--color-text-muted)]">{i18n.t.search.noPostsFor.replace('{query}', query)}</p>
     </div>
   {:else if results.length > 0}
-    <p class="text-sm text-[var(--color-text-muted)] mb-4">{results.length} results (sorted by engagement)</p>
+    <p class="text-sm text-[var(--color-text-muted)] mb-4">{results.length} results (ranked by engagement + recency)</p>
     <div class="space-y-3">
       {#each results as post (post.uri)}
         <Post {post} />

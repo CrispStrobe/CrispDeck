@@ -31,6 +31,21 @@
   let bookmarkCount = $state(0);
   let unreadMessages = $state(0);
 
+  // Cache initAllClients result to avoid rebuilding clients every 30s
+  let cachedClients: { accounts: any[]; clients: Map<number, any> } | null = null;
+  let clientsCacheTime = 0;
+  const CLIENTS_CACHE_TTL = 300000; // 5 minutes
+
+  async function getCachedClients() {
+    const now = Date.now();
+    if (!cachedClients || now - clientsCacheTime > CLIENTS_CACHE_TTL) {
+      const { initAllClients } = await import('$lib/api/client-factory');
+      cachedClients = await initAllClients();
+      clientsCacheTime = now;
+    }
+    return cachedClients;
+  }
+
   onMount(async () => {
     // Register service worker for PWA
     if ('serviceWorker' in navigator) {
@@ -65,8 +80,7 @@
 
   async function checkUnreadMessages() {
     try {
-      const { initAllClients } = await import('$lib/api/client-factory');
-      const { accounts: accts, clients } = await initAllClients();
+      const { accounts: accts, clients } = await getCachedClients();
       let count = 0;
       for (const [id, entry] of clients) {
         const acct = accts.find(a => a.id === id);
@@ -78,8 +92,7 @@
             count += (r.data.convos ?? []).reduce((s: number, c: any) => s + (c.unreadCount ?? 0), 0);
           } catch {}
         } else if (acct.platform === 'mastodon') {
-          const { MastodonClient } = await import('$lib/api/mastodon');
-          const masto = entry.client as InstanceType<typeof MastodonClient>;
+          const masto = entry.client as any;
           const token = masto.getAccessToken();
           if (token) {
             try {

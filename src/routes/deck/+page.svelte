@@ -16,15 +16,11 @@
   import { applyMuteFilter } from '$lib/muted-words';
   import { parseKeywords, buildKeywordMatcher, listKeywordSets } from '$lib/keyword-monitor';
   import { streamManager, type StreamEvent } from '$lib/streaming';
-
-  interface DeckColumnConfig {
-    id: string;
-    title: string;
-    type: ColumnType;
-    platform?: 'bluesky' | 'mastodon' | 'threads';
-    query?: string; // for search/hashtag columns
-    width?: number; // column width in pixels
-  }
+  import {
+    listLayouts, getLayout, saveLayout, deleteLayout,
+    getActiveLayoutName, setActiveLayoutName,
+    type DeckColumnConfig,
+  } from '$lib/deck-layouts';
 
   // Drag-and-drop reorder state
   let draggedColumnId: string | null = $state(null);
@@ -63,13 +59,18 @@
     { type: 'keyword-monitor', label: 'Monitor Keywords...' },
   ];
 
-  // Saved layouts
-  let savedLayouts: Record<string, DeckColumnConfig[]> = $state({});
+  // Saved layouts (using deck-layouts.ts module)
+  let savedLayoutNames: string[] = $state([]);
 
-  function loadLayout(name: string) {
-    const layout = savedLayouts[name];
+  function refreshLayoutList() {
+    savedLayoutNames = listLayouts().map(l => l.name);
+  }
+
+  function loadLayoutByName(name: string) {
+    const layout = getLayout(name);
     if (layout) {
-      columns = [...layout];
+      columns = [...layout.columns] as DeckColumnConfig[];
+      setActiveLayoutName(name);
       saveColumns();
       columns.forEach(col => loadColumn(col));
     }
@@ -85,9 +86,8 @@
       const saved = localStorage.getItem('crispdeck-deck-columns');
       columns = saved ? JSON.parse(saved) : defaultColumns;
 
-      // Load saved layouts
-      const layouts = localStorage.getItem('crispdeck-deck-layouts');
-      if (layouts) savedLayouts = JSON.parse(layouts);
+      // Load saved layouts via module
+      refreshLayoutList();
 
       // Load columns one by one (show as they load, don't block all)
       loading = false;
@@ -569,13 +569,13 @@
         <span class="text-xs text-[var(--color-text-muted)]">{columns.length} col</span>
       </div>
       <!-- Saved layouts -->
-      {#if Object.keys(savedLayouts).length > 0}
+      {#if savedLayoutNames.length > 0}
         <select
-          onchange={(e) => { const v = (e.target as HTMLSelectElement).value; if (v) loadLayout(v); }}
+          onchange={(e) => { const v = (e.target as HTMLSelectElement).value; if (v) loadLayoutByName(v); }}
           class="px-2 py-1 text-[10px] bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-[var(--color-text)]"
         >
           <option value="">Load layout...</option>
-          {#each Object.keys(savedLayouts) as name}
+          {#each savedLayoutNames as name}
             <option value={name}>{name}</option>
           {/each}
         </select>
@@ -584,8 +584,9 @@
         onclick={() => {
           const name = prompt('Layout name:');
           if (name) {
-            savedLayouts[name] = [...columns];
-            localStorage.setItem('crispdeck-deck-layouts', JSON.stringify(savedLayouts));
+            saveLayout(name, columns);
+            setActiveLayoutName(name);
+            refreshLayoutList();
           }
         }}
         class="px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] rounded"
