@@ -13,7 +13,7 @@ A unified Mastodon + Bluesky + Threads social media client with:
 
 ## Current State (2026-06-08)
 
-v0.9.2 — 872 tests (71 test files), 29 pages, live at https://crispdeck.vercel.app
+v0.9.3 — 911 tests (72 test files), 29 pages, live at https://crispdeck.vercel.app
 
 **License**: AGPL-3.0-only
 
@@ -563,6 +563,43 @@ Goal: close gaps in unit test coverage for untested TypeScript modules. Current:
 - **Effort**: Small
 - **Description**: Tauri plugin-store settings wrapper (5 tests)
 - **Key file**: `src/lib/store.ts`
+
+---
+
+---
+
+## Phase 13: Responsive UI & Polish
+
+### 102. Condensed mobile layout
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Mobile top bar condensed to single row (hamburger + title + theme toggle + notification bell). Bottom tab bar slimmer with smaller icons/text. Reduced content padding offsets.
+- **Key files**: `src/routes/+layout.svelte`
+
+### 103. Inline relative timestamps in posts
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Post timestamp moved from bottom of post into author line as relative time (now/5m/2h/3d/Jun 3). Full date on hover. Bottom row shows platform name on hover instead of redundant date.
+- **Key files**: `src/lib/components/Post.svelte`
+
+### 104. Compact post mode
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Optional compact post view with smaller avatars (w-7 vs w-10), tighter spacing (p-2.5 vs p-4, gap-2 vs gap-3). Settings toggle persisted in localStorage.
+- i18n: EN + DE
+- **Key files**: `src/lib/components/Post.svelte`, `src/routes/settings/+page.svelte`
+
+### 105. Identity scan follow cap
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Mastodon/Bluesky follow fetching capped at 2000 per platform to prevent UI hang when user follows hundreds of thousands of accounts.
+- **Key files**: `src/routes/identities/+page.svelte`
+
+### 106. Layout and responsive UI tests
+- **Status**: Done
+- **Effort**: Small
+- **Description**: 39 tests covering sidebar nav structure, merged route matching, mobile tab bar, relativeTime formatting, compact mode, media preview mode, platform filter visibility, formatDate.
+- **Key files**: `src/lib/layout.test.ts`
 
 ---
 
