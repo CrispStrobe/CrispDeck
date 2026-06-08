@@ -1,6 +1,6 @@
 # CrispDeck
 
-Full-featured cross-platform client for **Mastodon** and **Bluesky** with crossposting, identity mapping, and smart mentions.
+Full-featured cross-platform client for **Mastodon**, **Bluesky**, and **Threads** with crossposting, identity mapping, and smart mentions.
 
 Works as a **web app** (Vercel), **desktop app** (Windows/macOS/Linux via Tauri 2), and **mobile app** (iOS/Android via Tauri 2 mobile).
 
@@ -11,67 +11,88 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 
 ## Features
 
-### Full Social Client (23 pages)
-- **Timeline feed**: posts from everyone you follow, infinite scroll, "new posts" indicator
-- **Platform filter**: All / Bluesky only / Mastodon only toggle
-- **Multi-column Deck**: TweetDeck-style with 11 column types (timeline, mentions, notifications, hashtag, user, local, federated, search, list, feed, my-posts), per-column filters, saved layouts, auto-refresh
+### Full Social Client (29 pages)
+- **3-network client**: Bluesky + Mastodon + Threads
+- **Timeline feed**: posts from everyone you follow, infinite scroll, "new posts" indicator, multi-account merge
+- **Platform filter**: All / Bluesky / Mastodon / Threads toggle
+- **Multi-column Deck**: TweetDeck-style with 14 column types (timeline, mentions, notifications, hashtag, user, local, federated, search, list, feed, my-posts, tag-group, RSS, keyword-monitor), per-column filters, saved layouts/workspaces, drag-reorder, column width control
+- **Keyword monitoring columns**: real-time streaming filtered by user-defined keywords + regex, with Bluesky Jetstream firehose + Mastodon WebSocket, LIVE indicator
+- **Streaming timelines**: live-push of new posts via Bluesky Jetstream + Mastodon WebSocket
 - **Like, boost, reply, quote, bookmark, share, report** interactions
-- **Thread view**: click any post to see full parent chain + replies
+- **Thread view**: click any post to see full parent chain + replies, thread un-rolling ("Read as article")
 - **Profile pages**: any user — avatar/banner/bio/stats, follow/unfollow, block/mute, posts/replies/media gallery/followers/following tabs
-- **Cross-platform bookmarks**: stored locally in IndexedDB
+- **Cross-platform bookmarks**: stored locally in IndexedDB, Mastodon import
 
 ### Compose & Crosspost
-- Write once, post to both platforms — **thread auto-splitting** per platform (300 bsky / 500 masto)
+- Write once, post to all 3 platforms — **thread auto-splitting** per platform (300 bsky / 500 masto / 500 threads)
 - **Bluesky OAuth** (PKCE + DPoP) for full access including DMs
+- **Threads OAuth** with server proxy (no Meta Developer account needed) or direct BYOK
 - Quote posts, reply chains, Bluesky RichText facets (mentions, URLs, hashtags)
-- Media: images + video (up to 100MB), **alt text editing**, emoji picker, **GIF picker** (Tenor)
+- Media: images + video (up to 100MB), **alt text editing**, **AI alt-text generation** (BYOK + CrispASR + mistral.rs), emoji picker, **GIF picker** (Tenor)
 - **Alt text enforcement**: off / warn / require modes in settings
 - **Mastodon polls** (create with 2-4 options + vote on existing)
 - **Bluesky thread gates** (Anyone / Mentioned / Followers / Nobody)
-- Content warnings, visibility controls, **post templates**
+- Content warnings, visibility controls, **post templates with variables** ({date}, {time}, {handle})
+- **AI compose**: correct, shorten, hashtag suggestions — 3 providers (BYOK OpenAI-compatible, CrispASR, mistral.rs), 10 BYOK presets with /models discovery
+- **Hashtag bank**: saved sets for one-click insertion
 - Character count warnings (gray → orange → red → thread indicator)
-- Drafts: save, edit, schedule, post now
+- Drafts: save, edit, schedule, post now, **auto-save** (survives crashes)
 - **Smart @-mentions**: autocomplete from identity DB, resolves per platform
 
 ### Identity & Moderation
 - **Identity map**: auto-detect cross-platform accounts via Jaro-Winkler matching
 - **Bluesky labelers**: subscribe, configure hide/warn/show per label, labels shown on posts
 - **Custom PDS resolution**: federated Bluesky PDS instances work out of the box (resolves via plc.directory / did:web)
-- **Moderation**: view/manage blocked + muted accounts (both platforms)
+- **Moderation**: view/manage blocked + muted accounts (all platforms)
+- **Muted words / content filters**: keyword + regex filtering across all feeds
 - Block/mute from any profile
 
 ### Discovery & Social
-- **Notifications**: unified Bluesky + Mastodon feed
+- **Notifications**: unified 3-network feed with grouping/batching
 - **Direct messages**: Bluesky OAuth chat + Mastodon full conversation threading
-- **Lists & Feeds**: Mastodon lists + Bluesky custom feeds
-- **Bluesky Starter Packs**: browse, search by creator
-- **Trending**: Mastodon tags/links/posts with Latin script filter
+- **Lists & Feeds**: Mastodon lists + Bluesky custom feeds + Bluesky feed builder (GUI)
+- **Bluesky Starter Packs**: browse, search, create from identity DB
+- **Trending**: unified Bluesky + Mastodon trending
+- **Universal search**: queries all 3 networks simultaneously with engagement/recency scoring
+- **Catch-up mode**: AI-ranked missed posts
+- **"For You" algorithm**: local engagement-based ranking
+- **RSS feeds**: subscribe + OPML import, RSS deck columns
 - **Mastodon instance info**: rules, stats, contact, description
-- **Network search**: full-text across both platforms
-- **Inline translation**: translate any post (MyMemory API, cached in IndexedDB)
+- **Inline translation**: 3 providers (CrispASR local, BYOK OpenAI-compatible, MyMemory free), cached in IndexedDB
 - **Share post as image**: render any post as branded PNG
+- **Quick-follow** from anywhere (feed, deck, search, trending)
+- **Notification sounds + desktop alerts**
 
 ### Analytics & Archive
-- **Analytics**: full pagination, date range filter, clickable stats (top 5 by likes/reposts/engagement), hourly chart, platform breakdown
+- **Cross-platform analytics comparison**: side-by-side charts, best times, day-of-week, hourly heatmaps
+- **Post performance insights**: pattern analysis ("image posts get 3x more engagement")
+- **Engagement milestones**: configurable threshold alerts
+- **Post analytics history**: engagement snapshots with growth curves
 - **Local archive**: IndexedDB store of all your posts + likes, full-text search, filters, export
-- **Export**: JSON, CSV, Markdown
+- **Content calendar**: month/week view of past posts + scheduled drafts
+- **Media gallery**: masonry grid view for browsing media
+- **Reading lists**: themed post collections
+- **Export**: JSON, CSV, Markdown + full settings export/import
 
 ### Platform & UX
 - **Bluesky OAuth** (recommended) or app passwords
 - **Mastodon OAuth** with redirect callback
-- **Internationalization**: 8 languages (English, German, French, Spanish, Japanese, Portuguese, Chinese, Arabic) with RTL support
-- **Keyboard shortcuts**: ? for help, g+key navigation, Ctrl+Enter to post
+- **Threads OAuth** with server proxy or direct
+- **Internationalization**: 8 languages (EN, DE, ES 100%; FR, JA, PT, ZH ~30%; AR ~20%) with RTL support
+- **Keyboard shortcuts**: ? for help, g+key navigation, j/k post scrolling, vim-style deck navigation
 - **Collapsible sidebar** + mobile hamburger menu + bottom tab bar
+- Dark + light + **OLED dark** themes
+- **PWA install support** (manifest.json + service worker)
 - Safe area insets, touch targets, responsive design
 - **Emoji picker** + **GIF picker** (Tenor) in compose
 - **About page** with legal info + searchable open-source license list
-- 276 tests (260 frontend + 11 Rust unit + 5 Rust live translation)
+- 805 tests across 63 test files
 
 ## Architecture
 
 ```
 +-----------------------------------------------------------+
-|  SvelteKit Frontend (Svelte 5 runes, 23 pages)            |
+|  SvelteKit Frontend (Svelte 5 runes, 29 pages)            |
 |  +---------+---------+----------+---------+--------+      |
 |  | Feed    | Compose | Identity | Deck    | More...|      |
 |  +---------+---------+----------+---------+--------+      |
@@ -79,8 +100,8 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 |  +----v----------v--+  +---v----------v--------+          |
 |  | @atproto/api     |  | client-factory.ts      |         |
 |  | @atproto/oauth   |  | (OAuth + app-password) |         |
-|  | masto (JS libs)  |  +---+---------------+---+          |
-|  +------------------+      |               |              |
+|  | masto (JS libs)  |  | Threads Graph API      |         |
+|  +------------------+  +---+---------------+---+          |
 +----------------------------|---------------|---------------+
                              |               |
               +--------------v--+   +--------v-----------+
@@ -101,6 +122,7 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 | Frontend | SvelteKit 2 + Svelte 5 + Tailwind CSS 4 |
 | Bluesky API | @atproto/api + @atproto/oauth-client-browser |
 | Mastodon API | masto + direct REST |
+| Threads API | Direct REST (official Graph API) |
 | Database (desktop) | SQLite via rusqlite |
 | Database (web) | IndexedDB |
 | Encryption | AES-256-GCM (Argon2 on desktop, PBKDF2 on web) |
@@ -167,7 +189,7 @@ npx vercel deploy --prod
 ### Run tests
 
 ```bash
-npm test              # 260 frontend tests (unit + integration)
+npm test              # 805 frontend tests (unit + integration)
 npm run test:watch    # watch mode
 
 # Rust tests (requires CrispASR sibling checkout for --features crispasr)
@@ -183,25 +205,32 @@ Frontend tests hit real Bluesky/Mastodon APIs. Rust live tests download and run 
 
 ```
 src/
-  routes/              23 pages: dashboard, feed, deck, compose, drafts, notifications,
-                       messages, bookmarks, lists, starterpacks, identities, search,
-                       trending, labelers, instance, archive, moderation, analytics,
-                       settings, profile, thread, oauth/callback, oauth/bsky-callback
+  routes/              29 pages: dashboard, feed, deck, compose, drafts, notifications,
+                       messages, bookmarks, lists, feed-builder, starterpacks, identities,
+                       search, gallery, calendar, reading-lists, trending, archive,
+                       labelers, instance, moderation, analytics, settings, profile,
+                       thread, catchup, about, oauth/callback, oauth/bsky-callback
   lib/
-    api/               bluesky.ts, mastodon.ts, unified.ts, bluesky-oauth.ts, client-factory.ts
-    compose/           adapter.ts, thread.ts, mentions.ts, media.ts
+    api/               bluesky.ts, bluesky-oauth.ts, mastodon.ts, threads.ts, unified.ts, client-factory.ts
+    compose/           adapter.ts, thread.ts, mentions.ts, media.ts, ai.ts
     components/        Post, CrosspostGroup, AdvancedFilters, AccountPicker,
                        MentionAutocomplete, EmojiPicker, GifPicker, KeyboardShortcuts, DeckColumn
     utils/             export.ts (JSON, CSV, Markdown)
-    types.ts           UnifiedPost, Account, Identity, Filters, etc.
+    types.ts           UnifiedPost, Account, Identity, Platform, Filters, etc.
     db.ts              Platform dispatcher (Tauri invoke or browser IndexedDB)
     browser-db.ts      IndexedDB implementation of all DB operations
     platform.ts        Tauri vs browser detection
+    streaming.ts       StreamManager, Bluesky Jetstream + Mastodon WebSocket
+    keyword-monitor.ts Keyword matching + saved keyword sets for deck monitoring
+    byok-providers.ts  10 BYOK provider presets with /models discovery
+    universal-search.ts Cross-network search with merge/dedup
     archive.ts         Local post archive (IndexedDB)
     bookmarks.ts       Cross-platform bookmarks (IndexedDB)
-    templates.ts       Post templates (localStorage)
+    templates.ts       Post templates with variables (localStorage)
     translate.ts       Multi-provider translation (CrispASR / BYOK OpenAI / MyMemory)
-    i18n.svelte.ts     TranslationService (Svelte 5 runes, en + de)
+    hashtag-bank.ts    Saved hashtag sets for compose
+    deck-layouts.ts    Saved deck layouts / workspaces
+    i18n.svelte.ts     TranslationService (Svelte 5 runes, 8 languages)
     store.ts           tauri-plugin-store settings wrapper
 
 src-tauri/
@@ -220,7 +249,7 @@ static/
 
 ## CI/CD
 
-- **CI** (`ci.yml`): 328 frontend tests + frontend build + Rust check on Linux/macOS/Windows — every push and PR
+- **CI** (`ci.yml`): 805 frontend tests + frontend build + Rust check on Linux/macOS/Windows — every push and PR
 - **Mobile** (`mobile.yml`): iOS + Android builds via Tauri 2 — triggers on `v*` tags
 - **Release** (`release.yml`): Cross-platform Tauri builds — triggers on `v*` tags, creates GitHub Releases with `.deb`, `.dmg`, `.msi`
 
@@ -234,15 +263,13 @@ git push origin v0.2.1
 
 ## Stats
 
-- 79 commits
-- 83 source files (25 pages, 10 components, 26 frontend + 1 Rust test files, 16 Rust source)
-- 343 tests (328 frontend + 15 Rust)
-- 24 sidebar navigation items
-- 11 deck column types
-- 8 UI languages (English, German, French, Spanish, Japanese, Portuguese, Chinese, Arabic) with RTL support
-- Dark + light theme with toggle
-- Bluesky: OAuth + app password auth (with 2FA), public API reading
-- Mastodon: OAuth, full REST API
+- 805 frontend tests across 63 test files + 15 Rust tests
+- 29 pages, 14 deck column types
+- 3 networks: Bluesky (OAuth + app password), Mastodon (OAuth), Threads (OAuth with server proxy)
+- 8 UI languages (EN, DE, ES 100%; FR, JA, PT, ZH ~30%; AR ~20%) with RTL support
+- Dark + light + OLED dark themes
+- 10 BYOK AI provider presets with /models discovery
+- 3 translation providers (CrispASR local, BYOK OpenAI-compatible, MyMemory free)
 - CrispASR: 106 models (NMT/TTS/STT) via optional Cargo feature
 
 ## License
