@@ -5,7 +5,8 @@
   import { MastodonClient } from '$lib/api/mastodon';
   import { normalizePost } from '$lib/api/unified';
   import { i18n } from '$lib/i18n.svelte';
-  import { Image, Loader2, Video, Link2, X, ChevronLeft, ChevronRight } from '@lucide/svelte';
+  import { Image, Loader2, Video, Link2 } from '@lucide/svelte';
+  import MediaLightbox from '$lib/components/MediaLightbox.svelte';
   import type { UnifiedPost, Account } from '$lib/types';
 
   let accounts: Account[] = $state([]);
@@ -101,10 +102,12 @@
     mediaFilter === 'all' ? mediaItems : mediaItems.filter(m => m.type === (mediaFilter === 'links' ? 'link' : mediaFilter === 'video' ? 'video' : 'image'))
   );
 
+  let visibleCount = $state(24);
+  const visible = $derived(filtered.slice(0, visibleCount));
+  function loadMore() { visibleCount = Math.min(visibleCount + 24, filtered.length); }
+
   function openLightbox(idx: number) { lightboxIndex = idx; }
   function closeLightbox() { lightboxIndex = null; }
-  function nextImage() { if (lightboxIndex !== null) lightboxIndex = Math.min(lightboxIndex + 1, filtered.length - 1); }
-  function prevImage() { if (lightboxIndex !== null) lightboxIndex = Math.max(lightboxIndex - 1, 0); }
 </script>
 
 <svelte:head><title>CrispDeck — {i18n.t.nav.gallery}</title></svelte:head>
@@ -121,7 +124,7 @@
     <div class="flex items-center gap-1 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-0.5">
       {#each ['all', 'images', 'video', 'links'] as filter}
         <button
-          onclick={() => mediaFilter = filter as typeof mediaFilter}
+          onclick={() => { mediaFilter = filter as typeof mediaFilter; visibleCount = 24; }}
           class="px-3 py-1 text-xs rounded-md transition-colors {mediaFilter === filter ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)]'}"
         >{filter}</button>
       {/each}
@@ -139,14 +142,14 @@
     </div>
   {:else}
     <div class="columns-2 md:columns-3 lg:columns-4 gap-3 space-y-3">
-      {#each filtered as item, idx}
+      {#each visible as item, idx}
         <button
           onclick={() => openLightbox(idx)}
-          class="w-full break-inside-avoid rounded-lg overflow-hidden border border-[var(--color-border)] hover:border-[var(--color-primary)] transition-colors bg-[var(--color-surface)] block text-left"
+          class="relative w-full break-inside-avoid rounded-lg overflow-hidden border border-[var(--color-border)] hover:border-[var(--color-primary)] transition-colors bg-[var(--color-surface)] block text-left"
         >
           <img loading="lazy" src={item.thumb} alt={item.alt} class="w-full object-cover" />
           {#if item.type === 'video'}
-            <div class="absolute inset-0 flex items-center justify-center">
+            <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div class="w-10 h-10 bg-black/50 rounded-full flex items-center justify-center"><Video size={16} class="text-white" /></div>
             </div>
           {/if}
@@ -159,29 +162,23 @@
         </button>
       {/each}
     </div>
+    {#if visibleCount < filtered.length}
+      <div class="text-center mt-6">
+        <button
+          onclick={loadMore}
+          class="px-6 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:opacity-90 transition-opacity"
+        >
+          Load more ({filtered.length - visibleCount} remaining)
+        </button>
+      </div>
+    {/if}
   {/if}
 </div>
 
-<!-- Lightbox -->
-{#if lightboxIndex !== null && filtered[lightboxIndex]}
-  {@const item = filtered[lightboxIndex]}
-  <!-- svelte-ignore a11y_interactive_supports_focus -->
-  <div class="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center" role="dialog" tabindex="-1" onclick={closeLightbox} onkeydown={(e) => { if (e.key === 'Escape') closeLightbox(); if (e.key === 'ArrowRight') nextImage(); if (e.key === 'ArrowLeft') prevImage(); }}>
-    <button onclick={closeLightbox} class="absolute top-4 right-4 text-white/70 hover:text-white z-10"><X size={24} /></button>
-    {#if lightboxIndex > 0}
-      <button onclick={(e) => { e.stopPropagation(); prevImage(); }} class="absolute left-4 text-white/70 hover:text-white z-10"><ChevronLeft size={32} /></button>
-    {/if}
-    {#if lightboxIndex < filtered.length - 1}
-      <button onclick={(e) => { e.stopPropagation(); nextImage(); }} class="absolute right-4 text-white/70 hover:text-white z-10"><ChevronRight size={32} /></button>
-    {/if}
-    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions a11y_no_static_element_interactions -->
-    <div onclick={(e) => e.stopPropagation()} class="max-w-4xl max-h-[90vh] mx-4">
-      <img src={item.url} alt={item.alt} class="max-w-full max-h-[85vh] object-contain rounded-lg" />
-      <div class="mt-2 text-center">
-        <p class="text-sm text-white/80">@{item.post.author.handle}</p>
-        {#if item.alt}<p class="text-xs text-white/50 mt-1">{item.alt}</p>{/if}
-        <p class="text-[10px] text-white/40 mt-1">{lightboxIndex + 1} / {filtered.length}</p>
-      </div>
-    </div>
-  </div>
+{#if lightboxIndex !== null}
+  <MediaLightbox
+    items={visible.map(m => ({ url: m.url, thumb: m.thumb, alt: m.alt, type: m.type === 'video' ? 'video' : 'image' }))}
+    index={lightboxIndex}
+    onclose={closeLightbox}
+  />
 {/if}
