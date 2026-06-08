@@ -401,6 +401,123 @@ Analytics with full pagination, local post archive (IndexedDB), deck columns (11
 - i18n: EN + DE
 - **Key files**: `src/routes/settings/+page.svelte`, `src/lib/keyword-monitor.ts`
 
+### 85. Media lightbox overlay
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Images in posts open in fullscreen lightbox overlay instead of browser
+- Keyboard navigation (Escape, arrows), image counter, alt text display
+- "Open in browser" fallback button in overlay
+- Settings preference: lightbox (default) vs open-in-browser
+- Works for Bluesky images, Mastodon images, and quoted post images
+- Gallery page refactored to use shared MediaLightbox component
+- **Key files**: `src/lib/components/MediaLightbox.svelte`, `src/lib/components/Post.svelte`
+
+### 86. Media Gallery fix
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Gallery was hanging with too many images
+- Added pagination (24 items at a time, "Load more" button)
+- Fixed video play icon positioning (missing `relative` on parent)
+- Replaced inline lightbox with shared MediaLightbox component
+- **Key files**: `src/routes/gallery/+page.svelte`
+
+---
+
+## Phase 11: Navigation Consolidation & UX Polish
+
+Goal: reduce sidebar from 25 items to ~14 by merging related views into tabbed pages, and fix several UX issues with in-app linking and navigation.
+
+### 87. Sidebar navigation consolidation
+- **Status**: Not started
+- **Effort**: Large (multi-session)
+- **Description**: The sidebar has 25 items — too many for usable navigation. Consolidate related views:
+
+#### Merges:
+
+| Current items | Merged into | How |
+|---|---|---|
+| Catch Up + Trending | **Discover** | Two tabs in one view |
+| Compose + Drafts | **Compose** | Drafts as collapsible panel/tab within compose |
+| Lists + Starter Packs + Feed Builder | **Lists & Feeds** | Tabs: Mastodon Lists, Bluesky Feeds, Starter Packs, Feed Builder |
+| Gallery + Archive | **Archive** | Gallery as a tab alongside archive search/export |
+| Reading Lists + Bookmarks | **Bookmarks** | Reading Lists as a tab within Bookmarks |
+| Calendar | Move into **Analytics** as a tab (past posts + scheduled = calendar, analytics = charts) |
+| Instance Info | Move into **Settings** as a section |
+| Labelers + Moderation | **Moderation** | Tabs: Blocked/Muted, Labelers |
+
+#### Resulting sidebar (~14 items):
+1. Dashboard
+2. Feed (incl. For You tab)
+3. Discover (Catch Up + Trending tabs)
+4. Deck
+5. Compose (incl. Drafts tab)
+6. Notifications
+7. Messages
+8. Bookmarks (incl. Reading Lists tab)
+9. Lists & Feeds (Lists + Starter Packs + Feed Builder tabs)
+10. Identities
+11. Search
+12. Archive (incl. Gallery tab)
+13. Analytics (incl. Calendar tab)
+14. Moderation (Blocked/Muted + Labelers tabs)
+15. Settings (incl. Instance Info section)
+16. About
+
+#### Implementation notes:
+- Each merge creates a tabbed container page that imports existing page content as components
+- Route redirects: old routes (e.g. `/gallery`) redirect to new tab routes (e.g. `/archive?tab=gallery`)
+- Mobile bottom bar stays at 5 icons: Feed, Compose, Notifications, Search, Messages
+- Preserve deep-link support: `/bookmarks?tab=reading-lists` should open the right tab
+
+### 88. In-app link routing for @handles and #hashtags in posts
+- **Status**: Not started
+- **Effort**: Medium
+- **Description**: Post HTML content contains `<a>` tags pointing to external Mastodon/Bluesky URLs for @mentions and #hashtags. These should route in-app instead.
+- **@handles**: Click `@user@instance.social` → open CrispDeck profile page `/profile?handle=user@instance.social`
+- **#hashtags**: Click `#svelte` → open CrispDeck search `/search?q=%23svelte` or add as deck column
+- Intercept `<a>` clicks in post HTML rendering, match known patterns, route via `goto()`
+- External links (URLs to articles etc.) should still open in browser
+- **Key files**: `src/lib/components/Post.svelte` (post text rendering)
+
+### 89. Platform filter shows only logged-in platforms
+- **Status**: Not started
+- **Effort**: Small
+- **Description**: The All/Bluesky/Mastodon/Threads filter appears even when only one platform has a logged-in account
+- Only show filter buttons for platforms that have at least one connected account
+- If only one platform is connected, hide the filter entirely
+- **Key files**: `src/routes/feed/+page.svelte`, possibly deck and search pages
+
+### 90. "Back to feed" scroll position restore
+- **Status**: Not started
+- **Effort**: Small
+- **Description**: Navigating from a post/thread back to feed should return to the scroll position where the user was
+- `src/lib/read-position.ts` already exists — wire it into feed/deck navigation
+- Save scroll position on route leave, restore on route enter
+- **Key files**: `src/routes/feed/+page.svelte`, `src/lib/read-position.ts`
+
+### 91. Share-as-image error visibility
+- **Status**: Not started
+- **Effort**: Small
+- **Description**: `handleShareAsImage()` in Post.svelte silently catches errors — user sees nothing on failure
+- Show a toast/inline error message when html2canvas fails (commonly CORS issues with cross-origin images)
+- Consider: fall back to capturing without images if CORS blocks them
+- **Key files**: `src/lib/components/Post.svelte`
+
+### 92. "For You" auto-load on visit
+- **Status**: Not started
+- **Effort**: Small
+- **Description**: "For You" feed requires manual refresh before showing content — should auto-load on page visit
+- Ensure the For You ranking algorithm runs on initial mount, not just on refresh
+- **Key files**: `src/routes/feed/+page.svelte`, `src/lib/for-you.ts`
+
+### 93. MyMemory commercial use notice
+- **Status**: Not started
+- **Effort**: Tiny (docs only)
+- **Description**: MyMemory free tier (5K chars/day) is for personal, non-commercial use only
+- If CrispDeck is distributed commercially, need MyMemory paid plan or drop the fallback
+- CrispASR (local) and BYOK (user's own key) have no such restriction
+- Document this limitation clearly in PLAN.md and Settings UI tooltip
+
 ---
 
 ## Known Issues / Future Polish
