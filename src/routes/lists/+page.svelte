@@ -178,11 +178,20 @@
 <svelte:head><title>CrispDeck — Lists &amp; Feeds</title></svelte:head>
 
 <div class="p-6 max-w-4xl mx-auto">
+  <div class="flex items-center gap-2 mb-4">
+    <List size={24} />
+    <h1 class="text-2xl font-bold">Lists & Feeds</h1>
+  </div>
+
+  <!-- Sub-navigation tabs -->
+  <div class="flex items-center gap-1 mb-4">
+    <a href="/lists" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Lists</a>
+    <a href="/starterpacks" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Starter Packs</a>
+    <a href="/feed-builder" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Feed Builder</a>
+  </div>
+
   <div class="flex items-center justify-between mb-6">
-    <div class="flex items-center gap-2">
-      <List size={24} />
-      <h1 class="text-2xl font-bold">Lists & Feeds</h1>
-    </div>
+    <div></div>
     <button onclick={() => showCreateForm = !showCreateForm} class="flex items-center gap-1 px-3 py-1.5 text-sm bg-[var(--color-primary)] text-white rounded-md">
       <Plus size={14} /> New List
     </button>

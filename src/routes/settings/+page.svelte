@@ -400,9 +400,15 @@
 <svelte:head><title>CrispDeck — Settings</title><meta name="description" content="Account management and app preferences" /></svelte:head>
 
 <div class="p-6 max-w-3xl mx-auto">
-  <div class="flex items-center gap-2 mb-6">
+  <div class="flex items-center gap-2 mb-4">
     <Settings size={24} />
     <h1 class="text-2xl font-bold">{i18n.t.settings.title}</h1>
+  </div>
+
+  <!-- Settings tabs -->
+  <div class="flex items-center gap-1 mb-4">
+    <a href="/settings" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Settings</a>
+    <a href="/instance" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Instance Info</a>
   </div>
 
   {#if error}

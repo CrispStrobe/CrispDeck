@@ -199,6 +199,12 @@
 <svelte:head><title>CrispDeck — Moderation</title></svelte:head>
 
 <div class="p-6 max-w-3xl mx-auto">
+  <!-- Moderation tabs -->
+  <div class="flex items-center gap-1 mb-4">
+    <a href="/moderation" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Moderation</a>
+    <a href="/labelers" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Labelers</a>
+  </div>
+
   <div class="flex items-center gap-2 mb-6">
     <Shield size={24} />
     <h1 class="text-2xl font-bold">{i18n.t.moderation.title}</h1>

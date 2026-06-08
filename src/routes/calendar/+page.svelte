@@ -86,6 +86,12 @@
 <svelte:head><title>CrispDeck — {i18n.t.nav.calendar}</title></svelte:head>
 
 <div class="p-6 max-w-5xl mx-auto">
+  <!-- Analytics tabs -->
+  <div class="flex items-center gap-1 mb-4">
+    <a href="/analytics" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Analytics</a>
+    <a href="/calendar" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Calendar</a>
+  </div>
+
   <div class="flex items-center justify-between mb-6">
     <div class="flex items-center gap-2">
       <Calendar size={24} />

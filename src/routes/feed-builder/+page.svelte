@@ -199,6 +199,13 @@
 <svelte:head><title>CrispDeck — {i18n.t.nav.feedBuilder}</title><meta name="description" content="Build custom Bluesky feeds visually" /></svelte:head>
 
 <div class="p-6 max-w-6xl mx-auto">
+  <!-- Lists & Feeds tabs -->
+  <div class="flex items-center gap-1 mb-4">
+    <a href="/lists" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Lists</a>
+    <a href="/starterpacks" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Starter Packs</a>
+    <a href="/feed-builder" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Feed Builder</a>
+  </div>
+
   <div class="flex items-center justify-between mb-6">
     <div class="flex items-center gap-2">
       <Wand2 size={24} />

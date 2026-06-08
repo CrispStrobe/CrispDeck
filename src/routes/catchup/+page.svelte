@@ -124,11 +124,20 @@
 <svelte:head><title>CrispDeck — {i18n.t.catchup.title}</title><meta name="description" content="Catch up on what you missed" /></svelte:head>
 
 <div class="p-6 max-w-3xl mx-auto">
+  <!-- Discover tabs -->
+  <div class="flex items-center gap-2 mb-4">
+    <Clock size={24} />
+    <h1 class="text-2xl font-bold">Discover</h1>
+  </div>
+  <div class="flex items-center gap-1 mb-4">
+    <a href="/trending" class="px-4 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Trending</a>
+    <a href="/catchup" class="px-4 py-2 text-sm font-medium rounded-t-md border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Catch Up</a>
+  </div>
+
   <!-- Header -->
   <div class="flex items-center justify-between mb-6">
     <div class="flex items-center gap-2">
-      <Clock size={24} />
-      <h1 class="text-2xl font-bold">{i18n.t.catchup.title}</h1>
+      <h2 class="text-lg font-semibold">{i18n.t.catchup.title}</h2>
     </div>
     <div class="flex items-center gap-1 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-0.5">
       {#each windowOptions as opt}

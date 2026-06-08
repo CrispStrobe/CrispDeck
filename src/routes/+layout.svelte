@@ -136,27 +136,18 @@
   const navItems = $derived([
     { href: '/', icon: Home, label: i18n.t.nav.dashboard },
     { href: '/feed', icon: Rss, label: i18n.t.nav.feed },
-    { href: '/catchup', icon: Clock, label: i18n.t.catchup.title },
     { href: '/deck', icon: Columns3, label: i18n.t.nav.deck },
     { href: '/compose', icon: PenSquare, label: i18n.t.nav.compose },
-    { href: '/drafts', icon: FileText, label: i18n.t.nav.drafts },
     { href: '/notifications', icon: Bell, label: i18n.t.nav.notifications },
     { href: '/messages', icon: MessageSquare, label: i18n.t.nav.messages, badge: () => unreadMessages > 0 ? unreadMessages : 0 },
-    { href: '/bookmarks', icon: Bookmark, label: i18n.t.nav.bookmarks, badge: () => bookmarkCount > 0 ? bookmarkCount : 0 },
-    { href: '/lists', icon: List, label: i18n.t.nav.lists },
-    { href: '/feed-builder', icon: Wand2, label: i18n.t.nav.feedBuilder },
-    { href: '/starterpacks', icon: Package, label: i18n.t.nav.starterPacks },
-    { href: '/identities', icon: Users, label: i18n.t.nav.identities },
     { href: '/search', icon: Search, label: i18n.t.nav.search },
-    { href: '/trending', icon: TrendingUp, label: i18n.t.nav.trending },
-    { href: '/gallery', icon: Image, label: i18n.t.nav.gallery },
-    { href: '/calendar', icon: Calendar, label: i18n.t.nav.calendar },
-    { href: '/reading-lists', icon: BookOpen, label: i18n.t.nav.readingLists },
+    { href: '/bookmarks', icon: Bookmark, label: i18n.t.nav.bookmarks, badge: () => bookmarkCount > 0 ? bookmarkCount : 0 },
+    { href: '/lists', icon: List, label: 'Lists & Feeds' },
+    { href: '/trending', icon: TrendingUp, label: 'Discover' },
+    { href: '/identities', icon: Users, label: i18n.t.nav.identities },
     { href: '/archive', icon: Archive, label: i18n.t.nav.archive },
-    { href: '/labelers', icon: Tag, label: i18n.t.nav.labelers },
-    { href: '/instance', icon: Server, label: i18n.t.nav.instance },
-    { href: '/moderation', icon: Shield, label: i18n.t.nav.moderation },
     { href: '/analytics', icon: BarChart3, label: i18n.t.nav.analytics },
+    { href: '/moderation', icon: Shield, label: i18n.t.nav.moderation },
     { href: '/settings', icon: Settings, label: i18n.t.nav.settings },
     { href: '/about', icon: Info, label: 'About' },
   ]);
@@ -170,9 +161,23 @@
     { href: '/messages', icon: MessageSquare, label: i18n.t.nav.dms },
   ]);
 
+  // Merged routes: sidebar item → also active for these paths
+  const mergedRoutes: Record<string, string[]> = {
+    '/trending': ['/trending', '/catchup'],
+    '/lists': ['/lists', '/feed-builder', '/starterpacks'],
+    '/bookmarks': ['/bookmarks', '/reading-lists'],
+    '/archive': ['/archive', '/gallery'],
+    '/analytics': ['/analytics', '/calendar'],
+    '/moderation': ['/moderation', '/labelers'],
+    '/compose': ['/compose', '/drafts'],
+    '/settings': ['/settings', '/instance'],
+  };
+
   function isActive(href: string): boolean {
     const path = page.url?.pathname ?? '/';
     if (href === '/') return path === '/';
+    const routes = mergedRoutes[href];
+    if (routes) return routes.some(r => path.startsWith(r));
     return path.startsWith(href);
   }
 </script>

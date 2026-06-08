@@ -520,6 +520,12 @@
 <svelte:head><title>CrispDeck — Compose</title><meta name="description" content="Write and crosspost to Mastodon and Bluesky" /></svelte:head>
 
 <div class="p-6 max-w-4xl mx-auto">
+  <!-- Compose tabs -->
+  <div class="flex items-center gap-1 mb-4">
+    <a href="/compose" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Compose</a>
+    <a href="/drafts" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Drafts</a>
+  </div>
+
   <div class="flex items-center gap-2 mb-6">
     <PenSquare size={24} />
     <h1 class="text-2xl font-bold">{i18n.t.compose.title}</h1>
