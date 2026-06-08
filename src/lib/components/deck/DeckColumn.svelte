@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { X, RefreshCw, Loader2, GripVertical, Heart, Repeat, UserPlus, MessageCircle, AtSign, Bell, Quote, ChevronDown, ChevronUp } from '@lucide/svelte';
+  import { X, RefreshCw, Loader2, GripVertical, Heart, Repeat, UserPlus, MessageCircle, AtSign, Bell, Quote, ChevronDown, ChevronUp, Radio } from '@lucide/svelte';
   import Post from '$lib/components/Post.svelte';
   import type { UnifiedPost } from '$lib/types';
   import type { NotificationGroup } from '$lib/notification-grouping';
@@ -15,6 +15,7 @@
     posts = [],
     notificationGroups = [],
     loading = false,
+    streaming = false,
     width = 380,
     onrefresh,
     onremove,
@@ -31,6 +32,7 @@
     posts: UnifiedPost[];
     notificationGroups?: NotificationGroup[];
     loading?: boolean;
+    streaming?: boolean;
     width?: number;
     onrefresh?: () => void;
     onremove?: () => void;
@@ -155,6 +157,15 @@
     <div class="flex items-center gap-2">
       <GripVertical size={14} class="text-[var(--color-text-muted)] cursor-grab" />
       <span class="text-sm font-medium truncate">{title}</span>
+      {#if streaming}
+        <span class="flex items-center gap-1 text-[9px] text-green-400 font-medium" title="Live streaming">
+          <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-green-400"></span>
+          </span>
+          LIVE
+        </span>
+      {/if}
     </div>
     <div class="flex items-center gap-1">
       {#if onrefresh}

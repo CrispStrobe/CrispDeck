@@ -636,6 +636,7 @@
           posts={columnPosts[col.id] ?? []}
           notificationGroups={columnNotifGroups[col.id] ?? []}
           loading={columnLoading[col.id] ?? false}
+          streaming={streamCleanups.has(col.id)}
           width={col.width ?? 380}
           onrefresh={() => loadColumn(col)}
           onremove={() => removeColumn(col.id)}

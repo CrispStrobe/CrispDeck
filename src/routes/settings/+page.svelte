@@ -18,6 +18,7 @@
   import { listFeeds, addFeed, removeFeed, importOPML, type RssFeed } from '$lib/rss';
   import { getThreadsConfig, setThreadsConfig, getThreadsAuthUrl, exchangeCodeForToken, exchangeForLongLivedToken, ThreadsClient, getProxyAuthUrl, isThreadsAvailable } from '$lib/api/threads';
   import { listMutedWords, addMutedWord, removeMutedWord, toggleMutedWord, type MutedWord } from '$lib/muted-words';
+  import { listKeywordSets, saveKeywordSet, removeKeywordSet, createKeywordSet, parseKeywords, type KeywordSet } from '$lib/keyword-monitor';
   import { getAlertSettings, setAlertSettings } from '$lib/notification-alerts';
   import { exportSettings, importSettings, type SettingsExport } from '$lib/settings-export';
   import type { Account } from '$lib/types';
@@ -181,6 +182,9 @@
 
   // Muted words
   let mutedWords: MutedWord[] = $state(listMutedWords());
+  let keywordSets: KeywordSet[] = $state(listKeywordSets());
+  let newKeywordSetName = $state('');
+  let newKeywordSetWords = $state('');
   let newMutedWord = $state('');
   let newMutedIsRegex = $state(false);
   function handleHideEngagementChange() {
@@ -1489,6 +1493,71 @@
             }
           }}
           disabled={!newHashtagSetName.trim() || !newHashtagSetTags.trim()}
+          class="px-3 py-1.5 text-xs bg-[var(--color-primary)] text-white rounded-md disabled:opacity-30"
+        >
+          <Plus size={12} />
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Keyword Monitors -->
+  <section class="mb-8">
+    <h2 class="text-lg font-semibold mb-3">{i18n.t.settings.keywordMonitorsTitle}</h2>
+    <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+      <p class="text-[11px] text-[var(--color-text-muted)]">{i18n.t.settings.keywordMonitorsHint}</p>
+
+      {#if keywordSets.length > 0}
+        <div class="space-y-2">
+          {#each keywordSets as set}
+            <div class="flex items-center justify-between p-2 bg-[var(--color-bg)] rounded-md">
+              <div class="min-w-0 flex-1">
+                <span class="text-sm font-medium">{set.name}</span>
+                <span class="text-[10px] text-[var(--color-text-muted)] ml-2 truncate">
+                  {set.keywords.map(k => k.isRegex ? `/${k.value}/` : k.value).join(', ')}
+                </span>
+              </div>
+              <button
+                onclick={() => { removeKeywordSet(set.id); keywordSets = listKeywordSets(); }}
+                class="text-[var(--color-text-muted)] hover:text-[var(--color-danger)] p-1 flex-shrink-0"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <p class="text-xs text-[var(--color-text-muted)]">{i18n.t.settings.noKeywordSets}</p>
+      {/if}
+
+      <div class="flex gap-2">
+        <input
+          type="text"
+          bind:value={newKeywordSetName}
+          placeholder={i18n.t.settings.keywordSetName}
+          class="flex-1 px-2 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
+        />
+        <input
+          type="text"
+          bind:value={newKeywordSetWords}
+          placeholder={i18n.t.settings.keywordSetWords}
+          class="flex-2 px-2 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
+        />
+        <button
+          onclick={() => {
+            if (newKeywordSetName.trim() && newKeywordSetWords.trim()) {
+              const entries = parseKeywords(newKeywordSetWords);
+              if (entries.length > 0) {
+                const set = createKeywordSet(newKeywordSetName.trim(), []);
+                set.keywords = entries;
+                saveKeywordSet(set);
+                keywordSets = listKeywordSets();
+                newKeywordSetName = '';
+                newKeywordSetWords = '';
+              }
+            }
+          }}
+          disabled={!newKeywordSetName.trim() || !newKeywordSetWords.trim()}
           class="px-3 py-1.5 text-xs bg-[var(--color-primary)] text-white rounded-md disabled:opacity-30"
         >
           <Plus size={12} />
