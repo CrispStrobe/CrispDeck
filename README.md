@@ -58,7 +58,7 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **"For You" algorithm**: local engagement-based ranking
 - **RSS feeds**: subscribe + OPML import, RSS deck columns
 - **Mastodon instance info**: rules, stats, contact, description
-- **Inline translation**: 3 providers (CrispASR local, BYOK OpenAI-compatible, MyMemory free), cached in IndexedDB
+- **Inline translation**: 5 providers (Lingva Translate, LibreTranslate, MyMemory, BYOK OpenAI-compatible, CrispASR local), cached in IndexedDB
 - **Share post as image**: render any post as branded PNG
 - **Quick-follow** from anywhere (feed, deck, search, trending)
 - **Notification sounds + desktop alerts**
@@ -189,7 +189,7 @@ npx vercel deploy --prod
 ### Run tests
 
 ```bash
-npm test              # 935 frontend tests (unit + integration)
+npm test              # 937 frontend tests (unit + integration)
 npm run test:watch    # watch mode
 
 # Rust tests (requires CrispASR sibling checkout for --features crispasr)
@@ -249,7 +249,7 @@ static/
 
 ## CI/CD
 
-- **CI** (`ci.yml`): 935 frontend tests + frontend build + Rust check on Linux/macOS/Windows — every push and PR
+- **CI** (`ci.yml`): 937 frontend tests + frontend build + Rust check on Linux/macOS/Windows — every push and PR
 - **Mobile** (`mobile.yml`): iOS + Android builds via Tauri 2 — triggers on `v*` tags
 - **Release** (`release.yml`): Cross-platform Tauri builds — triggers on `v*` tags, creates GitHub Releases with `.deb`, `.dmg`, `.msi`
 
@@ -263,13 +263,13 @@ git push origin v0.2.1
 
 ## Stats
 
-- 935 frontend tests across 74 test files + 15 Rust tests
+- 937 frontend tests across 74 test files + 15 Rust tests
 - 29 pages, 14 deck column types
 - 3 networks: Bluesky (OAuth + app password), Mastodon (OAuth), Threads (OAuth with server proxy)
 - 8 UI languages (EN, DE, ES 100%; FR, JA, PT, ZH ~30%; AR ~20%) with RTL support
 - Dark + light + OLED dark themes
 - 10 BYOK AI provider presets with /models discovery
-- 3 translation providers (CrispASR local, BYOK OpenAI-compatible, MyMemory free)
+- 5 translation providers (Lingva, LibreTranslate, MyMemory, BYOK OpenAI, CrispASR local)
 - CrispASR: 106 models (NMT/TTS/STT) via optional Cargo feature
 
 ## License

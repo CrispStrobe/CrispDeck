@@ -13,7 +13,7 @@ A unified Mastodon + Bluesky + Threads social media client with:
 
 ## Current State (2026-06-08)
 
-v0.9.4 — 935 tests (74 test files), 29 pages, live at https://crispdeck.vercel.app
+v0.9.5 — 937 tests (74 test files), 29 pages, live at https://crispdeck.vercel.app
 
 **License**: AGPL-3.0-only
 
@@ -637,7 +637,7 @@ Goal: close gaps in unit test coverage for untested TypeScript modules. Current:
 - **Key files**: `src/lib/debug-log.ts`, `src/routes/settings/+page.svelte`
 
 ### 109. Additional translation providers
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Medium
 - **Description**: Add free/open translation alternatives alongside MyMemory
 - **Lingva Translate**: Google Translate proxy, free, no API key, no commercial restriction, many public instances
@@ -671,12 +671,14 @@ Post component (`src/lib/components/Post.svelte`) handles:
 - `app.bsky.embed.video#view` — video with thumbnail + play button
 - `app.bsky.embed.recordWithMedia#view` — nested: extracts both media and quote
 
-### Translation providers
-- **CrispASR** (desktop only) — local M2M-100 GGUF models, offline, no API key
+### Translation providers (5)
+- **Lingva Translate** (default) — free Google Translate proxy, no API key, no commercial restriction, public instances
+- **LibreTranslate** — self-hosted or public instances, AGPL, optional API key
+- **MyMemory** — free fallback, 5K chars/day, personal use only
 - **BYOK OpenAI-compatible** — user provides endpoint + key (supports Ollama, llama.cpp, Groq, etc.)
-- **MyMemory** — free fallback, no registration, 5K chars/day, anonymous API
+- **CrispASR** (desktop only) — local M2M-100 GGUF models, offline, no API key
 - Config stored in localStorage key `crispdeck-translate-config`
-- We do NOT use commercial translation services (DeepL was reverted).
+- DeepL was reverted — we prefer free/open services.
 
 ### Architecture patterns
 - **BYOK pattern** (used by translation + AI compose): config in localStorage, `getConfig()`/`setConfig()` helpers, `fetch()` to OpenAI-compatible `/chat/completions` endpoint, settings UI with base URL + API key + model inputs. See `src/lib/translate.ts` and `src/lib/compose/ai.ts`.
