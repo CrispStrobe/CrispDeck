@@ -15,7 +15,7 @@
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
-export type TranslateProvider = 'crispasr' | 'openai' | 'mymemory';
+export type TranslateProvider = 'crispasr' | 'openai' | 'mymemory' | 'lingva' | 'libretranslate';
 
 export interface TranslationResult {
   translated: string;
@@ -32,6 +32,11 @@ export interface TranslateConfig {
   openaiModel?: string;
   // CrispASR local model
   crispasrModel?: string;
+  // Lingva Translate instance
+  lingvaInstance?: string;
+  // LibreTranslate instance
+  libreTranslateInstance?: string;
+  libreTranslateApiKey?: string;
 }
 
 interface CachedTranslation {
@@ -49,7 +54,7 @@ interface CachedTranslation {
 const CONFIG_KEY = 'crispdeck-translate-config';
 
 const DEFAULT_CONFIG: TranslateConfig = {
-  provider: 'mymemory',
+  provider: 'lingva',
   targetLang: 'en',
 };
 
@@ -257,6 +262,84 @@ async function translateWithMyMemory(
   };
 }
 
+// ── Provider: Lingva Translate (free, no key, Google Translate proxy) ─────
+
+const DEFAULT_LINGVA_INSTANCE = 'https://lingva.ml';
+
+async function translateWithLingva(
+  text: string,
+  tgtLang: string,
+  config: TranslateConfig,
+): Promise<TranslationResult> {
+  const instance = (config.lingvaInstance ?? DEFAULT_LINGVA_INSTANCE).replace(/\/$/, '');
+  const url = `${instance}/api/v2/translate/auto/${tgtLang}`;
+
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: text.substring(0, 5000) }),
+  });
+
+  if (!resp.ok) {
+    // Fallback to GET API (older Lingva instances)
+    const getUrl = `${instance}/api/v1/auto/${tgtLang}/${encodeURIComponent(text.substring(0, 1000))}`;
+    const getResp = await fetch(getUrl);
+    if (!getResp.ok) throw new Error(`Lingva API error: ${getResp.statusText}`);
+    const getData = await getResp.json();
+    return {
+      translated: getData.translation ?? '',
+      sourceLang: getData.info?.detectedSource ?? 'auto',
+      provider: `Lingva (${new URL(instance).hostname})`,
+    };
+  }
+
+  const data = await resp.json();
+  return {
+    translated: data.translation ?? '',
+    sourceLang: data.info?.detectedSource ?? 'auto',
+    provider: `Lingva (${new URL(instance).hostname})`,
+  };
+}
+
+// ── Provider: LibreTranslate (self-hosted or public, AGPL) ───────────────
+
+const DEFAULT_LIBRETRANSLATE_INSTANCE = 'https://libretranslate.com';
+
+async function translateWithLibreTranslate(
+  text: string,
+  tgtLang: string,
+  config: TranslateConfig,
+): Promise<TranslationResult> {
+  const instance = (config.libreTranslateInstance ?? DEFAULT_LIBRETRANSLATE_INSTANCE).replace(/\/$/, '');
+  const apiKey = config.libreTranslateApiKey;
+
+  const body: Record<string, string> = {
+    q: text.substring(0, 5000),
+    source: 'auto',
+    target: tgtLang,
+    format: 'text',
+  };
+  if (apiKey) body.api_key = apiKey;
+
+  const resp = await fetch(`${instance}/translate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error ?? `LibreTranslate error: ${resp.statusText}`);
+  }
+
+  const data = await resp.json();
+  return {
+    translated: data.translatedText ?? '',
+    sourceLang: data.detectedLanguage?.language ?? 'auto',
+    provider: `LibreTranslate (${new URL(instance).hostname})`,
+  };
+}
+
 // ── Main entry point ──────────────────────────────────────────────────────
 
 /**
@@ -295,6 +378,14 @@ export async function translateText(
 
     case 'openai':
       result = await translateWithOpenAI(cleanText, 'auto', target, config);
+      break;
+
+    case 'lingva':
+      result = await translateWithLingva(cleanText, target, config);
+      break;
+
+    case 'libretranslate':
+      result = await translateWithLibreTranslate(cleanText, target, config);
       break;
 
     case 'mymemory':

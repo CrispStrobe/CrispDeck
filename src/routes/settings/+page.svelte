@@ -34,6 +34,9 @@
   let openaiApiKey = $state(txConfig.openaiApiKey ?? '');
   let openaiModel = $state(txConfig.openaiModel ?? 'gpt-4o-mini');
   let crispasrModel = $state(txConfig.crispasrModel ?? 'm2m100');
+  let lingvaInstance = $state(txConfig.lingvaInstance ?? '');
+  let libreTranslateInstance = $state(txConfig.libreTranslateInstance ?? '');
+  let libreTranslateApiKey = $state(txConfig.libreTranslateApiKey ?? '');
 
   // AI compose config
   const aiConfig = getAIComposeConfig();
@@ -152,6 +155,9 @@
       openaiApiKey: openaiApiKey || undefined,
       openaiModel: openaiModel || undefined,
       crispasrModel: crispasrModel || undefined,
+      lingvaInstance: lingvaInstance || undefined,
+      libreTranslateInstance: libreTranslateInstance || undefined,
+      libreTranslateApiKey: libreTranslateApiKey || undefined,
     });
   }
 
@@ -1207,24 +1213,36 @@
       <!-- Provider -->
       <div>
         <label class="block text-sm text-[var(--color-text-muted)] mb-2">{i18n.t.settings.translationProvider}</label>
-        <div class="flex items-center bg-[var(--color-bg)] rounded-lg border border-[var(--color-border)] p-0.5">
+        <div class="flex flex-wrap items-center gap-0.5 bg-[var(--color-bg)] rounded-lg border border-[var(--color-border)] p-0.5">
           <button
-            onclick={() => { translateProvider = 'mymemory'; saveTranslateConfig(); }}
-            class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {translateProvider === 'mymemory' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)]'}"
+            onclick={() => { translateProvider = 'lingva'; saveTranslateConfig(); }}
+            class="flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors {translateProvider === 'lingva' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)]'}"
           >
-            MyMemory (free)
+            Lingva
           </button>
           <button
-            onclick={() => { translateProvider = 'crispasr'; saveTranslateConfig(); }}
-            class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {translateProvider === 'crispasr' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)]'}"
+            onclick={() => { translateProvider = 'libretranslate'; saveTranslateConfig(); }}
+            class="flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors {translateProvider === 'libretranslate' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)]'}"
           >
-            CrispASR (local)
+            LibreTranslate
+          </button>
+          <button
+            onclick={() => { translateProvider = 'mymemory'; saveTranslateConfig(); }}
+            class="flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors {translateProvider === 'mymemory' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)]'}"
+          >
+            MyMemory
           </button>
           <button
             onclick={() => { translateProvider = 'openai'; saveTranslateConfig(); }}
-            class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {translateProvider === 'openai' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)]'}"
+            class="flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors {translateProvider === 'openai' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)]'}"
           >
-            OpenAI / BYOK
+            BYOK
+          </button>
+          <button
+            onclick={() => { translateProvider = 'crispasr'; saveTranslateConfig(); }}
+            class="flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors {translateProvider === 'crispasr' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)]'}"
+          >
+            CrispASR
           </button>
         </div>
       </div>
@@ -1254,11 +1272,62 @@
       </div>
 
       <!-- Provider-specific config -->
+      {#if translateProvider === 'lingva'}
+        <div class="space-y-2">
+          <p class="text-xs text-[var(--color-text-muted)]">
+            Free Google Translate proxy. No API key, no commercial restriction.
+            Uses public instances by default. You can self-host or use any <a href="https://github.com/thedaviddelta/lingva-translate" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">Lingva instance</a>.
+          </p>
+          <div>
+            <label for="lingva-instance" class="block text-xs text-[var(--color-text-muted)] mb-1">Instance URL (optional)</label>
+            <input
+              id="lingva-instance"
+              type="text"
+              bind:value={lingvaInstance}
+              onchange={saveTranslateConfig}
+              placeholder="https://lingva.ml"
+              class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
+            />
+          </div>
+        </div>
+      {/if}
+
+      {#if translateProvider === 'libretranslate'}
+        <div class="space-y-2">
+          <p class="text-xs text-[var(--color-text-muted)]">
+            Open-source translation (AGPL). Self-host or use a <a href="https://github.com/LibreTranslate/LibreTranslate" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">public instance</a>.
+            Some instances require an API key.
+          </p>
+          <div>
+            <label for="libre-instance" class="block text-xs text-[var(--color-text-muted)] mb-1">Instance URL</label>
+            <input
+              id="libre-instance"
+              type="text"
+              bind:value={libreTranslateInstance}
+              onchange={saveTranslateConfig}
+              placeholder="https://libretranslate.com"
+              class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
+            />
+          </div>
+          <div>
+            <label for="libre-key" class="block text-xs text-[var(--color-text-muted)] mb-1">API key (optional)</label>
+            <input
+              id="libre-key"
+              type="password"
+              bind:value={libreTranslateApiKey}
+              onchange={saveTranslateConfig}
+              placeholder="Leave empty if not required"
+              class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
+            />
+          </div>
+        </div>
+      {/if}
+
       {#if translateProvider === 'mymemory'}
         <p class="text-xs text-[var(--color-text-muted)]">
           Free API, no key needed. 5,000 chars/day limit. Auto-detects source language.
           For personal, non-commercial use only (<a href="https://mymemory.translated.net/doc/usagelimits.php" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">terms</a>).
-          For unlimited translation, configure BYOK with your own API key or use CrispASR (desktop).
+          For unlimited translation, use Lingva, LibreTranslate, BYOK, or CrispASR.
         </p>
       {/if}
 

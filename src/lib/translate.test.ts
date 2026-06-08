@@ -17,7 +17,7 @@ describe('translate utilities', () => {
     it('returns defaults when nothing stored', async () => {
       const { getTranslateConfig } = await import('./translate');
       const cfg = getTranslateConfig();
-      expect(cfg.provider).toBe('mymemory');
+      expect(cfg.provider).toBe('lingva');
       expect(cfg.targetLang).toBe('en');
     });
 
@@ -26,7 +26,7 @@ describe('translate utilities', () => {
       setTranslateConfig({ targetLang: 'de' });
       const cfg = getTranslateConfig();
       expect(cfg.targetLang).toBe('de');
-      expect(cfg.provider).toBe('mymemory'); // unchanged
+      expect(cfg.provider).toBe('lingva'); // unchanged
     });
 
     it('saves OpenAI config', async () => {

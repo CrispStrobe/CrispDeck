@@ -13,7 +13,7 @@ describe('translate provider config', () => {
     });
   });
 
-  it('switches between all 3 providers', async () => {
+  it('switches between all 5 providers', async () => {
     const { setTranslateConfig, getTranslateConfig } = await import('./translate');
 
     setTranslateConfig({ provider: 'mymemory' });
@@ -24,6 +24,12 @@ describe('translate provider config', () => {
 
     setTranslateConfig({ provider: 'crispasr' });
     expect(getTranslateConfig().provider).toBe('crispasr');
+
+    setTranslateConfig({ provider: 'lingva' });
+    expect(getTranslateConfig().provider).toBe('lingva');
+
+    setTranslateConfig({ provider: 'libretranslate' });
+    expect(getTranslateConfig().provider).toBe('libretranslate');
   });
 
   it('OpenAI config preserves all fields', async () => {
@@ -65,18 +71,36 @@ describe('translate provider config', () => {
     expect(getTranslateConfig().targetLang).toBe('ja');
   });
 
+  it('Lingva config preserves instance', async () => {
+    const { setTranslateConfig, getTranslateConfig } = await import('./translate');
+    setTranslateConfig({ provider: 'lingva', lingvaInstance: 'https://lingva.example.com' });
+    expect(getTranslateConfig().lingvaInstance).toBe('https://lingva.example.com');
+  });
+
+  it('LibreTranslate config preserves instance and key', async () => {
+    const { setTranslateConfig, getTranslateConfig } = await import('./translate');
+    setTranslateConfig({
+      provider: 'libretranslate',
+      libreTranslateInstance: 'https://lt.example.com',
+      libreTranslateApiKey: 'lt-key-123',
+    });
+    const cfg = getTranslateConfig();
+    expect(cfg.libreTranslateInstance).toBe('https://lt.example.com');
+    expect(cfg.libreTranslateApiKey).toBe('lt-key-123');
+  });
+
   it('invalid JSON in localStorage returns defaults', async () => {
     localStorage.setItem('crispdeck-translate-config', 'not-json');
     const { getTranslateConfig } = await import('./translate');
     const cfg = getTranslateConfig();
-    expect(cfg.provider).toBe('mymemory');
+    expect(cfg.provider).toBe('lingva');
     expect(cfg.targetLang).toBe('en');
   });
 
   it('empty localStorage returns defaults', async () => {
     const { getTranslateConfig } = await import('./translate');
     const cfg = getTranslateConfig();
-    expect(cfg.provider).toBe('mymemory');
+    expect(cfg.provider).toBe('lingva');
     expect(cfg.targetLang).toBe('en');
   });
 });
