@@ -62,6 +62,8 @@
         const entry = clientEntries.get(acct.id);
         if (!entry) continue;
 
+        const MAX_FOLLOWS = 2000; // Cap to prevent overwhelming the UI
+
         if (acct.platform === 'bluesky') {
           scanProgress = `Fetching Bluesky follows for ${acct.handle}...`;
           const bsky = entry.client as BlueskyClient;
@@ -82,6 +84,7 @@
             }
             cursor = result.cursor;
             scanProgress = `Bluesky: ${bskyFollows.length} follows...`;
+            if (bskyFollows.length >= MAX_FOLLOWS) { scanProgress += ` (capped at ${MAX_FOLLOWS})`; break; }
           } while (cursor);
 
           // Cache follows
@@ -107,6 +110,7 @@
                 });
               }
               scanProgress = `Mastodon: ${mastoFollows.length} follows...`;
+              if (mastoFollows.length >= MAX_FOLLOWS) { scanProgress += ` (capped at ${MAX_FOLLOWS})`; break; }
               if (page.length < 80) break;
               const lastId = page[page.length - 1].id;
               page = await masto.getFollowing(me.id, lastId);
