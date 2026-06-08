@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Heart, Repeat, MessageCircle, Quote, Bookmark, Share, Flag, Languages, Camera, Loader2, Volume2, VolumeOff, BarChart3, UserPlus, UserCheck, Pin } from '@lucide/svelte';
+  import { goto } from '$app/navigation';
   import { isPinned, pinPost, unpinPost } from '$lib/pinned-posts';
   import { addBookmark, removeBookmark, isBookmarked } from '$lib/bookmarks';
   import { translateText, type TranslationResult } from '$lib/translate';
@@ -193,11 +194,13 @@
 
   // Share as image
   let capturingImage = $state(false);
+  let shareError = $state('');
   let postEl: HTMLDivElement | undefined = $state();
 
   async function handleShareAsImage() {
     if (!postEl) return;
     capturingImage = true;
+    shareError = '';
     try {
       const { default: html2canvas } = await import('html2canvas');
       const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
@@ -239,6 +242,8 @@
       }, 'image/png');
     } catch (e) {
       console.error('Share as image failed:', e);
+      shareError = `Share failed: ${e instanceof Error ? e.message : 'Unknown error'}. Cross-origin images may block capture.`;
+      setTimeout(() => { shareError = ''; }, 5000);
     } finally {
       capturingImage = false;
     }
@@ -356,6 +361,41 @@
     if (post.platform !== 'mastodon') return '';
     const raw = post.raw as any;
     return (raw.reblog ? raw.reblog.content : raw.content) ?? '';
+  }
+
+  /** Intercept clicks on links in post HTML — route hashtags and handles in-app */
+  function handlePostLinkClick(e: MouseEvent) {
+    const target = (e.target as HTMLElement).closest('a');
+    if (!target || !(target instanceof HTMLAnchorElement)) return;
+    const href = target.href;
+    if (!href) return;
+
+    try {
+      const url = new URL(href);
+
+      // Hashtag: https://instance/tags/tagname
+      const tagMatch = url.pathname.match(/^\/tags\/(.+)$/);
+      if (tagMatch) {
+        e.preventDefault();
+        e.stopPropagation();
+        goto(`/search?q=${encodeURIComponent('#' + decodeURIComponent(tagMatch[1]))}`);
+        return;
+      }
+
+      // Handle: https://instance/@user or https://instance/@user@otherinstance
+      const handleMatch = url.pathname.match(/^\/@([^/]+)$/);
+      if (handleMatch) {
+        e.preventDefault();
+        e.stopPropagation();
+        const handle = decodeURIComponent(handleMatch[1]);
+        // If it contains @, it's already fully qualified; otherwise qualify with instance
+        const fullHandle = handle.includes('@') ? handle : `${handle}@${url.hostname}`;
+        goto(`/profile?handle=${encodeURIComponent(fullHandle)}`);
+        return;
+      }
+    } catch {
+      // Not a valid URL — let it pass through to browser
+    }
   }
 
   function getMastodonMedia(): any[] {
@@ -554,7 +594,8 @@
       </a>
       <a href={getThreadUrl(post)} class="block min-w-0 hover:bg-[var(--color-surface-hover)]/30 rounded -mx-1 px-1 transition-colors">
         {#if post.platform === 'mastodon' && mastodonHtml}
-          <div class="text-sm text-[var(--color-text)] break-words prose-invert [&_a]:text-blue-400 [&_a]:hover:underline">
+          <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+          <div class="text-sm text-[var(--color-text)] break-words prose-invert [&_a]:text-blue-400 [&_a]:hover:underline" onclick={handlePostLinkClick}>
             {@html mastodonHtml}
           </div>
         {:else}
@@ -845,6 +886,9 @@
           <Camera size={12} />
         {/if}
       </button>
+      {#if shareError}
+        <span class="text-[9px] text-red-400">{shareError}</span>
+      {/if}
 
       <button
         onclick={() => showStats = !showStats}

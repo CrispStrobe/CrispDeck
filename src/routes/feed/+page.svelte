@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal, RefreshCw } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import Post from '$lib/components/Post.svelte';
@@ -16,6 +16,7 @@
   import { searchArchive } from '$lib/archive';
   import { jetstream } from '$lib/jetstream';
   import { applyMuteFilter } from '$lib/muted-words';
+  import { saveReadPosition, getReadPosition } from '$lib/read-position';
 
   type FeedMode = 'timeline' | 'my-posts' | 'for-you';
 
@@ -29,6 +30,8 @@
   let feedMode: FeedMode = $state('timeline');
   let platformFilter: 'all' | Platform = $state('all');
   let showFilters = $state(false);
+  const connectedPlatforms = $derived(new Set(accounts.map(a => a.platform)));
+  const multiPlatform = $derived(connectedPlatforms.size > 1);
 
   let cursors: Record<number, string | undefined> = $state({});
   let loadingMore = $state(false);
@@ -82,6 +85,14 @@
       }
       if (accounts.length > 0) {
         await loadFeed();
+        // Restore scroll position after feed loads
+        requestAnimationFrame(() => {
+          const saved = getReadPosition('feed');
+          if (saved?.scrollY) {
+            const main = document.getElementById('main-content');
+            if (main) main.scrollTop = saved.scrollY;
+          }
+        });
       }
     } catch (e) {
       error = String(e);
@@ -92,6 +103,14 @@
     // Poll for new posts every 60 seconds
     const pollInterval = setInterval(checkForNewPosts, 60000);
     return () => { observer?.disconnect(); clearInterval(pollInterval); };
+  });
+
+  onDestroy(() => {
+    const main = document.getElementById('main-content');
+    const topPost = posts[0]?.uri;
+    if (topPost) {
+      saveReadPosition('feed', topPost, main?.scrollTop);
+    }
   });
 
   let newPostsAvailable = $state(0);
@@ -195,7 +214,7 @@
 
         const tag = (p: UnifiedPost) => { p.sourceAccount = acct.handle; return p; };
         if (acct.platform === 'bluesky') {
-          if (feedMode === 'timeline') {
+          if (feedMode === 'timeline' || feedMode === 'for-you') {
             // Use OAuth agent for timeline if available (has full access)
             if (entry.oauthAgent) {
               const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 50 });
@@ -222,7 +241,7 @@
           }
         } else {
           const masto = entry.client as MastodonClient;
-          if (feedMode === 'timeline') {
+          if (feedMode === 'timeline' || feedMode === 'for-you') {
             const statuses = await masto.getHomeTimeline();
             allPosts.push(...statuses.map(p => tag(normalizePost(p, 'mastodon'))));
             cursors[acct.id] = statuses.length > 0 ? statuses[statuses.length - 1].id : undefined;
@@ -443,25 +462,33 @@
         </button>
       </div>
 
-      <!-- Platform filter -->
-      <div class="flex items-center bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-0.5">
-        <button
-          onclick={() => platformFilter = 'all'}
-          class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors {platformFilter === 'all' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)]'}"
-        >{i18n.t.feed.all}</button>
-        <button
-          onclick={() => platformFilter = 'bluesky'}
-          class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1 {platformFilter === 'bluesky' ? 'bg-[var(--color-bluesky)] text-white' : 'text-[var(--color-text-muted)]'}"
-        ><span class="w-1.5 h-1.5 rounded-full bg-[var(--color-bluesky)]"></span> Bsky</button>
-        <button
-          onclick={() => platformFilter = 'mastodon'}
-          class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1 {platformFilter === 'mastodon' ? 'bg-[var(--color-mastodon)] text-white' : 'text-[var(--color-text-muted)]'}"
-        ><span class="w-1.5 h-1.5 rounded-full bg-[var(--color-mastodon)]"></span> Masto</button>
-        <button
-          onclick={() => platformFilter = 'threads'}
-          class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1 {platformFilter === 'threads' ? 'bg-[var(--color-threads)] text-white' : 'text-[var(--color-text-muted)]'}"
-        ><span class="w-1.5 h-1.5 rounded-full bg-[var(--color-threads)]"></span> Threads</button>
-      </div>
+      <!-- Platform filter (only shown when multiple platforms connected) -->
+      {#if multiPlatform}
+        <div class="flex items-center bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-0.5">
+          <button
+            onclick={() => platformFilter = 'all'}
+            class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors {platformFilter === 'all' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)]'}"
+          >{i18n.t.feed.all}</button>
+          {#if connectedPlatforms.has('bluesky')}
+            <button
+              onclick={() => platformFilter = 'bluesky'}
+              class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1 {platformFilter === 'bluesky' ? 'bg-[var(--color-bluesky)] text-white' : 'text-[var(--color-text-muted)]'}"
+            ><span class="w-1.5 h-1.5 rounded-full bg-[var(--color-bluesky)]"></span> Bsky</button>
+          {/if}
+          {#if connectedPlatforms.has('mastodon')}
+            <button
+              onclick={() => platformFilter = 'mastodon'}
+              class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1 {platformFilter === 'mastodon' ? 'bg-[var(--color-mastodon)] text-white' : 'text-[var(--color-text-muted)]'}"
+            ><span class="w-1.5 h-1.5 rounded-full bg-[var(--color-mastodon)]"></span> Masto</button>
+          {/if}
+          {#if connectedPlatforms.has('threads')}
+            <button
+              onclick={() => platformFilter = 'threads'}
+              class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1 {platformFilter === 'threads' ? 'bg-[var(--color-threads)] text-white' : 'text-[var(--color-text-muted)]'}"
+            ><span class="w-1.5 h-1.5 rounded-full bg-[var(--color-threads)]"></span> Threads</button>
+          {/if}
+        </div>
+      {/if}
 
       <button
         onclick={() => showFilters = !showFilters}

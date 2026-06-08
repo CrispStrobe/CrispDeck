@@ -24,6 +24,13 @@
       const result = await initAllClients();
       accounts = result.accounts;
       clientEntries = result.clients;
+      // Auto-search from URL params (e.g. /search?q=%23hashtag)
+      const params = new URLSearchParams(window.location.search);
+      const q = params.get('q');
+      if (q) {
+        query = q;
+        await handleSearch();
+      }
     } catch (e) {
       error = String(e);
     } finally {
