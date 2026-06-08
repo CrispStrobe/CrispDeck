@@ -79,7 +79,7 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **Bluesky OAuth** (recommended) or app passwords
 - **Mastodon OAuth** with redirect callback
 - **Threads OAuth** with server proxy or direct
-- **Internationalization**: 8 languages (EN, DE, ES 100%; FR, JA, PT, ZH ~30%; AR ~20%) with RTL support
+- **Internationalization**: 8 languages (EN, DE, ES, FR, JA, PT, ZH, AR — all 100%) with RTL support
 - **Keyboard shortcuts**: ? for help, g+key navigation, j/k post scrolling, vim-style deck navigation
 - **Collapsible sidebar** + mobile hamburger menu + bottom tab bar
 - Dark + light + **OLED dark** themes

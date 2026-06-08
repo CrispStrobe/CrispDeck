@@ -656,11 +656,8 @@ Goal: close gaps in unit test coverage for untested TypeScript modules. Current:
 ## Known Issues / Future Polish
 
 ### i18n coverage
-- **EN and DE**: 100% complete
-- **ES**: 100% complete
-- **FR, JA, PT, ZH**: ~30% coverage (nav, compose, feed, settings basics only)
-- **AR**: ~20% coverage (minimal)
-- All missing keys fall back to English via `deepMerge`.
+- **All 8 languages at 100%**: EN, DE, ES, FR, JA, PT, ZH, AR
+- All 31 sections translated for every language. No fallback to English needed.
 
 ### Mastodon API property casing
 - `normalizePost()` in `src/lib/api/unified.ts` handles both camelCase (masto library) and snake_case (raw fetch) for: `repliesCount`/`replies_count`, `reblogsCount`/`reblogs_count`, `favouritesCount`/`favourites_count`, `createdAt`/`created_at`, `inReplyToId`/`in_reply_to_id`, `displayName`/`display_name`
