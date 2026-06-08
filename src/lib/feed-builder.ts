@@ -280,17 +280,32 @@ export function getFeedDefinition(id: string): FeedDefinition | null {
 
 // ── Network publishing ──────────────────────────────────────────────────────
 
-/** Encode a string to base64url (URL-safe, no padding) */
-export function toBase64Url(s: string): string {
-  const b64 = btoa(unescape(encodeURIComponent(s)));
-  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+/** The API base for the feed storage server (same origin on Vercel) */
+const FEED_API_BASE = typeof window !== 'undefined'
+  ? `${window.location.origin}/api/feed`
+  : '/api/feed';
+
+let rkeyCounter = 0;
+
+/**
+ * Generate a human-readable, AT Protocol-safe rkey from a feed name.
+ * rkeys must match [a-zA-Z0-9._:~-]{1,512}.
+ */
+export function generateRkey(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 40);
+  const suffix = `${Date.now().toString(36)}${(rkeyCounter++).toString(36)}`;
+  return `${slug || 'feed'}-${suffix}`;
 }
 
 /**
  * Publish a feed definition to the Bluesky network.
- * Creates a `app.bsky.feed.generator` record on the user's PDS.
- * The compiled query is encoded in the rkey so the feed generator
- * server can decode and execute it without external storage.
+ *
+ * 1. Stores the feed definition (query + metadata) in Vercel Blob via /api/feed/publish
+ * 2. Creates an `app.bsky.feed.generator` record on the user's PDS
  *
  * @returns The AT URI of the published feed
  */
@@ -302,9 +317,27 @@ export async function publishFeedGenerator(
   const query = compileQuery(feed.rules);
   if (!query.trim()) throw new Error('Cannot publish a feed with no filter rules');
 
-  const rkey = toBase64Url(query);
-  if (rkey.length > 512) throw new Error('Feed query is too complex to publish (rkey > 512 chars). Simplify your rules.');
+  const rkey = generateRkey(feed.name);
 
+  // 1. Store feed definition on the server (Vercel Blob)
+  const storeResp = await fetch(`${FEED_API_BASE}/publish`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      rkey,
+      query,
+      name: feed.name || 'CrispDeck Feed',
+      description: feed.description || '',
+      userDid,
+    }),
+  });
+
+  if (!storeResp.ok) {
+    const err = await storeResp.json().catch(() => ({ error: 'Server error' }));
+    throw new Error(`Failed to store feed: ${err.error}`);
+  }
+
+  // 2. Create the feed generator record on the user's PDS
   const record = {
     $type: FEED_COLLECTION,
     did: GENERATOR_DID,
@@ -326,13 +359,22 @@ export async function publishFeedGenerator(
 
 /**
  * Unpublish a feed from the Bluesky network.
- * Deletes the `app.bsky.feed.generator` record from the user's PDS.
+ * 1. Deletes the feed definition from Vercel Blob
+ * 2. Deletes the `app.bsky.feed.generator` record from the user's PDS
  */
 export async function unpublishFeedGenerator(
   agent: any,
   userDid: string,
   rkey: string,
 ): Promise<void> {
+  // 1. Remove from server storage
+  await fetch(`${FEED_API_BASE}/unpublish`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rkey }),
+  }).catch(() => {}); // Best-effort — PDS record deletion is the critical path
+
+  // 2. Delete from user's PDS
   await agent.api.com.atproto.repo.deleteRecord({
     repo: userDid,
     collection: FEED_COLLECTION,

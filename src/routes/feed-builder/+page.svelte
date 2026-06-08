@@ -7,7 +7,7 @@
     createFeedDefinition, createRule, compileQuery, describeFeed,
     getRuleLabel, getRulePlaceholder, RULE_TYPES,
     listSavedFeeds, saveFeedDefinition, deleteFeedDefinition,
-    publishFeedGenerator, unpublishFeedGenerator, toBase64Url,
+    publishFeedGenerator, unpublishFeedGenerator,
     type FeedDefinition, type FeedRule, type RuleType,
   } from '$lib/feed-builder';
   import { i18n } from '$lib/i18n.svelte';
@@ -186,13 +186,6 @@
   async function handlePublish() {
     if (!compiledQuery.trim()) {
       publishError = 'Add at least one filter rule before publishing.';
-      return;
-    }
-
-    // Check rkey length
-    const rkey = toBase64Url(compiledQuery);
-    if (rkey.length > 512) {
-      publishError = 'Feed query is too complex to publish (exceeds 512-char limit). Simplify your rules.';
       return;
     }
 

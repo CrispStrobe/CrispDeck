@@ -6,7 +6,7 @@ import {
   createRule, createFeedDefinition, compileQuery, describeFeed,
   getRuleLabel, getRulePlaceholder, RULE_TYPES,
   listSavedFeeds, saveFeedDefinition, deleteFeedDefinition, getFeedDefinition,
-  toBase64Url, publishFeedGenerator, unpublishFeedGenerator, GENERATOR_DID,
+  generateRkey, publishFeedGenerator, unpublishFeedGenerator, GENERATOR_DID,
   type FeedRule, type FeedDefinition,
 } from './feed-builder';
 
@@ -266,29 +266,39 @@ describe('persistence', () => {
   });
 });
 
-// ── Base64url encoding ──────────────────────────────────────────────────────
+// ── Rkey generation ─────────────────────────────────────────────────────────
 
-describe('toBase64Url', () => {
-  it('encodes a simple string', () => {
-    const encoded = toBase64Url('svelte lang:en');
-    expect(encoded).toBeTruthy();
-    // Should not contain +, /, or = (standard base64 chars)
-    expect(encoded).not.toMatch(/[+/=]/);
+describe('generateRkey', () => {
+  it('produces a valid AT Protocol rkey', () => {
+    const rkey = generateRkey('My Svelte Feed');
+    // rkeys must match [a-zA-Z0-9._:~-]{1,512}
+    expect(rkey).toMatch(/^[a-zA-Z0-9._:~-]+$/);
+    expect(rkey.length).toBeLessThanOrEqual(512);
   });
 
-  it('produces URL-safe characters only', () => {
-    const encoded = toBase64Url('from:alice.bsky.social has:images -react "machine learning"');
-    expect(encoded).toMatch(/^[A-Za-z0-9_-]+$/);
+  it('slugifies the name', () => {
+    const rkey = generateRkey('Svelte & TypeScript Posts!');
+    expect(rkey).toContain('svelte');
+    expect(rkey).toContain('typescript');
+    expect(rkey).not.toContain('&');
+    expect(rkey).not.toContain('!');
   });
 
-  it('round-trips through decode', () => {
-    const original = 'svelte lang:en has:images';
-    const encoded = toBase64Url(original);
-    // Decode back
-    let b64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
-    while (b64.length % 4 !== 0) b64 += '=';
-    const decoded = decodeURIComponent(escape(atob(b64)));
-    expect(decoded).toBe(original);
+  it('generates unique rkeys', () => {
+    const r1 = generateRkey('Test');
+    const r2 = generateRkey('Test');
+    expect(r1).not.toBe(r2);
+  });
+
+  it('handles empty name', () => {
+    const rkey = generateRkey('');
+    expect(rkey).toMatch(/^feed-/);
+    expect(rkey.length).toBeGreaterThan(0);
+  });
+
+  it('truncates long names', () => {
+    const rkey = generateRkey('a'.repeat(200));
+    expect(rkey.length).toBeLessThanOrEqual(60);
   });
 });
 
@@ -310,7 +320,7 @@ describe('publishFeedGenerator', () => {
       .rejects.toThrow('no filter rules');
   });
 
-  it('calls putRecord with correct params', async () => {
+  it('stores feed on server then calls putRecord', async () => {
     const feed = createFeedDefinition('Test Feed');
     feed.rules = [createRule('keyword', 'svelte')];
     feed.description = 'Svelte posts';
@@ -318,43 +328,85 @@ describe('publishFeedGenerator', () => {
     const putRecord = vi.fn().mockResolvedValue({});
     const mockAgent = { api: { com: { atproto: { repo: { putRecord } } } } };
 
-    const result = await publishFeedGenerator(mockAgent, 'did:plc:abc123', feed);
+    // Mock fetch for the server publish call
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, url: 'https://blob.vercel.com/feeds/test.json' }),
+    });
 
-    expect(putRecord).toHaveBeenCalledOnce();
-    const call = putRecord.mock.calls[0][0];
-    expect(call.repo).toBe('did:plc:abc123');
-    expect(call.collection).toBe('app.bsky.feed.generator');
-    expect(call.record.did).toBe(GENERATOR_DID);
-    expect(call.record.displayName).toBe('Test Feed');
-    expect(result.atUri).toContain('did:plc:abc123');
-    expect(result.atUri).toContain('app.bsky.feed.generator');
-    expect(result.rkey).toBeTruthy();
+    try {
+      const result = await publishFeedGenerator(mockAgent, 'did:plc:abc123', feed);
+
+      // Should have called fetch for the server API
+      expect(globalThis.fetch).toHaveBeenCalledOnce();
+      const fetchCall = (globalThis.fetch as any).mock.calls[0];
+      expect(fetchCall[0]).toContain('/api/feed/publish');
+      const body = JSON.parse(fetchCall[1].body);
+      expect(body.query).toBe('svelte');
+      expect(body.userDid).toBe('did:plc:abc123');
+
+      // Should have called putRecord
+      expect(putRecord).toHaveBeenCalledOnce();
+      const call = putRecord.mock.calls[0][0];
+      expect(call.repo).toBe('did:plc:abc123');
+      expect(call.collection).toBe('app.bsky.feed.generator');
+      expect(call.record.did).toBe(GENERATOR_DID);
+      expect(call.record.displayName).toBe('Test Feed');
+      expect(result.atUri).toContain('did:plc:abc123');
+      expect(result.rkey).toMatch(/^test-feed-/);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
-  it('rejects query that produces rkey > 512 chars', async () => {
-    const feed = createFeedDefinition('Long');
-    // Create a very long query by repeating keywords
-    feed.rules = [createRule('keyword', 'a'.repeat(500))];
+  it('fails if server storage fails', async () => {
+    const feed = createFeedDefinition('Fail Feed');
+    feed.rules = [createRule('keyword', 'test')];
 
     const mockAgent = { api: { com: { atproto: { repo: { putRecord: vi.fn() } } } } };
-    await expect(publishFeedGenerator(mockAgent, 'did:plc:test', feed))
-      .rejects.toThrow('too complex');
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: 'Blob write failed' }),
+    });
+
+    try {
+      await expect(publishFeedGenerator(mockAgent, 'did:plc:test', feed))
+        .rejects.toThrow('Failed to store feed');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 
 // ── unpublishFeedGenerator ──────────────────────────────────────────────────
 
 describe('unpublishFeedGenerator', () => {
-  it('calls deleteRecord with correct params', async () => {
+  it('calls server unpublish then deleteRecord', async () => {
     const deleteRecord = vi.fn().mockResolvedValue({});
     const mockAgent = { api: { com: { atproto: { repo: { deleteRecord } } } } };
 
-    await unpublishFeedGenerator(mockAgent, 'did:plc:abc123', 'some-rkey');
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
 
-    expect(deleteRecord).toHaveBeenCalledWith({
-      repo: 'did:plc:abc123',
-      collection: 'app.bsky.feed.generator',
-      rkey: 'some-rkey',
-    });
+    try {
+      await unpublishFeedGenerator(mockAgent, 'did:plc:abc123', 'some-rkey');
+
+      // Should have called fetch for server unpublish
+      expect(globalThis.fetch).toHaveBeenCalledOnce();
+      const fetchCall = (globalThis.fetch as any).mock.calls[0];
+      expect(fetchCall[0]).toContain('/api/feed/unpublish');
+
+      // Should have called deleteRecord
+      expect(deleteRecord).toHaveBeenCalledWith({
+        repo: 'did:plc:abc123',
+        collection: 'app.bsky.feed.generator',
+        rkey: 'some-rkey',
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

@@ -2,10 +2,8 @@
  * Vercel serverless function: Bluesky Feed Generator — getFeedSkeleton
  *
  * Implements the AT Protocol feed generator endpoint.
- * Feed queries are encoded as base64url in the record rkey,
- * so no server-side storage is needed.
- *
- * Called by the Bluesky AppView when a user subscribes to a CrispDeck-published feed.
+ * Looks up the feed definition from Vercel Blob by rkey,
+ * executes the stored search query, and returns post URIs.
  *
  * Query params:
  *   feed   — AT URI: at://<did>/app.bsky.feed.generator/<rkey>
@@ -14,22 +12,48 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { list } from '@vercel/blob';
 
 const BSKY_PUBLIC_API = 'https://public.api.bsky.app';
 
-/** Decode base64url to UTF-8 string */
-function b64urlDecode(s: string): string {
-  // Convert base64url to standard base64
-  let b64 = s.replace(/-/g, '+').replace(/_/g, '/');
-  // Pad if needed
-  while (b64.length % 4 !== 0) b64 += '=';
-  return Buffer.from(b64, 'base64').toString('utf-8');
+// Simple in-memory cache: rkey → { query, expiry }
+const queryCache = new Map<string, { query: string; expiry: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function getQueryForRkey(rkey: string): Promise<string | null> {
+  // Check cache first
+  const cached = queryCache.get(rkey);
+  if (cached && cached.expiry > Date.now()) {
+    return cached.query;
+  }
+
+  // Look up from Vercel Blob
+  try {
+    const blobs = await list({ prefix: `feeds/${rkey}.json` });
+    if (blobs.blobs.length === 0) return null;
+
+    const resp = await fetch(blobs.blobs[0].url);
+    if (!resp.ok) return null;
+
+    const feedDef = await resp.json();
+    const query = feedDef.query;
+
+    if (query) {
+      queryCache.set(rkey, { query, expiry: Date.now() + CACHE_TTL });
+    }
+
+    return query || null;
+  } catch {
+    return null;
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  // Cache feed responses for 60s at the CDN layer
+  res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
@@ -50,20 +74,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const rkey = match[2];
 
-  // Decode the search query from the rkey
-  let query: string;
-  try {
-    query = b64urlDecode(rkey);
-  } catch {
-    return res.status(400).json({ error: 'Invalid feed rkey — could not decode query' });
-  }
-
-  if (!query.trim()) {
-    return res.status(400).json({ error: 'Empty feed query' });
+  // Look up the feed query from Vercel Blob
+  const query = await getQueryForRkey(rkey);
+  if (!query) {
+    return res.status(404).json({ error: 'Feed not found', rkey });
   }
 
   try {
-    // Execute the search on the public Bluesky API
     const params = new URLSearchParams({
       q: query,
       limit: String(limit),
@@ -81,7 +98,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const data = await resp.json();
 
-    // Return feed skeleton (just post URIs, not full posts)
+    // Return feed skeleton (just post URIs)
     const feed = (data.posts ?? []).map((p: any) => ({ post: p.uri }));
 
     return res.status(200).json({
