@@ -159,6 +159,7 @@
   }
 
   let hideEngagement = $state(localStorage.getItem('crispdeck-hide-engagement') === 'true');
+  let compactPosts = $state(localStorage.getItem('crispdeck-compact-posts') === 'true');
   let mediaPreview = $state<'lightbox' | 'browser'>((localStorage.getItem('crispdeck-media-preview') as 'lightbox' | 'browser') || 'lightbox');
   let liveCounters = $state(localStorage.getItem('crispdeck-live-counters') === 'true');
   function handleLiveCountersChange() {
@@ -886,6 +887,21 @@
           type="checkbox"
           bind:checked={hideEngagement}
           onchange={handleHideEngagementChange}
+          class="w-4 h-4 accent-[var(--color-primary)]"
+        />
+      </div>
+
+      <!-- Compact posts -->
+      <div class="flex items-center justify-between">
+        <div>
+          <label for="compact-posts" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.compactPosts}</label>
+          <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.compactPostsHint}</p>
+        </div>
+        <input
+          id="compact-posts"
+          type="checkbox"
+          bind:checked={compactPosts}
+          onchange={() => localStorage.setItem('crispdeck-compact-posts', String(compactPosts))}
           class="w-4 h-4 accent-[var(--color-primary)]"
         />
       </div>

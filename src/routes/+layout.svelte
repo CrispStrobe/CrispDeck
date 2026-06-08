@@ -194,7 +194,7 @@
       {#if !collapsed}
         <div>
           <h1 class="text-base font-bold text-[var(--color-text)]">CrispDeck</h1>
-          <p class="text-[10px] text-[var(--color-text-muted)]">Mastodon + Bluesky</p>
+          <p class="text-[10px] text-[var(--color-text-muted)]">Bluesky + Mastodon + Threads</p>
         </div>
       {/if}
       <div class="flex items-center gap-1">
@@ -233,12 +233,22 @@
     {/if}
   </nav>
 
-  <!-- Mobile top bar -->
-  <div class="md:hidden fixed top-0 left-0 right-0 z-50 bg-[var(--color-surface)] border-b border-[var(--color-border)] px-4 py-2 flex items-center justify-between">
-    <h1 class="text-base font-bold">CrispDeck</h1>
-    <button onclick={() => mobileMenuOpen = !mobileMenuOpen} class="p-2 text-[var(--color-text-muted)]">
-      {#if mobileMenuOpen}<X size={20} />{:else}<Menu size={20} />{/if}
-    </button>
+  <!-- Mobile top bar (condensed single row) -->
+  <div class="md:hidden fixed top-0 left-0 right-0 z-50 bg-[var(--color-surface)] border-b border-[var(--color-border)] px-3 py-1.5 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <button onclick={() => mobileMenuOpen = !mobileMenuOpen} class="p-1 text-[var(--color-text-muted)]">
+        {#if mobileMenuOpen}<X size={18} />{:else}<Menu size={18} />{/if}
+      </button>
+      <a href="/" class="text-sm font-bold text-[var(--color-text)]">CrispDeck</a>
+    </div>
+    <div class="flex items-center gap-1">
+      <button onclick={toggleTheme} class="p-1.5 text-[var(--color-text-muted)]" title="Toggle theme">
+        {#if theme === 'dark'}<Smartphone size={14} />{:else if theme === 'oled'}<Sun size={14} />{:else}<Moon size={14} />{/if}
+      </button>
+      <a href="/notifications" class="p-1.5 text-[var(--color-text-muted)]">
+        <Bell size={14} />
+      </a>
+    </div>
   </div>
 
   <!-- Mobile slide-out menu -->
@@ -268,7 +278,7 @@
   {/if}
 
   <!-- Main content -->
-  <main id="main-content" class="flex-1 overflow-y-auto md:pt-0 pt-12 pb-16 md:pb-0" role="main">
+  <main id="main-content" class="flex-1 overflow-y-auto md:pt-0 pt-10 pb-14 md:pb-0" role="main">
     {#if offline}
       <div class="bg-yellow-900/50 border-b border-yellow-700 px-4 py-2 text-center text-xs text-yellow-200">
         You're offline — some features may be unavailable
@@ -279,18 +289,18 @@
     </ErrorBoundary>
   </main>
 
-  <!-- Mobile bottom tab bar -->
-  <nav class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[var(--color-surface)] border-t border-[var(--color-border)] flex items-center justify-around px-1 py-1">
+  <!-- Mobile bottom tab bar (compact) -->
+  <nav class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[var(--color-surface)] border-t border-[var(--color-border)] flex items-center justify-around px-1 safe-area-bottom">
     {#each mobileTabItems as item}
       <a
         href={item.href}
-        class="flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg transition-colors min-w-0 flex-1
+        class="flex flex-col items-center gap-0 px-1 py-1 rounded-lg transition-colors min-w-0 flex-1
           {isActive(item.href)
             ? 'text-[var(--color-primary)]'
             : 'text-[var(--color-text-muted)]'}"
       >
-        <item.icon size={20} />
-        <span class="text-[9px] truncate">{item.label}</span>
+        <item.icon size={18} />
+        <span class="text-[8px] truncate leading-tight">{item.label}</span>
       </a>
     {/each}
   </nav>

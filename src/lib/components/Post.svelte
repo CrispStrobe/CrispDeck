@@ -59,6 +59,7 @@
     pinned = isPinned(post.uri);
     hideEngagement = localStorage.getItem('crispdeck-hide-engagement') === 'true';
     mediaPreviewMode = (localStorage.getItem('crispdeck-media-preview') as 'lightbox' | 'browser') || 'lightbox';
+    if (!compact) compact = localStorage.getItem('crispdeck-compact-posts') === 'true';
 
     // Subscribe to real-time count updates for this post
     if (post.platform === 'bluesky') {
@@ -325,6 +326,18 @@
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
+  function relativeTime(dateString?: string): string {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '';
+    const diff = Date.now() - date.getTime();
+    if (diff < 60000) return 'now';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
+    if (diff < 604800000) return `${Math.floor(diff / 86400000)}d`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
   function getProfileUrl(p: UnifiedPost): string {
     const h = encodeURIComponent(p.author.handle);
     return `/profile?handle=${h}&platform=${p.platform}`;
@@ -540,7 +553,7 @@
     <button onclick={() => labelRevealed = true} class="text-xs text-[var(--color-primary)] hover:underline mt-1">Show anyway</button>
   </div>
 {:else}
-<div bind:this={postEl} data-post-uri={post.uri} class="group p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] transition-shadow">
+<div bind:this={postEl} data-post-uri={post.uri} class="group {compact ? 'p-2.5' : 'p-4'} bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] transition-shadow">
   <!-- Label warnings -->
   {#if warnedLabels.length > 0 && !labelRevealed}
     <div class="mb-2 p-2 bg-yellow-900/20 border border-yellow-700/30 rounded text-xs text-yellow-300 flex items-center justify-between">
@@ -564,20 +577,20 @@
     </div>
   {/if}
 
-  <div class="flex items-start gap-3">
+  <div class="flex items-start {compact ? 'gap-2' : 'gap-3'}">
     <div class="relative group/avatar">
       <a href={getProfileUrl(post)}>
         {#if post.author.avatar}
-          <img loading="lazy" src={post.author.avatar} alt="" class="w-10 h-10 rounded-full bg-[var(--color-surface-hover)]" />
+          <img loading="lazy" src={post.author.avatar} alt="" class="{compact ? 'w-7 h-7' : 'w-10 h-10'} rounded-full bg-[var(--color-surface-hover)]" />
         {:else}
-          <div class="w-10 h-10 rounded-full bg-[var(--color-surface-hover)] flex items-center justify-center text-xs text-[var(--color-text-muted)]">
+          <div class="{compact ? 'w-7 h-7 text-[9px]' : 'w-10 h-10 text-xs'} rounded-full bg-[var(--color-surface-hover)] flex items-center justify-center text-[var(--color-text-muted)]">
             {post.author.handle.charAt(0).toUpperCase()}
           </div>
         {/if}
       </a>
       <button
         onclick={(e) => { e.stopPropagation(); following = !following; onfollow?.(post, following); }}
-        class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center transition-all opacity-0 group-hover/avatar:opacity-100 {following ? 'bg-[var(--color-success)] text-white' : 'bg-[var(--color-primary)] text-white'}"
+        class="absolute -bottom-1 -right-1 {compact ? 'w-4 h-4' : 'w-5 h-5'} rounded-full flex items-center justify-center transition-all opacity-0 group-hover/avatar:opacity-100 {following ? 'bg-[var(--color-success)] text-white' : 'bg-[var(--color-primary)] text-white'}"
         title={following ? 'Following' : 'Follow'}
         aria-label={following ? `Unfollow ${post.author.handle}` : `Follow ${post.author.handle}`}
       >
@@ -585,13 +598,18 @@
       </button>
     </div>
     <div class="flex-1 min-w-0">
-      <a href={getProfileUrl(post)} class="flex items-center gap-2 mb-1 group">
-        <span class="font-semibold text-[var(--color-text)] group-hover:underline truncate text-sm">
-          {post.author.displayName || post.author.handle}
-        </span>
-        <span class="text-[var(--color-text-muted)] text-xs truncate">{post.author.handle}</span>
-        <span class="w-2 h-2 rounded-full flex-shrink-0" style="background: {platformColor}"></span>
-      </a>
+      <div class="flex items-center gap-2 mb-1">
+        <a href={getProfileUrl(post)} class="flex items-center gap-2 min-w-0 group">
+          <span class="font-semibold text-[var(--color-text)] group-hover:underline truncate text-sm">
+            {post.author.displayName || post.author.handle}
+          </span>
+          <span class="text-[var(--color-text-muted)] text-xs truncate">{post.author.handle}</span>
+          <span class="w-2 h-2 rounded-full flex-shrink-0" style="background: {platformColor}"></span>
+        </a>
+        <a href={getThreadUrl(post)} class="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:underline flex-shrink-0 ml-auto" title={formatDate(post.createdAt)}>
+          {relativeTime(post.createdAt)}
+        </a>
+      </div>
       <a href={getThreadUrl(post)} class="block min-w-0 hover:bg-[var(--color-surface-hover)]/30 rounded -mx-1 px-1 transition-colors">
         {#if post.platform === 'mastodon' && mastodonHtml}
           <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
@@ -909,8 +927,8 @@
         <Flag size={12} />
       </button>
     </div>
-    <a href={getPostUrl(post)} target="_blank" rel="noopener noreferrer" class="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:underline">
-      {formatDate(post.createdAt)}
+    <a href={getPostUrl(post)} target="_blank" rel="noopener noreferrer" class="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:underline opacity-0 group-hover:opacity-100">
+      {post.platform}
     </a>
   </div>
 
