@@ -1,0 +1,27 @@
+{
+  "identifier": "mobile",
+  "description": "Capabilities for mobile (iOS/Android)",
+  "platforms": ["android", "iOS"],
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    "http:default",
+    "dialog:default",
+    "store:default",
+    "fs:default",
+    "fs:read-all",
+    "fs:write-all",
+    {
+      "identifier": "http:allow-fetch",
+      "allow": [
+        { "url": "http://*" },
+        { "url": "https://*" }
+      ]
+    },
+    {
+      "identifier": "fs:scope",
+      "allow": [{ "path": "$HOME/**" }, { "path": "/**" }]
+    }
+  ]
+}

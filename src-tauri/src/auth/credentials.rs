@@ -21,9 +21,12 @@ fn derive_key(passphrase: &[u8], salt: &[u8]) -> Result<[u8; 32]> {
 /// In production you'd want a user-set passphrase; for now we use a
 /// hardcoded app-level secret combined with the machine hostname.
 fn get_passphrase() -> Vec<u8> {
+    #[cfg(not(mobile))]
     let hostname = hostname::get()
         .map(|h| h.to_string_lossy().to_string())
         .unwrap_or_else(|_| "crispdeck-default".to_string());
+    #[cfg(mobile)]
+    let hostname = "crispdeck-mobile".to_string();
     format!("CrispDeck-v1-{}", hostname).into_bytes()
 }
 

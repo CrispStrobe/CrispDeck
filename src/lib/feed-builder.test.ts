@@ -6,6 +6,7 @@ import {
   createRule, createFeedDefinition, compileQuery, describeFeed,
   getRuleLabel, getRulePlaceholder, RULE_TYPES,
   listSavedFeeds, saveFeedDefinition, deleteFeedDefinition, getFeedDefinition,
+  toBase64Url, publishFeedGenerator, unpublishFeedGenerator, GENERATOR_DID,
   type FeedRule, type FeedDefinition,
 } from './feed-builder';
 
@@ -262,5 +263,98 @@ describe('persistence', () => {
     saveFeedDefinition(createFeedDefinition('Feed B'));
     saveFeedDefinition(createFeedDefinition('Feed C'));
     expect(listSavedFeeds()).toHaveLength(3);
+  });
+});
+
+// ── Base64url encoding ──────────────────────────────────────────────────────
+
+describe('toBase64Url', () => {
+  it('encodes a simple string', () => {
+    const encoded = toBase64Url('svelte lang:en');
+    expect(encoded).toBeTruthy();
+    // Should not contain +, /, or = (standard base64 chars)
+    expect(encoded).not.toMatch(/[+/=]/);
+  });
+
+  it('produces URL-safe characters only', () => {
+    const encoded = toBase64Url('from:alice.bsky.social has:images -react "machine learning"');
+    expect(encoded).toMatch(/^[A-Za-z0-9_-]+$/);
+  });
+
+  it('round-trips through decode', () => {
+    const original = 'svelte lang:en has:images';
+    const encoded = toBase64Url(original);
+    // Decode back
+    let b64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4 !== 0) b64 += '=';
+    const decoded = decodeURIComponent(escape(atob(b64)));
+    expect(decoded).toBe(original);
+  });
+});
+
+// ── Feed generator constants ────────────────────────────────────────────────
+
+describe('GENERATOR_DID', () => {
+  it('is a valid did:web', () => {
+    expect(GENERATOR_DID).toBe('did:web:crispdeck.vercel.app');
+  });
+});
+
+// ── publishFeedGenerator ────────────────────────────────────────────────────
+
+describe('publishFeedGenerator', () => {
+  it('rejects empty query', async () => {
+    const feed = createFeedDefinition('Empty');
+    const mockAgent = { api: { com: { atproto: { repo: { putRecord: vi.fn() } } } } };
+    await expect(publishFeedGenerator(mockAgent, 'did:plc:test', feed))
+      .rejects.toThrow('no filter rules');
+  });
+
+  it('calls putRecord with correct params', async () => {
+    const feed = createFeedDefinition('Test Feed');
+    feed.rules = [createRule('keyword', 'svelte')];
+    feed.description = 'Svelte posts';
+
+    const putRecord = vi.fn().mockResolvedValue({});
+    const mockAgent = { api: { com: { atproto: { repo: { putRecord } } } } };
+
+    const result = await publishFeedGenerator(mockAgent, 'did:plc:abc123', feed);
+
+    expect(putRecord).toHaveBeenCalledOnce();
+    const call = putRecord.mock.calls[0][0];
+    expect(call.repo).toBe('did:plc:abc123');
+    expect(call.collection).toBe('app.bsky.feed.generator');
+    expect(call.record.did).toBe(GENERATOR_DID);
+    expect(call.record.displayName).toBe('Test Feed');
+    expect(result.atUri).toContain('did:plc:abc123');
+    expect(result.atUri).toContain('app.bsky.feed.generator');
+    expect(result.rkey).toBeTruthy();
+  });
+
+  it('rejects query that produces rkey > 512 chars', async () => {
+    const feed = createFeedDefinition('Long');
+    // Create a very long query by repeating keywords
+    feed.rules = [createRule('keyword', 'a'.repeat(500))];
+
+    const mockAgent = { api: { com: { atproto: { repo: { putRecord: vi.fn() } } } } };
+    await expect(publishFeedGenerator(mockAgent, 'did:plc:test', feed))
+      .rejects.toThrow('too complex');
+  });
+});
+
+// ── unpublishFeedGenerator ──────────────────────────────────────────────────
+
+describe('unpublishFeedGenerator', () => {
+  it('calls deleteRecord with correct params', async () => {
+    const deleteRecord = vi.fn().mockResolvedValue({});
+    const mockAgent = { api: { com: { atproto: { repo: { deleteRecord } } } } };
+
+    await unpublishFeedGenerator(mockAgent, 'did:plc:abc123', 'some-rkey');
+
+    expect(deleteRecord).toHaveBeenCalledWith({
+      repo: 'did:plc:abc123',
+      collection: 'app.bsky.feed.generator',
+      rkey: 'some-rkey',
+    });
   });
 });

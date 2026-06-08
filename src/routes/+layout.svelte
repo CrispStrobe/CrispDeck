@@ -2,12 +2,14 @@
   import '../app.css';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import { Home, Rss, Columns3, PenSquare, FileText, Bell, MessageSquare, Bookmark, Users, Search, List, Package, Shield, Tag, Server, TrendingUp, Archive, BarChart3, Settings, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon, Clock, Smartphone, Wand2, Image, Calendar, BookOpen } from '@lucide/svelte';
+  import { Home, Rss, Columns3, PenSquare, Bell, MessageSquare, Bookmark, Users, Search, List, Shield, TrendingUp, Archive, BarChart3, Settings, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon, Smartphone } from '@lucide/svelte';
   import KeyboardShortcuts from '$lib/components/KeyboardShortcuts.svelte';
   import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { installLogInterceptors } from '$lib/debug-log';
   installLogInterceptors();
+
+  declare const __VERSION__: string;
 
   let { children } = $props();
 
@@ -41,8 +43,10 @@
 
     // Offline detection
     offline = !navigator.onLine;
-    window.addEventListener('online', () => offline = false);
-    window.addEventListener('offline', () => offline = true);
+    const handleOnline = () => offline = false;
+    const handleOffline = () => offline = true;
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
 
     bookmarkCount = await getBookmarkCount();
     // Check unread messages on load
@@ -52,7 +56,11 @@
       bookmarkCount = await getBookmarkCount();
       checkUnreadMessages();
     }, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   });
 
   async function checkUnreadMessages() {
@@ -231,7 +239,7 @@
       {/each}
     </ul>
     {#if !collapsed}
-      <div class="px-3 py-2 border-t border-[var(--color-border)] text-[10px] text-[var(--color-text-muted)]">v0.3.0</div>
+      <div class="px-3 py-2 border-t border-[var(--color-border)] text-[10px] text-[var(--color-text-muted)]">v{__VERSION__}</div>
     {/if}
   </nav>
 

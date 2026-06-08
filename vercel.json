@@ -10,10 +10,19 @@
         { "key": "Content-Type", "value": "application/json" },
         { "key": "Access-Control-Allow-Origin", "value": "*" }
       ]
+    },
+    {
+      "source": "/.well-known/did.json",
+      "headers": [
+        { "key": "Content-Type", "value": "application/json" },
+        { "key": "Access-Control-Allow-Origin", "value": "*" }
+      ]
     }
   ],
   "rewrites": [
     { "source": "/client-metadata.json", "destination": "/client-metadata.json" },
+    { "source": "/.well-known/did.json", "destination": "/.well-known/did.json" },
+    { "source": "/xrpc/:path*", "destination": "/api/xrpc/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

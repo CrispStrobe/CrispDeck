@@ -1,11 +1,13 @@
 /**
  * CrispDeck Service Worker — minimal offline shell caching.
- * Caches the app shell (HTML, CSS, JS) for installability.
+ * Caches the app shell (HTML) for installability.
  * Network-first strategy for API calls.
+ * Cache version is rotated on each deploy via the VERSION constant below.
  */
 
-const CACHE_NAME = 'crispdeck-v1';
-const SHELL_URLS = ['/', '/feed', '/deck', '/compose'];
+const VERSION = '0.9.6';
+const CACHE_NAME = `crispdeck-v${VERSION}`;
+const SHELL_URLS = ['/'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -28,7 +30,7 @@ self.addEventListener('fetch', (event) => {
 
   // Skip non-GET and API/external requests
   if (request.method !== 'GET') return;
-  if (request.url.includes('/api/') || request.url.includes('bsky.') || request.url.includes('mastodon.')) return;
+  if (request.url.includes('/api/') || request.url.includes('/xrpc/') || request.url.includes('bsky.') || request.url.includes('mastodon.')) return;
 
   event.respondWith(
     fetch(request)

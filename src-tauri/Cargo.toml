@@ -1,6 +1,6 @@
 [package]
 name = "crispdeck"
-version = "0.3.0"
+version = "0.9.6"
 description = "Cross-platform Mastodon + Bluesky client"
 authors = ["Christian Strobele"]
 license = "AGPL-3.0-only"
@@ -20,8 +20,8 @@ tauri-plugin-http = "2"
 tauri-plugin-store = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
-tauri-plugin-shell = "2"
-tauri-plugin-process = "2"
+tauri-plugin-shell = { version = "2", optional = true }
+tauri-plugin-process = { version = "2", optional = true }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -43,12 +43,13 @@ base64 = "0.22"
 # Identity detection (jaro-winkler string similarity)
 strsim = "0.11"
 
-# System info
-hostname = "0.4"
-
 # Logging
 log = "0.4"
 env_logger = "0.11"
+
+# System info (desktop only — hostname crate doesn't compile on mobile)
+[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
+hostname = "0.4"
 
 # ── CrispASR (optional — translation, TTS, STT) ──────────────────────────
 # Path dep to sibling CrispASR checkout. Same pattern as crisp-docx and
@@ -66,7 +67,8 @@ version  = "0.5"
 optional = true
 
 [features]
-default = []
+default = ["desktop"]
+desktop = ["dep:tauri-plugin-shell", "dep:tauri-plugin-process"]
 crispasr        = ["dep:crispasr"]
 crispasr-metal  = ["crispasr", "crispasr/metal"]
 crispasr-vulkan = ["crispasr", "crispasr/vulkan"]

@@ -13,7 +13,7 @@ A unified Mastodon + Bluesky + Threads social media client with:
 
 ## Current State (2026-06-08)
 
-v0.9.5 — 937 tests (74 test files), 29 pages, live at https://crispdeck.vercel.app
+v0.9.6 — 945 tests (74 test files), 29 pages, live at https://crispdeck.vercel.app
 
 **License**: AGPL-3.0-only
 
@@ -53,16 +53,21 @@ Analytics with full pagination, local post archive (IndexedDB), deck columns (11
 
 ## Remaining Work
 
-### 30. Visual Bluesky feed builder
-- **Status**: Done (client-side preview + deck integration; network publishing deferred)
+### 30. Visual Bluesky feed builder + network publishing
+- **Status**: Done (client-side preview + deck integration + network publishing)
 - **Effort**: Medium
 - **Description**: GUI for creating custom Bluesky algorithmic feeds without coding
 - Filter by: keywords, exact phrases, language, has-media, author list, exclude terms, domain, mentions, date range
 - Live preview using `app.bsky.feed.searchPosts` (Lucene-like query syntax)
 - Save/load/duplicate/delete feed definitions (localStorage)
 - Add custom feeds as deck columns
-- **Key files**: `src/lib/feed-builder.ts`, `src/routes/feed-builder/+page.svelte`
-- **Note**: Publishing to the Bluesky network via `app.bsky.feed.generator` requires a running feed generator server (implements `getFeedSkeleton`). The client-side preview and deck column integration work fully without a server. Network publishing is a future enhancement.
+- **Publish to Bluesky network**: creates `app.bsky.feed.generator` record on user's PDS
+- **Feed generator server**: Vercel serverless functions at `/xrpc/` endpoints
+  - `getFeedSkeleton` decodes the search query from the base64url-encoded rkey
+  - `describeFeedGenerator` returns service metadata
+  - `did:web:crispdeck.vercel.app` DID document at `/.well-known/did.json`
+  - Stateless: no database needed, query encoded in the record key
+- **Key files**: `src/lib/feed-builder.ts`, `src/routes/feed-builder/+page.svelte`, `api/xrpc/`, `static/.well-known/did.json`
 
 ### 43. Threads support (hybrid: official API + ActivityPub federation)
 - **Status**: Done

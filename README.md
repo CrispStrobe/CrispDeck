@@ -48,6 +48,7 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - Block/mute from any profile
 
 ### Discovery & Social
+- **Bluesky Feed Generator**: build custom feeds visually, publish to the Bluesky network (Vercel serverless, `did:web`)
 - **Notifications**: unified 3-network feed with grouping/batching
 - **Direct messages**: Bluesky OAuth chat + Mastodon full conversation threading
 - **Lists & Feeds**: Mastodon lists + Bluesky custom feeds + Bluesky feed builder (GUI)
@@ -86,7 +87,7 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - Safe area insets, touch targets, responsive design
 - **Emoji picker** + **GIF picker** (Tenor) in compose
 - **About page** with legal info + searchable open-source license list
-- 935 tests across 74 test files
+- 945 tests across 74 test files
 
 ## Architecture
 
@@ -243,13 +244,22 @@ src-tauri/
   tests/               crispasr_integration.rs (registry + live translation tests)
   migrations/          001_initial.sql (7-table schema)
 
+api/
+  threads/             Threads OAuth proxy (auth-url.ts, token.ts)
+  xrpc/                Bluesky feed generator (getFeedSkeleton, describeFeedGenerator)
+
 static/
+  .well-known/did.json Feed generator DID document (did:web:crispdeck.vercel.app)
   client-metadata.json Bluesky OAuth client metadata
+  favicon.png          App icon (192x192)
+  icon-512.png         PWA icon (512x512)
+  manifest.json        PWA manifest
+  sw.js                Service worker (versioned cache)
 ```
 
 ## CI/CD
 
-- **CI** (`ci.yml`): 937 frontend tests + frontend build + Rust check on Linux/macOS/Windows — every push and PR
+- **CI** (`ci.yml`): 945 frontend tests + frontend build + Rust check on Linux/macOS/Windows — every push and PR
 - **Mobile** (`mobile.yml`): iOS + Android builds via Tauri 2 — triggers on `v*` tags
 - **Release** (`release.yml`): Cross-platform Tauri builds — triggers on `v*` tags, creates GitHub Releases with `.deb`, `.dmg`, `.msi`
 
@@ -257,13 +267,25 @@ static/
 
 ```bash
 # Bump version in package.json + src-tauri/tauri.conf.json + src-tauri/Cargo.toml
-git tag v0.2.1
-git push origin v0.2.1
+git tag v0.9.6
+git push origin v0.9.6
 ```
+
+### Mobile builds (Tauri 2)
+
+Mobile support uses Tauri 2's iOS/Android targets. Desktop-only plugins (shell, process) are feature-gated and excluded from mobile builds:
+
+```bash
+# Build for mobile (requires tauri android init / tauri ios init first)
+cargo tauri android build --no-default-features
+cargo tauri ios build --no-default-features
+```
+
+OAuth on mobile uses the `crispdeck://` URL scheme (registered in AndroidManifest.xml and Info.plist) instead of the desktop localhost TCP listener.
 
 ## Stats
 
-- 937 frontend tests across 74 test files + 15 Rust tests
+- 945 frontend tests across 74 test files + 15 Rust tests
 - 29 pages, 14 deck column types
 - 3 networks: Bluesky (OAuth + app password), Mastodon (OAuth), Threads (OAuth with server proxy)
 - 8 UI languages (EN, DE, ES 100%; FR, JA, PT, ZH ~30%; AR ~20%) with RTL support

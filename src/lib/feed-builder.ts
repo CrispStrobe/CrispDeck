@@ -45,7 +45,18 @@ export interface FeedDefinition {
   rules: FeedRule[];
   created_at: string;
   updated_at: string;
+  /** AT URI if published to Bluesky network */
+  atUri?: string;
+  /** Record key used for publishing */
+  rkey?: string;
+  /** DID of the user who published it */
+  publishedBy?: string;
 }
+
+// ── Feed generator constants ────────────────────────────────────────────────
+
+export const GENERATOR_DID = 'did:web:crispdeck.vercel.app';
+const FEED_COLLECTION = 'app.bsky.feed.generator';
 
 // ── Rule helpers ─────────────────────────────────────────────────────────────
 
@@ -265,4 +276,66 @@ export function deleteFeedDefinition(id: string): void {
 
 export function getFeedDefinition(id: string): FeedDefinition | null {
   return listSavedFeeds().find(f => f.id === id) ?? null;
+}
+
+// ── Network publishing ──────────────────────────────────────────────────────
+
+/** Encode a string to base64url (URL-safe, no padding) */
+export function toBase64Url(s: string): string {
+  const b64 = btoa(unescape(encodeURIComponent(s)));
+  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/**
+ * Publish a feed definition to the Bluesky network.
+ * Creates a `app.bsky.feed.generator` record on the user's PDS.
+ * The compiled query is encoded in the rkey so the feed generator
+ * server can decode and execute it without external storage.
+ *
+ * @returns The AT URI of the published feed
+ */
+export async function publishFeedGenerator(
+  agent: any,
+  userDid: string,
+  feed: FeedDefinition,
+): Promise<{ atUri: string; rkey: string }> {
+  const query = compileQuery(feed.rules);
+  if (!query.trim()) throw new Error('Cannot publish a feed with no filter rules');
+
+  const rkey = toBase64Url(query);
+  if (rkey.length > 512) throw new Error('Feed query is too complex to publish (rkey > 512 chars). Simplify your rules.');
+
+  const record = {
+    $type: FEED_COLLECTION,
+    did: GENERATOR_DID,
+    displayName: feed.name || 'CrispDeck Feed',
+    description: feed.description || `Custom feed: ${query}`,
+    createdAt: new Date().toISOString(),
+  };
+
+  await agent.api.com.atproto.repo.putRecord({
+    repo: userDid,
+    collection: FEED_COLLECTION,
+    rkey,
+    record,
+  });
+
+  const atUri = `at://${userDid}/${FEED_COLLECTION}/${rkey}`;
+  return { atUri, rkey };
+}
+
+/**
+ * Unpublish a feed from the Bluesky network.
+ * Deletes the `app.bsky.feed.generator` record from the user's PDS.
+ */
+export async function unpublishFeedGenerator(
+  agent: any,
+  userDid: string,
+  rkey: string,
+): Promise<void> {
+  await agent.api.com.atproto.repo.deleteRecord({
+    repo: userDid,
+    collection: FEED_COLLECTION,
+    rkey,
+  });
 }

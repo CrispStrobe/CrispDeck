@@ -7,6 +7,7 @@
     createFeedDefinition, createRule, compileQuery, describeFeed,
     getRuleLabel, getRulePlaceholder, RULE_TYPES,
     listSavedFeeds, saveFeedDefinition, deleteFeedDefinition,
+    publishFeedGenerator, unpublishFeedGenerator, toBase64Url,
     type FeedDefinition, type FeedRule, type RuleType,
   } from '$lib/feed-builder';
   import { i18n } from '$lib/i18n.svelte';
@@ -16,6 +17,7 @@
   import {
     Wand2, Plus, Trash2, Play, Save, Loader2, X, Search,
     ChevronDown, Eye, EyeOff, Columns3, Copy, FileText, GripVertical,
+    Upload, CloudOff, ExternalLink,
   } from '@lucide/svelte';
 
   let accounts: Account[] = $state([]);
@@ -174,6 +176,93 @@
 
   function copyQuery() {
     navigator.clipboard.writeText(compiledQuery);
+  }
+
+  // Publishing state
+  let publishLoading = $state(false);
+  let publishError = $state('');
+  let publishSuccess = $state('');
+
+  async function handlePublish() {
+    if (!compiledQuery.trim()) {
+      publishError = 'Add at least one filter rule before publishing.';
+      return;
+    }
+
+    // Check rkey length
+    const rkey = toBase64Url(compiledQuery);
+    if (rkey.length > 512) {
+      publishError = 'Feed query is too complex to publish (exceeds 512-char limit). Simplify your rules.';
+      return;
+    }
+
+    publishLoading = true;
+    publishError = '';
+    publishSuccess = '';
+
+    try {
+      const bskyEntry = [...clientEntries.entries()]
+        .find(([id]) => accounts.find(a => a.id === id)?.platform === 'bluesky')?.[1];
+
+      if (!bskyEntry) {
+        publishError = 'No Bluesky account connected.';
+        return;
+      }
+
+      const agent = bskyEntry.oauthAgent ?? (bskyEntry.client as BlueskyClient).getAgent();
+      const acct = accounts.find(a => a.platform === 'bluesky');
+      if (!acct) { publishError = 'No Bluesky account found.'; return; }
+
+      // Get user DID from profile
+      const profile = await agent.api.app.bsky.actor.getProfile({ actor: acct.handle });
+      const userDid = profile.data.did;
+
+      const result = await publishFeedGenerator(agent, userDid, feed);
+
+      // Save publish info to the feed definition
+      feed.atUri = result.atUri;
+      feed.rkey = result.rkey;
+      feed.publishedBy = userDid;
+      handleSave();
+
+      publishSuccess = `Published! Feed URI: ${result.atUri}`;
+    } catch (e) {
+      publishError = String(e);
+    } finally {
+      publishLoading = false;
+    }
+  }
+
+  async function handleUnpublish() {
+    if (!feed.rkey || !feed.publishedBy) return;
+
+    publishLoading = true;
+    publishError = '';
+    publishSuccess = '';
+
+    try {
+      const bskyEntry = [...clientEntries.entries()]
+        .find(([id]) => accounts.find(a => a.id === id)?.platform === 'bluesky')?.[1];
+
+      if (!bskyEntry) {
+        publishError = 'No Bluesky account connected.';
+        return;
+      }
+
+      const agent = bskyEntry.oauthAgent ?? (bskyEntry.client as BlueskyClient).getAgent();
+      await unpublishFeedGenerator(agent, feed.publishedBy, feed.rkey);
+
+      feed.atUri = undefined;
+      feed.rkey = undefined;
+      feed.publishedBy = undefined;
+      handleSave();
+
+      publishSuccess = 'Feed unpublished from the Bluesky network.';
+    } catch (e) {
+      publishError = String(e);
+    } finally {
+      publishLoading = false;
+    }
   }
 
   // Media type options for has-media rule
@@ -433,7 +522,50 @@
             <Columns3 size={14} />
             {i18n.t.feedBuilder.addToDeck}
           </button>
+
+          {#if feed.atUri}
+            <button
+              onclick={handleUnpublish}
+              disabled={publishLoading}
+              class="flex items-center gap-1.5 px-4 py-2 text-sm bg-red-900/30 border border-red-800 rounded-md hover:bg-red-900/50 transition-colors disabled:opacity-50"
+            >
+              {#if publishLoading}<Loader2 size={14} class="animate-spin" />{:else}<CloudOff size={14} />{/if}
+              Unpublish
+            </button>
+          {:else}
+            <button
+              onclick={handlePublish}
+              disabled={publishLoading || !compiledQuery.trim()}
+              class="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--color-bluesky)] rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              {#if publishLoading}<Loader2 size={14} class="animate-spin" />{:else}<Upload size={14} />{/if}
+              Publish to Bluesky
+            </button>
+          {/if}
         </div>
+
+        <!-- Publish status messages -->
+        {#if publishError}
+          <div class="p-3 bg-red-900/20 border border-red-800 rounded-lg text-sm text-red-300">
+            {publishError}
+          </div>
+        {/if}
+        {#if publishSuccess}
+          <div class="p-3 bg-green-900/20 border border-green-800 rounded-lg text-sm text-green-300">
+            {publishSuccess}
+          </div>
+        {/if}
+
+        <!-- Published feed info -->
+        {#if feed.atUri}
+          <div class="p-3 bg-[var(--color-bluesky)]/10 border border-[var(--color-bluesky)]/30 rounded-lg">
+            <div class="flex items-center gap-2 mb-1">
+              <ExternalLink size={12} class="text-[var(--color-bluesky)]" />
+              <span class="text-xs font-medium text-[var(--color-bluesky)]">Published to Bluesky</span>
+            </div>
+            <code class="text-[10px] text-[var(--color-text-muted)] break-all">{feed.atUri}</code>
+          </div>
+        {/if}
       </div>
 
       <!-- Right: Preview -->
