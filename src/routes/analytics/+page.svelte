@@ -9,6 +9,8 @@
   import { normalizePost, sortPosts } from '$lib/api/unified';
   import { exportAsJson, exportAsCsv, exportAsMarkdown } from '$lib/utils/export';
   import { analyzePerformance, type PerformanceInsight } from '$lib/performance-insights';
+  import { recordSnapshots } from '$lib/engagement-history';
+  import { checkMilestones, getRecentMilestones, type ReachedMilestone } from '$lib/milestones';
   import Post from '$lib/components/Post.svelte';
   import type { UnifiedPost, Account } from '$lib/types';
 
@@ -23,6 +25,7 @@
   let dateRange: 'all' | '7d' | '30d' | '90d' = $state('all');
   let expandedStat: string | null = $state(null);
   let clientEntries: Map<number, ClientEntry> = new Map();
+  let recentMilestones: ReachedMilestone[] = $state([]);
 
   onMount(async () => {
     try {
@@ -94,6 +97,16 @@
     loadingProgress = `Loaded ${total} posts total.`;
     loadingPercent = 100;
     loading = false;
+
+    // Capture engagement snapshots for all loaded posts (background)
+    const originals = posts.filter(p => !p.isRepost);
+    recordSnapshots(originals).catch(() => {});
+
+    // Check milestones for all posts
+    for (const post of originals) {
+      checkMilestones(post);
+    }
+    recentMilestones = getRecentMilestones(10);
   }
 
   function toggleStat(name: string) {
@@ -553,6 +566,22 @@
               <span class="text-[8px] text-[var(--color-text-muted)] flex-1 text-center">{h % 6 === 0 ? h : ''}</span>
             {/each}
           </div>
+        </div>
+      </div>
+    {/if}
+
+    <!-- Engagement Milestones -->
+    {#if recentMilestones.length > 0}
+      <div class="mt-6">
+        <h3 class="text-sm font-semibold mb-3">🏆 Recent Milestones</h3>
+        <div class="flex flex-wrap gap-2">
+          {#each recentMilestones as ms}
+            <div class="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-xs">
+              <span class="font-bold text-[var(--color-primary)]">{ms.threshold}+</span>
+              <span class="text-[var(--color-text-muted)]">{ms.metric}</span>
+              <span class="text-[var(--color-text-muted)] text-[10px] ml-1">({ms.actualValue} actual)</span>
+            </div>
+          {/each}
         </div>
       </div>
     {/if}

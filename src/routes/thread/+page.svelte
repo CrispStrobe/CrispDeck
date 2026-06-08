@@ -1,11 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { MessageCircle, Loader2, ArrowLeft, BookOpen } from '@lucide/svelte';
+  import { MessageCircle, Loader2, ArrowLeft, BookOpen, Share2 } from '@lucide/svelte';
+  import { goto } from '$app/navigation';
   import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import { normalizePost } from '$lib/api/unified';
+  import { isThread, extractThreadText, planThreadSync, type ThreadSyncPlan } from '$lib/thread-sync';
   import Post from '$lib/components/Post.svelte';
   import type { UnifiedPost, Account, Platform } from '$lib/types';
 
@@ -135,6 +137,19 @@
   });
 
   const articleText = $derived(articlePosts.map(p => p.text).join('\n\n'));
+
+  // Thread sync — detect if this is a thread by the same author (can be crossposted)
+  const canSync = $derived(
+    articlePosts.length >= 2 && isThread(articlePosts) &&
+    accounts.some(a => a.handle === mainPost?.author.handle)
+  );
+
+  function syncToCompose() {
+    if (!canSync) return;
+    const text = extractThreadText(articlePosts);
+    // Navigate to compose with the thread text pre-filled
+    goto(`/compose?text=${encodeURIComponent(text)}`);
+  }
 </script>
 
 <svelte:head><title>CrispDeck — Thread</title></svelte:head>
@@ -144,15 +159,26 @@
     <a href="/feed" class="flex items-center gap-1 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
       <ArrowLeft size={14} /> {i18n.t.profile.backToFeed}
     </a>
-    {#if mainPost && articlePosts.length > 1}
-      <button
-        onclick={() => articleMode = !articleMode}
-        class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors {articleMode ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)]'}"
-      >
-        <BookOpen size={14} />
-        {i18n.t.thread.readAsArticle}
-      </button>
-    {/if}
+    <div class="flex items-center gap-2">
+      {#if canSync}
+        <button
+          onclick={syncToCompose}
+          class="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] rounded-md transition-colors"
+        >
+          <Share2 size={14} />
+          Crosspost thread
+        </button>
+      {/if}
+      {#if mainPost && articlePosts.length > 1}
+        <button
+          onclick={() => articleMode = !articleMode}
+          class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors {articleMode ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)]'}"
+        >
+          <BookOpen size={14} />
+          {i18n.t.thread.readAsArticle}
+        </button>
+      {/if}
+    </div>
   </div>
 
   {#if error}
