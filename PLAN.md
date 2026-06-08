@@ -428,8 +428,8 @@ Analytics with full pagination, local post archive (IndexedDB), deck columns (11
 Goal: reduce sidebar from 25 items to ~14 by merging related views into tabbed pages, and fix several UX issues with in-app linking and navigation.
 
 ### 87. Sidebar navigation consolidation
-- **Status**: Not started
-- **Effort**: Large (multi-session)
+- **Status**: Done
+- **Effort**: Large
 - **Description**: The sidebar has 25 items — too many for usable navigation. Consolidate related views:
 
 #### Merges:
@@ -470,7 +470,7 @@ Goal: reduce sidebar from 25 items to ~14 by merging related views into tabbed p
 - Preserve deep-link support: `/bookmarks?tab=reading-lists` should open the right tab
 
 ### 88. In-app link routing for @handles and #hashtags in posts
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Medium
 - **Description**: Post HTML content contains `<a>` tags pointing to external Mastodon/Bluesky URLs for @mentions and #hashtags. These should route in-app instead.
 - **@handles**: Click `@user@instance.social` → open CrispDeck profile page `/profile?handle=user@instance.social`
@@ -480,7 +480,7 @@ Goal: reduce sidebar from 25 items to ~14 by merging related views into tabbed p
 - **Key files**: `src/lib/components/Post.svelte` (post text rendering)
 
 ### 89. Platform filter shows only logged-in platforms
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Small
 - **Description**: The All/Bluesky/Mastodon/Threads filter appears even when only one platform has a logged-in account
 - Only show filter buttons for platforms that have at least one connected account
@@ -488,7 +488,7 @@ Goal: reduce sidebar from 25 items to ~14 by merging related views into tabbed p
 - **Key files**: `src/routes/feed/+page.svelte`, possibly deck and search pages
 
 ### 90. "Back to feed" scroll position restore
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Small
 - **Description**: Navigating from a post/thread back to feed should return to the scroll position where the user was
 - `src/lib/read-position.ts` already exists — wire it into feed/deck navigation
@@ -496,7 +496,7 @@ Goal: reduce sidebar from 25 items to ~14 by merging related views into tabbed p
 - **Key files**: `src/routes/feed/+page.svelte`, `src/lib/read-position.ts`
 
 ### 91. Share-as-image error visibility
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Small
 - **Description**: `handleShareAsImage()` in Post.svelte silently catches errors — user sees nothing on failure
 - Show a toast/inline error message when html2canvas fails (commonly CORS issues with cross-origin images)
@@ -504,11 +504,69 @@ Goal: reduce sidebar from 25 items to ~14 by merging related views into tabbed p
 - **Key files**: `src/lib/components/Post.svelte`
 
 ### 92. "For You" auto-load on visit
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Small
 - **Description**: "For You" feed requires manual refresh before showing content — should auto-load on page visit
 - Ensure the For You ranking algorithm runs on initial mount, not just on refresh
 - **Key files**: `src/routes/feed/+page.svelte`, `src/lib/for-you.ts`
+
+---
+
+## Phase 12: Test Coverage
+
+Goal: close gaps in unit test coverage for untested TypeScript modules. Current: 805 tests, 63 files, 31/38 lib/ files tested (81.6%). Target: 95%+ lib/ file coverage.
+
+### 94. Tests for engagement-history.ts
+- **Status**: Not started
+- **Effort**: Small
+- **Description**: Engagement snapshot storage, growth curves, periodic capture
+- **Key file**: `src/lib/engagement-history.ts`
+
+### 95. Tests for list-management.ts
+- **Status**: Not started
+- **Effort**: Small
+- **Description**: Create/edit/delete Mastodon lists and Bluesky lists
+- **Key file**: `src/lib/list-management.ts`
+
+### 96. Tests for starter-pack-creator.ts
+- **Status**: Not started
+- **Effort**: Small
+- **Description**: Build and publish Bluesky starter packs from identity DB
+- **Key file**: `src/lib/starter-pack-creator.ts`
+
+### 97. Tests for browser-db.ts
+- **Status**: Not started
+- **Effort**: Medium
+- **Description**: Core IndexedDB implementation — accounts, identities, archive, drafts, follows
+- Needs IndexedDB mock (fake-indexeddb or manual mock)
+- **Key file**: `src/lib/browser-db.ts`
+
+### 98. Tests for bluesky-oauth.ts
+- **Status**: Not started
+- **Effort**: Small
+- **Description**: DPoP/PKCE helpers, client metadata URL resolution, session management helpers
+- Focus on pure functions, not actual OAuth flow
+- **Key file**: `src/lib/api/bluesky-oauth.ts`
+
+### 99. Tests for compose/mentions.ts
+- **Status**: Not started
+- **Effort**: Small
+- **Description**: @mention autocomplete, platform-specific handle resolution
+- **Key file**: `src/lib/compose/mentions.ts`
+
+### 100. Tests for db.ts (platform dispatcher)
+- **Status**: Not started
+- **Effort**: Small
+- **Description**: Verifies isTauri() dispatch logic, function signatures
+- **Key file**: `src/lib/db.ts`
+
+### 101. Tests for store.ts
+- **Status**: Not started
+- **Effort**: Small
+- **Description**: Tauri plugin-store settings wrapper
+- **Key file**: `src/lib/store.ts`
+
+---
 
 ### 93. MyMemory commercial use notice
 - **Status**: Not started
