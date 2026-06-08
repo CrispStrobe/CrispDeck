@@ -86,7 +86,7 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - Safe area insets, touch targets, responsive design
 - **Emoji picker** + **GIF picker** (Tenor) in compose
 - **About page** with legal info + searchable open-source license list
-- 911 tests across 72 test files
+- 935 tests across 74 test files
 
 ## Architecture
 
@@ -189,7 +189,7 @@ npx vercel deploy --prod
 ### Run tests
 
 ```bash
-npm test              # 911 frontend tests (unit + integration)
+npm test              # 935 frontend tests (unit + integration)
 npm run test:watch    # watch mode
 
 # Rust tests (requires CrispASR sibling checkout for --features crispasr)
@@ -249,7 +249,7 @@ static/
 
 ## CI/CD
 
-- **CI** (`ci.yml`): 911 frontend tests + frontend build + Rust check on Linux/macOS/Windows — every push and PR
+- **CI** (`ci.yml`): 935 frontend tests + frontend build + Rust check on Linux/macOS/Windows — every push and PR
 - **Mobile** (`mobile.yml`): iOS + Android builds via Tauri 2 — triggers on `v*` tags
 - **Release** (`release.yml`): Cross-platform Tauri builds — triggers on `v*` tags, creates GitHub Releases with `.deb`, `.dmg`, `.msi`
 
@@ -263,7 +263,7 @@ git push origin v0.2.1
 
 ## Stats
 
-- 911 frontend tests across 72 test files + 15 Rust tests
+- 935 frontend tests across 74 test files + 15 Rust tests
 - 29 pages, 14 deck column types
 - 3 networks: Bluesky (OAuth + app password), Mastodon (OAuth), Threads (OAuth with server proxy)
 - 8 UI languages (EN, DE, ES 100%; FR, JA, PT, ZH ~30%; AR ~20%) with RTL support

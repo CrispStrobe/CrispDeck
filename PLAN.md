@@ -13,7 +13,7 @@ A unified Mastodon + Bluesky + Threads social media client with:
 
 ## Current State (2026-06-08)
 
-v0.9.3 — 911 tests (72 test files), 29 pages, live at https://crispdeck.vercel.app
+v0.9.4 — 935 tests (74 test files), 29 pages, live at https://crispdeck.vercel.app
 
 **License**: AGPL-3.0-only
 
@@ -604,12 +604,47 @@ Goal: close gaps in unit test coverage for untested TypeScript modules. Current:
 ---
 
 ### 93. MyMemory commercial use notice
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Tiny (docs only)
 - **Description**: MyMemory free tier (5K chars/day) is for personal, non-commercial use only
 - If CrispDeck is distributed commercially, need MyMemory paid plan or drop the fallback
 - CrispASR (local) and BYOK (user's own key) have no such restriction
 - Document this limitation clearly in PLAN.md and Settings UI tooltip
+- Done: Settings tooltip now shows personal-use-only notice with link to terms
+
+---
+
+## Phase 14: Infrastructure & Performance
+
+### 107. Stale-while-revalidate view cache
+- **Status**: Done
+- **Effort**: Medium
+- **Description**: Shows cached data instantly on page load, refreshes from API in background
+- localStorage cache with per-view keys and timestamps, 5-min TTL
+- Wired into: feed, notifications, lists pages
+- `swr()` helper for easy adoption in additional views
+- 15 tests
+- **Key files**: `src/lib/view-cache.ts`
+
+### 108. Debug log viewer
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Captures console.error/warn + unhandled errors/rejections in a ring buffer (200 entries)
+- Interceptors installed at app startup in layout
+- Viewable in Settings as a scrollable monospace panel with level coloring
+- Clear button to reset log
+- 9 tests
+- **Key files**: `src/lib/debug-log.ts`, `src/routes/settings/+page.svelte`
+
+### 109. Additional translation providers
+- **Status**: Not started
+- **Effort**: Medium
+- **Description**: Add free/open translation alternatives alongside MyMemory
+- **Lingva Translate**: Google Translate proxy, free, no API key, no commercial restriction, many public instances
+- **LibreTranslate**: self-hosted or public instances, AGPL, free, fits BYOK pattern
+- **Google Cloud Translation**: 500K chars/month free tier, requires API key (BYOK)
+- **Argos Translate**: MIT-licensed, Python/CLI, potential CrispASR desktop integration
+- **Key files**: `src/lib/translate.ts`, `src/routes/settings/+page.svelte`
 
 ---
 
