@@ -14,6 +14,8 @@
   import { listTagGroups } from '$lib/tag-groups';
   import { listFeeds, fetchFeed, rssItemToPost } from '$lib/rss';
   import { applyMuteFilter } from '$lib/muted-words';
+  import { parseKeywords, buildKeywordMatcher, listKeywordSets } from '$lib/keyword-monitor';
+  import { streamManager, type StreamEvent } from '$lib/streaming';
 
   interface DeckColumnConfig {
     id: string;
@@ -36,6 +38,7 @@
   let columnLoading: Record<string, boolean> = $state({});
 
   let clientEntries: Map<number, ClientEntry> = new Map();
+  let streamCleanups: Map<string, () => void> = new Map();
 
   const defaultColumns: DeckColumnConfig[] = [
     { id: 'timeline', title: 'Timeline', type: 'timeline' },
@@ -57,6 +60,7 @@
     { type: 'feed', label: 'Bluesky Feed...' },
     { type: 'tag-group', label: 'Tag Group...' },
     { type: 'rss', label: 'RSS Feed...' },
+    { type: 'keyword-monitor', label: 'Monitor Keywords...' },
   ];
 
   // Saved layouts
@@ -99,7 +103,11 @@
     const interval = setInterval(() => {
       columns.forEach(col => loadColumn(col));
     }, 180000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      streamManager.disconnectAll();
+      streamCleanups.clear();
+    };
   });
 
   function saveColumns() {
@@ -288,6 +296,45 @@
           const resp = await agent.api.app.bsky.feed.getFeed({ feed: col.query, limit: 50 });
           posts.push(...resp.data.feed.map(p => normalizePost(p, 'bluesky')));
         } catch {}
+      } else if (col.type === 'keyword-monitor' && col.query) {
+        const entries = parseKeywords(col.query);
+        const matches = buildKeywordMatcher(entries);
+        // Search all connected networks for keyword matches
+        const searchTerms = entries.filter(e => !e.isRegex).map(e => e.value);
+        const searchQuery = searchTerms.length > 0 ? searchTerms.join(' OR ') : entries[0]?.value ?? '';
+        if (searchQuery) {
+          if (bskyClient) try {
+            const r = await bskyClient.searchPosts(searchQuery);
+            for (const p of r.posts) {
+              const text = (p.record as any).text ?? '';
+              if (matches(text)) {
+                posts.push({ uri: p.uri, text, author: { handle: p.author.handle, displayName: p.author.displayName, avatar: p.author.avatar }, createdAt: (p.record as any).createdAt ?? p.indexedAt, platform: 'bluesky', likeCount: p.likeCount, repostCount: p.repostCount, isRepost: false, raw: p });
+              }
+            }
+          } catch {}
+          if (mastoClient) try {
+            const token = mastoClient.getAccessToken();
+            const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+            // Mastodon search doesn't support OR — search each term
+            for (const term of (searchTerms.length > 0 ? searchTerms : [searchQuery])) {
+              const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v2/search?q=${encodeURIComponent(term)}&type=statuses&limit=20`, { headers });
+              if (resp.ok) {
+                const data = await resp.json();
+                for (const s of data.statuses ?? []) {
+                  const normalized = normalizePost(s, 'mastodon');
+                  if (matches(normalized.text)) posts.push(normalized);
+                }
+              }
+            }
+          } catch {}
+          if (threadsClient) try {
+            const results = await threadsClient.search(searchQuery, 'KEYWORD');
+            for (const p of results) {
+              const normalized = threadsClient.normalizePost(p);
+              if (matches(normalized.text)) posts.push(normalized);
+            }
+          } catch {}
+        }
       }
     } catch (e) {
       console.error(`Failed to load column ${col.id}:`, e);
@@ -295,6 +342,54 @@
 
     columnPosts[col.id] = applyMuteFilter(sortPosts(posts, 'newest'));
     columnLoading[col.id] = false;
+
+    // Enable streaming for keyword-monitor columns
+    if (col.type === 'keyword-monitor' && col.query) {
+      // Clean up previous stream for this column (e.g. on refresh)
+      const prevCleanup = streamCleanups.get(col.id);
+      if (prevCleanup) prevCleanup();
+
+      const entries = parseKeywords(col.query);
+      const matches = buildKeywordMatcher(entries);
+
+      const handleStreamEvent = (event: StreamEvent) => {
+        if (event.type !== 'new-post') return;
+        try {
+          const normalized = normalizePost(event.payload, event.platform);
+          if (!matches(normalized.text)) return;
+          // Prepend to existing posts, dedup by URI
+          const existing = columnPosts[col.id] ?? [];
+          if (existing.some(p => p.uri === normalized.uri)) return;
+          columnPosts[col.id] = [normalized, ...existing].slice(0, 200);
+        } catch {}
+      };
+
+      const cleanups: (() => void)[] = [];
+      // Subscribe to Mastodon public stream (catches federated + local)
+      if (mastoClient) {
+        const token = mastoClient.getAccessToken();
+        if (token) {
+          cleanups.push(streamManager.enableColumn({
+            columnId: `${col.id}-masto`,
+            platform: 'mastodon',
+            instanceUrl: mastoClient.getInstanceUrl(),
+            accessToken: token,
+            streamType: 'public',
+          }, handleStreamEvent));
+        }
+      }
+      // Subscribe to Bluesky Jetstream (firehose — keyword filter applied client-side)
+      if (bskyClient) {
+        cleanups.push(streamManager.enableColumn({
+          columnId: `${col.id}-bsky`,
+          platform: 'bluesky',
+        }, handleStreamEvent));
+      }
+
+      if (cleanups.length > 0) {
+        streamCleanups.set(col.id, () => cleanups.forEach(fn => fn()));
+      }
+    }
   }
 
   function addColumn(type: ColumnType) {
@@ -356,6 +451,25 @@
           return;
         }
       }
+    } else if (type === 'keyword-monitor') {
+      const saved = listKeywordSets();
+      let input: string | undefined;
+      if (saved.length > 0) {
+        input = prompt(`Saved: ${saved.map(s => s.name).join(', ')}\nEnter set name or keywords (comma-separated):`) ?? undefined;
+      } else {
+        input = prompt('Keywords to monitor (comma-separated, /regex/ supported):') ?? undefined;
+      }
+      if (!input) return;
+      // Check if it matches a saved set name
+      const set = saved.find(s => s.name.toLowerCase() === input!.toLowerCase());
+      if (set) {
+        query = set.keywords.map(k => k.isRegex ? `/${k.value}/` : k.value).join(',');
+        title = `Monitor: ${set.name}`;
+      } else {
+        query = input;
+        const keywords = parseKeywords(input);
+        title = `Monitor: ${keywords.slice(0, 3).map(k => k.value).join(', ')}${keywords.length > 3 ? '...' : ''}`;
+      }
     }
 
     columns = [...columns, { id, title, type, query }];
@@ -368,6 +482,9 @@
   function removeColumn(id: string) {
     columns = columns.filter(c => c.id !== id);
     delete columnPosts[id];
+    // Clean up any active streams for this column
+    const cleanup = streamCleanups.get(id);
+    if (cleanup) { cleanup(); streamCleanups.delete(id); }
     saveColumns();
   }
 

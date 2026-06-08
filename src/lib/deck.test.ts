@@ -3,7 +3,7 @@
  */
 import { describe, it, expect } from 'vitest';
 
-type ColumnType = 'timeline' | 'mentions' | 'notifications' | 'my-posts' | 'search' | 'list' | 'hashtag' | 'user' | 'feed' | 'local' | 'federated';
+type ColumnType = 'timeline' | 'mentions' | 'notifications' | 'my-posts' | 'search' | 'list' | 'hashtag' | 'user' | 'feed' | 'local' | 'federated' | 'tag-group' | 'rss' | 'keyword-monitor';
 
 interface DeckColumnConfig {
   id: string;
@@ -14,9 +14,9 @@ interface DeckColumnConfig {
 }
 
 describe('deck column configuration', () => {
-  it('supports all 11 column types', () => {
-    const types: ColumnType[] = ['timeline', 'mentions', 'notifications', 'my-posts', 'search', 'list', 'hashtag', 'user', 'feed', 'local', 'federated'];
-    expect(types.length).toBe(11);
+  it('supports all 14 column types', () => {
+    const types: ColumnType[] = ['timeline', 'mentions', 'notifications', 'my-posts', 'search', 'list', 'hashtag', 'user', 'feed', 'local', 'federated', 'tag-group', 'rss', 'keyword-monitor'];
+    expect(types.length).toBe(14);
     for (const t of types) {
       const col: DeckColumnConfig = { id: `${t}-1`, title: t, type: t };
       expect(col.type).toBe(t);
@@ -30,6 +30,19 @@ describe('deck column configuration', () => {
     expect(search.query).toBe('test');
     expect(hashtag.query).toBe('svelte');
     expect(user.query).toBe('alice.bsky.social');
+  });
+
+  it('keyword-monitor columns store comma-separated keywords in query', () => {
+    const col: DeckColumnConfig = { id: 'km1', title: 'Monitor: svelte, rust', type: 'keyword-monitor', query: 'svelte,rust' };
+    expect(col.type).toBe('keyword-monitor');
+    expect(col.query).toBe('svelte,rust');
+    const keywords = col.query!.split(',');
+    expect(keywords).toHaveLength(2);
+  });
+
+  it('keyword-monitor supports regex in query', () => {
+    const col: DeckColumnConfig = { id: 'km2', title: 'Monitor: regex', type: 'keyword-monitor', query: '/type.*script/,svelte' };
+    expect(col.query).toContain('/type.*script/');
   });
 
   it('columns have optional width with default 380', () => {

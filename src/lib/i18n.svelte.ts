@@ -455,6 +455,10 @@ export const translations = {
       streaming: 'Live streaming',
       streamingOn: 'Streaming on',
       streamingOff: 'Streaming off',
+      // Keyword monitoring
+      keywordMonitor: 'Monitor Keywords...',
+      keywordsPrompt: 'Keywords to monitor (comma-separated, /regex/ supported):',
+      keywordsSavedPrompt: 'Enter set name or keywords (comma-separated):',
     },
     archive: {
       title: 'Archive',
@@ -966,6 +970,9 @@ export const translations = {
       streaming: 'Live-Streaming',
       streamingOn: 'Streaming an',
       streamingOff: 'Streaming aus',
+      keywordMonitor: 'Stichwörter überwachen...',
+      keywordsPrompt: 'Stichwörter (kommagetrennt, /regex/ möglich):',
+      keywordsSavedPrompt: 'Set-Name oder Stichwörter (kommagetrennt):',
     },
     archive: {
       title: 'Archiv',
