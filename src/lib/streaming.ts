@@ -258,11 +258,13 @@ export interface ColumnStreamConfig {
   accessToken?: string;
   streamType?: string; // 'user', 'public', 'public:local', 'hashtag', 'list'
   streamParam?: string; // for hashtag: tag name, for list: list ID
+  firehose?: boolean; // Bluesky only: use unfiltered Jetstream (no DID filter) for keyword monitoring
 }
 
 class StreamManager {
   private mastodonStreams = new Map<string, MastodonStream>();
   private blueskyStream: BlueskyStream | null = null;
+  private blueskyFirehose: BlueskyStream | null = null; // Separate unfiltered stream for keyword monitoring
   private columnListeners = new Map<string, () => void>(); // cleanup fns
 
   /** Enable streaming for a deck column */
@@ -293,6 +295,22 @@ class StreamManager {
     }
 
     if (config.platform === 'bluesky') {
+      // Firehose mode: unfiltered Jetstream for keyword monitoring (no wantedDids)
+      // Separate from DID-filtered stream so they don't interfere
+      if (config.firehose) {
+        if (!this.blueskyFirehose) {
+          this.blueskyFirehose = new BlueskyStream();
+        }
+        const unsub = this.blueskyFirehose.subscribe(taggedListener);
+        this.blueskyFirehose.setEnabled(true);
+
+        this.columnListeners.set(config.columnId, unsub);
+        return () => {
+          unsub();
+          this.columnListeners.delete(config.columnId);
+        };
+      }
+
       if (!this.blueskyStream) {
         this.blueskyStream = new BlueskyStream();
       }
@@ -327,6 +345,8 @@ class StreamManager {
     this.mastodonStreams.clear();
     this.blueskyStream?.disconnect();
     this.blueskyStream = null;
+    this.blueskyFirehose?.disconnect();
+    this.blueskyFirehose = null;
     this.columnListeners.clear();
   }
 

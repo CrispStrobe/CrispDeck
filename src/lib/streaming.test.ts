@@ -367,4 +367,68 @@ describe('streamManager', () => {
     expect(typeof cleanup).toBe('function');
     cleanup(); // should not throw
   });
+
+  it('firehose creates separate BlueskyStream from regular', () => {
+    const firehoseListener = vi.fn();
+    const regularListener = vi.fn();
+
+    const cleanup1 = streamManager.enableColumn({
+      columnId: 'col-firehose',
+      platform: 'bluesky',
+      firehose: true,
+    }, firehoseListener);
+
+    const cleanup2 = streamManager.enableColumn({
+      columnId: 'col-regular',
+      platform: 'bluesky',
+    }, regularListener);
+
+    // Both should be streaming independently
+    expect(streamManager.isColumnStreaming('col-firehose')).toBe(true);
+    expect(streamManager.isColumnStreaming('col-regular')).toBe(true);
+
+    // Two separate WebSocket connections (one firehose, one regular)
+    expect(MockWebSocket.instances).toHaveLength(2);
+
+    cleanup1();
+    cleanup2();
+  });
+
+  it('firehose stream receives events independently', () => {
+    const firehoseListener = vi.fn();
+
+    const cleanup = streamManager.enableColumn({
+      columnId: 'col-keyword',
+      platform: 'bluesky',
+      firehose: true,
+    }, firehoseListener);
+
+    // Simulate message on the firehose WebSocket
+    const ws = MockWebSocket.instances[MockWebSocket.instances.length - 1];
+    ws.simulateMessage({
+      did: 'did:plc:random',
+      commit: {
+        collection: 'app.bsky.feed.post',
+        operation: 'create',
+        rkey: 'abc',
+        cid: 'cid1',
+        record: { text: 'hello svelte', createdAt: new Date().toISOString() },
+      },
+    });
+
+    expect(firehoseListener).toHaveBeenCalledOnce();
+    expect(firehoseListener.mock.calls[0][0].columnId).toBe('col-keyword');
+    expect(firehoseListener.mock.calls[0][0].payload.did).toBe('did:plc:random');
+
+    cleanup();
+  });
+
+  it('disconnectAll cleans up firehose stream too', () => {
+    streamManager.enableColumn({ columnId: 'fh1', platform: 'bluesky', firehose: true }, vi.fn());
+    streamManager.enableColumn({ columnId: 'reg1', platform: 'bluesky' }, vi.fn());
+
+    streamManager.disconnectAll();
+    expect(streamManager.isColumnStreaming('fh1')).toBe(false);
+    expect(streamManager.isColumnStreaming('reg1')).toBe(false);
+  });
 });

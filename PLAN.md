@@ -11,9 +11,9 @@ A unified Mastodon + Bluesky social media client with:
 
 **Tech stack**: SvelteKit 2, Svelte 5 (runes), Tailwind CSS 4, Vite 6, Tauri 2, TypeScript + Rust, Vitest
 
-## Current State (2026-06-07)
+## Current State (2026-06-08)
 
-v0.9.0 — 800 tests (63 test files), 29 pages, live at https://crispdeck.vercel.app
+v0.9.1 — 802 tests (63 test files), 29 pages, live at https://crispdeck.vercel.app
 
 **License**: AGPL-3.0-only
 
@@ -370,6 +370,39 @@ Analytics with full pagination, local post archive (IndexedDB), deck columns (11
 
 ---
 
+## Phase 10: Keyword Monitoring & Polish
+
+### 82. Keyword monitoring deck columns
+- **Status**: Done
+- **Effort**: Medium
+- **Description**: New `keyword-monitor` column type that searches all 3 networks for keyword matches and streams live updates
+- Comma-separated keywords with `/regex/` pattern support (OR logic)
+- Initial load searches Bluesky `searchPosts`, Mastodon `/api/v2/search`, and Threads search
+- Real-time streaming: Bluesky Jetstream firehose (unfiltered, client-side keyword filter) + Mastodon public WebSocket
+- Saved keyword sets in localStorage with CRUD (Settings UI + deck add-column picker)
+- Posts capped at 200 per column, deduped by URI
+- **Key files**: `src/lib/keyword-monitor.ts`, `src/routes/deck/+page.svelte`
+
+### 83. Live streaming indicator on deck columns
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Pulsing green "LIVE" badge in column header when streaming is active
+- Driven by `streamCleanups` map tracking active stream subscriptions per column
+- Applies to any streaming column, not just keyword monitors
+- **Key files**: `src/lib/components/deck/DeckColumn.svelte`
+
+### 84. Keyword monitor management in Settings
+- **Status**: Done
+- **Effort**: Small
+- **Description**: CRUD UI for saved keyword sets in Settings page
+- Create named sets with comma-separated keywords + regex patterns
+- List existing sets with delete buttons
+- Keyword sets included in settings export/import automatically (wildcard `crispdeck-*` pattern)
+- i18n: EN + DE
+- **Key files**: `src/routes/settings/+page.svelte`, `src/lib/keyword-monitor.ts`
+
+---
+
 ## Known Issues / Future Polish
 
 ### i18n coverage
@@ -421,4 +454,4 @@ CrispDeck is the only client combining multi-column deck view + multi-network (B
 | Free to post | Yes | No ($5/mo) | 2 accts free | Yes | No ($2/mo) |
 | Open source | Yes (AGPL) | No | No | No | No |
 
-Key competitive advantages: deck+multi-network+Threads (unique combo), cross-platform analytics (no competitor), catch-up mode, AI compose (3 providers incl. local), "For You" local algorithm, thread un-rolling, real-time Jetstream counters, Threads hybrid reading via ActivityPub, saved deck workspaces, universal cross-network search, streaming timelines, hashtag bank, AI alt-text generation (BYOK + CrispASR/llama.cpp + mistral.rs).
+Key competitive advantages: deck+multi-network+Threads (unique combo), cross-platform analytics (no competitor), catch-up mode, AI compose (3 providers incl. local), "For You" local algorithm, thread un-rolling, real-time Jetstream counters, Threads hybrid reading via ActivityPub, saved deck workspaces, universal cross-network search, streaming timelines, hashtag bank, AI alt-text generation (BYOK + CrispASR/llama.cpp + mistral.rs), keyword monitoring columns with live streaming (TweetDeck refugee #1 ask).

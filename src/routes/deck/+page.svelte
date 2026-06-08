@@ -378,11 +378,12 @@
           }, handleStreamEvent));
         }
       }
-      // Subscribe to Bluesky Jetstream (firehose — keyword filter applied client-side)
+      // Subscribe to Bluesky Jetstream firehose — unfiltered, keyword filter applied client-side
       if (bskyClient) {
         cleanups.push(streamManager.enableColumn({
           columnId: `${col.id}-bsky`,
           platform: 'bluesky',
+          firehose: true,
         }, handleStreamEvent));
       }
 
