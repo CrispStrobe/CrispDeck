@@ -11,3 +11,4 @@ src-tauri/gen/
 dist/
 .vercel
 src-tauri/.cargo/config.toml
+handover-prompts/
