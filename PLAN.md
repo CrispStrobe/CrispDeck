@@ -2,7 +2,7 @@
 
 ## What is CrispDeck
 
-A unified Mastodon + Bluesky social media client with:
+A unified Mastodon + Bluesky + Threads social media client with:
 - Multi-column TweetDeck-style deck view
 - Crossposting with intelligent thread splitting
 - Identity matching across platforms (Jaro-Winkler)
@@ -13,7 +13,7 @@ A unified Mastodon + Bluesky social media client with:
 
 ## Current State (2026-06-08)
 
-v0.9.1 — 802 tests (63 test files), 29 pages, live at https://crispdeck.vercel.app
+v0.9.2 — 872 tests (71 test files), 29 pages, live at https://crispdeck.vercel.app
 
 **License**: AGPL-3.0-only
 
@@ -517,53 +517,51 @@ Goal: reduce sidebar from 25 items to ~14 by merging related views into tabbed p
 Goal: close gaps in unit test coverage for untested TypeScript modules. Current: 805 tests, 63 files, 31/38 lib/ files tested (81.6%). Target: 95%+ lib/ file coverage.
 
 ### 94. Tests for engagement-history.ts
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Small
-- **Description**: Engagement snapshot storage, growth curves, periodic capture
+- **Description**: Engagement snapshot storage, growth curves, periodic capture (10 tests)
 - **Key file**: `src/lib/engagement-history.ts`
 
 ### 95. Tests for list-management.ts
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Small
-- **Description**: Create/edit/delete Mastodon lists and Bluesky lists
+- **Description**: Create/edit/delete Mastodon lists and Bluesky lists (11 tests)
 - **Key file**: `src/lib/list-management.ts`
 
 ### 96. Tests for starter-pack-creator.ts
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Small
-- **Description**: Build and publish Bluesky starter packs from identity DB
+- **Description**: Build and publish Bluesky starter packs from identity DB (8 tests)
 - **Key file**: `src/lib/starter-pack-creator.ts`
 
 ### 97. Tests for browser-db.ts
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Medium
-- **Description**: Core IndexedDB implementation — accounts, identities, archive, drafts, follows
-- Needs IndexedDB mock (fake-indexeddb or manual mock)
+- **Description**: Core IndexedDB implementation — data model, credential formats, dispatch (9 tests)
 - **Key file**: `src/lib/browser-db.ts`
 
 ### 98. Tests for bluesky-oauth.ts
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Small
-- **Description**: DPoP/PKCE helpers, client metadata URL resolution, session management helpers
-- Focus on pure functions, not actual OAuth flow
+- **Description**: Client_id construction, metadata shape, OAuth scopes (7 tests)
 - **Key file**: `src/lib/api/bluesky-oauth.ts`
 
 ### 99. Tests for compose/mentions.ts
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Small
-- **Description**: @mention autocomplete, platform-specific handle resolution
+- **Description**: @mention autocomplete, platform-specific handle resolution (11 tests)
 - **Key file**: `src/lib/compose/mentions.ts`
 
 ### 100. Tests for db.ts (platform dispatcher)
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Small
-- **Description**: Verifies isTauri() dispatch logic, function signatures
+- **Description**: Platform dispatch delegation, function signatures (8 tests)
 - **Key file**: `src/lib/db.ts`
 
 ### 101. Tests for store.ts
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Small
-- **Description**: Tauri plugin-store settings wrapper
+- **Description**: Tauri plugin-store settings wrapper (5 tests)
 - **Key file**: `src/lib/store.ts`
 
 ---
