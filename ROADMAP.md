@@ -102,4 +102,4 @@
 
 ## Done
 
-All planned features shipped. 375 frontend + 15 Rust = 390 tests.
+All planned features shipped. 947 frontend + 15 Rust = 962 tests. v0.9.6, 8 languages at 100%, Vercel Blob feed generator, mobile compat.

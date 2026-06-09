@@ -11,9 +11,9 @@ A unified Mastodon + Bluesky + Threads social media client with:
 
 **Tech stack**: SvelteKit 2, Svelte 5 (runes), Tailwind CSS 4, Vite 6, Tauri 2, TypeScript + Rust, Vitest
 
-## Current State (2026-06-08)
+## Current State (2026-06-09)
 
-v0.9.6 — 945 tests (74 test files), 29 pages, live at https://crispdeck.vercel.app
+v0.9.6 — 947 tests (74 test files), 29 pages, live at https://crispdeck.vercel.app
 
 **License**: AGPL-3.0-only
 
@@ -63,11 +63,13 @@ Analytics with full pagination, local post archive (IndexedDB), deck columns (11
 - Add custom feeds as deck columns
 - **Publish to Bluesky network**: creates `app.bsky.feed.generator` record on user's PDS
 - **Feed generator server**: Vercel serverless functions at `/xrpc/` endpoints
-  - `getFeedSkeleton` decodes the search query from the base64url-encoded rkey
+  - `getFeedSkeleton` looks up feed query from Vercel Blob, caches in-memory 5min + CDN 60s
   - `describeFeedGenerator` returns service metadata
   - `did:web:crispdeck.vercel.app` DID document at `/.well-known/did.json`
-  - Stateless: no database needed, query encoded in the record key
-- **Key files**: `src/lib/feed-builder.ts`, `src/routes/feed-builder/+page.svelte`, `api/xrpc/`, `static/.well-known/did.json`
+  - Feed definitions stored in Vercel Blob (`feeds/<rkey>.json`)
+  - Human-readable rkeys (e.g. `my-svelte-feed-mq5qo7ty0`)
+  - `api/feed/publish.ts` + `api/feed/unpublish.ts` manage Blob storage
+- **Key files**: `src/lib/feed-builder.ts`, `src/routes/feed-builder/+page.svelte`, `api/xrpc/`, `api/feed/`, `static/.well-known/did.json`
 
 ### 43. Threads support (hybrid: official API + ActivityPub federation)
 - **Status**: Done

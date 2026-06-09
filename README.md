@@ -87,7 +87,7 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - Safe area insets, touch targets, responsive design
 - **Emoji picker** + **GIF picker** (Tenor) in compose
 - **About page** with legal info + searchable open-source license list
-- 945 tests across 74 test files
+- 947 tests across 74 test files
 
 ## Architecture
 
@@ -245,6 +245,7 @@ src-tauri/
   migrations/          001_initial.sql (7-table schema)
 
 api/
+  feed/                Feed definition storage (publish.ts, unpublish.ts — Vercel Blob)
   threads/             Threads OAuth proxy (auth-url.ts, token.ts)
   xrpc/                Bluesky feed generator (getFeedSkeleton, describeFeedGenerator)
 
@@ -259,7 +260,7 @@ static/
 
 ## CI/CD
 
-- **CI** (`ci.yml`): 945 frontend tests + frontend build + Rust check on Linux/macOS/Windows — every push and PR
+- **CI** (`ci.yml`): 947 frontend tests + frontend build + Rust check on Linux/macOS/Windows — every push and PR
 - **Mobile** (`mobile.yml`): iOS + Android builds via Tauri 2 — triggers on `v*` tags
 - **Release** (`release.yml`): Cross-platform Tauri builds — triggers on `v*` tags, creates GitHub Releases with `.deb`, `.dmg`, `.msi`
 
@@ -285,10 +286,10 @@ OAuth on mobile uses the `crispdeck://` URL scheme (registered in AndroidManifes
 
 ## Stats
 
-- 945 frontend tests across 74 test files + 15 Rust tests
+- 947 frontend tests across 74 test files + 15 Rust tests
 - 29 pages, 14 deck column types
 - 3 networks: Bluesky (OAuth + app password), Mastodon (OAuth), Threads (OAuth with server proxy)
-- 8 UI languages (EN, DE, ES 100%; FR, JA, PT, ZH ~30%; AR ~20%) with RTL support
+- 8 UI languages (EN, DE, ES, FR, JA, PT, ZH, AR — all 100%) with RTL support
 - Dark + light + OLED dark themes
 - 10 BYOK AI provider presets with /models discovery
 - 5 translation providers (Lingva, LibreTranslate, MyMemory, BYOK OpenAI, CrispASR local)
