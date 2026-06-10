@@ -256,7 +256,12 @@
         </div>
       {/each}
     {:else if filteredPosts.length === 0}
-      <p class="text-center py-8 text-xs text-[var(--color-text-muted)]">{filterText ? 'No matches' : 'No posts'}</p>
+      <div class="text-center py-8">
+        <p class="text-xs text-[var(--color-text-muted)] mb-2">{filterText ? 'No matches' : 'No posts yet'}</p>
+        {#if onrefresh && !filterText}
+          <button onclick={onrefresh} class="text-[10px] text-[var(--color-primary)] hover:underline">Refresh column</button>
+        {/if}
+      </div>
     {:else}
       {#each filteredPosts as post (post.uri)}
         <Post {post} {onlike} {onboost} />

@@ -186,7 +186,49 @@
   {/if}
 
   {#if loading}
-    <div class="text-center py-12"><Loader2 size={32} class="text-[var(--color-text-muted)] animate-spin mx-auto" /></div>
+    <!-- Thread skeleton -->
+    <div class="space-y-3 animate-pulse">
+      <!-- Parent post skeleton -->
+      <div class="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-4 relative">
+        <div class="absolute left-7 top-14 bottom-0 w-0.5 bg-[var(--color-border)]/50"></div>
+        <div class="flex items-start gap-3">
+          <div class="w-8 h-8 rounded-full bg-[var(--color-border)]"></div>
+          <div class="flex-1">
+            <div class="h-3 w-32 bg-[var(--color-border)] rounded mb-2"></div>
+            <div class="h-3 w-full bg-[var(--color-border)]/60 rounded mb-1"></div>
+            <div class="h-3 w-2/3 bg-[var(--color-border)]/40 rounded"></div>
+          </div>
+        </div>
+      </div>
+      <!-- Main post skeleton (highlighted) -->
+      <div class="bg-[var(--color-surface)] rounded-lg border-2 border-[var(--color-primary)]/30 p-4">
+        <div class="flex items-start gap-3">
+          <div class="w-10 h-10 rounded-full bg-[var(--color-border)]"></div>
+          <div class="flex-1">
+            <div class="h-3.5 w-36 bg-[var(--color-border)] rounded mb-2"></div>
+            <div class="space-y-1.5 mb-3">
+              <div class="h-3 w-full bg-[var(--color-border)] rounded"></div>
+              <div class="h-3 w-5/6 bg-[var(--color-border)] rounded"></div>
+              <div class="h-3 w-2/3 bg-[var(--color-border)]/70 rounded"></div>
+            </div>
+            <div class="flex gap-6"><div class="h-3 w-8 bg-[var(--color-border)]/50 rounded"></div><div class="h-3 w-8 bg-[var(--color-border)]/50 rounded"></div><div class="h-3 w-8 bg-[var(--color-border)]/50 rounded"></div></div>
+          </div>
+        </div>
+      </div>
+      <!-- Reply skeletons -->
+      {#each { length: 2 } as _}
+        <div class="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-4 ml-6">
+          <div class="flex items-start gap-3">
+            <div class="w-8 h-8 rounded-full bg-[var(--color-border)]"></div>
+            <div class="flex-1">
+              <div class="h-3 w-28 bg-[var(--color-border)] rounded mb-2"></div>
+              <div class="h-3 w-full bg-[var(--color-border)]/60 rounded mb-1"></div>
+              <div class="h-3 w-1/2 bg-[var(--color-border)]/40 rounded"></div>
+            </div>
+          </div>
+        </div>
+      {/each}
+    </div>
   {:else if articleMode && mainPost}
     <!-- Article (un-rolled thread) -->
     <article class="bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] p-6 md:p-8">

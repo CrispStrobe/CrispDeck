@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { Bell, Heart, Repeat, UserPlus, MessageCircle, AtSign, Loader2, Quote, ChevronDown, ChevronUp } from '@lucide/svelte';
+  import { Bell, Heart, Repeat, UserPlus, MessageCircle, AtSign, Loader2, Quote, ChevronDown, ChevronUp, RefreshCw, CheckCheck } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
@@ -14,6 +14,7 @@
   let groups: NotificationGroup[] = $state([]);
   let loading = $state(true);
   let error = $state('');
+  let refreshing = $state(false);
   let expandedGroups: Set<string> = $state(new Set());
 
   let clientEntries: Map<number, ClientEntry> = new Map();
@@ -96,6 +97,12 @@
     setCache('notifications', groups);
   }
 
+  async function refresh() {
+    refreshing = true;
+    await loadNotifications();
+    refreshing = false;
+  }
+
   function toggleGroup(groupId: string) {
     const next = new Set(expandedGroups);
     if (next.has(groupId)) next.delete(groupId);
@@ -164,9 +171,31 @@
 <svelte:head><title>CrispDeck — Notifications</title><meta name="description" content="Unified notifications from all your accounts" /></svelte:head>
 
 <div class="p-6 max-w-3xl mx-auto">
-  <div class="flex items-center gap-2 mb-6">
-    <Bell size={24} />
-    <h1 class="text-2xl font-bold">{i18n.t.notifications.title}</h1>
+  <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center gap-2">
+      <Bell size={24} />
+      <h1 class="text-2xl font-bold">{i18n.t.notifications.title}</h1>
+    </div>
+    {#if groups.length > 0}
+      <div class="flex items-center gap-2">
+        <button
+          onclick={refresh}
+          disabled={refreshing}
+          class="p-1.5 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors disabled:opacity-50"
+          title="Refresh"
+        >
+          <RefreshCw size={16} class={refreshing ? 'animate-spin' : ''} />
+        </button>
+        <button
+          onclick={() => groups = []}
+          class="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
+          title="Clear all"
+        >
+          <CheckCheck size={14} />
+          Clear
+        </button>
+      </div>
+    {/if}
   </div>
 
   {#if error}
