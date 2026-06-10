@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { listAccounts } from '$lib/db';
-  import { Rss, PenSquare, Users, ScanSearch, Columns3, Bell, Search, TrendingUp, BarChart3 } from '@lucide/svelte';
+  import { Rss, PenSquare, Users, ScanSearch, Columns3, Bell, Search, TrendingUp, BarChart3, Bookmark, MessageSquare, Keyboard } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import Onboarding from '$lib/components/Onboarding.svelte';
   import type { Account } from '$lib/types';
@@ -33,6 +33,7 @@
 
   const bskyAccounts = $derived(accounts.filter(a => a.platform === 'bluesky'));
   const mastoAccounts = $derived(accounts.filter(a => a.platform === 'mastodon'));
+  const threadsAccounts = $derived(accounts.filter(a => a.platform === 'threads'));
 </script>
 
 <svelte:head><title>CrispDeck</title></svelte:head>
@@ -46,7 +47,7 @@
     <Onboarding ongetstarted={() => goto('/settings')} />
   {:else}
     <!-- Account summary -->
-    <div class="grid grid-cols-2 gap-4 mb-8">
+    <div class="grid grid-cols-3 gap-4 mb-8">
       <div class="bg-[var(--color-surface)] rounded-lg p-4 border border-[var(--color-border)]">
         <div class="flex items-center gap-2 mb-2">
           <div class="w-3 h-3 rounded-full bg-[var(--color-bluesky)]"></div>
@@ -65,6 +66,16 @@
         <p class="text-2xl font-bold">{mastoAccounts.length}</p>
         <p class="text-xs text-[var(--color-text-muted)]">
           {i18n.t.dashboard.accountsConnected.replace('{count}', String(mastoAccounts.length))}
+        </p>
+      </div>
+      <div class="bg-[var(--color-surface)] rounded-lg p-4 border border-[var(--color-border)]">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="w-3 h-3 rounded-full bg-[var(--color-threads,#000)]"></div>
+          <span class="text-sm font-medium">Threads</span>
+        </div>
+        <p class="text-2xl font-bold">{threadsAccounts.length}</p>
+        <p class="text-xs text-[var(--color-text-muted)]">
+          {i18n.t.dashboard.accountsConnected.replace('{count}', String(threadsAccounts.length))}
         </p>
       </div>
     </div>
@@ -108,6 +119,25 @@
         <ScanSearch size={20} />
         <span>{i18n.t.dashboard.scanIdentities}</span>
       </a>
+      <a href="/bookmarks" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
+        <Bookmark size={20} />
+        <span>{i18n.t.nav.bookmarks}</span>
+      </a>
+      <a href="/messages" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
+        <MessageSquare size={20} />
+        <span>{i18n.t.nav.messages}</span>
+      </a>
+    </div>
+
+    <!-- Tips -->
+    <div class="mt-8 flex items-center gap-3 px-4 py-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] text-xs text-[var(--color-text-muted)]">
+      <Keyboard size={16} class="flex-shrink-0" />
+      <span>
+        Press <kbd class="px-1 py-0.5 rounded bg-[var(--color-bg)] border border-[var(--color-border)] text-[10px]">?</kbd> for keyboard shortcuts ·
+        <kbd class="px-1 py-0.5 rounded bg-[var(--color-bg)] border border-[var(--color-border)] text-[10px]">g</kbd>+<kbd class="px-1 py-0.5 rounded bg-[var(--color-bg)] border border-[var(--color-border)] text-[10px]">f</kbd> feed ·
+        <kbd class="px-1 py-0.5 rounded bg-[var(--color-bg)] border border-[var(--color-border)] text-[10px]">g</kbd>+<kbd class="px-1 py-0.5 rounded bg-[var(--color-bg)] border border-[var(--color-border)] text-[10px]">c</kbd> compose ·
+        <kbd class="px-1 py-0.5 rounded bg-[var(--color-bg)] border border-[var(--color-border)] text-[10px]">j</kbd>/<kbd class="px-1 py-0.5 rounded bg-[var(--color-bg)] border border-[var(--color-border)] text-[10px]">k</kbd> navigate posts
+      </span>
     </div>
 
   {/if}
