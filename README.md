@@ -107,6 +107,8 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - Safe area insets, touch targets, responsive design
 - **Emoji picker** + **GIF picker** (Tenor) in compose
 - **About page** with legal info + searchable open-source license list
+- **Log viewer**: CrispLens-style modal with level filters, search, auto-follow, export to .txt
+- **About page**: git commit hash (linked), real app icon, Logs button
 - **HTML sanitization**: DOMPurify on all Mastodon HTML (XSS prevention)
 - **Security headers**: CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy
 - **Encryption**: AES-256-GCM with 600k PBKDF2 iterations + per-device random salt
