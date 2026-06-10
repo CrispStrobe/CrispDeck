@@ -144,6 +144,19 @@ button:focus-visible, a:focus-visible {
   margin-left: auto;
 }
 
+/* Mobile menu animations */
+.mobile-menu-slide {
+  animation: slide-in-left 0.2s ease-out;
+}
+.mobile-menu-overlay {
+  background: rgba(0, 0, 0, 0.5);
+  animation: fade-in 0.2s ease-out;
+}
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
 /* Page transitions (View Transitions API) */
 ::view-transition-old(root) {
   animation: fade-out 0.15s ease-out;

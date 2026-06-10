@@ -629,6 +629,7 @@
             bind:value={text}
             placeholder={i18n.t.compose.placeholder}
             rows="8"
+            autofocus
             oninput={() => { mentionAutocomplete?.handleInput(); scheduleAutoSave(); }}
             onkeydown={(e) => {
               mentionAutocomplete?.handleKeydown(e);

@@ -289,8 +289,8 @@
 
   <!-- Mobile slide-out menu -->
   {#if mobileMenuOpen}
-    <div class="md:hidden fixed inset-0 z-40 flex" onclick={() => mobileMenuOpen = false}>
-      <div class="w-64 bg-[var(--color-surface)] border-r border-[var(--color-border)] pt-14 overflow-y-auto" onclick={(e) => e.stopPropagation()}>
+    <div class="md:hidden fixed inset-0 z-40 flex mobile-menu-backdrop" onclick={() => mobileMenuOpen = false}>
+      <div class="w-64 bg-[var(--color-surface)] border-r border-[var(--color-border)] pt-14 overflow-y-auto mobile-menu-slide" onclick={(e) => e.stopPropagation()}>
         <ul class="py-2">
           {#each navItems as item}
             <li>
@@ -309,7 +309,7 @@
           {/each}
         </ul>
       </div>
-      <div class="flex-1 bg-black/50"></div>
+      <div class="flex-1 mobile-menu-overlay"></div>
     </div>
   {/if}
 

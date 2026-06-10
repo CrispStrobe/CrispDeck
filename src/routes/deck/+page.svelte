@@ -631,24 +631,27 @@
   {:else}
     <div class="flex-1 flex overflow-x-auto">
       {#each columns as col (col.id)}
-        <DeckColumn
-          id={col.id}
-          title={col.title}
-          type={col.type}
-          posts={columnPosts[col.id] ?? []}
-          notificationGroups={columnNotifGroups[col.id] ?? []}
-          loading={columnLoading[col.id] ?? false}
-          streaming={streamCleanups.has(col.id)}
-          width={col.width ?? 380}
-          onrefresh={() => loadColumn(col)}
-          onremove={() => removeColumn(col.id)}
-          onlike={handleLike}
-          onboost={handleBoost}
-          onwidthchange={(w) => handleColumnWidthChange(col.id, w)}
-          ondragstart={(e) => handleDragStart(col.id, e)}
-          ondragover={(e) => handleDragOver(col.id, e)}
-          ondrop={(e) => handleDrop(col.id, e)}
-        />
+        <div class="transition-opacity duration-200 {draggedColumnId === col.id ? 'opacity-40' : draggedColumnId ? 'hover:ring-2 hover:ring-[var(--color-primary)]/30 hover:rounded-lg' : ''}">
+          <DeckColumn
+            id={col.id}
+            title={col.title}
+            type={col.type}
+            posts={columnPosts[col.id] ?? []}
+            notificationGroups={columnNotifGroups[col.id] ?? []}
+            loading={columnLoading[col.id] ?? false}
+            streaming={streamCleanups.has(col.id)}
+            width={col.width ?? 380}
+            onrefresh={() => loadColumn(col)}
+            onremove={() => removeColumn(col.id)}
+            onlike={handleLike}
+            onboost={handleBoost}
+            onwidthchange={(w) => handleColumnWidthChange(col.id, w)}
+            ondragstart={(e) => handleDragStart(col.id, e)}
+            ondragover={(e) => handleDragOver(col.id, e)}
+            ondrop={(e) => handleDrop(col.id, e)}
+            ondragend={() => draggedColumnId = null}
+          />
+        </div>
       {/each}
     </div>
   {/if}

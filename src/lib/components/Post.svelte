@@ -792,7 +792,7 @@
   <div class="flex items-center justify-between mt-3 pl-13">
     <div class="flex items-center gap-4">
       {#if onreply}
-        <button onclick={() => onreply?.(post)} class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-blue-400 transition-colors" title="Reply" aria-label="Reply ({post.replyCount ?? 0} replies)">
+        <button onclick={() => onreply?.(post)} class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-blue-400 transition-all hover:scale-110 active:scale-90" title="Reply" aria-label="Reply ({post.replyCount ?? 0} replies)">
           <MessageCircle size={14} />
           {#if !hideEngagement}<span class="text-xs">{post.replyCount ?? 0}</span>{/if}
         </button>
@@ -806,7 +806,7 @@
       <button
         onclick={handleBoost}
         disabled={!onboost}
-        class="flex items-center gap-1.5 transition-colors {boosted ? 'text-green-400' : 'text-[var(--color-text-muted)]'} {onboost ? 'hover:text-green-400' : ''}"
+        class="flex items-center gap-1.5 transition-all {boosted ? 'text-green-400' : 'text-[var(--color-text-muted)]'} {onboost ? 'hover:text-green-400 hover:scale-110 active:scale-90' : ''}"
         title="Boost"
         aria-label="{boosted ? 'Undo boost' : 'Boost'} ({localBoostCount} boosts)"
         aria-pressed={boosted}
@@ -818,7 +818,7 @@
       {#if onquote}
         <button
           onclick={() => onquote?.(post)}
-          class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-purple-400 transition-colors"
+          class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-purple-400 transition-all hover:scale-110 active:scale-90"
           title="Quote"
           aria-label="Quote post"
         >
@@ -829,7 +829,7 @@
       <button
         onclick={handleLike}
         disabled={!onlike}
-        class="flex items-center gap-1.5 transition-colors {liked ? 'text-red-400' : 'text-[var(--color-text-muted)]'} {onlike ? 'hover:text-red-400' : ''}"
+        class="flex items-center gap-1.5 transition-all {liked ? 'text-red-400' : 'text-[var(--color-text-muted)]'} {onlike ? 'hover:text-red-400 hover:scale-110 active:scale-90' : ''}"
         title="Like"
         aria-label="{liked ? 'Unlike' : 'Like'} ({localLikeCount} likes)"
         aria-pressed={liked}
@@ -840,7 +840,7 @@
 
       <button
         onclick={handleBookmark}
-        class="flex items-center gap-1.5 transition-colors {bookmarked ? 'text-yellow-400' : 'text-[var(--color-text-muted)]'} hover:text-yellow-400"
+        class="flex items-center gap-1.5 transition-all {bookmarked ? 'text-yellow-400' : 'text-[var(--color-text-muted)]'} hover:text-yellow-400 hover:scale-110 active:scale-90"
         title={bookmarked ? 'Remove bookmark' : 'Bookmark'}
         aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark this post'}
         aria-pressed={bookmarked}
