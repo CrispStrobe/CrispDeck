@@ -349,6 +349,8 @@
   // Add Threads form
   let showThreadsForm = $state(false);
   let threadsAdvanced = $state(false);
+  let threadsTokenMode = $state(false);
+  let threadsManualToken = $state('');
   let threadsClientId = $state('');
   let threadsClientSecret = $state('');
   let threadsLoading = $state(false);
@@ -398,6 +400,48 @@
       window.location.href = authUrl;
     } catch (e) {
       error = String(e);
+      threadsLoading = false;
+    }
+  }
+
+  async function handleThreadsManualToken() {
+    if (!threadsManualToken.trim()) return;
+    threadsLoading = true;
+    error = '';
+    try {
+      const token = threadsManualToken.trim();
+      // Get user profile to find userId
+      const meResp = await fetch(`https://graph.threads.net/v1.0/me?fields=id,username,name,threads_profile_picture_url&access_token=${token}`);
+      if (!meResp.ok) {
+        const err = await meResp.json().catch(() => ({}));
+        throw new Error(err.error?.message || 'Invalid token — could not fetch profile');
+      }
+      const profile = await meResp.json();
+      const userId = profile.id;
+
+      // Store the account
+      const credentials = JSON.stringify({
+        access_token: token,
+        user_id: userId,
+        connected_at: new Date().toISOString(),
+      });
+
+      await dbAddAccount({
+        platform: 'threads',
+        handle: `@${profile.username}`,
+        display_name: profile.name || profile.username,
+        avatar_url: profile.threads_profile_picture_url || undefined,
+        credentials,
+        is_primary: false,
+      });
+
+      accounts = await listAccounts();
+      showThreadsForm = false;
+      threadsManualToken = '';
+      threadsTokenMode = false;
+    } catch (e) {
+      error = String(e);
+    } finally {
       threadsLoading = false;
     }
   }
@@ -773,6 +817,37 @@
               </button>
             {/if}
           {/if}
+
+          <!-- Manual token entry (works without redirect URI) -->
+          <div class="border-t border-[var(--color-border)] pt-3 mt-3">
+            <button
+              onclick={() => threadsTokenMode = !threadsTokenMode}
+              class="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] underline"
+            >
+              {threadsTokenMode ? 'Hide' : 'Paste access token manually'}
+            </button>
+            {#if threadsTokenMode}
+              <div class="mt-2 space-y-2">
+                <p class="text-[10px] text-[var(--color-text-muted)]">
+                  Generate a token from the <a href="https://developers.facebook.com/apps/{threadsClientId || '...'}/use_cases/" target="_blank" rel="noopener" class="underline">Meta Developer Portal</a> → Threads API → User Token Generator. No redirect URI setup needed.
+                </p>
+                <input
+                  type="password"
+                  bind:value={threadsManualToken}
+                  placeholder="Paste your Threads access token..."
+                  class="w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] font-mono focus:outline-none focus:border-[var(--color-primary)]"
+                />
+                <button
+                  onclick={handleThreadsManualToken}
+                  disabled={threadsLoading || !threadsManualToken.trim()}
+                  class="flex items-center gap-1 px-4 py-2 bg-[var(--color-primary)] hover:opacity-90 rounded-md text-sm font-medium transition-opacity disabled:opacity-50"
+                >
+                  {#if threadsLoading}<Loader2 size={14} class="animate-spin" />{/if}
+                  Connect
+                </button>
+              </div>
+            {/if}
+          </div>
         </div>
       </div>
     {/if}
