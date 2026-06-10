@@ -8,6 +8,7 @@
   import type { Account } from '$lib/types';
   import { groupNotifications, type UnifiedNotification, type NotificationGroup } from '$lib/notification-grouping';
   import { getCached, setCache } from '$lib/view-cache';
+  import SkeletonNotification from '$lib/components/SkeletonNotification.svelte';
 
   let accounts: Account[] = $state([]);
   let groups: NotificationGroup[] = $state([]);
@@ -173,8 +174,10 @@
   {/if}
 
   {#if loading}
-    <div class="text-center py-12">
-      <Loader2 size={32} class="text-[var(--color-text-muted)] animate-spin mx-auto" />
+    <div class="space-y-1">
+      {#each { length: 8 } as _}
+        <SkeletonNotification />
+      {/each}
     </div>
   {:else if groups.length === 0}
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">

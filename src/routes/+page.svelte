@@ -4,6 +4,7 @@
   import { listAccounts } from '$lib/db';
   import { Rss, PenSquare, Users, ScanSearch, Columns3, Bell, Search, TrendingUp, BarChart3 } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
+  import Onboarding from '$lib/components/Onboarding.svelte';
   import type { Account } from '$lib/types';
 
   let accounts: Account[] = $state([]);
@@ -41,6 +42,8 @@
 
   {#if loading}
     <p class="text-[var(--color-text-muted)]">{i18n.t.common.loading}</p>
+  {:else if accounts.length === 0}
+    <Onboarding ongetstarted={() => goto('/settings')} />
   {:else}
     <!-- Account summary -->
     <div class="grid grid-cols-2 gap-4 mb-8">
@@ -107,13 +110,5 @@
       </a>
     </div>
 
-    {#if accounts.length === 0}
-      <div class="mt-8 p-6 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] text-center">
-        <p class="text-[var(--color-text-muted)] mb-3">{i18n.t.feed.addAccountsFirst}</p>
-        <a href="/settings" class="inline-block px-4 py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] rounded-md text-sm font-medium transition-colors">
-          {i18n.t.settings.addAccount}
-        </a>
-      </div>
-    {/if}
   {/if}
 </div>

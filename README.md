@@ -84,6 +84,11 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **Collapsible sidebar** + mobile hamburger menu + bottom tab bar
 - Dark + light + **OLED dark** themes
 - **PWA install support** (manifest.json + service worker + maskable icons + apple-touch-icon)
+- **Skeleton loading screens**: pulse-animated placeholders for feed and notifications
+- **Toast notifications**: global success/error/warning/info toasts with auto-dismiss
+- **Page transitions**: smooth fade via View Transitions API (progressive enhancement)
+- **Welcome onboarding**: feature carousel for first-time users with guided setup
+- **Reduced motion**: respects `prefers-reduced-motion` across all animations
 - Safe area insets, touch targets, responsive design
 - **Emoji picker** + **GIF picker** (Tenor) in compose
 - **About page** with legal info + searchable open-source license list

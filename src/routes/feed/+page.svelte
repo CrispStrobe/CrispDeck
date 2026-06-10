@@ -4,6 +4,7 @@
   import { i18n } from '$lib/i18n.svelte';
   import Post from '$lib/components/Post.svelte';
   import CrosspostGroup from '$lib/components/CrosspostGroup.svelte';
+  import SkeletonPost from '$lib/components/SkeletonPost.svelte';
   import AdvancedFilters from '$lib/components/AdvancedFilters.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
@@ -532,8 +533,10 @@
   {/if}
 
   {#if initialLoading}
-    <div class="text-center py-12">
-      <Loader2 size={32} class="text-[var(--color-text-muted)] animate-spin mx-auto" />
+    <div class="space-y-3">
+      {#each { length: 5 } as _}
+        <SkeletonPost />
+      {/each}
     </div>
   {:else if accounts.length === 0}
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
@@ -557,11 +560,10 @@
     {/if}
 
     {#if loading && posts.length === 0}
-      <div class="text-center py-12">
-        <Loader2 size={32} class="text-[var(--color-text-muted)] animate-spin mx-auto" />
-        <p class="text-sm text-[var(--color-text-muted)] mt-2">
-          {feedMode === 'timeline' ? i18n.t.feed.loadingTimeline : i18n.t.feed.loadingYourPosts}
-        </p>
+      <div class="space-y-3">
+        {#each { length: 4 } as _}
+          <SkeletonPost />
+        {/each}
       </div>
     {:else if finalFeed.length === 0}
       <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">

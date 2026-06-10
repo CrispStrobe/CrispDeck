@@ -17,6 +17,7 @@
   import { tryVoiceCommand, looksLikeCommand } from '$lib/voice-commands';
   import { runAIAction, isAIConfigured, type AIAction } from '$lib/compose/ai';
   import { computeBestHour, formatHour, type PostingTimeInsight } from '$lib/posting-times';
+  import { toast } from '$lib/toast.svelte';
   import { searchArchive } from '$lib/archive';
   import type { Account, Platform } from '$lib/types';
 
@@ -319,6 +320,7 @@
 
       // Clear on full success
       if (allSuccess) {
+        toast.success(`Posted to ${results.map(r => r.platform).join(' + ')}!`);
         text = '';
         contentWarning = '';
         showCW = false;
@@ -327,9 +329,15 @@
         mediaPreviews = [];
         altTexts = [];
         clearAutoSave();
+      } else {
+        const failed = results.filter(r => !r.success);
+        const succeeded = results.filter(r => r.success);
+        if (succeeded.length > 0) toast.warning(`Posted to ${succeeded.map(r => r.platform).join(', ')} but failed on ${failed.map(r => r.platform).join(', ')}`);
+        else toast.error(`Post failed: ${failed[0]?.error || 'Unknown error'}`);
       }
     } catch (e) {
       error = String(e);
+      toast.error('Post failed — see details above');
     } finally {
       posting = false;
     }

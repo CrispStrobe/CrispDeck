@@ -5,6 +5,7 @@
   import { Home, Rss, Columns3, PenSquare, Bell, MessageSquare, Bookmark, Users, Search, List, Shield, TrendingUp, Archive, BarChart3, Settings, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon, Smartphone } from '@lucide/svelte';
   import KeyboardShortcuts from '$lib/components/KeyboardShortcuts.svelte';
   import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
+  import ToastContainer from '$lib/components/ToastContainer.svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { installLogInterceptors } from '$lib/debug-log';
   installLogInterceptors();
@@ -14,6 +15,7 @@
   let { children } = $props();
 
   import { onMount } from 'svelte';
+  import { onNavigate } from '$app/navigation';
   import { getBookmarkCount } from '$lib/bookmarks';
 
   let collapsed = $state(false);
@@ -45,6 +47,17 @@
     }
     return cachedClients;
   }
+
+  // Page transitions via View Transitions API (progressive enhancement)
+  onNavigate((navigation) => {
+    if (!document.startViewTransition) return;
+    return new Promise((resolve) => {
+      document.startViewTransition(async () => {
+        resolve();
+        await navigation.complete;
+      });
+    });
+  });
 
   onMount(async () => {
     // Register service worker for PWA
@@ -311,6 +324,8 @@
       {@render children()}
     </ErrorBoundary>
   </main>
+
+  <ToastContainer />
 
   <!-- Mobile bottom tab bar (compact) -->
   <nav class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[var(--color-surface)] border-t border-[var(--color-border)] flex items-center justify-around px-1 safe-area-bottom">
