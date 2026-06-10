@@ -11,9 +11,9 @@ A unified Mastodon + Bluesky + Threads social media client with:
 
 **Tech stack**: SvelteKit 2, Svelte 5 (runes), Tailwind CSS 4, Vite 6, Tauri 2, TypeScript + Rust, Vitest
 
-## Current State (2026-06-09)
+## Current State (2026-06-10)
 
-v0.9.6 — 947 tests (74 test files), 29 pages, live at https://crispdeck.vercel.app
+v1.0.0 — 947 unit tests + 28 Playwright E2E tests, 29 pages, live at https://crispdeck.vercel.app
 
 **License**: AGPL-3.0-only
 
@@ -706,3 +706,32 @@ CrispDeck is the only client combining multi-column deck view + multi-network (B
 | Open source | Yes (AGPL) | No | No | No | No |
 
 Key competitive advantages: deck+multi-network+Threads (unique combo), cross-platform analytics (no competitor), catch-up mode, AI compose (3 providers incl. local), "For You" local algorithm, thread un-rolling, real-time Jetstream counters, Threads hybrid reading via ActivityPub, saved deck workspaces, universal cross-network search, streaming timelines, hashtag bank, AI alt-text generation (BYOK + CrispASR/llama.cpp + mistral.rs), keyword monitoring columns with live streaming (TweetDeck refugee #1 ask).
+
+---
+
+## v1.0 Release Plan (2026-06-10)
+
+### R1. Move CSP headers to vercel.json
+- **Status**: Done
+- **Effort**: Small
+- **Description**: `hooks.server.ts` doesn't run with `adapter-static`. Move security headers (CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) to `vercel.json` headers config so they're actually served on the live site.
+
+### R2. Add Playwright E2E to GitHub Actions CI
+- **Status**: Done
+- **Effort**: Small
+- **Description**: The 28 E2E tests only run locally. Add a CI job to `.github/workflows/ci.yml` that builds the app, installs Chromium, and runs `npm run test:e2e`.
+
+### R3. Bundle size analysis + optimization
+- **Status**: Done (2.8MB total, well-split, no issues found)
+- **Effort**: Medium
+- **Description**: Run bundle analysis to check for oversized chunks, duplicate dependencies, or tree-shaking failures. Fix any issues found.
+
+### R4. Version bump to v1.0.0
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Update version in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`.
+
+### R5. Final docs update for v1.0
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Final README pass — update test counts, version references, stats section. Update PLAN.md and memory file.

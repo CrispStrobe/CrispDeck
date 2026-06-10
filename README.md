@@ -302,8 +302,8 @@ scripts/
 
 ```bash
 # Bump version in package.json + src-tauri/tauri.conf.json + src-tauri/Cargo.toml
-git tag v0.9.6
-git push origin v0.9.6
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
 ### Mobile builds (Tauri 2)
