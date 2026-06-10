@@ -91,6 +91,9 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **Reduced motion**: respects `prefers-reduced-motion` across all animations
 - **Micro-interactions**: hover scale + press feedback on engagement buttons, mobile menu slide animation, deck drag visual feedback
 - **Compose autofocus**: textarea focused on page load, Ctrl+Enter to post
+- **Alt-text UX**: character count + fill indicator on media alt-text inputs
+- **Scroll-to-top button**: floating FAB after scrolling on any page
+- **Search suggestions**: hashtag chips shown before first search
 - Safe area insets, touch targets, responsive design
 - **Emoji picker** + **GIF picker** (Tenor) in compose
 - **About page** with legal info + searchable open-source license list
