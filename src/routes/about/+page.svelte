@@ -1,7 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Info, ExternalLink, Search, Shield } from '@lucide/svelte';
+  import { Info, ExternalLink, Search, Shield, ScrollText } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
+  import LogViewer from '$lib/components/LogViewer.svelte';
+
+  declare const __GIT_HASH__: string;
+  let showLogs = $state(false);
 
   interface LicenseEntry {
     name: string;
@@ -57,14 +61,16 @@
   <!-- App info -->
   <section class="mb-6 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
     <div class="flex items-center gap-4 mb-3">
-      <div class="w-14 h-14 bg-[var(--color-primary)]/20 rounded-xl flex items-center justify-center text-2xl font-bold text-[var(--color-primary)]">CD</div>
+      <img src="/favicon.png" alt="CrispDeck" class="w-14 h-14 rounded-xl" />
       <div>
         <h2 class="text-lg font-bold">CrispDeck</h2>
-        <p class="text-sm text-[var(--color-text-muted)]">v{__VERSION__} · Mastodon + Bluesky client</p>
+        <p class="text-sm text-[var(--color-text-muted)]">
+          v{__VERSION__}{__GIT_HASH__ ? ` · ${__GIT_HASH__}` : ''} · Mastodon + Bluesky + Threads client
+        </p>
       </div>
     </div>
     <p class="text-sm text-[var(--color-text-muted)]">
-      Full-featured cross-platform client with crossposting, identity mapping, translation, and smart mentions. Built with Tauri 2 + SvelteKit + Svelte 5 + Rust.
+      Full-featured cross-platform client with crossposting, identity mapping, translation, and smart mentions. Built with Tauri 2 + SvelteKit + Svelte 5 + Rust. {#if typeof window !== 'undefined'}Deployed on web.{/if}
     </p>
     <div class="flex gap-3 mt-3">
       <a href="https://github.com/CrispStrobe/CrispDeck" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline">
@@ -73,6 +79,14 @@
       <a href="https://crispdeck.vercel.app" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline">
         <ExternalLink size={12} /> Web App
       </a>
+      {#if __GIT_HASH__}
+        <a href="https://github.com/CrispStrobe/CrispDeck/commit/{__GIT_HASH__}" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1 text-xs text-[var(--color-text-muted)] hover:underline">
+          <ExternalLink size={12} /> {__GIT_HASH__}
+        </a>
+      {/if}
+      <button onclick={() => showLogs = true} class="flex items-center gap-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors">
+        <ScrollText size={12} /> Logs
+      </button>
     </div>
   </section>
 
@@ -153,6 +167,7 @@
       {/if}
     {/if}
   </section>
+  <LogViewer bind:show={showLogs} />
 </div>
 
 <script context="module">

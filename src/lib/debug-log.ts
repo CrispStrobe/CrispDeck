@@ -68,15 +68,23 @@ export function installLogInterceptors(): void {
 
   const origError = console.error;
   const origWarn = console.warn;
+  const origInfo = console.info;
+
+  const fmt = (a: any) => typeof a === 'object' ? JSON.stringify(a, null, 0) : String(a);
 
   console.error = (...args: any[]) => {
-    addLog('error', args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 0) : String(a)).join(' '));
+    addLog('error', args.map(fmt).join(' '));
     origError.apply(console, args);
   };
 
   console.warn = (...args: any[]) => {
-    addLog('warn', args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 0) : String(a)).join(' '));
+    addLog('warn', args.map(fmt).join(' '));
     origWarn.apply(console, args);
+  };
+
+  console.info = (...args: any[]) => {
+    addLog('info', args.map(fmt).join(' '));
+    origInfo.apply(console, args);
   };
 
   // Capture unhandled errors
