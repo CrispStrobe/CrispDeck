@@ -282,8 +282,23 @@
 
 <div class="p-6 max-w-3xl mx-auto">
   {#if loading}
-    <div class="text-center py-12">
-      <Loader2 size={32} class="text-[var(--color-text-muted)] animate-spin mx-auto" />
+    <!-- Profile skeleton -->
+    <div class="animate-pulse">
+      <div class="h-32 rounded-t-lg bg-[var(--color-border)]/30 -mx-6 -mt-6 mb-4"></div>
+      <div class="flex items-start gap-4 mb-6">
+        <div class="w-20 h-20 rounded-full bg-[var(--color-border)] -mt-12"></div>
+        <div class="flex-1 pt-2">
+          <div class="h-5 w-40 bg-[var(--color-border)] rounded mb-2"></div>
+          <div class="h-3 w-28 bg-[var(--color-border)]/60 rounded mb-3"></div>
+          <div class="h-3 w-full bg-[var(--color-border)]/40 rounded mb-1.5"></div>
+          <div class="h-3 w-3/4 bg-[var(--color-border)]/40 rounded"></div>
+        </div>
+      </div>
+      <div class="flex gap-6 mb-6">
+        <div class="h-4 w-20 bg-[var(--color-border)]/50 rounded"></div>
+        <div class="h-4 w-20 bg-[var(--color-border)]/50 rounded"></div>
+        <div class="h-4 w-20 bg-[var(--color-border)]/50 rounded"></div>
+      </div>
     </div>
   {:else if error}
     <div class="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">{error}</div>

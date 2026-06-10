@@ -37,6 +37,13 @@
   let sending = $state(false);
   let showNewConvo = $state(false);
   let newConvoHandle = $state('');
+  let messagesContainer: HTMLDivElement | undefined = $state();
+
+  function scrollToLatest() {
+    requestAnimationFrame(() => {
+      if (messagesContainer) messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    });
+  }
   let bskyDmNote = $state(false);
 
   let clientEntries: Map<number, ClientEntry> = new Map();
@@ -218,6 +225,7 @@
       error = String(e);
     } finally {
       loadingMessages = false;
+      scrollToLatest();
     }
   }
 
@@ -261,6 +269,7 @@
         isOurs: true,
       }];
       newMessage = '';
+      scrollToLatest();
     } catch (e) {
       error = String(e);
     } finally {
@@ -377,7 +386,7 @@
           </div>
 
           <!-- Messages -->
-          <div class="flex-1 overflow-y-auto p-4 space-y-3">
+          <div bind:this={messagesContainer} class="flex-1 overflow-y-auto p-4 space-y-3">
             {#if loadingMessages}
               <div class="text-center py-4"><Loader2 size={20} class="text-[var(--color-text-muted)] animate-spin mx-auto" /></div>
             {:else}
