@@ -89,6 +89,8 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **Page transitions**: smooth fade via View Transitions API (progressive enhancement)
 - **Welcome onboarding**: feature carousel for first-time users with guided setup
 - **Reduced motion**: respects `prefers-reduced-motion` across all animations
+- **Micro-interactions**: hover scale + press feedback on engagement buttons, mobile menu slide animation, deck drag visual feedback
+- **Compose autofocus**: textarea focused on page load, Ctrl+Enter to post
 - Safe area insets, touch targets, responsive design
 - **Emoji picker** + **GIF picker** (Tenor) in compose
 - **About page** with legal info + searchable open-source license list
