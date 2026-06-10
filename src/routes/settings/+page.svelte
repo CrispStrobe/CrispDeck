@@ -694,7 +694,7 @@
     {#if showThreadsForm}
       <div class="mb-4 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
         <div class="space-y-3">
-          {#if !threadsAdvanced}
+          {#if !threadsAdvanced && threadsProxyAvailable}
             <p class="text-xs text-[var(--color-text-muted)]">
               Connect your Threads account via OAuth. You'll be redirected to Threads to authorize.
             </p>
@@ -723,9 +723,9 @@
             </button>
           {:else}
             <p class="text-xs text-[var(--color-text-muted)]">
-              Use your own Meta Developer App. Create one at
+              {#if !threadsProxyAvailable}Connect your Threads account using your own Meta Developer App credentials. {:else}Use your own Meta Developer App. {/if}Create one at
               <a href="https://developers.facebook.com" target="_blank" rel="noopener" class="underline">developers.facebook.com</a>
-              with the Threads API product enabled.
+              with the Threads API product enabled. Add <code class="text-[10px] bg-[var(--color-bg)] px-1 rounded">{typeof window !== 'undefined' ? window.location.origin : ''}/oauth/threads-callback</code> as a redirect URI.
             </p>
             <div>
               <label for="threads-client-id" class="block text-sm text-[var(--color-text-muted)] mb-1">App ID (Client ID)</label>
@@ -764,12 +764,14 @@
                 Cancel
               </button>
             </div>
-            <button
-              onclick={() => threadsAdvanced = false}
-              class="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] underline"
-            >
-              Back to simple mode
-            </button>
+            {#if threadsProxyAvailable}
+              <button
+                onclick={() => threadsAdvanced = false}
+                class="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] underline"
+              >
+                Back to simple mode
+              </button>
+            {/if}
           {/if}
         </div>
       </div>
