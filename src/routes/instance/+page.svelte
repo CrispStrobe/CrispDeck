@@ -4,6 +4,7 @@
   import { Server, Loader2, Users, MessageCircle, Shield, Mail, ExternalLink, Globe } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { MastodonClient } from '$lib/api/mastodon';
+  import { sanitizeHtml } from '$lib/sanitize';
   import type { Account } from '$lib/types';
 
   interface InstanceInfo {
@@ -172,7 +173,7 @@
         {/if}
         {#if instance.description && instance.description !== instance.shortDescription}
           <div class="text-xs text-[var(--color-text-muted)] mt-2 prose-invert" >
-            {@html instance.description}
+            {@html sanitizeHtml(instance.description)}
           </div>
         {/if}
       </div>

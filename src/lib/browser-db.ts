@@ -101,19 +101,29 @@ function now(): string {
 // ── Web Crypto helpers for credential encryption ─────────────────────────
 
 const CRYPTO_KEY_NAME = 'crispdeck-key';
+const CRYPTO_SALT_NAME = 'crispdeck-salt';
 
 async function getCryptoKey(): Promise<CryptoKey> {
-  // Derive a stable key from a fixed passphrase stored in localStorage.
+  // Derive a stable key from a random UUID seed stored in localStorage.
+  // Uses per-device random salt + 600k PBKDF2 iterations (OWASP 2024 recommendation).
   // Less secure than Tauri's machine-bound Argon2 key, but functional for web.
   let seed = localStorage.getItem(CRYPTO_KEY_NAME);
   if (!seed) {
     seed = crypto.randomUUID();
     localStorage.setItem(CRYPTO_KEY_NAME, seed);
   }
+  // Per-device random salt (generated once, stored alongside key)
+  let saltB64 = localStorage.getItem(CRYPTO_SALT_NAME);
+  if (!saltB64) {
+    const saltBytes = crypto.getRandomValues(new Uint8Array(32));
+    saltB64 = btoa(String.fromCharCode(...saltBytes));
+    localStorage.setItem(CRYPTO_SALT_NAME, saltB64);
+  }
+  const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
   const enc = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(seed), 'PBKDF2', false, ['deriveKey']);
   return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: enc.encode('crispdeck-salt'), iterations: 100000, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt, iterations: 600000, hash: 'SHA-256' },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
     false,

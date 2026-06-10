@@ -7,6 +7,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { jetstream } from '$lib/jetstream';
   import type { UnifiedPost } from '$lib/types';
+  import { sanitizeHtml } from '$lib/sanitize';
   import MediaLightbox from '$lib/components/MediaLightbox.svelte';
   import type { LightboxItem } from '$lib/components/MediaLightbox.svelte';
 
@@ -520,7 +521,7 @@
   const bskyExternal = $derived(getBskyExternal());
   const bskyQuote = $derived(getBskyQuote());
   const bskyVideo = $derived(getBskyVideo());
-  const mastodonHtml = $derived(getMastodonHtml());
+  const mastodonHtml = $derived(sanitizeHtml(getMastodonHtml()));
   const platformColor = $derived(`var(--color-${post.platform})`);
 
   // Labels on Bluesky posts
