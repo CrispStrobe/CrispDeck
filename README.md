@@ -107,7 +107,10 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - Safe area insets, touch targets, responsive design
 - **Emoji picker** + **GIF picker** (Tenor) in compose
 - **About page** with legal info + searchable open-source license list
-- 947 tests across 74 test files
+- **HTML sanitization**: DOMPurify on all Mastodon HTML (XSS prevention)
+- **Security headers**: CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy
+- **Encryption**: AES-256-GCM with 600k PBKDF2 iterations + per-device random salt
+- 947 unit tests across 74 test files + 28 Playwright E2E tests
 
 ## Architecture
 
@@ -210,8 +213,9 @@ npx vercel deploy --prod
 ### Run tests
 
 ```bash
-npm test              # 937 frontend tests (unit + integration)
+npm test              # 947 frontend unit tests
 npm run test:watch    # watch mode
+npm run test:e2e      # 28 Playwright E2E browser tests (requires build first)
 
 # Rust tests (requires CrispASR sibling checkout for --features crispasr)
 cd src-tauri
@@ -220,7 +224,7 @@ cargo test --features crispasr          # 11 tests (registry, cache, config)
 cargo test --features crispasr -- --ignored  # 5 live translation tests (downloads m2m100 model)
 ```
 
-Frontend tests hit real Bluesky/Mastodon APIs. Rust live tests download and run M2M-100 translation models via CrispASR.
+Frontend unit tests hit real Bluesky/Mastodon APIs. E2E tests use Playwright with Chromium against the production build. Rust live tests download and run M2M-100 translation models via CrispASR.
 
 ## Project Structure
 
@@ -314,7 +318,7 @@ OAuth on mobile uses the `crispdeck://` URL scheme (registered in AndroidManifes
 
 ## Stats
 
-- 947 frontend tests across 74 test files + 15 Rust tests
+- 947 frontend unit tests + 28 Playwright E2E tests + 15 Rust tests
 - 29 pages, 14 deck column types
 - 3 networks: Bluesky (OAuth + app password), Mastodon (OAuth), Threads (OAuth with server proxy)
 - 8 UI languages (EN, DE, ES, FR, JA, PT, ZH, AR — all 100%) with RTL support
