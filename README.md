@@ -96,6 +96,10 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **Search suggestions**: hashtag chips shown before first search
 - **Messages auto-scroll**: scroll to latest on load and after sending
 - **Profile skeleton**: banner + avatar + bio placeholder during load
+- **Thread skeleton**: parent chain + main post + replies placeholder during load
+- **Notification actions**: refresh + clear all buttons in header
+- **Dashboard**: 3-platform account summary, keyboard shortcut tips, 11 quick-action cards
+- **Deck empty states**: "Refresh column" action when no posts loaded
 - Safe area insets, touch targets, responsive design
 - **Emoji picker** + **GIF picker** (Tenor) in compose
 - **About page** with legal info + searchable open-source license list
