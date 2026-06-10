@@ -83,7 +83,7 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **Keyboard shortcuts**: ? for help, g+key navigation, j/k post scrolling, vim-style deck navigation
 - **Collapsible sidebar** + mobile hamburger menu + bottom tab bar
 - Dark + light + **OLED dark** themes
-- **PWA install support** (manifest.json + service worker)
+- **PWA install support** (manifest.json + service worker + maskable icons + apple-touch-icon)
 - Safe area insets, touch targets, responsive design
 - **Emoji picker** + **GIF picker** (Tenor) in compose
 - **About page** with legal info + searchable open-source license list
@@ -254,8 +254,15 @@ static/
   client-metadata.json Bluesky OAuth client metadata
   favicon.png          App icon (192x192)
   icon-512.png         PWA icon (512x512)
+  icon-1024.png        Hi-res source icon (1024x1024)
+  apple-touch-icon.png iOS home screen icon (180x180)
+  icon-*-maskable.png  Android adaptive icons (192+512)
   manifest.json        PWA manifest
   sw.js                Service worker (versioned cache)
+
+scripts/
+  generate-icon.mjs         Icon generator (Node.js canvas, source of truth)
+  generate-tauri-icons.mjs  Resize to Tauri icon sizes
 ```
 
 ## CI/CD
