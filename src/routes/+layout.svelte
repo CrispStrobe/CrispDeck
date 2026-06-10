@@ -6,6 +6,7 @@
   import KeyboardShortcuts from '$lib/components/KeyboardShortcuts.svelte';
   import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
   import ToastContainer from '$lib/components/ToastContainer.svelte';
+  import ScrollToTop from '$lib/components/ScrollToTop.svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { installLogInterceptors } from '$lib/debug-log';
   installLogInterceptors();
@@ -316,8 +317,11 @@
   <!-- Main content -->
   <main id="main-content" class="flex-1 overflow-y-auto md:pt-0 pt-10 pb-14 md:pb-0" role="main">
     {#if offline}
-      <div class="bg-yellow-900/50 border-b border-yellow-700 px-4 py-2 text-center text-xs text-yellow-200">
-        You're offline — some features may be unavailable
+      <div class="bg-yellow-900/50 border-b border-yellow-700 px-4 py-2 text-center text-xs text-yellow-200 flex items-center justify-center gap-2">
+        <span>You're offline — some features may be unavailable</span>
+        <button onclick={() => offline = false} class="p-0.5 hover:bg-yellow-800/50 rounded" aria-label="Dismiss">
+          <X size={12} />
+        </button>
       </div>
     {/if}
     <ErrorBoundary>
@@ -326,6 +330,7 @@
   </main>
 
   <ToastContainer />
+  <ScrollToTop />
 
   <!-- Mobile bottom tab bar (compact) -->
   <nav class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[var(--color-surface)] border-t border-[var(--color-border)] flex items-center justify-around px-1 safe-area-bottom">

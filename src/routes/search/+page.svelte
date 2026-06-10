@@ -167,5 +167,19 @@
       <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">{i18n.t.search.noAccounts}</h3>
       <p class="text-sm text-[var(--color-text-muted)]">Add accounts in <a href="/settings" class="text-[var(--color-primary)] underline">Settings</a> to search.</p>
     </div>
+  {:else}
+    <!-- Pre-search suggestions -->
+    <div class="text-center py-12">
+      <Search size={40} class="text-[var(--color-text-muted)]/40 mx-auto mb-4" />
+      <h3 class="text-base font-medium text-[var(--color-text-muted)] mb-3">Search across all your networks</h3>
+      <div class="flex flex-wrap justify-center gap-2 max-w-md mx-auto">
+        {#each ['#news', '#photography', '#tech', '#fediverse', '#art'] as tag}
+          <button
+            onclick={() => { query = tag; handleSearch(); }}
+            class="px-3 py-1.5 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] rounded-full text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]/50 transition-colors"
+          >{tag}</button>
+        {/each}
+      </div>
+    </div>
   {/if}
 </div>

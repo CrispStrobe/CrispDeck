@@ -679,12 +679,17 @@
                     <X size={12} />
                   </button>
                 </div>
-                <input
-                  type="text"
-                  bind:value={altTexts[i]}
-                  placeholder={i18n.t.compose.altTextPlaceholder}
-                  class="w-full px-2 py-1.5 bg-transparent border-t text-xs text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none {altTextEnforced && !altTexts[i]?.trim() ? 'border-yellow-500 bg-yellow-950/20' : 'border-[var(--color-border)]'}"
-                />
+                <div class="relative">
+                  <input
+                    type="text"
+                    bind:value={altTexts[i]}
+                    placeholder={i18n.t.compose.altTextPlaceholder}
+                    class="w-full px-2 py-1.5 pr-16 bg-transparent border-t text-xs text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none {altTextEnforced && !altTexts[i]?.trim() ? 'border-yellow-500 bg-yellow-950/20' : 'border-[var(--color-border)]'}"
+                  />
+                  <span class="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] {altTexts[i]?.trim() ? 'text-[var(--color-success)]' : 'text-[var(--color-text-muted)]'}">
+                    {altTexts[i]?.length ?? 0}/1000
+                  </span>
+                </div>
               </div>
             {/each}
           </div>
