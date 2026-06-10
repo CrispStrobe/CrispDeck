@@ -101,18 +101,32 @@ function now(): string {
 // ── Web Crypto helpers for credential encryption ─────────────────────────
 
 const CRYPTO_KEY_NAME = 'crispdeck-key';
-const CRYPTO_SALT_NAME = 'crispdeck-salt';
+const CRYPTO_SALT_NAME = 'crispdeck-salt-v2';
+const CRYPTO_MIGRATED = 'crispdeck-crypto-v2';
 
-async function getCryptoKey(): Promise<CryptoKey> {
-  // Derive a stable key from a random UUID seed stored in localStorage.
-  // Uses per-device random salt + 600k PBKDF2 iterations (OWASP 2024 recommendation).
-  // Less secure than Tauri's machine-bound Argon2 key, but functional for web.
+function getSeed(): string {
   let seed = localStorage.getItem(CRYPTO_KEY_NAME);
   if (!seed) {
     seed = crypto.randomUUID();
     localStorage.setItem(CRYPTO_KEY_NAME, seed);
   }
-  // Per-device random salt (generated once, stored alongside key)
+  return seed;
+}
+
+async function deriveKey(salt: Uint8Array, iterations: number): Promise<CryptoKey> {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(getSeed()), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt'],
+  );
+}
+
+async function getCryptoKey(): Promise<CryptoKey> {
+  // New key: per-device random salt + 600k iterations (OWASP 2024).
   let saltB64 = localStorage.getItem(CRYPTO_SALT_NAME);
   if (!saltB64) {
     const saltBytes = crypto.getRandomValues(new Uint8Array(32));
@@ -120,15 +134,13 @@ async function getCryptoKey(): Promise<CryptoKey> {
     localStorage.setItem(CRYPTO_SALT_NAME, saltB64);
   }
   const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
+  return deriveKey(salt, 600000);
+}
+
+/** Legacy key for migrating existing data (static salt, 100k iterations) */
+async function getLegacyCryptoKey(): Promise<CryptoKey> {
   const enc = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(seed), 'PBKDF2', false, ['deriveKey']);
-  return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt, iterations: 600000, hash: 'SHA-256' },
-    keyMaterial,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt'],
-  );
+  return deriveKey(enc.encode('crispdeck-salt'), 100000);
 }
 
 async function encrypt(plaintext: string): Promise<string> {
@@ -144,12 +156,21 @@ async function encrypt(plaintext: string): Promise<string> {
 }
 
 async function decrypt(encoded: string): Promise<string> {
-  const key = await getCryptoKey();
   const packed = Uint8Array.from(atob(encoded), c => c.charCodeAt(0));
   const iv = packed.slice(0, 12);
   const ct = packed.slice(12);
-  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
-  return new TextDecoder().decode(pt);
+
+  // Try new key first
+  try {
+    const key = await getCryptoKey();
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+    return new TextDecoder().decode(pt);
+  } catch {
+    // Fall back to legacy key (static salt, 100k iterations)
+    const legacyKey = await getLegacyCryptoKey();
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, legacyKey, ct);
+    return new TextDecoder().decode(pt);
+  }
 }
 
 // ── Accounts ──────────────────────────────────────────────────────────────
