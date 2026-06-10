@@ -100,6 +100,10 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **Notification actions**: refresh + clear all buttons in header
 - **Dashboard**: 3-platform account summary, keyboard shortcut tips, 11 quick-action cards
 - **Deck empty states**: "Refresh column" action when no posts loaded
+- **Custom error page**: branded 404 with navigation links
+- **Open Graph / Twitter Card** meta tags for social link sharing
+- **Focus trap** in keyboard shortcuts modal
+- **favicon.ico** for legacy browser tab support
 - Safe area insets, touch targets, responsive design
 - **Emoji picker** + **GIF picker** (Tenor) in compose
 - **About page** with legal info + searchable open-source license list
@@ -269,6 +273,7 @@ static/
   .well-known/did.json Feed generator DID document (did:web:crispdeck.vercel.app)
   client-metadata.json Bluesky OAuth client metadata
   favicon.png          App icon (192x192)
+  favicon.ico          Legacy browser tab icon (16+32px)
   icon-512.png         PWA icon (512x512)
   icon-1024.png        Hi-res source icon (1024x1024)
   apple-touch-icon.png iOS home screen icon (180x180)
