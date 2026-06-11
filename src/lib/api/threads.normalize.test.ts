@@ -62,8 +62,9 @@ describe('normalizePost (threads)', () => {
     });
     const result = normalizePost(post, 'threads');
     expect(result.embeds).toBeTruthy();
-    expect((result.embeds as any).url).toBe('https://scontent.cdninstagram.com/image.jpg');
-    expect((result.embeds as any).type).toBe('IMAGE');
+    const media = (result.embeds as any[])[0];
+    expect(media.url).toBe('https://scontent.cdninstagram.com/image.jpg');
+    expect(media.type).toBe('image');
   });
 
   it('normalizes video post', () => {
@@ -72,7 +73,8 @@ describe('normalizePost (threads)', () => {
       media_url: 'https://scontent.cdninstagram.com/video.mp4',
     });
     const result = normalizePost(post, 'threads');
-    expect((result.embeds as any).type).toBe('VIDEO');
+    const media = (result.embeds as any[])[0];
+    expect(media.type).toBe('video');
   });
 
   it('handles carousel post', () => {

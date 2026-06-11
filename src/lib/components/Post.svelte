@@ -413,7 +413,7 @@
   }
 
   function getMastodonMedia(): any[] {
-    if (post.platform !== 'mastodon') return [];
+    if (post.platform !== 'mastodon' && post.platform !== 'threads') return [];
     const raw = post.raw as any;
     const target = raw.reblog ?? raw;
     // Handle both camelCase (masto library) and snake_case (raw fetch)
@@ -423,7 +423,7 @@
     ];
     for (const source of sources) {
       if (Array.isArray(source) && source.length > 0) {
-        return source.filter((item: any) => item && item.type === 'image').map((item: any) => ({
+        return source.filter((item: any) => item && (item.type === 'image' || item.type === 'video' || item.type === 'gifv')).map((item: any) => ({
           ...item,
           // Normalize to camelCase for template
           previewUrl: item.previewUrl ?? item.preview_url,

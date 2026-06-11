@@ -8,6 +8,16 @@ type PlatformPost = AppBskyFeedDefs.FeedViewPost | mastodon.v1.Status | ThreadsP
 export function normalizePost(post: PlatformPost, platform: Platform): UnifiedPost {
   if (platform === 'threads') {
     const item = post as ThreadsPost;
+    // Build media array matching Mastodon attachment format for Post.svelte rendering
+    const media: any[] = [];
+    if (item.media_url && item.media_type && item.media_type !== 'TEXT_POST') {
+      media.push({
+        type: item.media_type === 'VIDEO' ? 'video' : 'image',
+        url: item.media_url,
+        previewUrl: item.thumbnail_url ?? item.media_url,
+        description: '',
+      });
+    }
     return {
       uri: item.permalink ?? `threads://${item.id}`,
       text: item.text ?? '',
@@ -21,7 +31,7 @@ export function normalizePost(post: PlatformPost, platform: Platform): UnifiedPo
       replyCount: 0,
       repostCount: 0,
       likeCount: 0,
-      embeds: item.media_url ? { url: item.media_url, type: item.media_type } : undefined,
+      embeds: media.length > 0 ? media : undefined,
       raw: item,
     };
   } else if (platform === 'bluesky') {
