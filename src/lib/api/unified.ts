@@ -1,11 +1,30 @@
 import { AppBskyFeedDefs } from '@atproto/api';
 import type { mastodon } from 'masto';
 import type { UnifiedPost, FeedItem, CrosspostGroup, Platform } from '$lib/types';
+import type { ThreadsPost } from '$lib/api/threads';
 
-type PlatformPost = AppBskyFeedDefs.FeedViewPost | mastodon.v1.Status;
+type PlatformPost = AppBskyFeedDefs.FeedViewPost | mastodon.v1.Status | ThreadsPost;
 
 export function normalizePost(post: PlatformPost, platform: Platform): UnifiedPost {
-  if (platform === 'bluesky') {
+  if (platform === 'threads') {
+    const item = post as ThreadsPost;
+    return {
+      uri: item.permalink ?? `threads://${item.id}`,
+      text: item.text ?? '',
+      author: {
+        handle: item.username ? `@${item.username}` : '?',
+        displayName: item.username,
+        avatar: undefined,
+      },
+      createdAt: item.timestamp ?? new Date().toISOString(),
+      platform: 'threads',
+      replyCount: 0,
+      repostCount: 0,
+      likeCount: 0,
+      embeds: item.media_url ? { url: item.media_url, type: item.media_type } : undefined,
+      raw: item,
+    };
+  } else if (platform === 'bluesky') {
     const item = post as AppBskyFeedDefs.FeedViewPost;
     const p = item.post;
     const record = p.record as {
