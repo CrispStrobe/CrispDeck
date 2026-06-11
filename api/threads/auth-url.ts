@@ -44,7 +44,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
-    scope: 'threads_basic,threads_content_publish,threads_manage_replies,threads_manage_insights',
+    scope: 'threads_basic,threads_content_publish,threads_manage_replies,threads_read_replies,threads_manage_insights',
     response_type: 'code',
     state,
   });
