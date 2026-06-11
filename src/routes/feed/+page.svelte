@@ -8,6 +8,7 @@
   import AdvancedFilters from '$lib/components/AdvancedFilters.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
+  import { ThreadsClient } from '$lib/api/threads';
   import { notifyNewPosts, getPermission } from '$lib/push-notifications';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { normalizePost, filterPosts, sortPosts, detectCrossposts, buildIdentityPairs } from '$lib/api/unified';
@@ -145,6 +146,13 @@
             const statuses = await masto.getHomeTimeline();
             count += statuses.filter((s: any) => s.createdAt > newestDate || s.created_at > newestDate).length;
           } catch {}
+        } else if (acct.platform === 'threads') {
+          // Threads API has no home timeline — check own posts only
+          const threads = entry.client as ThreadsClient;
+          try {
+            const posts = await threads.getOwnPosts(10);
+            count += posts.filter(p => p.timestamp > newestDate).length;
+          } catch {}
         }
       } catch {}
     }
@@ -177,12 +185,17 @@
               .filter(p => !newestDate || p.createdAt > newestDate);
             newPosts.push(...newer);
           }
-        } else {
+        } else if (acct.platform === 'mastodon') {
           const masto = entry.client as MastodonClient;
           const statuses = await masto.getHomeTimeline();
           const newer = statuses
             .map((s: any) => normalizePost(s, 'mastodon'))
             .filter(p => !newestDate || p.createdAt > newestDate);
+          newPosts.push(...newer);
+        } else if (acct.platform === 'threads') {
+          const threads = entry.client as ThreadsClient;
+          const posts = await threads.getOwnPosts(25);
+          const newer = posts.map(p => normalizePost(p, 'threads')).filter(p => !newestDate || p.createdAt > newestDate);
           newPosts.push(...newer);
         }
       } catch {}
@@ -247,6 +260,10 @@
             allPosts.push(...result.feed.map(p => tag(normalizePost(p, 'bluesky'))));
             cursors[acct.id] = result.cursor;
           }
+        } else if (acct.platform === 'threads') {
+          const threads = entry.client as ThreadsClient;
+          const posts = await threads.getOwnPosts(50);
+          allPosts.push(...posts.map(p => tag(normalizePost(p, 'threads'))));
         } else {
           const masto = entry.client as MastodonClient;
           if (feedMode === 'timeline' || feedMode === 'for-you') {
@@ -298,6 +315,8 @@
             newPosts.push(...result.feed.map(p => normalizePost(p, 'bluesky')));
             cursors[acct.id] = result.cursor;
           }
+        } else if (acct.platform === 'threads') {
+          // Threads has no pagination cursor — skip in loadMore
         } else {
           const masto = entry.client as MastodonClient;
           if (feedMode === 'timeline') {
