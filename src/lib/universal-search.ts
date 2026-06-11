@@ -66,7 +66,7 @@ export async function searchMastodon(
 }
 
 /**
- * Search Threads via /threads endpoint (search_surface=TOP).
+ * Search Threads via keyword_search endpoint (official API).
  */
 export async function searchThreads(
   query: string,
@@ -75,10 +75,13 @@ export async function searchThreads(
 ): Promise<any[]> {
   if (!accessToken) return [];
   try {
-    const url = `https://graph.threads.net/search?q=${encodeURIComponent(query)}&search_surface=TOP&limit=${limit}`;
-    const resp = await fetch(url, {
-      headers: { Authorization: `Bearer ${accessToken}` },
+    const params = new URLSearchParams({
+      q: query,
+      fields: 'id,media_product_type,media_type,media_url,permalink,username,text,timestamp,thumbnail_url,is_quote_post',
+      limit: String(limit),
+      access_token: accessToken,
     });
+    const resp = await fetch(`https://graph.threads.net/v1.0/keyword_search?${params}`);
     if (!resp.ok) return [];
     const data = await resp.json();
     return data.data ?? [];

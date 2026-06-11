@@ -239,6 +239,38 @@ export class ThreadsClient {
     return resp.data ?? [];
   }
 
+  async getMentions(limit = 25): Promise<ThreadsPost[]> {
+    const resp = await this.apiGet<{ data: ThreadsPost[] }>(`/${this.userId}/mentions`, {
+      fields: 'id,media_type,media_url,permalink,username,text,timestamp,thumbnail_url,is_quote_post',
+      limit: String(limit),
+    });
+    return resp.data ?? [];
+  }
+
+  async keywordSearch(query: string, options: { searchType?: 'TOP' | 'RECENT'; mediaType?: 'TEXT' | 'IMAGE' | 'VIDEO'; limit?: number } = {}): Promise<ThreadsPost[]> {
+    const params: Record<string, string> = {
+      q: query,
+      fields: 'id,media_product_type,media_type,media_url,permalink,username,text,timestamp,thumbnail_url,is_quote_post',
+    };
+    if (options.searchType) params.search_type = options.searchType;
+    if (options.mediaType) params.media_type = options.mediaType;
+    if (options.limit) params.limit = String(options.limit);
+    const resp = await this.apiGet<{ data: ThreadsPost[] }>('/keyword_search', params);
+    return resp.data ?? [];
+  }
+
+  async getUserPosts(username: string, limit = 25): Promise<ThreadsPost[]> {
+    // Use keyword search filtered by author to get a specific user's posts
+    const params: Record<string, string> = {
+      q: '*',
+      author_username: username.replace(/^@/, ''),
+      fields: 'id,media_product_type,media_type,media_url,permalink,username,text,timestamp,thumbnail_url,is_quote_post',
+      limit: String(limit),
+    };
+    const resp = await this.apiGet<{ data: ThreadsPost[] }>('/keyword_search', params);
+    return resp.data ?? [];
+  }
+
   // ── Publishing (container-then-publish) ──────────────────────────────────
 
   /**

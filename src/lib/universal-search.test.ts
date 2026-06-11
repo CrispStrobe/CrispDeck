@@ -113,7 +113,7 @@ describe('searchThreads', () => {
     expect(results).toHaveLength(1);
 
     const [url] = mockFetch.mock.calls[0];
-    expect(url).toContain('graph.threads.net/search');
+    expect(url).toContain('graph.threads.net/v1.0/keyword_search');
     expect(url).toContain('q=test');
 
     vi.unstubAllGlobals();
