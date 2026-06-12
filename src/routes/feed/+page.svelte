@@ -284,11 +284,13 @@
       }
     }
 
-    posts = sortPosts(allPosts, 'newest');
-    progress = posts.length;
+    // Only replace if we got fresh data; keep cached posts on network failure
+    if (allPosts.length > 0) {
+      posts = sortPosts(allPosts, 'newest');
+      progress = posts.length;
+      setCache('feed-' + feedMode, posts.slice(0, 50));
+    }
     loading = false;
-    // Cache for instant display on next visit
-    setCache('feed-' + feedMode, posts.slice(0, 50));
   }
 
   async function loadMore() {

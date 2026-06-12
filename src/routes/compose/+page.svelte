@@ -640,26 +640,45 @@
           <MentionAutocomplete bind:this={mentionAutocomplete} textarea={textareaEl} bind:text />
 
           <!-- Character counts with warning thresholds -->
-          <div class="absolute bottom-3 right-3 flex items-center gap-3 text-xs">
+          <!-- Character count rings -->
+          <div class="absolute bottom-3 right-3 flex items-center gap-2.5 text-xs">
             {#if hasBsky}
-              {@const pct = bskyLen / 300}
-              <span class="{pct >= 1 ? 'text-yellow-400 font-bold' : pct >= 0.9 ? 'text-red-400' : pct >= 0.8 ? 'text-orange-400' : 'text-[var(--color-text-muted)]'}">
-                <span class="inline-block w-2 h-2 rounded-full bg-[var(--color-bluesky)] mr-1"></span>
-                {bskyLen}/300{bskyNeedsThread ? ' →thread' : ''}
+              {@const pct = Math.min(bskyLen / 300, 1)}
+              {@const color = pct >= 1 ? '#facc15' : pct >= 0.9 ? '#f87171' : pct >= 0.8 ? '#fb923c' : 'var(--color-bluesky)'}
+              <span class="flex items-center gap-1 {pct >= 1 ? 'text-yellow-400 font-bold' : pct >= 0.9 ? 'text-red-400' : pct >= 0.8 ? 'text-orange-400' : 'text-[var(--color-text-muted)]'}">
+                <svg width="18" height="18" viewBox="0 0 18 18" class="flex-shrink-0">
+                  <circle cx="9" cy="9" r="7" fill="none" stroke="var(--color-border)" stroke-width="2" />
+                  <circle cx="9" cy="9" r="7" fill="none" stroke={color} stroke-width="2"
+                    stroke-dasharray="{pct * 44} 44" stroke-linecap="round"
+                    transform="rotate(-90 9 9)" />
+                </svg>
+                {bskyLen}/300{bskyNeedsThread ? ' →' : ''}
               </span>
             {/if}
             {#if hasMasto}
-              {@const pct = mastoLen / 500}
-              <span class="{pct >= 1 ? 'text-yellow-400 font-bold' : pct >= 0.9 ? 'text-red-400' : pct >= 0.8 ? 'text-orange-400' : 'text-[var(--color-text-muted)]'}">
-                <span class="inline-block w-2 h-2 rounded-full bg-[var(--color-mastodon)] mr-1"></span>
-                {mastoLen}/500{mastoNeedsThread ? ' →thread' : ''}
+              {@const pct = Math.min(mastoLen / 500, 1)}
+              {@const color = pct >= 1 ? '#facc15' : pct >= 0.9 ? '#f87171' : pct >= 0.8 ? '#fb923c' : 'var(--color-mastodon)'}
+              <span class="flex items-center gap-1 {pct >= 1 ? 'text-yellow-400 font-bold' : pct >= 0.9 ? 'text-red-400' : pct >= 0.8 ? 'text-orange-400' : 'text-[var(--color-text-muted)]'}">
+                <svg width="18" height="18" viewBox="0 0 18 18" class="flex-shrink-0">
+                  <circle cx="9" cy="9" r="7" fill="none" stroke="var(--color-border)" stroke-width="2" />
+                  <circle cx="9" cy="9" r="7" fill="none" stroke={color} stroke-width="2"
+                    stroke-dasharray="{pct * 44} 44" stroke-linecap="round"
+                    transform="rotate(-90 9 9)" />
+                </svg>
+                {mastoLen}/500{mastoNeedsThread ? ' →' : ''}
               </span>
             {/if}
             {#if hasThreads}
-              {@const pct = threadsLen / 500}
-              <span class="{pct >= 1 ? 'text-yellow-400 font-bold' : pct >= 0.9 ? 'text-red-400' : pct >= 0.8 ? 'text-orange-400' : 'text-[var(--color-text-muted)]'}">
-                <span class="inline-block w-2 h-2 rounded-full bg-[var(--color-threads,#000)] mr-1"></span>
-                {threadsLen}/500{threadsNeedsThread ? ' →thread' : ''}
+              {@const pct = Math.min(threadsLen / 500, 1)}
+              {@const color = pct >= 1 ? '#facc15' : pct >= 0.9 ? '#f87171' : pct >= 0.8 ? '#fb923c' : 'var(--color-threads, #888)'}
+              <span class="flex items-center gap-1 {pct >= 1 ? 'text-yellow-400 font-bold' : pct >= 0.9 ? 'text-red-400' : pct >= 0.8 ? 'text-orange-400' : 'text-[var(--color-text-muted)]'}">
+                <svg width="18" height="18" viewBox="0 0 18 18" class="flex-shrink-0">
+                  <circle cx="9" cy="9" r="7" fill="none" stroke="var(--color-border)" stroke-width="2" />
+                  <circle cx="9" cy="9" r="7" fill="none" stroke={color} stroke-width="2"
+                    stroke-dasharray="{pct * 44} 44" stroke-linecap="round"
+                    transform="rotate(-90 9 9)" />
+                </svg>
+                {threadsLen}/500{threadsNeedsThread ? ' →' : ''}
               </span>
             {/if}
           </div>
