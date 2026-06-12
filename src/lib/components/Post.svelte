@@ -359,6 +359,9 @@
       const id = raw.reblog?.id ?? raw.id ?? '';
       return `/thread?id=${id}&platform=mastodon`;
     }
+    if (p.platform === 'threads') {
+      return `/thread?uri=${encodeURIComponent(p.uri)}&platform=threads`;
+    }
     return `/thread?uri=${encodeURIComponent(p.uri)}&platform=bluesky`;
   }
 

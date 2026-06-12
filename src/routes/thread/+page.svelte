@@ -27,6 +27,11 @@
     platform = (params.get('platform') as Platform) ?? 'bluesky';
     const statusId = params.get('id') ?? '';
 
+    // Auto-detect Threads URIs even if platform param is wrong
+    if (uri.includes('threads.com') || uri.startsWith('threads://')) {
+      platform = 'threads';
+    }
+
     if (!uri && !statusId) {
       error = 'No post URI specified';
       loading = false;
