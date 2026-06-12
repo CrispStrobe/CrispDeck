@@ -108,7 +108,12 @@ export async function exchangeCodeForToken(
     throw new Error(err.error_message || `Token exchange failed: ${resp.statusText}`);
   }
 
-  return resp.json();
+  // Parse as text first to preserve large user_id precision (exceeds Number.MAX_SAFE_INTEGER)
+  const text = await resp.text();
+  const parsed = JSON.parse(text);
+  const userIdMatch = text.match(/"user_id"\s*:\s*(\d+)/);
+  if (userIdMatch) parsed.user_id = userIdMatch[1];
+  return parsed;
 }
 
 /**

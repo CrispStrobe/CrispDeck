@@ -67,7 +67,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
-      const shortLived = await tokenResp.json();
+      // Parse response as text first to preserve large user_id precision
+      // (user IDs exceed Number.MAX_SAFE_INTEGER, JSON.parse would corrupt them)
+      const shortLivedText = await tokenResp.text();
+      const shortLived = JSON.parse(shortLivedText);
+      // Extract user_id as string from raw text to avoid precision loss
+      const userIdMatch = shortLivedText.match(/"user_id"\s*:\s*(\d+)/);
+      const safeUserId = userIdMatch ? userIdMatch[1] : String(shortLived.user_id);
 
       // Step 2: Immediately exchange for long-lived token (58 days)
       const longLivedResp = await fetch(
@@ -84,7 +90,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json({
           access_token: shortLived.access_token,
           token_type: 'bearer',
-          user_id: shortLived.user_id,
+          user_id: safeUserId,
           long_lived: false,
         });
       }
@@ -95,7 +101,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         access_token: longLived.access_token,
         token_type: 'bearer',
         expires_in: longLived.expires_in,
-        user_id: shortLived.user_id,
+        user_id: safeUserId,
         long_lived: true,
       });
     }
