@@ -169,7 +169,7 @@ describe('ThreadsClient API methods', () => {
   });
 
   describe('getUserPosts', () => {
-    it('searches posts by author username', async () => {
+    it('fetches posts via profile_posts endpoint', async () => {
       const posts = [{ id: 'u1', text: 'User post', username: 'targetuser' }];
       vi.stubGlobal('fetch', mockFetch({ data: posts }));
       const client = new ThreadsClient(TOKEN, USER_ID);
@@ -177,9 +177,8 @@ describe('ThreadsClient API methods', () => {
       const result = await client.getUserPosts('@targetuser');
       expect(result).toHaveLength(1);
       const url = getCalledUrl(vi.mocked(fetch));
-      expect(url.pathname).toBe('/v1.0/keyword_search');
-      expect(url.searchParams.get('author_username')).toBe('targetuser');
-      expect(url.searchParams.get('q')).toBe('*');
+      expect(url.pathname).toBe('/v1.0/profile_posts');
+      expect(url.searchParams.get('username')).toBe('targetuser');
     });
 
     it('strips @ from username', async () => {
@@ -187,7 +186,7 @@ describe('ThreadsClient API methods', () => {
       const client = new ThreadsClient(TOKEN, USER_ID);
       await client.getUserPosts('@someuser');
       const url = getCalledUrl(vi.mocked(fetch));
-      expect(url.searchParams.get('author_username')).toBe('someuser');
+      expect(url.searchParams.get('username')).toBe('someuser');
     });
 
     it('handles username without @', async () => {
@@ -195,7 +194,7 @@ describe('ThreadsClient API methods', () => {
       const client = new ThreadsClient(TOKEN, USER_ID);
       await client.getUserPosts('plainuser');
       const url = getCalledUrl(vi.mocked(fetch));
-      expect(url.searchParams.get('author_username')).toBe('plainuser');
+      expect(url.searchParams.get('username')).toBe('plainuser');
     });
   });
 

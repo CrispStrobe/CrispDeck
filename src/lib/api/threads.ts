@@ -267,15 +267,32 @@ export class ThreadsClient {
   }
 
   async getUserPosts(username: string, limit = 25): Promise<ThreadsPost[]> {
-    // Use keyword search filtered by author to get a specific user's posts
-    const params: Record<string, string> = {
-      q: '*',
-      author_username: username.replace(/^@/, ''),
-      fields: 'id,media_product_type,media_type,media_url,permalink,username,text,timestamp,thumbnail_url,is_quote_post',
+    // Use profile_posts endpoint (requires threads_profile_discovery permission)
+    const resp = await this.apiGet<{ data: ThreadsPost[] }>('/profile_posts', {
+      username: username.replace(/^@/, ''),
+      fields: 'id,media_product_type,media_type,media_url,permalink,username,text,timestamp,thumbnail_url,is_quote_post,reposted_post,quoted_post',
       limit: String(limit),
-    };
-    const resp = await this.apiGet<{ data: ThreadsPost[] }>('/keyword_search', params);
+    });
     return resp.data ?? [];
+  }
+
+  /** Resolve REPOST_FACADE posts by fetching the original post content */
+  async resolveReposts(posts: ThreadsPost[]): Promise<ThreadsPost[]> {
+    const resolved = await Promise.all(posts.map(async (post) => {
+      if (post.media_type !== 'REPOST_FACADE') return post;
+      // reposted_post may contain a media ID object { id: "..." }
+      const repostId = typeof post.reposted_post === 'object' && post.reposted_post?.id
+        ? post.reposted_post.id
+        : (typeof post.reposted_post === 'string' ? post.reposted_post : null);
+      if (!repostId) return post;
+      try {
+        const original = await this.getPost(repostId);
+        return { ...post, reposted_post: original };
+      } catch {
+        return post; // can't resolve — return as-is
+      }
+    }));
+    return resolved;
   }
 
   // ── Publishing (container-then-publish) ──────────────────────────────────

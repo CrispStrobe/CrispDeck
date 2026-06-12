@@ -262,7 +262,8 @@
           }
         } else if (acct.platform === 'threads') {
           const threads = entry.client as ThreadsClient;
-          const posts = await threads.getOwnPosts(50);
+          let posts = await threads.getOwnPosts(50);
+          posts = await threads.resolveReposts(posts);
           allPosts.push(...posts.map(p => tag(normalizePost(p, 'threads'))));
         } else {
           const masto = entry.client as MastodonClient;
