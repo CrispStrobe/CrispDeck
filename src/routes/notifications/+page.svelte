@@ -62,7 +62,7 @@
               postUri: n.reasonSubject,
             });
           }
-        } else {
+        } else if (acct.platform === 'mastodon') {
           const masto = entry.client as MastodonClient;
           const token = masto.getAccessToken();
           if (!token) continue;

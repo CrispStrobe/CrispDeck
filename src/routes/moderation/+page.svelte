@@ -73,7 +73,7 @@
             allMuted.push({ platform: 'bluesky', handle: m.handle, displayName: m.displayName, avatar: m.avatar, did: m.did, type: 'mute' });
           }
         } catch {}
-      } else {
+      } else if (acct.platform === 'mastodon') {
         const masto = entry.client as MastodonClient;
         const token = masto.getAccessToken();
         if (!token) continue;

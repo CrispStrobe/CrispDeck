@@ -56,7 +56,7 @@
           const bsky = entry.client as BlueskyClient;
           const r = await bsky.getTimeline();
           posts.push(...r.feed.map(p => normalizePost(p, 'bluesky')));
-        } else {
+        } else if (acct.platform === 'mastodon') {
           const masto = entry.client as MastodonClient;
           const statuses = await masto.getHomeTimeline();
           posts.push(...statuses.map(s => normalizePost(s, 'mastodon')));
@@ -77,7 +77,7 @@
         if (post.platform === 'bluesky') {
           const raw = post.raw as any;
           await (entry.client as BlueskyClient).like(raw.post?.uri ?? raw.uri, raw.post?.cid ?? raw.cid);
-        } else {
+        } else if (post.platform === 'mastodon') {
           await (entry.client as MastodonClient).favourite((post.raw as any).id);
         }
         return;
@@ -93,7 +93,7 @@
         if (post.platform === 'bluesky') {
           const raw = post.raw as any;
           await (entry.client as BlueskyClient).repost(raw.post?.uri ?? raw.uri, raw.post?.cid ?? raw.cid);
-        } else {
+        } else if (post.platform === 'mastodon') {
           await (entry.client as MastodonClient).reblog((post.raw as any).id);
         }
         return;

@@ -106,7 +106,7 @@
           // App passwords can't access DMs
           bskyDmNote = true;
         }
-      } else {
+      } else if (acct.platform === 'mastodon') {
         const masto = entry.client as MastodonClient;
         const token = masto.getAccessToken();
         if (!token) continue;
@@ -173,7 +173,7 @@
             messages = [{ id: 'error', text: `Failed to load messages: ${e}`, sender: { handle: 'system' }, createdAt: new Date().toISOString(), isOurs: false }];
           }
         }
-      } else {
+      } else if (convo.platform === 'mastodon') {
         // Mastodon: load all direct messages between us and this person
         for (const [, entry] of clientEntries) {
           if (entry.platform !== 'mastodon') continue;
@@ -241,7 +241,7 @@
           { convoId: selectedConvo.id, message: { text: newMessage.trim() } },
           { encoding: 'application/json', headers: proxyHeaders }
         );
-      } else {
+      } else if (selectedConvo.platform === 'mastodon') {
         // Mastodon: create a status with direct visibility mentioning the user
         for (const [id, entry] of clientEntries) {
           const acct = accounts.find(a => a.id === id);

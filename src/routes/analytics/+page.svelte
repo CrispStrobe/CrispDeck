@@ -73,7 +73,7 @@
           total += normalized.length;
           loadingProgress = `${acct.handle}: ${total} posts`;
           loadingPercent = Math.min(99, Math.round((loadingAccountIndex / accounts.length) * 100));
-        } else {
+        } else if (acct.platform === 'mastodon') {
           const client = entry.client as MastodonClient;
           const account = await client.getAccountByHandle(acct.handle);
           let cursor: string | undefined;

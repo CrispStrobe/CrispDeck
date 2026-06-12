@@ -75,7 +75,7 @@
             if (newPosts.length < posts.length) done = true;
             cursor = r.cursor;
           } while (cursor && !done);
-        } else {
+        } else if (acct.platform === 'mastodon') {
           const client = entry.client as MastodonClient;
           const account = await client.getAccountByHandle(acct.handle);
           let cursor: string | undefined;
@@ -141,7 +141,7 @@
             } catch { cursor = undefined; }
           } while (cursor);
 
-        } else {
+        } else if (acct.platform === 'mastodon') {
           const client = entry.client as MastodonClient;
           const account = await client.getAccountByHandle(acct.handle);
 
