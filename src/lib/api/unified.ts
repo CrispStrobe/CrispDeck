@@ -8,22 +8,25 @@ type PlatformPost = AppBskyFeedDefs.FeedViewPost | mastodon.v1.Status | ThreadsP
 export function normalizePost(post: PlatformPost, platform: Platform): UnifiedPost {
   if (platform === 'threads') {
     const item = post as ThreadsPost;
+    const isRepost = item.media_type === 'REPOST_FACADE';
+    // Use reposted_post content if available, otherwise the post itself
+    const target = (isRepost && item.reposted_post) ? item.reposted_post : item;
     // Build media array matching Mastodon attachment format for Post.svelte rendering
     const media: any[] = [];
-    if (item.media_url && item.media_type && item.media_type !== 'TEXT_POST') {
+    if (target.media_url && target.media_type && target.media_type !== 'TEXT_POST') {
       media.push({
-        type: item.media_type === 'VIDEO' ? 'video' : 'image',
-        url: item.media_url,
-        previewUrl: item.thumbnail_url ?? item.media_url,
+        type: target.media_type === 'VIDEO' ? 'video' : 'image',
+        url: target.media_url,
+        previewUrl: target.thumbnail_url ?? target.media_url,
         description: '',
       });
     }
     return {
       uri: item.permalink ?? `threads://${item.id}`,
-      text: item.text ?? '',
+      text: target.text ?? '',
       author: {
-        handle: item.username ? `@${item.username}` : '?',
-        displayName: item.username,
+        handle: target.username ? `@${target.username}` : (item.username ? `@${item.username}` : '?'),
+        displayName: target.username ?? item.username,
         avatar: undefined,
       },
       createdAt: item.timestamp ?? new Date().toISOString(),
@@ -31,6 +34,8 @@ export function normalizePost(post: PlatformPost, platform: Platform): UnifiedPo
       replyCount: 0,
       repostCount: 0,
       likeCount: 0,
+      isRepost,
+      repostAuthor: isRepost ? { handle: item.username ? `@${item.username}` : '?', displayName: item.username } : undefined,
       embeds: media.length > 0 ? media : undefined,
       raw: item,
     };

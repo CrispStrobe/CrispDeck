@@ -42,6 +42,8 @@ export interface ThreadsPost {
   thumbnail_url?: string;
   children?: { data: Array<{ id: string }> };
   is_quote_post?: boolean;
+  reposted_post?: ThreadsPost;
+  quoted_post?: ThreadsPost;
 }
 
 export interface ThreadsInsight {
@@ -225,7 +227,7 @@ export class ThreadsClient {
 
   async getOwnPosts(limit = 25): Promise<ThreadsPost[]> {
     const resp = await this.apiGet<{ data: ThreadsPost[] }>(`/${this.userId}/threads`, {
-      fields: 'id,media_product_type,media_type,media_url,permalink,username,text,timestamp,shortcode,thumbnail_url,children,is_quote_post',
+      fields: 'id,media_product_type,media_type,media_url,permalink,username,text,timestamp,shortcode,thumbnail_url,children,is_quote_post,reposted_post,quoted_post',
       limit: String(limit),
     });
     return resp.data ?? [];
@@ -233,7 +235,7 @@ export class ThreadsClient {
 
   async getPost(postId: string): Promise<ThreadsPost> {
     return this.apiGet<ThreadsPost>(`/${postId}`, {
-      fields: 'id,media_product_type,media_type,media_url,permalink,username,text,timestamp,shortcode,thumbnail_url,children,is_quote_post',
+      fields: 'id,media_product_type,media_type,media_url,permalink,username,text,timestamp,shortcode,thumbnail_url,children,is_quote_post,reposted_post,quoted_post',
     });
   }
 
