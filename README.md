@@ -15,7 +15,7 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **3-network client**: Bluesky + Mastodon + Threads
 - **Timeline feed**: Bluesky + Mastodon home timelines merged, Threads own posts (Threads API has no home timeline), infinite scroll, "new posts" indicator, multi-account merge
 - **Platform filter**: All / Bluesky / Mastodon / Threads toggle
-- **Multi-column Deck**: TweetDeck-style with 14 column types (timeline, mentions, notifications, hashtag, user, local, federated, search, list, feed, my-posts, tag-group, RSS, keyword-monitor), per-column filters, saved layouts/workspaces, drag-reorder, column width control
+- **Multi-column Deck**: TweetDeck-style with 15 column types (timeline, mentions, notifications, hashtag, user, local, federated, search, list, feed, my-posts, tag-group, RSS, keyword-monitor, threads-search), per-column filters, saved layouts/workspaces, drag-reorder, column width control, platform-aware column picker
 - **Keyword monitoring columns**: real-time streaming filtered by user-defined keywords + regex, with Bluesky Jetstream firehose + Mastodon WebSocket, LIVE indicator
 - **Streaming timelines**: live-push of new posts via Bluesky Jetstream + Mastodon WebSocket
 - **Like, boost, reply, quote, bookmark, share, report** interactions (Bluesky + Mastodon; Threads: bookmark + share only)
@@ -348,7 +348,7 @@ OAuth on mobile uses the `crispdeck://` URL scheme (registered in AndroidManifes
 ## Stats
 
 - 947 frontend unit tests + 28 Playwright E2E tests + 15 Rust tests
-- 29 pages, 14 deck column types
+- 29 pages, 15 deck column types
 - 3 networks: Bluesky (OAuth + app password), Mastodon (OAuth), Threads (OAuth with server proxy)
 - 8 UI languages (EN, DE, ES, FR, JA, PT, ZH, AR — all 100%) with RTL support
 - Dark + light + OLED dark themes
