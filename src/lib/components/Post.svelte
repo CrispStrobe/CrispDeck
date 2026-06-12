@@ -585,7 +585,7 @@
     <div class="relative group/avatar">
       <a href={getProfileUrl(post)}>
         {#if post.author.avatar}
-          <img loading="lazy" src={post.author.avatar} alt="" class="{compact ? 'w-7 h-7' : 'w-10 h-10'} rounded-full bg-[var(--color-surface-hover)]" />
+          <img loading="lazy" src={post.author.avatar} alt="" width="40" height="40" class="{compact ? 'w-7 h-7' : 'w-10 h-10'} rounded-full bg-[var(--color-surface-hover)]" />
         {:else}
           <div class="{compact ? 'w-7 h-7 text-[9px]' : 'w-10 h-10 text-xs'} rounded-full bg-[var(--color-surface-hover)] flex items-center justify-center text-[var(--color-text-muted)]">
             {post.author.handle.charAt(0).toUpperCase()}

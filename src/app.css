@@ -58,6 +58,16 @@ html, body {
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Prevent iOS text size inflation */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Smoother scrolling on mobile */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Font display optimization — prevent FOIT */
+@font-face {
+  font-display: swap;
 }
 
 /* Mobile: hide sidebar by default, show as overlay */

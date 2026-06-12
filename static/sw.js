@@ -1,11 +1,13 @@
 /**
- * CrispDeck Service Worker — minimal offline shell caching.
- * Caches the app shell (HTML) for installability.
- * Network-first strategy for API calls.
- * Cache version is rotated on each deploy via the VERSION constant below.
+ * CrispDeck Service Worker — offline shell + immutable asset caching.
+ * - Precaches app shell (HTML) for installability
+ * - Caches immutable JS/CSS chunks with cache-first strategy (they have hashed filenames)
+ * - Network-first for navigation and mutable assets
+ * - Skips API/external requests entirely
+ * Cache version rotates on each deploy.
  */
 
-const VERSION = '0.9.6';
+const VERSION = '1.0.0';
 const CACHE_NAME = `crispdeck-v${VERSION}`;
 const SHELL_URLS = ['/'];
 
@@ -27,16 +29,52 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
+  const url = new URL(request.url);
 
   // Skip non-GET and API/external requests
   if (request.method !== 'GET') return;
-  if (request.url.includes('/api/') || request.url.includes('/xrpc/') || request.url.includes('bsky.') || request.url.includes('mastodon.')) return;
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/xrpc/')) return;
+  if (!url.origin.includes(self.location.origin)) return;
 
+  // Immutable assets (hashed filenames) — cache-first, never expires
+  if (url.pathname.includes('/_app/immutable/')) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+        return fetch(request).then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // Static assets (icons, manifest, etc.) — stale-while-revalidate
+  if (url.pathname.match(/\.(png|jpg|ico|svg|webp|json|js|css|woff2?)$/)) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        const fetchPromise = fetch(request).then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        }).catch(() => cached);
+        return cached || fetchPromise;
+      })
+    );
+    return;
+  }
+
+  // Navigation — network-first, fall back to cached shell
   event.respondWith(
     fetch(request)
       .then((response) => {
-        // Cache successful navigation/asset responses
-        if (response.ok && (request.mode === 'navigate' || request.destination === 'script' || request.destination === 'style')) {
+        if (response.ok && request.mode === 'navigate') {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
         }

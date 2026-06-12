@@ -1,22 +1,28 @@
 /**
  * Tests for the i18n translation service.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { translations } from './i18n.svelte';
+import de from './i18n/de';
+import fr from './i18n/fr';
+import es from './i18n/es';
+import ja from './i18n/ja';
+import pt from './i18n/pt';
+import zh from './i18n/zh';
+import ar from './i18n/ar';
 
-// Note: We can't test the reactive TranslationService directly (Svelte 5 runes
-// require a compiler), but we can test the translation data and structure.
+const allLangs: Record<string, any> = { en: translations.en, de, fr, es, ja, pt, zh, ar };
 
 describe('i18n translations', () => {
   describe('translation structure', () => {
     it('has en and de languages', () => {
       expect(translations).toHaveProperty('en');
-      expect(translations).toHaveProperty('de');
+      expect(de).toBeTruthy();
     });
 
     it('en and de have identical top-level keys', () => {
       const enKeys = Object.keys(translations.en).sort();
-      const deKeys = Object.keys(translations.de).sort();
+      const deKeys = Object.keys(de).sort();
       expect(enKeys).toEqual(deKeys);
     });
 
@@ -29,7 +35,7 @@ describe('i18n translations', () => {
       ];
       for (const key of requiredKeys) {
         expect(translations.en.nav).toHaveProperty(key);
-        expect(translations.de.nav).toHaveProperty(key);
+        expect(de.nav).toHaveProperty(key);
       }
     });
 
@@ -41,7 +47,7 @@ describe('i18n translations', () => {
       ];
       for (const key of requiredKeys) {
         expect(translations.en.compose).toHaveProperty(key);
-        expect(translations.de.compose).toHaveProperty(key);
+        expect(de.compose).toHaveProperty(key);
       }
     });
 
@@ -53,7 +59,7 @@ describe('i18n translations', () => {
       ];
       for (const key of requiredKeys) {
         expect(translations.en.post).toHaveProperty(key);
-        expect(translations.de.post).toHaveProperty(key);
+        expect(de.post).toHaveProperty(key);
       }
     });
 
@@ -66,7 +72,7 @@ describe('i18n translations', () => {
       ];
       for (const key of requiredKeys) {
         expect(translations.en.settings).toHaveProperty(key);
-        expect(translations.de.settings).toHaveProperty(key);
+        expect(de.settings).toHaveProperty(key);
       }
     });
 
@@ -74,7 +80,7 @@ describe('i18n translations', () => {
       const requiredKeys = ['dismiss', 'loading', 'error', 'postedTo', 'view'];
       for (const key of requiredKeys) {
         expect(translations.en.common).toHaveProperty(key);
-        expect(translations.de.common).toHaveProperty(key);
+        expect(de.common).toHaveProperty(key);
       }
     });
 
@@ -82,36 +88,36 @@ describe('i18n translations', () => {
       const requiredKeys = ['provider', 'mymemoryFree', 'crispasrLocal', 'openaiByok', 'targetLang'];
       for (const key of requiredKeys) {
         expect(translations.en.translation).toHaveProperty(key);
-        expect(translations.de.translation).toHaveProperty(key);
+        expect(de.translation).toHaveProperty(key);
       }
     });
 
     it('tts/stt/analytics/moderation sections exist in en and de', () => {
       for (const section of ['tts', 'stt', 'analytics', 'moderation', 'lists', 'trending', 'starterPacks', 'about'] as const) {
         expect(translations.en).toHaveProperty(section);
-        expect(translations.de).toHaveProperty(section);
+        expect(de).toHaveProperty(section);
       }
     });
 
     it('fr/es/ja/ar have core nav + compose + feed + settings + common sections', () => {
-      for (const lang of ['fr', 'es', 'ja', 'ar'] as const) {
-        expect(translations[lang]).toHaveProperty('nav');
-        expect(translations[lang]).toHaveProperty('compose');
-        expect(translations[lang]).toHaveProperty('feed');
-        expect(translations[lang]).toHaveProperty('settings');
-        expect(translations[lang]).toHaveProperty('common');
+      for (const lang of [fr, es, ja, ar]) {
+        expect(lang).toHaveProperty('nav');
+        expect(lang).toHaveProperty('compose');
+        expect(lang).toHaveProperty('feed');
+        expect(lang).toHaveProperty('settings');
+        expect(lang).toHaveProperty('common');
       }
     });
 
     it('all 8 languages have nav.dashboard', () => {
-      for (const lang of ['en', 'de', 'fr', 'es', 'ja', 'pt', 'zh', 'ar'] as const) {
-        expect(translations[lang].nav.dashboard).toBeTruthy();
+      for (const [name, lang] of Object.entries(allLangs)) {
+        expect(lang.nav.dashboard, `${name} missing nav.dashboard`).toBeTruthy();
       }
     });
 
     it('ar (Arabic) has RTL-appropriate translations', () => {
-      expect(translations.ar.nav.dashboard).toBe('لوحة التحكم');
-      expect(translations.ar.nav.settings).toBe('الإعدادات');
+      expect(ar.nav.dashboard).toBe('لوحة التحكم');
+      expect(ar.nav.settings).toBe('الإعدادات');
     });
   });
 
@@ -131,7 +137,7 @@ describe('i18n translations', () => {
 
     it('de has all leaf keys that en has', () => {
       const enLeaves = getLeafKeys(translations.en).sort();
-      const deLeaves = getLeafKeys(translations.de).sort();
+      const deLeaves = getLeafKeys(de).sort();
       expect(deLeaves).toEqual(enLeaves);
     });
 
@@ -144,9 +150,9 @@ describe('i18n translations', () => {
     });
 
     it('no empty translation values in de', () => {
-      const deLeaves = getLeafKeys(translations.de);
+      const deLeaves = getLeafKeys(de);
       for (const path of deLeaves) {
-        const value = path.split('.').reduce((obj: any, key) => obj[key], translations.de);
+        const value = path.split('.').reduce((obj: any, key) => obj[key], de);
         expect(value, `de.${path} is empty`).not.toBe('');
       }
     });
@@ -160,21 +166,20 @@ describe('i18n translations', () => {
     });
 
     it('de values are in German', () => {
-      expect(translations.de.nav.dashboard).toBe('Übersicht');
-      expect(translations.de.nav.settings).toBe('Einstellungen');
-      expect(translations.de.compose.post).toBe('Posten');
+      expect(de.nav.dashboard).toBe('Übersicht');
+      expect(de.nav.settings).toBe('Einstellungen');
+      expect(de.compose.post).toBe('Posten');
     });
 
     it('interpolation placeholders match between languages', () => {
-      // Find all {placeholder} patterns and ensure they match
       const enPost = translations.en.compose.postToAccounts;
-      const dePost = translations.de.compose.postToAccounts;
+      const dePost = de.compose.postToAccounts;
       expect(enPost).toContain('{count}');
       expect(dePost).toContain('{count}');
     });
 
     it('app name is the same in both languages', () => {
-      expect(translations.en.app.name).toBe(translations.de.app.name);
+      expect(translations.en.app.name).toBe(de.app.name);
     });
   });
 });
