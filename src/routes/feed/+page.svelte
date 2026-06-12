@@ -224,7 +224,7 @@
 
   async function loadFeed() {
     loading = true;
-    posts = [];
+    // Don't clear posts — keep cached content visible while fresh data loads
     cursors = {};
     const allPosts: UnifiedPost[] = [];
 
