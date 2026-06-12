@@ -276,20 +276,65 @@ export class ThreadsClient {
     return resp.data ?? [];
   }
 
-  /** Resolve REPOST_FACADE posts by fetching the original post content */
+  /** Resolve REPOST_FACADE posts by following permalink redirect + fetching original */
   async resolveReposts(posts: ThreadsPost[]): Promise<ThreadsPost[]> {
     const resolved = await Promise.all(posts.map(async (post) => {
       if (post.media_type !== 'REPOST_FACADE') return post;
-      // reposted_post may contain a media ID object { id: "..." }
+
+      // If API already provided reposted_post with an ID, fetch it directly
       const repostId = typeof post.reposted_post === 'object' && post.reposted_post?.id
         ? post.reposted_post.id
         : (typeof post.reposted_post === 'string' ? post.reposted_post : null);
-      if (!repostId) return post;
+      if (repostId) {
+        try {
+          const original = await this.getPost(repostId);
+          return { ...post, reposted_post: original };
+        } catch { /* fall through to permalink resolution */ }
+      }
+
+      // Fallback: resolve via permalink redirect (server-side)
+      if (!post.permalink) return post;
       try {
-        const original = await this.getPost(repostId);
-        return { ...post, reposted_post: original };
+        const resp = await fetch(`/api/threads/resolve-repost?url=${encodeURIComponent(post.permalink)}`);
+        if (!resp.ok) return post;
+        const data = await resp.json();
+        if (!data.resolved || !data.original_author) return post;
+
+        // Fetch original author's posts and find the matching one
+        try {
+          const authorPosts = await this.getUserPosts(data.original_author, 10);
+          const match = authorPosts.find(p =>
+            p.permalink?.includes(data.original_shortcode) || p.shortcode === data.original_shortcode
+          );
+          if (match) {
+            return { ...post, reposted_post: match };
+          }
+          // No exact match — still show the original author info
+          return {
+            ...post,
+            reposted_post: {
+              id: '',
+              text: '',
+              username: data.original_author,
+              permalink: data.original_url,
+              media_type: 'TEXT_POST' as const,
+            },
+          };
+        } catch {
+          // profile_posts may fail (100+ followers requirement) — show author only
+          return {
+            ...post,
+            reposted_post: {
+              id: '',
+              text: `[Post by @${data.original_author}]`,
+              username: data.original_author,
+              permalink: data.original_url,
+              media_type: 'TEXT_POST' as const,
+            },
+          };
+        }
       } catch {
-        return post; // can't resolve — return as-is
+        return post;
       }
     }));
     return resolved;
