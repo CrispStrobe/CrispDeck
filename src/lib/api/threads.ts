@@ -321,12 +321,30 @@ export class ThreadsClient {
             },
           };
         } catch {
-          // profile_posts may fail (100+ followers requirement) — show author only
+          // profile_posts may fail (needs Advanced Access) — try oEmbed for preview
+          try {
+            const oembedResp = await fetch(`https://graph.threads.net/v1.0/oembed?url=${encodeURIComponent(data.original_url)}`);
+            if (oembedResp.ok) {
+              const oembed = await oembedResp.json();
+              // Extract text from the embed HTML if possible
+              const textMatch = oembed.html?.match(/data-text-post-permalink[^>]*>[\s\S]*?<\/a>/);
+              return {
+                ...post,
+                reposted_post: {
+                  id: '',
+                  username: data.original_author,
+                  permalink: data.original_url,
+                  media_type: 'TEXT_POST' as const,
+                  text: `View original post by @${data.original_author}`,
+                },
+              };
+            }
+          } catch {}
           return {
             ...post,
             reposted_post: {
               id: '',
-              text: `[Post by @${data.original_author}]`,
+              text: `Post by @${data.original_author}`,
               username: data.original_author,
               permalink: data.original_url,
               media_type: 'TEXT_POST' as const,

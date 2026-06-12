@@ -42,6 +42,13 @@
         await loadBskyThread(uri);
       } else if (platform === 'mastodon' && (statusId || uri)) {
         await loadMastoThread(statusId || uri);
+      } else if (platform === 'threads' && uri) {
+        // Threads API has no thread view — open permalink directly
+        if (uri.startsWith('https://')) {
+          window.open(uri, '_blank');
+          goto('/feed');
+          return;
+        }
       }
     } catch (e) {
       error = String(e);
