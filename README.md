@@ -13,20 +13,20 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 
 ### Full Social Client (29 pages)
 - **3-network client**: Bluesky + Mastodon + Threads
-- **Timeline feed**: posts from everyone you follow, infinite scroll, "new posts" indicator, multi-account merge
+- **Timeline feed**: Bluesky + Mastodon home timelines merged, Threads own posts (Threads API has no home timeline), infinite scroll, "new posts" indicator, multi-account merge
 - **Platform filter**: All / Bluesky / Mastodon / Threads toggle
 - **Multi-column Deck**: TweetDeck-style with 14 column types (timeline, mentions, notifications, hashtag, user, local, federated, search, list, feed, my-posts, tag-group, RSS, keyword-monitor), per-column filters, saved layouts/workspaces, drag-reorder, column width control
 - **Keyword monitoring columns**: real-time streaming filtered by user-defined keywords + regex, with Bluesky Jetstream firehose + Mastodon WebSocket, LIVE indicator
 - **Streaming timelines**: live-push of new posts via Bluesky Jetstream + Mastodon WebSocket
-- **Like, boost, reply, quote, bookmark, share, report** interactions
-- **Thread view**: click any post to see full parent chain + replies, thread un-rolling ("Read as article")
+- **Like, boost, reply, quote, bookmark, share, report** interactions (Bluesky + Mastodon; Threads: bookmark + share only)
+- **Thread view**: click any post to see full parent chain + replies, thread un-rolling ("Read as article") — Bluesky + Mastodon; Threads posts open on threads.com
 - **Profile pages**: any user — avatar/banner/bio/stats, follow/unfollow, block/mute, posts/replies/media gallery/followers/following tabs
 - **Cross-platform bookmarks**: stored locally in IndexedDB, Mastodon import
 
 ### Compose & Crosspost
 - Write once, post to all 3 platforms — **thread auto-splitting** per platform (300 bsky / 500 masto / 500 threads)
 - **Bluesky OAuth** (PKCE + DPoP) for full access including DMs
-- **Threads OAuth** with server proxy (no Meta Developer account needed) or direct BYOK
+- **Threads OAuth** with server proxy or direct BYOK credentials, or manual token paste
 - Quote posts, reply chains, Bluesky RichText facets (mentions, URLs, hashtags)
 - Media: images + video (up to 100MB), **alt text editing**, **AI alt-text generation** (BYOK + CrispASR + mistral.rs), emoji picker, **GIF picker** (Tenor)
 - **Alt text enforcement**: off / warn / require modes in settings
@@ -54,7 +54,7 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **Lists & Feeds**: Mastodon lists + Bluesky custom feeds + Bluesky feed builder (GUI)
 - **Bluesky Starter Packs**: browse, search, create from identity DB
 - **Trending**: unified Bluesky + Mastodon trending
-- **Universal search**: queries all 3 networks simultaneously with engagement/recency scoring
+- **Universal search**: queries all 3 networks simultaneously with engagement/recency scoring (Threads: keyword search via official API)
 - **Catch-up mode**: AI-ranked missed posts
 - **"For You" algorithm**: local engagement-based ranking
 - **RSS feeds**: subscribe + OPML import, RSS deck columns
@@ -75,10 +75,31 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **Reading lists**: themed post collections
 - **Export**: JSON, CSV, Markdown + full settings export/import
 
+### Threads Integration (API limitations)
+
+The Threads API is significantly more limited than Bluesky/Mastodon. Here's what works and what doesn't:
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **OAuth login** | Works | Server proxy, BYOK credentials, or manual token paste |
+| **View own posts** | Works | Text, images, videos, carousels |
+| **Crosspost to Threads** | Works | Text + media, 500-char limit, container-then-publish flow |
+| **Keyword search** | Works | Requires `threads_keyword_search` permission |
+| **View reposts** | Partial | Shows original author via permalink redirect; full content requires Advanced Access |
+| **View other users' posts** | Limited | `profile_posts` endpoint requires Advanced Access (App Review) |
+| **Home timeline** | Not available | Meta does not expose a feed/timeline API endpoint |
+| **DMs** | Not available | No messaging API |
+| **Notifications** | Not available | No notifications API |
+| **Like/reply/boost** | Not available | No interaction API from third-party apps |
+| **Follow/unfollow** | Not available | No social graph API |
+| **Streaming/real-time** | Not available | No WebSocket or firehose |
+
+Threads users' posts can also be read via **Mastodon federation** (`@user@threads.net`) if the Threads user has opted into fediverse sharing.
+
 ### Platform & UX
 - **Bluesky OAuth** (recommended) or app passwords
 - **Mastodon OAuth** with redirect callback
-- **Threads OAuth** with server proxy or direct
+- **Threads OAuth** with server proxy, BYOK credentials, or manual token paste
 - **Internationalization**: 8 languages (EN, DE, ES, FR, JA, PT, ZH, AR — all 100%) with RTL support
 - **Keyboard shortcuts**: ? for help, g+key navigation, j/k post scrolling, vim-style deck navigation
 - **Collapsible sidebar** + mobile hamburger menu + bottom tab bar
