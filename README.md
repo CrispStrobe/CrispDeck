@@ -113,7 +113,7 @@ Threads users' posts can also be read via **Mastodon federation** (`@user@thread
 - **Welcome onboarding**: feature carousel for first-time users with guided setup
 - **Reduced motion**: respects `prefers-reduced-motion` across all animations
 - **Micro-interactions**: hover scale + press feedback on engagement buttons, mobile menu slide animation, deck drag visual feedback
-- **Compose autofocus**: textarea focused on page load, Ctrl+Enter to post
+- **Compose autofocus**: textarea focused on page load, Ctrl+Enter to post, SVG progress rings per platform
 - **Alt-text UX**: character count + fill indicator on media alt-text inputs
 - **Scroll-to-top button**: floating FAB after scrolling on any page
 - **Search suggestions**: hashtag chips shown before first search
