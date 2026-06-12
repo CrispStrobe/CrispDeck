@@ -104,6 +104,8 @@ Threads users' posts can also be read via **Mastodon federation** (`@user@thread
 - **Keyboard shortcuts**: ? for help, g+key navigation, j/k post scrolling, vim-style deck navigation
 - **Collapsible sidebar** + mobile hamburger menu + bottom tab bar
 - Dark + light + **OLED dark** themes
+- **Display settings**: font family (system/Inter/Georgia/mono), font size, line spacing, content max width
+- **Cache management**: view localStorage/IndexedDB usage, clear feed cache, purge all cached data
 - **PWA install support** (manifest.json + service worker + maskable icons + apple-touch-icon)
 - **Skeleton loading screens**: pulse-animated placeholders for feed and notifications
 - **Toast notifications**: global success/error/warning/info toasts with auto-dismiss
