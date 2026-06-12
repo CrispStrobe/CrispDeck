@@ -51,7 +51,7 @@
 html, body {
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  font-family: var(--user-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif);
   background: var(--color-bg);
   color: var(--color-text);
   height: 100%;
@@ -152,6 +152,15 @@ button:focus-visible, a:focus-visible {
 [dir="rtl"] .mr-auto {
   margin-right: 0;
   margin-left: auto;
+}
+
+/* User display preferences — applied to post content */
+[data-post-uri] p, [data-post-uri] .prose-invert {
+  font-size: var(--user-font-size, 0.875rem);
+  line-height: var(--user-line-height, 1.5);
+}
+#main-content {
+  max-width: var(--user-content-width, none);
 }
 
 /* Mobile menu animations */

@@ -169,6 +169,73 @@
   let compactPosts = $state(localStorage.getItem('crispdeck-compact-posts') === 'true');
   let mediaPreview = $state<'lightbox' | 'browser'>((localStorage.getItem('crispdeck-media-preview') as 'lightbox' | 'browser') || 'lightbox');
   let liveCounters = $state(localStorage.getItem('crispdeck-live-counters') === 'true');
+
+  // Display settings
+  type FontFamily = 'system' | 'inter' | 'georgia' | 'mono';
+  let fontFamily = $state<FontFamily>((localStorage.getItem('crispdeck-font-family') as FontFamily) || 'system');
+  let fontSize = $state(parseInt(localStorage.getItem('crispdeck-font-size') ?? '14'));
+  let lineSpacing = $state(parseFloat(localStorage.getItem('crispdeck-line-spacing') ?? '1.5'));
+  let contentWidth = $state(parseInt(localStorage.getItem('crispdeck-content-width') ?? '0')); // 0 = auto
+
+  const fontMap: Record<FontFamily, string> = {
+    system: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif",
+    inter: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+    georgia: "Georgia, 'Times New Roman', serif",
+    mono: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
+  };
+
+  function applyDisplaySettings() {
+    const root = document.documentElement;
+    root.style.setProperty('--user-font-family', fontMap[fontFamily]);
+    root.style.setProperty('--user-font-size', `${fontSize}px`);
+    root.style.setProperty('--user-line-height', String(lineSpacing));
+    if (contentWidth > 0) root.style.setProperty('--user-content-width', `${contentWidth}px`);
+    else root.style.removeProperty('--user-content-width');
+    localStorage.setItem('crispdeck-font-family', fontFamily);
+    localStorage.setItem('crispdeck-font-size', String(fontSize));
+    localStorage.setItem('crispdeck-line-spacing', String(lineSpacing));
+    localStorage.setItem('crispdeck-content-width', String(contentWidth));
+  }
+
+  // Cache management
+  let cacheStats = $state({ localStorage: 0, indexedDB: '' });
+  async function calcCacheStats() {
+    // localStorage size
+    let lsSize = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) lsSize += (localStorage.getItem(key) ?? '').length;
+    }
+    cacheStats.localStorage = lsSize;
+    // IndexedDB estimate
+    if (navigator.storage?.estimate) {
+      const est = await navigator.storage.estimate();
+      cacheStats.indexedDB = formatBytes(est.usage ?? 0);
+    }
+  }
+  function formatBytes(b: number): string {
+    if (b < 1024) return `${b} B`;
+    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+    return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  function purgeViewCache() {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith('crispdeck-vc-')) keys.push(k);
+    }
+    keys.forEach(k => localStorage.removeItem(k));
+    calcCacheStats();
+  }
+  async function purgeAllData() {
+    if (!confirm('This will delete all cached data, drafts, bookmarks, and archive. Accounts and settings are preserved. Continue?')) return;
+    // Delete IndexedDB databases
+    for (const name of ['crispdeck-archive', 'crispdeck-bookmarks', 'crispdeck-engagement', 'crispdeck-translations']) {
+      try { indexedDB.deleteDatabase(name); } catch {}
+    }
+    purgeViewCache();
+    calcCacheStats();
+  }
   function handleLiveCountersChange() {
     localStorage.setItem('crispdeck-live-counters', String(liveCounters));
     jetstream.setEnabled(liveCounters);
@@ -359,6 +426,8 @@
   // Check if server proxy is available on mount
   onMount(async () => {
     threadsProxyAvailable = await isThreadsAvailable();
+    applyDisplaySettings();
+    calcCacheStats();
   });
 
   async function handleStartThreadsOAuth() {
@@ -1022,6 +1091,58 @@
           onchange={handleLiveCountersChange}
           class="w-4 h-4 accent-[var(--color-primary)]"
         />
+      </div>
+
+      <!-- Display settings -->
+      <div class="border-t border-[var(--color-border)] pt-3 mt-3">
+        <h3 class="text-sm font-medium mb-2">Display</h3>
+
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <label for="font-family" class="text-xs text-[var(--color-text-muted)]">Font</label>
+            <select id="font-family" bind:value={fontFamily} onchange={applyDisplaySettings} class="px-2 py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)]">
+              <option value="system">System default</option>
+              <option value="inter">Inter</option>
+              <option value="georgia">Georgia (serif)</option>
+              <option value="mono">Monospace</option>
+            </select>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <label for="font-size" class="text-xs text-[var(--color-text-muted)]">Font size: {fontSize}px</label>
+            <input id="font-size" type="range" min="11" max="20" step="1" bind:value={fontSize} oninput={applyDisplaySettings} class="w-28 accent-[var(--color-primary)]" />
+          </div>
+
+          <div class="flex items-center justify-between">
+            <label for="line-spacing" class="text-xs text-[var(--color-text-muted)]">Line spacing: {lineSpacing.toFixed(1)}</label>
+            <input id="line-spacing" type="range" min="1.0" max="2.2" step="0.1" bind:value={lineSpacing} oninput={applyDisplaySettings} class="w-28 accent-[var(--color-primary)]" />
+          </div>
+
+          <div class="flex items-center justify-between">
+            <label for="content-width" class="text-xs text-[var(--color-text-muted)]">{contentWidth > 0 ? `Max width: ${contentWidth}px` : 'Max width: auto'}</label>
+            <input id="content-width" type="range" min="0" max="1200" step="100" bind:value={contentWidth} oninput={applyDisplaySettings} class="w-28 accent-[var(--color-primary)]" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Cache management -->
+      <div class="border-t border-[var(--color-border)] pt-3 mt-3">
+        <h3 class="text-sm font-medium mb-2">Cache & Storage</h3>
+        <div class="text-[10px] text-[var(--color-text-muted)] space-y-1 mb-2">
+          <p>localStorage: {formatBytes(cacheStats.localStorage * 2)}</p>
+          {#if cacheStats.indexedDB}<p>IndexedDB (archive, bookmarks, translations): {cacheStats.indexedDB}</p>{/if}
+        </div>
+        <div class="flex gap-2">
+          <button onclick={purgeViewCache} class="px-2 py-1 text-[10px] bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
+            Clear feed cache
+          </button>
+          <button onclick={purgeAllData} class="px-2 py-1 text-[10px] bg-red-900/20 border border-red-800/30 rounded text-red-400 hover:text-red-300 transition-colors">
+            Purge all cached data
+          </button>
+          <button onclick={calcCacheStats} class="px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+            Refresh
+          </button>
+        </div>
       </div>
 
       <!-- Notification sound -->

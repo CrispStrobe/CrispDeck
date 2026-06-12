@@ -70,6 +70,18 @@
     const saved = localStorage.getItem('crispdeck-theme') as 'dark' | 'oled' | 'light' | null;
     if (saved) { theme = saved; document.documentElement.setAttribute('data-theme', saved); }
 
+    // Restore display preferences
+    const root = document.documentElement;
+    const fontMap: Record<string, string> = { system: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif", inter: "'Inter', -apple-system, sans-serif", georgia: "Georgia, 'Times New Roman', serif", mono: "'SF Mono', 'Fira Code', monospace" };
+    const ff = localStorage.getItem('crispdeck-font-family');
+    if (ff && fontMap[ff]) root.style.setProperty('--user-font-family', fontMap[ff]);
+    const fs = localStorage.getItem('crispdeck-font-size');
+    if (fs) root.style.setProperty('--user-font-size', `${fs}px`);
+    const ls = localStorage.getItem('crispdeck-line-spacing');
+    if (ls) root.style.setProperty('--user-line-height', ls);
+    const cw = localStorage.getItem('crispdeck-content-width');
+    if (cw && parseInt(cw) > 0) root.style.setProperty('--user-content-width', `${cw}px`);
+
     // Offline detection
     offline = !navigator.onLine;
     const handleOnline = () => offline = false;
