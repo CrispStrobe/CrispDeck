@@ -5,8 +5,8 @@ export default defineConfig({
   timeout: 30000,
   retries: 1,
   fullyParallel: true,
-  reporter: [['list'], ['html', { outputFolder: '/mnt/volume1/playwright-report' }]],
-  outputDir: '/mnt/volume1/playwright-results',
+  reporter: [['list'], ['html', { outputFolder: 'playwright-report' }]],
+  outputDir: 'playwright-results',
   use: {
     baseURL: 'http://localhost:4173',
     trace: 'on-first-retry',

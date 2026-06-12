@@ -12,3 +12,5 @@ dist/
 .vercel
 src-tauri/.cargo/config.toml
 handover-prompts/
+playwright-report/
+playwright-results/
