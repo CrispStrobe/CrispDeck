@@ -36,6 +36,10 @@
   let clientEntries: Map<number, ClientEntry> = new Map();
   let streamCleanups: Map<string, () => void> = new Map();
 
+  const hasBsky = $derived(accounts.some(a => a.platform === 'bluesky'));
+  const hasMasto = $derived(accounts.some(a => a.platform === 'mastodon'));
+  const hasThreads = $derived(accounts.some(a => a.platform === 'threads'));
+
   const defaultColumns: DeckColumnConfig[] = [
     { id: 'timeline', title: 'Timeline', type: 'timeline' },
     { id: 'notifications', title: 'Notifications', type: 'notifications' },
@@ -57,6 +61,7 @@
     { type: 'tag-group', label: 'Tag Group...' },
     { type: 'rss', label: 'RSS Feed...' },
     { type: 'keyword-monitor', label: 'Monitor Keywords...' },
+    { type: 'threads-search', label: 'Threads Search...' },
   ];
 
   // Saved layouts (using deck-layouts.ts module)
@@ -328,12 +333,19 @@
             }
           } catch {}
           if (threadsClient) try {
-            const results = await threadsClient.search(searchQuery, 'KEYWORD');
+            const results = await threadsClient.keywordSearch(searchQuery, { searchType: 'RECENT', limit: 25 });
             for (const p of results) {
-              const normalized = threadsClient.normalizePost(p);
+              const normalized = normalizePost(p, 'threads');
               if (matches(normalized.text)) posts.push(normalized);
             }
           } catch {}
+        }
+      } else if (col.type === 'threads-search' && col.query && threadsClient) {
+        try {
+          const results = await threadsClient.keywordSearch(col.query, { searchType: 'RECENT', limit: 50 });
+          posts.push(...results.map(p => normalizePost(p, 'threads')));
+        } catch (e) {
+          console.error('Threads search column failed:', e);
         }
       }
     } catch (e) {
@@ -452,6 +464,11 @@
           return;
         }
       }
+    } else if (type === 'threads-search') {
+      const input = prompt('Threads search query (e.g. #tech, AI, photography):');
+      if (!input) return;
+      query = input;
+      title = `Threads: ${input.length > 20 ? input.slice(0, 20) + '...' : input}`;
     } else if (type === 'keyword-monitor') {
       const saved = listKeywordSets();
       let input: string | undefined;
@@ -603,7 +620,12 @@
       </button>
       {#if showAddMenu}
         <div class="absolute right-0 top-full mt-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl z-50 py-1 min-w-[160px]">
-          {#each availableColumns as opt}
+          {#each availableColumns.filter(opt => {
+            if (opt.type === 'local' || opt.type === 'federated' || opt.type === 'list') return hasMasto;
+            if (opt.type === 'feed') return hasBsky;
+            if (opt.type === 'threads-search') return hasThreads;
+            return true;
+          }) as opt}
             <button
               onclick={() => addColumn(opt.type)}
               class="w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-surface-hover)] transition-colors"
