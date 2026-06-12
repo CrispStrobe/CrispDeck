@@ -125,6 +125,10 @@ Threads users' posts can also be read via **Mastodon federation** (`@user@thread
 - **Open Graph / Twitter Card** meta tags for social link sharing
 - **Focus trap** in keyboard shortcuts modal
 - **favicon.ico** for legacy browser tab support
+- **Lazy i18n**: only active language loaded; 7 others split into async chunks (~80KB savings)
+- **Dynamic DOMPurify**: loaded on first use, not bundled into every page (~30KB savings)
+- **Service worker**: cache-first for immutable chunks, stale-while-revalidate for assets, offline shell
+- **Mobile**: viewport-fit=cover, text-size-adjust, smooth scrolling, font-display:swap, image CLS prevention
 - Safe area insets, touch targets, responsive design
 - **Emoji picker** + **GIF picker** (Tenor) in compose
 - **About page** with legal info + searchable open-source license list
