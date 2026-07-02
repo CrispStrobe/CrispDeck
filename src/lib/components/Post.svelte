@@ -502,6 +502,12 @@
     return null;
   }
 
+  function getThreadsQuote(): any | null {
+    if (post.platform !== 'threads') return null;
+    const raw = post.raw as any;
+    return raw.quoted_post ?? null;
+  }
+
   function getMastodonCard(): any | null {
     if (post.platform !== 'mastodon') return null;
     const raw = post.raw as any;
@@ -523,6 +529,7 @@
   const bskyImages = $derived(getBskyImages());
   const bskyExternal = $derived(getBskyExternal());
   const bskyQuote = $derived(getBskyQuote());
+  const threadsQuote = $derived(getThreadsQuote());
   const bskyVideo = $derived(getBskyVideo());
   const mastodonHtml = $derived(sanitizeHtml(getMastodonHtml()));
   const platformColor = $derived(`var(--color-${post.platform})`);
@@ -675,26 +682,34 @@
 
       <!-- Bluesky quoted post -->
       {#if bskyQuote}
-        <div class="mt-2 border border-[var(--color-border)] rounded-lg p-3 bg-[var(--color-bg)]">
+        <button
+          type="button"
+          onclick={() => goto(`/thread?uri=${encodeURIComponent(bskyQuote.uri)}&platform=bluesky`)}
+          class="mt-2 w-full text-left border border-[var(--color-border)] rounded-lg p-3 bg-[var(--color-bg)] cursor-pointer hover:border-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] transition-colors"
+        >
           <div class="flex items-center gap-2 mb-1">
             {#if bskyQuote.author?.avatar}
-              <img loading="lazy" src={bskyQuote.author.avatar} alt="" class="w-4 h-4 rounded-full" />
+              <img loading="lazy" src={bskyQuote.author.avatar} alt="" class="w-5 h-5 rounded-full" />
             {/if}
             <span class="text-xs font-medium">{bskyQuote.author?.displayName || bskyQuote.author?.handle}</span>
             <span class="text-[10px] text-[var(--color-text-muted)]">@{bskyQuote.author?.handle}</span>
           </div>
-          <p class="text-xs text-[var(--color-text-muted)] line-clamp-3">{(bskyQuote.value as any)?.text ?? ''}</p>
+          <p class="text-sm text-[var(--color-text)] line-clamp-6">{(bskyQuote.value as any)?.text ?? ''}</p>
           {#if bskyQuote.embeds?.[0]}
             {@const qEmbed = bskyQuote.embeds[0]}
             {#if qEmbed.$type === 'app.bsky.embed.images#view' && qEmbed.images?.[0]}
-              <button type="button" onclick={() => openLightbox(qEmbed.images.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0)} class="w-full cursor-pointer text-left">
-                <img loading="lazy" src={qEmbed.images[0].thumb} alt={qEmbed.images[0].alt || ''} class="mt-1.5 rounded w-full h-24 object-cover" />
-              </button>
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <div onclick={(e: MouseEvent) => { e.stopPropagation(); openLightbox(qEmbed.images.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0); }} class="cursor-pointer" role="button" tabindex="-1">
+                <img loading="lazy" src={qEmbed.images[0].thumb} alt={qEmbed.images[0].alt || ''} class="mt-2 rounded w-full max-h-48 object-cover" />
+                {#if qEmbed.images.length > 1}
+                  <p class="mt-1 text-[10px] text-[var(--color-text-muted)]">+{qEmbed.images.length - 1} more</p>
+                {/if}
+              </div>
             {/if}
             {#if qEmbed.$type === 'app.bsky.embed.external#view' && qEmbed.external}
-              <div class="mt-1.5 flex items-center gap-2 text-[10px] text-[var(--color-text-muted)]">
+              <div class="mt-2 flex items-center gap-2 text-[10px] text-[var(--color-text-muted)]">
                 {#if qEmbed.external.thumb}
-                  <img loading="lazy" src={qEmbed.external.thumb} alt="" class="w-10 h-10 rounded object-cover" />
+                  <img loading="lazy" src={qEmbed.external.thumb} alt="" class="w-12 h-12 rounded object-cover" />
                 {/if}
                 <div class="min-w-0">
                   <p class="font-medium truncate">{qEmbed.external.title}</p>
@@ -703,7 +718,29 @@
               </div>
             {/if}
           {/if}
-        </div>
+        </button>
+      {/if}
+
+      <!-- Threads quoted post -->
+      {#if threadsQuote}
+        <button
+          type="button"
+          onclick={() => {
+            const permalink = threadsQuote.permalink;
+            if (permalink) window.open(permalink, '_blank', 'noopener,noreferrer');
+          }}
+          class="mt-2 w-full text-left border border-[var(--color-border)] rounded-lg p-3 bg-[var(--color-bg)] cursor-pointer hover:border-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] transition-colors"
+        >
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-xs font-medium">@{threadsQuote.username}</span>
+          </div>
+          {#if threadsQuote.text}
+            <p class="text-sm text-[var(--color-text)] line-clamp-6">{threadsQuote.text}</p>
+          {/if}
+          {#if threadsQuote.media_url && threadsQuote.media_type !== 'TEXT_POST'}
+            <img loading="lazy" src={threadsQuote.thumbnail_url ?? threadsQuote.media_url} alt="" class="mt-2 rounded w-full max-h-48 object-cover" />
+          {/if}
+        </button>
       {/if}
 
       <!-- Bluesky video -->
