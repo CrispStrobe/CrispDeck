@@ -3,6 +3,7 @@
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Bell, Heart, Repeat, UserPlus, MessageCircle, AtSign, Loader2, Quote, ChevronDown, ChevronUp, RefreshCw, CheckCheck } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
+  import { createPullToRefresh } from '$lib/utils/pull-to-refresh';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import type { Account } from '$lib/types';
@@ -88,7 +89,7 @@
                   platform: 'mastodon',
                   type: n.type,
                   createdAt: n.created_at,
-                  author: { handle: n.account?.acct ? `@${n.account.acct}` : '?', displayName: n.account?.display_name, avatar: n.account?.avatar },
+                  author: { handle: n.account?.acct ? `@${n.account.acct}` : '?', displayName: n.account?.display_name, avatar: n.account?.avatar, accountId: n.account?.id },
                   text: n.status?.content?.replace(/<[^>]*>?/gm, ''),
                   postUri: n.status?.uri,
                 });
@@ -106,11 +107,29 @@
     setCache('notifications', groups);
   }
 
+  async function handleFollowRequest(group: NotificationGroup, action: 'accept' | 'reject') {
+    for (const actor of group.actors) {
+      const mastoAccountId = (actor as any).accountId;
+      if (!mastoAccountId) continue;
+      for (const [, entry] of clientEntries) {
+        if (entry.platform !== 'mastodon') continue;
+        const masto = entry.client as MastodonClient;
+        try {
+          if (action === 'accept') await masto.authorizeFollowRequest(mastoAccountId);
+          else await masto.rejectFollowRequest(mastoAccountId);
+        } catch (e) { console.error(`Follow request ${action} failed:`, e); }
+      }
+    }
+    groups = groups.filter(g => g.id !== group.id);
+  }
+
   async function refresh() {
     refreshing = true;
     await loadNotifications();
     refreshing = false;
   }
+
+  const ptr = createPullToRefresh(async () => { await loadNotifications(); });
 
   function toggleGroup(groupId: string) {
     const next = new Set(expandedGroups);
@@ -123,7 +142,7 @@
     switch (type) {
       case 'like': case 'favourite': return Heart;
       case 'repost': case 'reblog': return Repeat;
-      case 'follow': return UserPlus;
+      case 'follow': case 'follow_request': return UserPlus;
       case 'mention': return AtSign;
       case 'reply': return MessageCircle;
       case 'quote': return Quote;
@@ -179,7 +198,12 @@
 
 <svelte:head><title>CrispDeck — Notifications</title><meta name="description" content="Unified notifications from all your accounts" /></svelte:head>
 
-<div class="p-6 max-w-3xl mx-auto">
+<div class="p-6 max-w-3xl mx-auto" ontouchstart={ptr.onTouchStart} ontouchmove={ptr.onTouchMove} ontouchend={ptr.onTouchEnd}>
+  {#if ptr.state.pullDistance > 0}
+    <div class="flex items-center justify-center mb-2 transition-all" style="height: {ptr.state.pullDistance}px">
+      <RefreshCw size={20} class="text-[var(--color-primary)] {ptr.state.pullRefreshing ? 'animate-spin' : ''}" style="opacity: {ptr.state.pullDistance / 60}; transform: rotate({ptr.state.pullDistance * 3}deg)" />
+    </div>
+  {/if}
   <div class="flex items-center justify-between mb-6">
     <div class="flex items-center gap-2">
       <Bell size={24} />
@@ -296,6 +320,18 @@
                 </p>
                 {#if group.text}
                   <p class="text-xs text-[var(--color-text-muted)] mt-1 line-clamp-2">{group.text}</p>
+                {/if}
+                {#if group.type === 'follow_request'}
+                  <div class="flex gap-2 mt-2">
+                    <button
+                      onclick={() => handleFollowRequest(group, 'accept')}
+                      class="px-3 py-1 text-xs bg-[var(--color-primary)] text-white rounded-md hover:opacity-90 transition-opacity"
+                    >Accept</button>
+                    <button
+                      onclick={() => handleFollowRequest(group, 'reject')}
+                      class="px-3 py-1 text-xs bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] rounded-md hover:bg-[var(--color-border)] transition-colors"
+                    >Reject</button>
+                  </div>
                 {/if}
               </div>
             </div>

@@ -52,6 +52,8 @@
 
   // Thread gate (Bluesky)
   let threadGate: ThreadGate = $state('everyone');
+  // Self-label (Bluesky content warning)
+  let selfLabel = $state<'none' | 'graphic-media' | 'nudity' | 'porn' | 'gore'>('none');
 
   // Poll (Mastodon)
   let showPoll = $state(false);
@@ -300,6 +302,7 @@
       quoteCid: quoteCid || undefined,
       quoteUrl,
       threadGate: threadGate !== 'everyone' ? threadGate : undefined,
+      selfLabel: selfLabel !== 'none' ? selfLabel : undefined,
       poll: showPoll && pollOptions.filter(o => o.trim()).length >= 2
         ? { options: pollOptions.filter(o => o.trim()), expiresIn: pollExpiry, multiple: pollMultiple }
         : undefined,
@@ -868,6 +871,17 @@
                 <option value="mentioned">{i18n.t.compose.mentionedOnly}</option>
                 <option value="following">{i18n.t.compose.followersOnlyVis}</option>
                 <option value="nobody">{i18n.t.compose.noReplies}</option>
+              </select>
+              <select
+                bind:value={selfLabel}
+                class="px-2 py-1 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-[var(--color-text)] focus:outline-none"
+                title="Content label (Bluesky)"
+              >
+                <option value="none">No label</option>
+                <option value="graphic-media">Graphic Media</option>
+                <option value="nudity">Nudity</option>
+                <option value="porn">Porn</option>
+                <option value="gore">Gore</option>
               </select>
             {/if}
           </div>

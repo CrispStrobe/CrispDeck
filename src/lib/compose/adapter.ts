@@ -26,6 +26,7 @@ export interface ComposeOptions {
   quoteCid?: string;   // CID of quoted post
   quoteUrl?: string;   // Web URL for Mastodon (appended to text)
   threadGate?: ThreadGate; // Bluesky: who can reply
+  selfLabel?: string;      // Bluesky: content self-label (graphic-media, nudity, porn, gore)
   poll?: PollOptions;      // Mastodon: attach a poll
 }
 
@@ -95,6 +96,14 @@ export async function postToBluesky(
       record.embed = {
         $type: 'app.bsky.embed.record',
         record: { uri: options.quoteUri, cid: options.quoteCid },
+      };
+    }
+
+    // Add self-label if specified (content warning for Bluesky)
+    if (options.selfLabel) {
+      record.labels = {
+        $type: 'com.atproto.label.defs#selfLabels',
+        values: [{ val: options.selfLabel }],
       };
     }
 

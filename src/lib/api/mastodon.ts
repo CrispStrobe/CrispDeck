@@ -132,6 +132,18 @@ export class MastodonClient {
   async reblog(statusId: string) { return this.authedPost(`/api/v1/statuses/${statusId}/reblog`); }
   async unreblog(statusId: string) { return this.authedPost(`/api/v1/statuses/${statusId}/unreblog`); }
 
+  // Follow requests
+  async getFollowRequests(): Promise<any[]> {
+    if (!this.accessToken) return [];
+    const resp = await fetch(`${this.instanceUrl}/api/v1/follow_requests`, {
+      headers: { Authorization: `Bearer ${this.accessToken}` },
+    });
+    if (!resp.ok) return [];
+    return resp.json();
+  }
+  async authorizeFollowRequest(accountId: string) { return this.authedPost(`/api/v1/follow_requests/${accountId}/authorize`); }
+  async rejectFollowRequest(accountId: string) { return this.authedPost(`/api/v1/follow_requests/${accountId}/reject`); }
+
   getInstanceUrl() { return this.instanceUrl; }
   getAccessToken() { return this.accessToken; }
   isAuthenticated() { return !!this.client; }

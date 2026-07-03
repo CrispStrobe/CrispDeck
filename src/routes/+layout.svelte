@@ -38,6 +38,30 @@
   let bookmarkCount = $state(0);
   let unreadMessages = $state(0);
 
+  // Configurable sidebar — simple mode hides advanced items
+  const SIMPLE_MODE_HIDDEN = ['/deck', '/identities', '/archive', '/analytics', '/moderation', '/labelers', '/about'];
+  let simpleMode = $state(localStorage.getItem('crispdeck-simple-mode') === 'true');
+  let navHidden = $state<Set<string>>(new Set(
+    simpleMode ? SIMPLE_MODE_HIDDEN : JSON.parse(localStorage.getItem('crispdeck-nav-hidden') ?? '[]')
+  ));
+  let showNavCustomize = $state(false);
+
+  function toggleSimpleMode() {
+    simpleMode = !simpleMode;
+    localStorage.setItem('crispdeck-simple-mode', String(simpleMode));
+    if (simpleMode) {
+      navHidden = new Set(SIMPLE_MODE_HIDDEN);
+    } else {
+      navHidden = new Set();
+    }
+    localStorage.setItem('crispdeck-nav-hidden', JSON.stringify([...navHidden]));
+  }
+  function toggleNavItem(href: string) {
+    if (navHidden.has(href)) navHidden.delete(href); else navHidden.add(href);
+    navHidden = new Set(navHidden);
+    localStorage.setItem('crispdeck-nav-hidden', JSON.stringify([...navHidden]));
+  }
+
   async function getCachedClients() {
     const { initAllClients } = await import('$lib/api/client-factory');
     return await initAllClients();
@@ -210,6 +234,9 @@
     { href: '/about', icon: Info, label: 'About' },
   ]);
 
+  // Filtered nav items (respects simple mode / custom hidden items)
+  const visibleNavItems = $derived(navItems.filter(i => !navHidden.has(i.href)));
+
   // Key items for mobile bottom tab bar
   const mobileTabItems = $derived([
     { href: '/feed', icon: Rss, label: i18n.t.nav.feed },
@@ -265,7 +292,7 @@
       </div>
     </div>
     <ul class="flex-1 py-1 overflow-y-auto" role="list">
-      {#each navItems as item}
+      {#each visibleNavItems as item}
         <li>
           <a
             href={item.href}
@@ -287,7 +314,29 @@
       {/each}
     </ul>
     {#if !collapsed}
-      <div class="px-3 py-2 border-t border-[var(--color-border)] text-[10px] text-[var(--color-text-muted)]">v{__VERSION__}</div>
+      <div class="px-3 py-2 border-t border-[var(--color-border)] flex items-center justify-between">
+        <span class="text-[10px] text-[var(--color-text-muted)]">v{__VERSION__}</span>
+        <button onclick={() => showNavCustomize = !showNavCustomize} class="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)]" title="Customize sidebar">
+          <Settings size={12} />
+        </button>
+      </div>
+      {#if showNavCustomize}
+        <div class="px-3 py-2 border-t border-[var(--color-border)] space-y-1 max-h-60 overflow-y-auto">
+          <label class="flex items-center gap-2 text-xs text-[var(--color-text-muted)] cursor-pointer">
+            <input type="checkbox" checked={simpleMode} onchange={toggleSimpleMode} class="rounded" />
+            Simple mode
+          </label>
+          <hr class="border-[var(--color-border)]" />
+          {#each navItems as item}
+            {#if item.href !== '/' && item.href !== '/settings'}
+              <label class="flex items-center gap-2 text-[10px] text-[var(--color-text-muted)] cursor-pointer">
+                <input type="checkbox" checked={!navHidden.has(item.href)} onchange={() => toggleNavItem(item.href)} class="rounded" />
+                {item.label}
+              </label>
+            {/if}
+          {/each}
+        </div>
+      {/if}
     {/if}
   </nav>
 
@@ -314,7 +363,7 @@
     <div class="md:hidden fixed inset-0 z-40 flex mobile-menu-backdrop" onclick={() => mobileMenuOpen = false}>
       <div class="w-64 bg-[var(--color-surface)] border-r border-[var(--color-border)] pt-14 overflow-y-auto mobile-menu-slide" onclick={(e) => e.stopPropagation()}>
         <ul class="py-2">
-          {#each navItems as item}
+          {#each visibleNavItems as item}
             <li>
               <a
                 href={item.href}
