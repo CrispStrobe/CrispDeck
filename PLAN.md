@@ -13,7 +13,7 @@ A unified Mastodon + Bluesky + Threads social media client with:
 
 ## Current State (2026-07-03)
 
-v1.0.0 — 1003 unit tests + 28 Playwright E2E tests, 29 pages, live at https://crispdeck.vercel.app
+v1.0.0 — 1008 unit tests + 28 Playwright E2E tests, 29 pages, live at https://crispdeck.vercel.app
 
 **License**: AGPL-3.0-only
 
@@ -858,6 +858,30 @@ Key competitive advantages: deck+multi-network+Threads (unique combo), cross-pla
 - Slider control in Cache & Storage section
 - Persisted in localStorage, included in settings export/import
 - **Key files**: `src/routes/settings/+page.svelte`, `src/routes/feed/+page.svelte`
+
+### 120. Parallel notification fetching
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Notifications page fetched from accounts sequentially (N serial API calls). Now uses Promise.all() for parallel fetch across all accounts (~4x faster with 5 accounts).
+- **Key files**: `src/routes/notifications/+page.svelte`
+
+### 121. Debounced deck column filter
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Deck column filter input was re-filtering all posts on every keystroke. Now debounced at 200ms — only applies filter after user stops typing.
+- **Key files**: `src/lib/components/deck/DeckColumn.svelte`
+
+### 122. Throttled read position saves
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Read position saved to localStorage on every scroll event (sync I/O). Now uses in-memory cache with 500ms throttled writes. Added flushReadPositions() for page unload.
+- **Key files**: `src/lib/read-position.ts`
+
+### 123. Keyword matcher caching
+- **Status**: Done
+- **Effort**: Small
+- **Description**: buildKeywordMatcher() now caches compiled matchers by entry fingerprint. Avoids re-creating regex objects on repeated calls (e.g., streaming column filtering).
+- **Key files**: `src/lib/keyword-monitor.ts`
 
 ---
 

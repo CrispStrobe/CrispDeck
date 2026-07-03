@@ -116,7 +116,11 @@ export async function getArchiveStats(): Promise<{
   };
 }
 
-/** Search the archive */
+/**
+ * Search the archive. Uses IndexedDB indexes when a single filter is applied
+ * (type, platform) to avoid loading the entire archive into memory.
+ * Falls back to full scan only when text search or multi-field filter is needed.
+ */
 export async function searchArchive(params: {
   query?: string;
   platform?: Platform;
@@ -128,16 +132,44 @@ export async function searchArchive(params: {
   limit?: number;
 }): Promise<ArchivedPost[]> {
   const db = await openArchiveDB();
-  const all = await new Promise<ArchivedPost[]>((resolve, reject) => {
-    const req = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+  const store = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME);
 
-  let results = all;
+  // Fast path: use index when only filtering by type or platform (most common case)
+  const hasTextFilters = !!(params.query || params.author);
+  const hasDateFilters = !!(params.dateFrom || params.dateTo);
+  const hasMediaFilter = !!params.hasMedia;
 
-  if (params.platform) results = results.filter(p => p.platform === params.platform);
-  if (params.type) results = results.filter(p => p.type === params.type);
+  let initial: ArchivedPost[];
+
+  if (params.type && !params.platform && !hasTextFilters && !hasDateFilters && !hasMediaFilter) {
+    // Index scan on 'type' — much faster than getAll() for large archives
+    initial = await new Promise<ArchivedPost[]>((resolve, reject) => {
+      const req = store.index('type').getAll(params.type);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  } else if (params.platform && !params.type && !hasTextFilters && !hasDateFilters && !hasMediaFilter) {
+    initial = await new Promise<ArchivedPost[]>((resolve, reject) => {
+      const req = store.index('platform').getAll(params.platform);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  } else {
+    // Full scan — needed for text search or complex multi-field filters
+    initial = await new Promise<ArchivedPost[]>((resolve, reject) => {
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  let results = initial;
+
+  if (params.platform && params.type) {
+    // Both set but only one was used for index scan
+    if (params.platform) results = results.filter(p => p.platform === params.platform);
+    if (params.type) results = results.filter(p => p.type === params.type);
+  }
   if (params.author) {
     const a = params.author.toLowerCase();
     results = results.filter(p => p.authorHandle.toLowerCase().includes(a) || p.authorName.toLowerCase().includes(a));

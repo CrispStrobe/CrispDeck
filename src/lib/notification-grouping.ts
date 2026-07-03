@@ -58,6 +58,8 @@ const FOLLOW_TYPES = new Set(['follow']);
  */
 export function groupNotifications(notifications: UnifiedNotification[]): NotificationGroup[] {
   const groups: Map<string, NotificationGroup> = new Map();
+  // Track seen actors per group with Set for O(1) dedup (was O(n) Array.some)
+  const actorSets: Map<string, Set<string>> = new Map();
 
   for (const notif of notifications) {
     const normType = normalizeType(notif.type);
@@ -68,26 +70,28 @@ export function groupNotifications(notifications: UnifiedNotification[]): Notifi
     } else if (GROUPABLE_TYPES.has(notif.type) && notif.postUri) {
       groupKey = `${normType}:${notif.postUri}`;
     } else {
-      // Mentions, replies, quotes — each is unique
       groupKey = `unique:${notif.id}`;
     }
 
     const existing = groups.get(groupKey);
     if (existing) {
-      // Add actor if not already present (dedup by handle)
-      if (!existing.actors.some(a => a.handle === notif.author.handle && a.platform === notif.platform)) {
+      // O(1) dedup via Set
+      const actorKey = `${notif.author.handle}:${notif.platform}`;
+      const seen = actorSets.get(groupKey)!;
+      if (!seen.has(actorKey)) {
+        seen.add(actorKey);
         existing.actors.push({ ...notif.author, platform: notif.platform });
       }
       existing.platforms.add(notif.platform);
-      // Keep the most recent timestamp
       if (notif.createdAt > existing.latestAt) {
         existing.latestAt = notif.createdAt;
       }
-      // Keep text if we don't have one yet
       if (!existing.text && notif.text) {
         existing.text = notif.text;
       }
     } else {
+      const actorKey = `${notif.author.handle}:${notif.platform}`;
+      actorSets.set(groupKey, new Set([actorKey]));
       groups.set(groupKey, {
         id: notif.id,
         type: normType,
