@@ -818,7 +818,7 @@
               onclick={() => openLightbox(bskyImages.map(img => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), i)}
               class="cursor-pointer text-left w-full relative"
             >
-              <img loading="lazy" src={image.thumb} alt={image.alt || ''} class="rounded-md w-full {bskyImages.length === 1 ? 'max-h-96 object-contain bg-black/20' : 'aspect-square object-cover'}" />
+              <img loading="lazy" src={image.thumb} alt={image.alt || ''} class="rounded-md w-full {bskyImages.length === 1 ? 'max-h-64 object-contain bg-black/10' : 'aspect-square object-cover'}" />
               {#if image.alt}
                 <span
                   class="absolute bottom-1 left-1 px-1 py-0.5 text-[9px] font-bold bg-black/70 text-white rounded cursor-pointer"
@@ -948,7 +948,7 @@
                 onclick={() => openLightbox(mastodonMedia.map(a => ({ url: a.url || a.previewUrl || a.remoteUrl || '', thumb: a.previewUrl || a.url || '', alt: a.description })), i)}
                 class="cursor-pointer text-left w-full relative"
               >
-                <img loading="lazy" src={imageUrl} alt={attachment.description || `Image ${i + 1}`} class="rounded-md w-full {mastodonMedia.length === 1 ? 'max-h-96 object-contain bg-black/20' : 'aspect-square object-cover'} bg-[var(--color-surface-hover)]" />
+                <img loading="lazy" src={imageUrl} alt={attachment.description || `Image ${i + 1}`} class="rounded-md w-full {mastodonMedia.length === 1 ? 'max-h-64 object-contain bg-black/10' : 'aspect-square object-cover'} bg-[var(--color-surface-hover)]" />
                 {#if attachment.description}
                   <span
                     class="absolute bottom-1 left-1 px-1 py-0.5 text-[9px] font-bold bg-black/70 text-white rounded cursor-pointer"
