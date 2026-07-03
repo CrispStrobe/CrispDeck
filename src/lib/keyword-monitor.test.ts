@@ -94,6 +94,21 @@ describe('buildKeywordMatcher', () => {
     const match = buildKeywordMatcher([]);
     expect(match('anything')).toBe(false);
   });
+
+  it('caches compiled matchers for identical entries', () => {
+    const entries: KeywordEntry[] = [{ value: 'cached', isRegex: false }];
+    const match1 = buildKeywordMatcher(entries);
+    const match2 = buildKeywordMatcher(entries);
+    expect(match1).toBe(match2); // same function reference = cache hit
+  });
+
+  it('recompiles when entries change', () => {
+    const match1 = buildKeywordMatcher([{ value: 'alpha', isRegex: false }]);
+    const match2 = buildKeywordMatcher([{ value: 'beta', isRegex: false }]);
+    expect(match1).not.toBe(match2);
+    expect(match1('alpha test')).toBe(true);
+    expect(match2('beta test')).toBe(true);
+  });
 });
 
 describe('buildMatcherFromString', () => {

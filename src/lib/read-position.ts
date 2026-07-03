@@ -1,6 +1,9 @@
 /**
  * Read position sync — remember where the user left off in each feed/column.
  * Stores the URI of the last-seen post per context key.
+ *
+ * Optimized: uses an in-memory cache with throttled localStorage writes
+ * to avoid blocking the main thread on frequent scroll events.
  */
 
 const STORAGE_KEY = 'crispdeck-read-positions';
@@ -13,14 +16,26 @@ interface ReadPositions {
   };
 }
 
+/** In-memory cache — avoids repeated JSON.parse on every read */
+let _cache: ReadPositions | null = null;
+
 function load(): ReadPositions {
+  if (_cache) return _cache;
   const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return {};
-  try { return JSON.parse(raw); } catch { return {}; }
+  if (!raw) { _cache = {}; return _cache; }
+  try { _cache = JSON.parse(raw); return _cache!; } catch { _cache = {}; return _cache; }
 }
 
+/** Throttle timer for batched localStorage writes */
+let _saveTimer: ReturnType<typeof setTimeout> | undefined;
+
 function save(positions: ReadPositions): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(positions));
+  _cache = positions;
+  // Throttle writes: batch rapid scroll updates into one localStorage write
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(positions));
+  }, 500);
 }
 
 /**
@@ -60,4 +75,12 @@ export function clearReadPosition(contextKey: string): void {
   const positions = load();
   delete positions[contextKey];
   save(positions);
+}
+
+/** Flush pending writes immediately (call on page unload) */
+export function flushReadPositions(): void {
+  if (_cache && _saveTimer) {
+    clearTimeout(_saveTimer);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(_cache));
+  }
 }

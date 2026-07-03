@@ -37,71 +37,71 @@
   });
 
   async function loadNotifications() {
-    const all: UnifiedNotification[] = [];
+    // Fetch notifications from all accounts in parallel
+    const fetchers: Promise<UnifiedNotification[]>[] = [];
 
     for (const [id, entry] of clientEntries) {
       const acct = accounts.find(a => a.id === id);
       if (!acct) continue;
 
-      try {
-        if (acct.platform === 'bluesky') {
-          let notifs: any[] = [];
-          if (entry.oauthAgent) {
-            // OAuth account — use the OAuth agent directly
-            const resp = await entry.oauthAgent.api.app.bsky.notification.listNotifications({ limit: 50 });
-            notifs = resp.data.notifications;
-          } else {
-            // App-password account — use BlueskyClient
-            const bsky = entry.client as BlueskyClient;
-            const result = await bsky.getNotifications();
-            notifs = result.notifications;
-          }
-          for (const n of notifs) {
-            all.push({
-              id: `bsky-${n.uri}`,
-              platform: 'bluesky',
-              type: n.reason, // like, repost, follow, mention, reply, quote
-              createdAt: n.indexedAt,
-              author: {
-                handle: n.author.handle,
-                displayName: n.author.displayName,
-                avatar: n.author.avatar,
-              },
-              text: (n.record as any)?.text,
-              postUri: n.reasonSubject,
-            });
-          }
-        } else if (acct.platform === 'mastodon') {
-          const masto = entry.client as MastodonClient;
-          const token = masto.getAccessToken();
-          if (!token) continue;
-          const resp = await fetch(`${masto.getInstanceUrl()}/api/v1/notifications?limit=40`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (resp.ok) {
-            const raw = await resp.json();
+      if (acct.platform === 'bluesky') {
+        fetchers.push((async () => {
+          const notifs: UnifiedNotification[] = [];
+          try {
+            let raw: any[] = [];
+            if (entry.oauthAgent) {
+              const resp = await entry.oauthAgent.api.app.bsky.notification.listNotifications({ limit: 50 });
+              raw = resp.data.notifications;
+            } else {
+              const bsky = entry.client as BlueskyClient;
+              const result = await bsky.getNotifications();
+              raw = result.notifications;
+            }
             for (const n of raw) {
-              all.push({
-                id: `masto-${n.id}`,
-                platform: 'mastodon',
-                type: n.type, // mention, status, reblog, follow, favourite, poll, update
-                createdAt: n.created_at,
-                author: {
-                  handle: n.account?.acct ? `@${n.account.acct}` : '?',
-                  displayName: n.account?.display_name,
-                  avatar: n.account?.avatar,
-                },
-                text: n.status?.content?.replace(/<[^>]*>?/gm, ''),
-                postUri: n.status?.uri,
+              notifs.push({
+                id: `bsky-${n.uri}`,
+                platform: 'bluesky',
+                type: n.reason,
+                createdAt: n.indexedAt,
+                author: { handle: n.author.handle, displayName: n.author.displayName, avatar: n.author.avatar },
+                text: (n.record as any)?.text,
+                postUri: n.reasonSubject,
               });
             }
-          }
-        }
-      } catch (e) {
-        console.error(`Failed to load notifications for ${acct.handle}:`, e);
+          } catch (e) { console.error(`Failed to load notifications for ${acct.handle}:`, e); }
+          return notifs;
+        })());
+      } else if (acct.platform === 'mastodon') {
+        fetchers.push((async () => {
+          const notifs: UnifiedNotification[] = [];
+          try {
+            const masto = entry.client as MastodonClient;
+            const token = masto.getAccessToken();
+            if (!token) return notifs;
+            const resp = await fetch(`${masto.getInstanceUrl()}/api/v1/notifications?limit=40`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (resp.ok) {
+              for (const n of await resp.json()) {
+                notifs.push({
+                  id: `masto-${n.id}`,
+                  platform: 'mastodon',
+                  type: n.type,
+                  createdAt: n.created_at,
+                  author: { handle: n.account?.acct ? `@${n.account.acct}` : '?', displayName: n.account?.display_name, avatar: n.account?.avatar },
+                  text: n.status?.content?.replace(/<[^>]*>?/gm, ''),
+                  postUri: n.status?.uri,
+                });
+              }
+            }
+          } catch (e) { console.error(`Failed to load notifications for ${acct.handle}:`, e); }
+          return notifs;
+        })());
       }
     }
 
+    const results = await Promise.all(fetchers);
+    const all = results.flat();
     groups = groupNotifications(all);
     setCache('notifications', groups);
   }

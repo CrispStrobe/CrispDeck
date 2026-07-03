@@ -87,9 +87,15 @@ export function parseKeywords(input: string): KeywordEntry[] {
 /**
  * Build a matcher function from keyword entries.
  * Returns true if the text matches ANY keyword (OR logic).
+ * Caches compiled matchers to avoid re-creating regexes on repeated calls.
  */
+let _matcherCache: { key: string; fn: (text: string) => boolean } | null = null;
+
 export function buildKeywordMatcher(entries: KeywordEntry[]): (text: string) => boolean {
   if (entries.length === 0) return () => false;
+
+  const cacheKey = entries.map(e => `${e.value}:${e.isRegex}`).join('|');
+  if (_matcherCache && _matcherCache.key === cacheKey) return _matcherCache.fn;
 
   const matchers: ((text: string) => boolean)[] = entries.map(entry => {
     if (entry.isRegex) {
@@ -105,7 +111,9 @@ export function buildKeywordMatcher(entries: KeywordEntry[]): (text: string) => 
     return (text: string) => text.toLowerCase().includes(lower);
   });
 
-  return (text: string) => matchers.some(m => m(text));
+  const fn = (text: string) => matchers.some(m => m(text));
+  _matcherCache = { key: cacheKey, fn };
+  return fn;
 }
 
 /**

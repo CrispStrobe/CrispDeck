@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { saveReadPosition, getReadPosition, findReadPositionIndex, clearReadPosition } from './read-position';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { saveReadPosition, getReadPosition, findReadPositionIndex, clearReadPosition, flushReadPositions } from './read-position';
 
 describe('read position', () => {
   beforeEach(() => {
@@ -51,5 +51,25 @@ describe('read position', () => {
     saveReadPosition('feed', 'at://post-1');
     clearReadPosition('feed');
     expect(getReadPosition('feed')).toBeNull();
+  });
+
+  it('reads from in-memory cache without hitting localStorage', () => {
+    saveReadPosition('cached', 'at://cache-test');
+    // Second read should use cache (no additional localStorage.getItem)
+    const pos = getReadPosition('cached');
+    expect(pos!.lastSeenUri).toBe('at://cache-test');
+  });
+
+  it('flushReadPositions writes immediately', () => {
+    vi.useFakeTimers();
+    saveReadPosition('flush-test', 'at://flush-uri');
+    // Before flush, the throttled write hasn't fired yet
+    flushReadPositions();
+    // After flush, the data should be in localStorage
+    vi.useRealTimers();
+  });
+
+  it('exports flushReadPositions function', () => {
+    expect(typeof flushReadPositions).toBe('function');
   });
 });

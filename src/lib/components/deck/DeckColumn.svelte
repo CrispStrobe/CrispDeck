@@ -108,10 +108,21 @@
   const useGroupedNotifs = $derived(type === 'notifications' && notificationGroups.length > 0);
 
   let filterText = $state('');
+  let debouncedFilter = $state('');
+  let filterTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function onFilterInput(value: string) {
+    filterText = value;
+    clearTimeout(filterTimer);
+    filterTimer = setTimeout(() => { debouncedFilter = value; }, 200);
+  }
+
   const filteredPosts = $derived(
-    filterText
-      ? posts.filter(p => p.text.toLowerCase().includes(filterText.toLowerCase()) ||
-          p.author.handle.toLowerCase().includes(filterText.toLowerCase()))
+    debouncedFilter
+      ? posts.filter(p => {
+          const q = debouncedFilter.toLowerCase();
+          return p.text.toLowerCase().includes(q) || p.author.handle.toLowerCase().includes(q);
+        })
       : posts
   );
 
@@ -185,7 +196,8 @@
   <div class="px-2 py-1 border-b border-[var(--color-border)]">
     <input
       type="text"
-      bind:value={filterText}
+      value={filterText}
+      oninput={(e) => onFilterInput((e.target as HTMLInputElement).value)}
       placeholder="Filter..."
       class="w-full px-2 py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-[10px] text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]"
     />
