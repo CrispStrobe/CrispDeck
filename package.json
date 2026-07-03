@@ -41,6 +41,7 @@
     "@tauri-apps/cli": "^2",
     "@tauri-apps/plugin-notification": "^2",
     "@types/dompurify": "^3.0.5",
+    "@types/node": "^26.1.0",
     "jsdom": "^26.1.0",
     "svelte": "^5.0.0",
     "svelte-check": "^4.0.0",
