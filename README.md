@@ -129,9 +129,24 @@ Threads users' posts can also be read via **Mastodon federation** (`@user@thread
 - **favicon.ico** for legacy browser tab support
 - **Lazy i18n**: only active language loaded; 7 others split into async chunks (~80KB savings)
 - **Dynamic DOMPurify**: loaded on first use, not bundled into every page (~30KB savings)
-- **Service worker**: cache-first for immutable chunks, stale-while-revalidate for assets, offline shell
-- **Mobile**: viewport-fit=cover, text-size-adjust, smooth scrolling, font-display:swap, image CLS prevention
+- **Service worker**: cache-first for immutable chunks, stale-while-revalidate for assets, offline shell, auto-versioned from git hash
+- **Mobile**: viewport-fit=cover, text-size-adjust, smooth scrolling, image CLS prevention
 - Safe area insets, touch targets, responsive design
+
+### Performance (Phases 16–21)
+- **Parallel API loading**: all network requests across accounts fire concurrently (Promise.allSettled) on every page
+- **Stale-while-revalidate**: trending + profile pages show cached data instantly, refresh in background
+- **IDB singletons**: all 4 IndexedDB databases (main, archive, bookmarks, engagement) use cached connections
+- **Batched IDB writes**: follows cache, bookmark imports use single transactions (N+1 → 1)
+- **PBKDF2 key caching**: 600k-iteration derived key cached after first use (~100-300ms saved per call)
+- **Crosspost detection**: O(N²) Jaro-Winkler with result caching, platform-indexed lookup, order-independent hash key
+- **Visibility-aware**: all polling/WebSockets pause when tab hidden, resume on focus
+- **WebSocket backoff**: exponential reconnect (5s base, 2× per attempt, 60s cap)
+- **Deck virtualization**: 50-post cap per column with "Show more" pagination
+- **Build**: es2022 target, lightningcss minification, vendor chunk splitting, preconnect hints
+- **CSS**: `content-visibility: auto` on post cards, `loading="lazy"` + `decoding="async"` on images
+- **Svelte reactivity**: all `$derived` computations properly memoized (no function-returning anti-patterns)
+- **Template efficiency**: all expensive computations (URL parsing, time formatting, thread splitting) hoisted to `$derived`
 - **Emoji picker** + **GIF picker** (Tenor) in compose
 - **About page** with legal info + searchable open-source license list
 - **Log viewer**: CrispLens-style modal with level filters, search, auto-follow, export to .txt
@@ -139,7 +154,7 @@ Threads users' posts can also be read via **Mastodon federation** (`@user@thread
 - **HTML sanitization**: DOMPurify on all Mastodon HTML (XSS prevention)
 - **Security headers**: CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy
 - **Encryption**: AES-256-GCM with 600k PBKDF2 iterations + per-device random salt
-- 947 unit tests across 74 test files + 28 Playwright E2E tests
+- 1032 unit tests across 77 test files + 28 Playwright E2E tests
 
 ## Architecture
 
@@ -347,7 +362,7 @@ OAuth on mobile uses the `crispdeck://` URL scheme (registered in AndroidManifes
 
 ## Stats
 
-- 947 frontend unit tests + 28 Playwright E2E tests + 15 Rust tests
+- 1032 frontend unit tests + 28 Playwright E2E tests + 15 Rust tests
 - 29 pages, 15 deck column types
 - 3 networks: Bluesky (OAuth + app password), Mastodon (OAuth), Threads (OAuth with server proxy)
 - 8 UI languages (EN, DE, ES, FR, JA, PT, ZH, AR — all 100%) with RTL support

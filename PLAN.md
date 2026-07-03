@@ -883,6 +883,126 @@ Key competitive advantages: deck+multi-network+Threads (unique combo), cross-pla
 - **Description**: buildKeywordMatcher() now caches compiled matchers by entry fingerprint. Avoids re-creating regex objects on repeated calls (e.g., streaming column filtering).
 - **Key files**: `src/lib/keyword-monitor.ts`
 
+## Phase 17: Deep Performance Optimizations (2026-07-03)
+
+### 124. Memory leak fixes
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Fixed three memory leaks:
+  - `setInterval` in drafts page not cleaned up on navigation (cleanup fn not returned from `onMount`)
+  - DeckColumn global `mousemove`/`mouseup` listeners not removed on component destroy mid-drag
+  - TTS `audioEl` blob URL not revoked in `onDestroy`
+- **Key files**: `src/routes/drafts/+page.svelte`, `src/lib/components/deck/DeckColumn.svelte`, `src/lib/components/Post.svelte`
+
+### 125. PBKDF2 CryptoKey caching
+- **Status**: Done
+- **Effort**: Small
+- **Description**: 600k-iteration PBKDF2 key derivation ran on every encrypt/decrypt call (~100-300ms each). Now cached in module-level variable after first derivation.
+- **Key files**: `src/lib/browser-db.ts`
+
+### 126. Feed loading parallelization
+- **Status**: Done
+- **Effort**: Medium
+- **Description**: `loadFeed()`, `checkForNewPosts()`, and `checkUnreadMessages()` all used sequential `for...await` loops across accounts. Converted to `Promise.allSettled` for concurrent execution.
+- **Key files**: `src/routes/feed/+page.svelte`, `src/routes/+layout.svelte`
+
+### 127. Fix $derived anti-patterns
+- **Status**: Done
+- **Effort**: Medium
+- **Description**: `$derived(() => ...)` returns a function, not a value — causing redundant re-execution on every access. Fixed across Post.svelte (postLabels: 5×→1×), analytics page (8 derived values), profile page (filteredPosts, mediaGallery), and analytics cutoffDate.
+- **Key files**: `src/lib/components/Post.svelte`, `src/routes/analytics/+page.svelte`, `src/routes/profile/+page.svelte`
+
+### 128. IndexedDB batching and singletons
+- **Status**: Done
+- **Effort**: Medium
+- **Description**: Multiple IDB optimizations:
+  - `cacheFollows`: N+M sequential writes → single `readwrite` transaction
+  - `importPlatformBookmarks`: N sequential `addBookmark` → single batch transaction
+  - `openDB()` in browser-db.ts, archive.ts, engagement-history.ts: added module-level singleton caching (avoid repeated `indexedDB.open()`)
+- **Key files**: `src/lib/browser-db.ts`, `src/lib/bookmarks.ts`, `src/lib/archive.ts`, `src/lib/engagement-history.ts`
+
+### 129. EmojiPicker search fix
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Search filter computed query `q` but never used it — all emojis always rendered regardless of search. Fixed to filter by category name match.
+- **Key files**: `src/lib/components/EmojiPicker.svelte`
+
+### 130. Build and rendering optimizations
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Multiple build and rendering improvements:
+  - Vite: `build.target: 'es2022'` + `cssMinify: 'lightningcss'`
+  - Svelte: `compilerOptions: { runes: true }` for smaller runtime
+  - Deck columns: 50-post cap with "Show more" pagination (prevents 600+ Post components)
+  - `jaroWinkler` deduplicated to `$lib/utils/string.ts` (was in browser-db.ts + unified.ts)
+  - SW version auto-injected from git hash at build time via Vite plugin
+  - `dns-prefetch` upgraded to `preconnect` for Bluesky hosts
+  - `content-visibility: auto` on post cards for off-screen rendering skip
+  - Image optimization: `loading="lazy"`, `decoding="async"`, `width`/`height` on avatars
+- **Key files**: `vite.config.js`, `svelte.config.js`, `src/app.html`, `src/app.css`, `src/lib/components/deck/DeckColumn.svelte`, `src/lib/utils/string.ts`, `static/sw.js`
+
+### 131. Comprehensive API parallelization
+- **Status**: Done
+- **Effort**: Medium
+- **Description**: Every remaining sequential `for...await` loop across the entire app converted to `Promise.allSettled`:
+  - `loadMore()`, `loadNewPosts()` in feed page
+  - `loadPosts()` in catchup page
+  - `loadConversations()` in messages page
+  - `handleSearch()` in search page
+  - `loadMedia()` in gallery page
+  - `loadBskyTrending`/`loadMastoTrending` in trending page (parallel)
+  - `loadLists()` in lists page (+ batch Bluesky feeds/lists)
+- **Key files**: All route pages
+
+### 132. Template computation optimizations
+- **Status**: Done
+- **Effort**: Medium
+- **Description**: Hoisted expensive computations from Svelte templates to `$derived` state:
+  - Compose page: `splitForPlatform` called 3× per render → 3 `$derived` values
+  - Post.svelte: `new URL().hostname` and `relativeTime()` → `$derived` values
+  - Trending page: `totalUses()` and `new URL().hostname` → pre-computed in `$derived` arrays
+  - Post.svelte: `getMastodonHtml()` called 3× → reuse cached `mastodonHtml`
+  - Layout keyboard handler: `querySelectorAll('[data-post-uri]')` cached with 2s TTL
+  - Settings: inline `localStorage.getItem` in template → `$state` variable
+- **Key files**: `src/routes/compose/+page.svelte`, `src/lib/components/Post.svelte`, `src/routes/trending/+page.svelte`, `src/routes/+layout.svelte`, `src/routes/settings/+page.svelte`
+
+### 133. WebSocket exponential backoff
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Fixed 5-second reconnect timer → exponential backoff (5s base, 2× per attempt, 60s cap) with reset on successful connection. Applied to MastodonStream, BlueskyStream, and JetstreamClient.
+- **Key files**: `src/lib/streaming.ts`, `src/lib/jetstream.ts`
+
+### 134. Crosspost detection cache improvements
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Two improvements:
+  - Cache key changed from O(N) string join to O(N) hash (saves ~10KB string allocation per feed update)
+  - Cache key made order-independent (hash-based) so re-sorting the same posts doesn't trigger O(N²) redetection
+- **Key files**: `src/lib/api/unified.ts`
+
+### 135. Deck column optimizations
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Three deck improvements:
+  - Client groups (allBsky/allMasto/allThreads) precomputed once after init instead of per-column load
+  - Staggered column refresh on tab re-focus (150ms between columns) to avoid thundering herd
+  - RSS importOPML: N×read+write to localStorage → single batch write
+- **Key files**: `src/routes/deck/+page.svelte`, `src/lib/rss.ts`
+
+### 136. Stale-while-revalidate page caching
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Added SWR caching to high-traffic pages for instant display on revisit:
+  - Trending page: 10-minute TTL, shows cached data instantly while refreshing
+  - Profile page: 5-minute TTL per handle, shows cached profile+posts instantly
+- **Key files**: `src/routes/trending/+page.svelte`, `src/routes/profile/+page.svelte`
+
+### 137. Archive stats optimization
+- **Status**: Done
+- **Effort**: Small
+- **Description**: `getArchiveStats()` was doing `getAll()` full IDB scan to compute counts. Replaced with parallel `IDBIndex.count()` calls and cursor-based date range — O(N) → O(1).
+- **Key files**: `src/lib/archive.ts`
+
 ---
 
 ## Future Ideas (from Graysky comparison)
