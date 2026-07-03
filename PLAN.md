@@ -1005,9 +1005,9 @@ Key competitive advantages: deck+multi-network+Threads (unique combo), cross-pla
 
 ---
 
-## Competitive Gap-Closing Plan (vs Graysky/Skeets/Tusky)
+## Competitive Gap-Closing Plan
 
-CrispDeck has three competitive weaknesses vs dedicated native clients:
+CrispDeck has three competitive weaknesses vs dedicated native single-network clients:
 1. **Not native-feeling** — no haptics, no swipe gestures, fade-only transitions
 2. **Shallower platform features** — missing Mastodon custom emoji/filters, Bluesky video upload/self-labels, Threads like/repost
 3. **Cognitive overload** — 16-item sidebar always shown, 2065-line settings page, no progressive disclosure
@@ -1016,27 +1016,27 @@ CrispDeck has three competitive weaknesses vs dedicated native clients:
 
 | # | Item | Status | Effort | Priority |
 |---|------|--------|--------|----------|
-| 138 | Redirect to feed after first account connect | Not started | Small | Must-have |
+| 138 | Redirect to feed after first account connect | Done | Small | Must-have |
 | 139 | Network-first onboarding (replace feature carousel with 3 network buttons → inline auth) | Not started | Medium | Must-have |
 | 140 | Configurable sidebar with simple mode (hide 7 advanced items, gear icon to customize) | Not started | Medium | Must-have |
 | 141 | Split settings into 6 tabbed sections (Account/Appearance/Content/Compose/Advanced/About) | Not started | Medium | Must-have |
 | 142 | Dashboard progressive disclosure (5 primary tiles, "More" expands secondary) | Not started | Small | Nice-to-have |
-| 143 | Fix safe-area-bottom CSS bug + tap-highlight + overscroll-behavior | Not started | Small | Must-have |
+| 143 | Fix safe-area-bottom CSS bug + tap-highlight + overscroll-behavior | Done | Small | Must-have |
 
 ### Phase B — Native Feel (Gestures, Animations, Haptics)
 
 | # | Item | Status | Effort | Priority |
 |---|------|--------|--------|----------|
-| 144 | Haptic feedback module (navigator.vibrate + Tauri haptics plugin, on like/repost/tab) | Not started | Small | Must-have |
-| 145 | Directional slide transitions (slide left forward, slide right back, via View Transitions API) | Not started | Small | Must-have |
-| 146 | Touch swipe in MediaLightbox (horizontal prev/next, vertical close, translateX animation) | Not started | Small | Must-have |
+| 144 | Haptic feedback module (navigator.vibrate on like/repost) | Done | Small | Must-have |
+| 145 | Directional slide transitions (slide left forward, slide right back, via View Transitions API) | Done | Small | Must-have |
+| 146 | Touch swipe in MediaLightbox (horizontal prev/next, translateX animation) | Done | Small | Must-have |
 | 147 | Touch-compatible deck reorder (long-press to pick up, touchmove drag, floating preview) | Not started | Medium | Must-have |
 | 148 | Heart-burst like animation (CSS pop + 6 particle spans) | Not started | Small | Nice-to-have |
 | 149 | Shimmer skeleton loaders (replace animate-pulse with gradient shimmer) | Not started | Small | Nice-to-have |
 | 150 | Pull-to-refresh on all scroll views (extract to reusable util, apply to notifications/thread/deck) | Not started | Small | Must-have |
 | 151 | Mobile menu exit animation (slide-out-left + backdrop fade-out) | Not started | Small | Nice-to-have |
 
-### Phase C — Platform Depth: Bluesky (vs Graysky)
+### Phase C — Platform Depth: Bluesky
 
 | # | Item | Status | Effort | Priority |
 |---|------|--------|--------|----------|
@@ -1046,7 +1046,7 @@ CrispDeck has three competitive weaknesses vs dedicated native clients:
 | 155 | Post gates / quote restrictions (disable quoting via app.bsky.feed.postgate) | Not started | Small | Nice-to-have |
 | 156 | Profile-pinned post (update app.bsky.actor.profile pinnedPost field) | Not started | Small | Nice-to-have |
 
-### Phase D — Platform Depth: Mastodon (vs Tusky)
+### Phase D — Platform Depth: Mastodon
 
 | # | Item | Status | Effort | Priority |
 |---|------|--------|--------|----------|
@@ -1058,21 +1058,21 @@ CrispDeck has three competitive weaknesses vs dedicated native clients:
 | 162 | List membership management (Add to list action menu, checkbox overlay) | Not started | Small | Nice-to-have |
 | 163 | Server-side translation (try POST /api/v1/statuses/:id/translate first, fall back to third-party) | Not started | Small | Nice-to-have |
 
-### Phase E — Platform Depth: Threads (vs official app)
+### Phase E — Platform Depth: Threads
 
 | # | Item | Status | Effort | Priority |
 |---|------|--------|--------|----------|
-| 164 | Like / Unlike (POST /{userId}/likes, DELETE /{userId}/likes/{mediaId}) | Not started | Small | Must-have |
-| 165 | Repost (container with media_type: REPOST + repost_id) | Not started | Small | Must-have |
-| 166 | Quote post (container with quote_post_id) | Not started | Small | Must-have |
+| 164 | Like / Unlike (POST /{userId}/likes, DELETE /{userId}/likes/{mediaId}) | Done | Small | Must-have |
+| 165 | Repost (container with media_type: REPOST + repost_id) | Done | Small | Must-have |
+| 166 | Quote post (container with quote_post_id) | Done | Small | Must-have |
 
 ### Phase F — PWA & Notifications
 
 | # | Item | Status | Effort | Priority |
 |---|------|--------|--------|----------|
 | 167 | Web push with VAPID (PushManager.subscribe, SW push/notificationclick handlers, Vercel cron) | Not started | Large | Must-have |
-| 168 | PWA manifest shortcuts + share_target (Compose/Feed/Notifications shortcuts, share → compose) | Not started | Small | Must-have |
-| 169 | Register Tauri notification plugin (add to Cargo.toml + lib.rs — currently silently broken) | Not started | Small | Must-have |
+| 168 | PWA manifest shortcuts + share_target (Compose/Feed/Notifications shortcuts, share → compose) | Done | Small | Must-have |
+| 169 | Register Tauri notification plugin (add to Cargo.toml + lib.rs — was silently broken) | Done | Small | Must-have |
 | 170 | Notification badge API (navigator.setAppBadge on unread count) | Not started | Small | Nice-to-have |
 
 ### Implementation Order (by competitive impact per effort)

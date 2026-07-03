@@ -18,7 +18,7 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **Multi-column Deck**: TweetDeck-style with 15 column types (timeline, mentions, notifications, hashtag, user, local, federated, search, list, feed, my-posts, tag-group, RSS, keyword-monitor, threads-search), per-column filters, saved layouts/workspaces, drag-reorder, column width control, platform-aware column picker
 - **Keyword monitoring columns**: real-time streaming filtered by user-defined keywords + regex, with Bluesky Jetstream firehose + Mastodon WebSocket, LIVE indicator
 - **Streaming timelines**: live-push of new posts via Bluesky Jetstream + Mastodon WebSocket
-- **Like, boost, reply, quote, bookmark, share, report** interactions (Bluesky + Mastodon; Threads: bookmark + share only)
+- **Like, boost, reply, quote, bookmark, share, report** interactions (Bluesky + Mastodon + Threads)
 - **Thread view**: click any post to see full parent chain + replies, thread un-rolling ("Read as article") — Bluesky + Mastodon; Threads posts open on threads.com
 - **Profile pages**: any user — avatar/banner/bio/stats, follow/unfollow, block/mute, posts/replies/media gallery/followers/following tabs
 - **Cross-platform bookmarks**: stored locally in IndexedDB, Mastodon import
@@ -106,13 +106,15 @@ Threads users' posts can also be read via **Mastodon federation** (`@user@thread
 - Dark + light + **OLED dark** themes
 - **Display settings**: font family (system/Inter/Georgia/mono), font size, line spacing, content max width
 - **Cache management**: view localStorage/IndexedDB usage, clear feed cache, purge all cached data
-- **PWA install support** (manifest.json + service worker + maskable icons + apple-touch-icon)
+- **PWA install support** (manifest.json + service worker + maskable icons + apple-touch-icon + home screen shortcuts + share target)
+- **Haptic feedback**: vibration on like/repost for native-feeling interactions
 - **Skeleton loading screens**: pulse-animated placeholders for feed and notifications
 - **Toast notifications**: global success/error/warning/info toasts with auto-dismiss
-- **Page transitions**: smooth fade via View Transitions API (progressive enhancement)
+- **Page transitions**: directional slide transitions via View Transitions API (forward=slide-left, back=slide-right)
 - **Welcome onboarding**: feature carousel for first-time users with guided setup
 - **Reduced motion**: respects `prefers-reduced-motion` across all animations
-- **Micro-interactions**: hover scale + press feedback on engagement buttons, mobile menu slide animation, deck drag visual feedback
+- **Micro-interactions**: hover scale + press feedback on engagement buttons, mobile menu slide animation, deck drag visual feedback, lightbox touch swipe
+- **Safe area support**: proper notch/home-indicator handling on iOS, tap-highlight suppression, scroll-chaining prevention
 - **Compose autofocus**: textarea focused on page load, Ctrl+Enter to post, SVG progress rings per platform
 - **Alt-text UX**: character count + fill indicator on media alt-text inputs
 - **Scroll-to-top button**: floating FAB after scrolling on any page
