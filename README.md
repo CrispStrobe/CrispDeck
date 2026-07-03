@@ -22,6 +22,10 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **Thread view**: click any post to see full parent chain + replies, thread un-rolling ("Read as article") — Bluesky + Mastodon; Threads posts open on threads.com
 - **Profile pages**: any user — avatar/banner/bio/stats, follow/unfollow, block/mute, posts/replies/media gallery/followers/following tabs
 - **Cross-platform bookmarks**: stored locally in IndexedDB, Mastodon import
+- **Mastodon custom emoji**: inline rendering of instance-specific custom emoji in posts
+- **Mastodon follow requests**: Accept/Reject buttons on notification cards for locked accounts
+- **Bluesky muted words sync**: server-side muted words synced from Bluesky preferences
+- **Notification badge**: PWA app icon badge count via Badging API
 
 ### Compose & Crosspost
 - Write once, post to all 3 platforms — **thread auto-splitting** per platform (300 bsky / 500 masto / 500 threads)
@@ -32,7 +36,7 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **Alt text enforcement**: off / warn / require modes in settings
 - **Mastodon polls** (create with 2-4 options + vote on existing)
 - **Bluesky thread gates** (Anyone / Mentioned / Followers / Nobody)
-- Content warnings, visibility controls, **post templates with variables** ({date}, {time}, {handle})
+- Content warnings, visibility controls, **Bluesky self-labels** (graphic-media/nudity/porn/gore), **post templates with variables** ({date}, {time}, {handle})
 - **AI compose**: correct, shorten, hashtag suggestions — 3 providers (BYOK OpenAI-compatible, CrispASR, mistral.rs), 10 BYOK presets with /models discovery
 - **Hashtag bank**: saved sets for one-click insertion
 - Character count warnings (gray → orange → red → thread indicator)
@@ -108,7 +112,9 @@ Threads users' posts can also be read via **Mastodon federation** (`@user@thread
 - **Cache management**: view localStorage/IndexedDB usage, clear feed cache, purge all cached data
 - **PWA install support** (manifest.json + service worker + maskable icons + apple-touch-icon + home screen shortcuts + share target)
 - **Haptic feedback**: vibration on like/repost for native-feeling interactions
-- **Skeleton loading screens**: pulse-animated placeholders for feed and notifications
+- **Skeleton loading screens**: shimmer-animated placeholders for feed and notifications
+- **Like animation**: heart-burst pop with particle effect on like
+- **Configurable sidebar**: simple mode hides advanced items, per-item customization via gear icon
 - **Toast notifications**: global success/error/warning/info toasts with auto-dismiss
 - **Page transitions**: directional slide transitions via View Transitions API (forward=slide-left, back=slide-right)
 - **Welcome onboarding**: feature carousel for first-time users with guided setup

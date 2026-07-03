@@ -40,6 +40,7 @@
   } = $props();
 
   let liked = $state(false);
+  let likeAnimating = $state(false);
   let boosted = $state(false);
   let bookmarked = $state(false);
   let hideEngagement = $state(false);
@@ -335,6 +336,7 @@
     liked = !liked;
     localLikeCount += liked ? 1 : -1;
     haptic('light');
+    if (liked) { likeAnimating = true; setTimeout(() => likeAnimating = false, 600); }
     onlike(post);
   }
 
@@ -628,7 +630,16 @@
   const bskyQuote = $derived(getBskyQuote());
   const threadsQuote = $derived(getThreadsQuote());
   const bskyVideo = $derived(getBskyVideo());
-  const mastodonHtml = $derived(sanitizeHtml(getMastodonHtml()));
+  const mastodonHtml = $derived.by(() => {
+    let html = sanitizeHtml(getMastodonHtml());
+    // Render custom emoji :shortcode: → inline <img>
+    if (post.emojis?.length && html) {
+      for (const e of post.emojis) {
+        html = html.replaceAll(`:${e.shortcode}:`, `<img src="${e.url}" alt=":${e.shortcode}:" class="inline-emoji" draggable="false">`);
+      }
+    }
+    return html;
+  });
   const bskyHtml = $derived(getBskyHtml());
   const bskyExternalHost = $derived.by(() => {
     if (!bskyExternal) return '';
@@ -990,12 +1001,17 @@
       <button
         onclick={handleLike}
         disabled={!onlike}
-        class="flex items-center gap-1.5 transition-all {liked ? 'text-red-400' : 'text-[var(--color-text-muted)]'} {onlike ? 'hover:text-red-400 hover:scale-110 active:scale-90' : ''}"
+        class="flex items-center gap-1.5 transition-all relative {liked ? 'text-red-400' : 'text-[var(--color-text-muted)]'} {onlike ? 'hover:text-red-400 hover:scale-110 active:scale-90' : ''}"
         title="Like"
         aria-label="{liked ? 'Unlike' : 'Like'} ({localLikeCount} likes)"
         aria-pressed={liked}
       >
-        <Heart size={14} class={liked ? 'fill-current' : ''} />
+        <Heart size={14} class="{liked ? 'fill-current' : ''} {likeAnimating ? 'like-pop' : ''}" />
+        {#if likeAnimating}
+          <span class="like-burst" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span><span></span>
+          </span>
+        {/if}
         {#if !hideEngagement}<span class="text-xs">{localLikeCount}</span>{/if}
       </button>
 

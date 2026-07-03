@@ -1018,7 +1018,7 @@ CrispDeck has three competitive weaknesses vs dedicated native single-network cl
 |---|------|--------|--------|----------|
 | 138 | Redirect to feed after first account connect | Done | Small | Must-have |
 | 139 | Network-first onboarding (replace feature carousel with 3 network buttons → inline auth) | Not started | Medium | Must-have |
-| 140 | Configurable sidebar with simple mode (hide 7 advanced items, gear icon to customize) | Not started | Medium | Must-have |
+| 140 | Configurable sidebar with simple mode (hide 7 advanced items, gear icon to customize) | Done | Medium | Must-have |
 | 141 | Split settings into 6 tabbed sections (Account/Appearance/Content/Compose/Advanced/About) | Not started | Medium | Must-have |
 | 142 | Dashboard progressive disclosure (5 primary tiles, "More" expands secondary) | Not started | Small | Nice-to-have |
 | 143 | Fix safe-area-bottom CSS bug + tap-highlight + overscroll-behavior | Done | Small | Must-have |
@@ -1031,18 +1031,18 @@ CrispDeck has three competitive weaknesses vs dedicated native single-network cl
 | 145 | Directional slide transitions (slide left forward, slide right back, via View Transitions API) | Done | Small | Must-have |
 | 146 | Touch swipe in MediaLightbox (horizontal prev/next, translateX animation) | Done | Small | Must-have |
 | 147 | Touch-compatible deck reorder (long-press to pick up, touchmove drag, floating preview) | Not started | Medium | Must-have |
-| 148 | Heart-burst like animation (CSS pop + 6 particle spans) | Not started | Small | Nice-to-have |
-| 149 | Shimmer skeleton loaders (replace animate-pulse with gradient shimmer) | Not started | Small | Nice-to-have |
-| 150 | Pull-to-refresh on all scroll views (extract to reusable util, apply to notifications/thread/deck) | Not started | Small | Must-have |
-| 151 | Mobile menu exit animation (slide-out-left + backdrop fade-out) | Not started | Small | Nice-to-have |
+| 148 | Heart-burst like animation (CSS pop + 6 particle spans) | Done | Small | Nice-to-have |
+| 149 | Shimmer skeleton loaders (replace animate-pulse with gradient shimmer) | Done | Small | Nice-to-have |
+| 150 | Pull-to-refresh on all scroll views (extract to reusable util, apply to notifications/thread/deck) | Done | Small | Must-have |
+| 151 | Mobile menu exit animation (slide-out-left + backdrop fade-out) | Done | Small | Nice-to-have |
 
 ### Phase C — Platform Depth: Bluesky
 
 | # | Item | Status | Effort | Priority |
 |---|------|--------|--------|----------|
 | 152 | Video upload pipeline (video.bsky.app upload → poll job → embed, progress bar) | Not started | Large | Must-have |
-| 153 | Self-labeling on posts (graphic-media/nudity/porn/gore in compose UI) | Not started | Small | Must-have |
-| 154 | Server-synced muted words (fetch/merge/sync via app.bsky.actor.putPreferences) | Not started | Medium | Must-have |
+| 153 | Self-labeling on posts (graphic-media/nudity/porn/gore in compose UI) | Done | Small | Must-have |
+| 154 | Server-synced muted words (fetch/merge/sync via app.bsky.actor.putPreferences) | Done | Medium | Must-have |
 | 155 | Post gates / quote restrictions (disable quoting via app.bsky.feed.postgate) | Not started | Small | Nice-to-have |
 | 156 | Profile-pinned post (update app.bsky.actor.profile pinnedPost field) | Not started | Small | Nice-to-have |
 
@@ -1050,9 +1050,9 @@ CrispDeck has three competitive weaknesses vs dedicated native single-network cl
 
 | # | Item | Status | Effort | Priority |
 |---|------|--------|--------|----------|
-| 157 | Custom emoji rendering (populate emojis array, replace :shortcode: with <img> post-sanitize) | Not started | Medium | Must-have |
+| 157 | Custom emoji rendering (populate emojis array, replace :shortcode: with <img> post-sanitize) | Done | Medium | Must-have |
 | 158 | Server-side filters with expiry/context (GET /api/v2/filters, apply in filterPosts, CRUD UI) | Not started | Medium | Must-have |
-| 159 | Follow requests (handle follow_request notif type, Accept/Reject buttons, badge count) | Not started | Small | Must-have |
+| 159 | Follow requests (handle follow_request notif type, Accept/Reject buttons, badge count) | Done | Small | Must-have |
 | 160 | Announcements (GET /api/v1/announcements, pinned card on notifications, dismiss) | Not started | Small | Nice-to-have |
 | 161 | Post edit history (edited badge, history dialog, Edit own posts prefill compose) | Not started | Small | Nice-to-have |
 | 162 | List membership management (Add to list action menu, checkbox overlay) | Not started | Small | Nice-to-have |
@@ -1073,7 +1073,7 @@ CrispDeck has three competitive weaknesses vs dedicated native single-network cl
 | 167 | Web push with VAPID (PushManager.subscribe, SW push/notificationclick handlers, Vercel cron) | Not started | Large | Must-have |
 | 168 | PWA manifest shortcuts + share_target (Compose/Feed/Notifications shortcuts, share → compose) | Done | Small | Must-have |
 | 169 | Register Tauri notification plugin (add to Cargo.toml + lib.rs — was silently broken) | Done | Small | Must-have |
-| 170 | Notification badge API (navigator.setAppBadge on unread count) | Not started | Small | Nice-to-have |
+| 170 | Notification badge API (navigator.setAppBadge on unread count) | Done | Small | Nice-to-have |
 
 ### Implementation Order (by competitive impact per effort)
 

@@ -15,6 +15,7 @@
   import { listIdentities } from '$lib/db';
   import type { UnifiedPost, FeedItem, Filters, Account, Platform, CrosspostGroup as CrosspostGroupType } from '$lib/types';
   import { buildAffinityMap, rankForYou } from '$lib/for-you';
+  import { syncMutedWordsFromServer } from '$lib/bluesky-prefs';
   import { searchArchive } from '$lib/archive';
   import { jetstream } from '$lib/jetstream';
   import { applyMuteFilter } from '$lib/muted-words';
@@ -69,6 +70,10 @@
       const result = await initAllClients();
       accounts = result.accounts;
       clientEntries = result.clients;
+      // Sync Bluesky server muted words (non-blocking)
+      for (const [, entry] of clientEntries) {
+        if (entry.oauthAgent) syncMutedWordsFromServer(entry.oauthAgent);
+      }
       // Load confirmed identities for crosspost dedup + affinity for "For You"
       try {
         const ids = await listIdentities({ confirmed_only: true });

@@ -109,6 +109,10 @@ export function normalizePost(post: PlatformPost, platform: Platform): UnifiedPo
         : undefined,
       embeds: target.mediaAttachments,
       raw: item,
+      emojis: (target.emojis ?? (target as any).emojis)?.map((e: any) => ({
+        shortcode: e.shortcode,
+        url: e.url ?? e.static_url,
+      })),
     };
   }
 }

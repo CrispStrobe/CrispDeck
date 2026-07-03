@@ -92,6 +92,61 @@ html {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* Heart-burst like animation */
+.like-pop {
+  animation: like-pop 0.35s ease-out;
+}
+@keyframes like-pop {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.4); }
+  100% { transform: scale(1); }
+}
+.like-burst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.like-burst > span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #f87171;
+  animation: like-particle 0.5s ease-out forwards;
+}
+.like-burst > span:nth-child(1) { --angle: 0deg; }
+.like-burst > span:nth-child(2) { --angle: 60deg; }
+.like-burst > span:nth-child(3) { --angle: 120deg; }
+.like-burst > span:nth-child(4) { --angle: 180deg; }
+.like-burst > span:nth-child(5) { --angle: 240deg; }
+.like-burst > span:nth-child(6) { --angle: 300deg; }
+@keyframes like-particle {
+  0% { transform: translate(-50%, -50%) rotate(var(--angle)) translateY(0) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -50%) rotate(var(--angle)) translateY(-14px) scale(0); opacity: 0; }
+}
+
+/* Shimmer skeleton loader */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton-shimmer {
+  background: linear-gradient(90deg, var(--color-border) 25%, var(--color-surface-hover) 50%, var(--color-border) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Mastodon custom emoji inline rendering */
+.inline-emoji {
+  width: 1.25em;
+  height: 1.25em;
+  display: inline-block;
+  vertical-align: middle;
+  object-fit: contain;
+}
+
 /* Prevent scroll chaining on mobile (parent scroll bleed) */
 .overflow-y-auto, .overflow-y-scroll, [role="feed"] {
   overscroll-behavior: contain;
@@ -183,13 +238,23 @@ button:focus-visible, a:focus-visible {
 .mobile-menu-slide {
   animation: slide-in-left 0.2s ease-out;
 }
+.mobile-menu-slide-out {
+  animation: slide-out-menu-left 0.2s ease-in forwards;
+}
 .mobile-menu-overlay {
   background: rgba(0, 0, 0, 0.5);
   animation: fade-in 0.2s ease-out;
 }
+.mobile-menu-backdrop-out .mobile-menu-overlay {
+  animation: fade-out 0.2s ease-in forwards;
+}
 @keyframes slide-in-left {
   from { transform: translateX(-100%); }
   to { transform: translateX(0); }
+}
+@keyframes slide-out-menu-left {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
 }
 
 /* Page transitions (View Transitions API) — directional slides */

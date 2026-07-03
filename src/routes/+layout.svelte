@@ -23,6 +23,11 @@
 
   let collapsed = $state(false);
   let mobileMenuOpen = $state(false);
+  let mobileMenuClosing = $state(false);
+  function closeMobileMenu() {
+    mobileMenuClosing = true;
+    setTimeout(() => { mobileMenuOpen = false; mobileMenuClosing = false; }, 200);
+  }
   let theme = $state<'dark' | 'oled' | 'light'>('dark');
 
   function toggleTheme() {
@@ -158,6 +163,9 @@
         return 0;
       }));
       unreadMessages = results.reduce((sum, r) => sum + (r.status === 'fulfilled' ? r.value : 0), 0);
+      // Update PWA badge
+      if (unreadMessages > 0) (navigator as any).setAppBadge?.(unreadMessages);
+      else (navigator as any).clearAppBadge?.();
     } catch {}
   }
 
@@ -360,14 +368,14 @@
 
   <!-- Mobile slide-out menu -->
   {#if mobileMenuOpen}
-    <div class="md:hidden fixed inset-0 z-40 flex mobile-menu-backdrop" onclick={() => mobileMenuOpen = false}>
-      <div class="w-64 bg-[var(--color-surface)] border-r border-[var(--color-border)] pt-14 overflow-y-auto mobile-menu-slide" onclick={(e) => e.stopPropagation()}>
+    <div class="md:hidden fixed inset-0 z-40 flex {mobileMenuClosing ? 'mobile-menu-backdrop-out' : 'mobile-menu-backdrop'}" onclick={closeMobileMenu}>
+      <div class="w-64 bg-[var(--color-surface)] border-r border-[var(--color-border)] pt-14 overflow-y-auto {mobileMenuClosing ? 'mobile-menu-slide-out' : 'mobile-menu-slide'}" onclick={(e) => e.stopPropagation()}>
         <ul class="py-2">
           {#each visibleNavItems as item}
             <li>
               <a
                 href={item.href}
-                onclick={() => mobileMenuOpen = false}
+                onclick={closeMobileMenu}
                 class="flex items-center gap-3 px-4 py-3 text-sm transition-colors
                   {isActive(item.href)
                     ? 'text-[var(--color-text)] bg-[var(--color-primary)]/10'

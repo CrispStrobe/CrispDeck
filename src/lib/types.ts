@@ -88,6 +88,7 @@ export interface UnifiedPost {
   embeds?: unknown;
   raw?: unknown;
   sourceAccount?: string; // handle of account that loaded this post (multi-account feed indicator)
+  emojis?: Array<{ shortcode: string; url: string }>; // Mastodon custom emoji
 }
 
 export interface CrosspostGroup {
