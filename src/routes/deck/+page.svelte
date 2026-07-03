@@ -501,7 +501,10 @@
       console.error(`Failed to load column ${col.id}:`, e);
     }
 
-    columnPosts[col.id] = applyMuteFilter(sortPosts(posts, 'newest'));
+    // Dedup by URI to avoid Svelte each_key_duplicate errors
+    const seen = new Set<string>();
+    const deduped = posts.filter(p => { if (seen.has(p.uri)) return false; seen.add(p.uri); return true; });
+    columnPosts[col.id] = applyMuteFilter(sortPosts(deduped, 'newest'));
     columnLoading[col.id] = false;
 
     // Enable streaming for keyword-monitor columns

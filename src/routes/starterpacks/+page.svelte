@@ -72,11 +72,10 @@
       }
 
       // Strategy 2: Use the official searchStarterPacks API (requires auth)
-      // Paginate to get comprehensive results
       let apiWorked = false;
-      let cursor: string | undefined;
-      for (let page = 0; page < 3; page++) {
-        try {
+      try {
+        let cursor: string | undefined;
+        for (let page = 0; page < 3; page++) {
           const resp = await agent.api.app.bsky.graph.searchStarterPacks({
             q: searchQuery.trim(),
             limit: 25,
@@ -89,39 +88,37 @@
           }
           cursor = resp.data.cursor;
           if (!cursor) break;
-        } catch {
-          break; // API not available or auth failed, stop paginating
         }
+      } catch (e) {
+        console.error('searchStarterPacks failed:', e);
       }
 
-      // Fallback: if the API didn't work (auth issue), search posts that link to starter packs
-      if (!apiWorked) {
-        const bskyClient = bskyEntry.client as BlueskyClient;
+      // Fallback: search posts mentioning starter packs
+      if (!apiWorked || allPacks.length === 0) {
         try {
-          const searchResp = await bskyClient.searchPosts(searchQuery);
-          const handles = new Set<string>();
-          for (const post of searchResp.posts ?? []) {
-            handles.add(post.author.handle);
-            const text = (post.record as any)?.text ?? '';
-            for (const m of text.matchAll(/bsky\.app\/starter-pack\/([\w.-]+)\//g)) handles.add(m[1]);
-            for (const m of text.matchAll(/@([\w.-]+)/g)) handles.add(m[1]);
+          // Search for posts containing the query
+          const searchResp = await fetch(
+            `https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=${encodeURIComponent(searchQuery + ' starter pack')}&limit=50`
+          );
+          if (searchResp.ok) {
+            const searchData = await searchResp.json();
+            const handles = new Set<string>();
+            for (const post of searchData.posts ?? []) {
+              handles.add(post.author.handle);
+              const text = post.record?.text ?? '';
+              for (const m of text.matchAll(/bsky\.app\/starter-pack\/([\w.-]+)\//g)) handles.add(m[1]);
+            }
+            const handleArray = [...handles].slice(0, 20);
+            await Promise.all(handleArray.map(async (handle) => {
+              try {
+                const resp = await agent.api.app.bsky.graph.getActorStarterPacks({ actor: handle });
+                for (const sp of resp.data.starterPacks ?? []) {
+                  const pack = sp as unknown as StarterPack;
+                  if (!seen.has(pack.uri)) { seen.add(pack.uri); allPacks.push(pack); }
+                }
+              } catch {}
+            }));
           }
-          // Also search actors
-          try {
-            const actors = await bskyClient.searchActors(searchQuery);
-            for (const a of actors.slice(0, 15)) handles.add(a.handle);
-          } catch {}
-          // Fetch starter packs from discovered handles
-          const handleArray = [...handles].slice(0, 30);
-          await Promise.all(handleArray.map(async (handle) => {
-            try {
-              const resp = await agent.api.app.bsky.graph.getActorStarterPacks({ actor: handle });
-              for (const sp of resp.data.starterPacks ?? []) {
-                const pack = sp as unknown as StarterPack;
-                if (!seen.has(pack.uri)) { seen.add(pack.uri); allPacks.push(pack); }
-              }
-            } catch {}
-          }));
         } catch {}
       }
 
