@@ -3,7 +3,7 @@
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Bell, Heart, Repeat, UserPlus, MessageCircle, AtSign, Loader2, Quote, ChevronDown, ChevronUp, RefreshCw, CheckCheck } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
-  import { createPullToRefresh } from '$lib/utils/pull-to-refresh';
+  import { createPullToRefresh } from '$lib/utils/pull-to-refresh.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import type { Account } from '$lib/types';

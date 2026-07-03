@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import type { Snippet } from 'svelte';
 
-  let { delay = 100 }: { delay?: number } = $props();
+  let { delay = 100, children }: { delay?: number; children: Snippet } = $props();
   let show = $state(false);
 
   onMount(() => {
@@ -11,5 +12,5 @@
 </script>
 
 {#if show}
-  <slot />
+  {@render children()}
 {/if}
