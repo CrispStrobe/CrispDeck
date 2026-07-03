@@ -296,12 +296,16 @@
   }
 
   async function handleBookmark() {
-    if (bookmarked) {
-      await removeBookmark(post.uri);
-    } else {
-      await addBookmark(post);
+    try {
+      if (bookmarked) {
+        await removeBookmark(post.uri);
+      } else {
+        await addBookmark(post);
+      }
+      bookmarked = !bookmarked;
+    } catch (e) {
+      console.error('Bookmark failed:', e);
     }
-    bookmarked = !bookmarked;
   }
   let localLikeCount = $state(post.likeCount ?? 0);
   let localBoostCount = $state(post.repostCount ?? 0);

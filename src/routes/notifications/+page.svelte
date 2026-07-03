@@ -45,8 +45,17 @@
 
       try {
         if (acct.platform === 'bluesky') {
-          const bsky = entry.client as BlueskyClient;
-          const { notifications: notifs } = await bsky.getNotifications();
+          let notifs: any[] = [];
+          if (entry.oauthAgent) {
+            // OAuth account — use the OAuth agent directly
+            const resp = await entry.oauthAgent.api.app.bsky.notification.listNotifications({ limit: 50 });
+            notifs = resp.data.notifications;
+          } else {
+            // App-password account — use BlueskyClient
+            const bsky = entry.client as BlueskyClient;
+            const result = await bsky.getNotifications();
+            notifs = result.notifications;
+          }
           for (const n of notifs) {
             all.push({
               id: `bsky-${n.uri}`,
