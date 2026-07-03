@@ -178,6 +178,7 @@
   let fontSize = $state(parseInt(localStorage.getItem('crispdeck-font-size') ?? '14'));
   let lineSpacing = $state(parseFloat(localStorage.getItem('crispdeck-line-spacing') ?? '1.5'));
   let contentWidth = $state(parseInt(localStorage.getItem('crispdeck-content-width') ?? '0')); // 0 = auto
+  let homeMode = $state(localStorage.getItem('crispdeck-home-mode') ?? 'dashboard');
 
   const fontMap: Record<FontFamily, string> = {
     system: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif",
@@ -993,8 +994,8 @@
         <label for="home-mode" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.homepage}</label>
         <select
           id="home-mode"
-          value={localStorage.getItem('crispdeck-home-mode') ?? 'dashboard'}
-          onchange={(e) => localStorage.setItem('crispdeck-home-mode', (e.target as HTMLSelectElement).value)}
+          value={homeMode}
+          onchange={(e) => { homeMode = (e.target as HTMLSelectElement).value; localStorage.setItem('crispdeck-home-mode', homeMode); }}
           class="px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none"
         >
           <option value="dashboard">{i18n.t.settings.homeDashboard}</option>

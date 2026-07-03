@@ -108,7 +108,7 @@
 
   function getPostText(): string {
     const raw = post.platform === 'mastodon'
-      ? (getMastodonHtml() || post.text).replace(/<[^>]*>/g, '')
+      ? (mastodonHtml || post.text).replace(/<[^>]*>/g, '')
       : post.text;
     return raw.trim();
   }
@@ -204,7 +204,7 @@
     translating = true;
     translateError = '';
     try {
-      const sourceText = post.platform === 'mastodon' ? getMastodonHtml() || post.text : post.text;
+      const sourceText = post.platform === 'mastodon' ? mastodonHtml || post.text : post.text;
       translation = await translateText(sourceText);
     } catch (e) {
       translateError = String(e);

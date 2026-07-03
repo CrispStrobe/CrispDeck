@@ -38,24 +38,22 @@
 
   async function loadMedia() {
     loading = true;
-    const posts: UnifiedPost[] = [];
-
-    for (const acct of accounts) {
+    const results = await Promise.allSettled(accounts.map(async (acct) => {
       const entry = clientEntries.get(acct.id);
-      if (!entry) continue;
-      try {
-        if (acct.platform === 'bluesky') {
-          const client = entry.client as BlueskyClient;
-          const r = await client.getAuthorFeed(acct.handle);
-          posts.push(...r.feed.map(p => normalizePost(p, 'bluesky')));
-        } else if (acct.platform === 'mastodon') {
-          const client = entry.client as MastodonClient;
-          const a = await client.getAccountByHandle(acct.handle);
-          const statuses = await client.getAccountStatuses(a.id);
-          posts.push(...statuses.map(s => normalizePost(s, 'mastodon')));
-        }
-      } catch {}
-    }
+      if (!entry) return [];
+      if (acct.platform === 'bluesky') {
+        const client = entry.client as BlueskyClient;
+        const r = await client.getAuthorFeed(acct.handle);
+        return r.feed.map(p => normalizePost(p, 'bluesky'));
+      } else if (acct.platform === 'mastodon') {
+        const client = entry.client as MastodonClient;
+        const a = await client.getAccountByHandle(acct.handle);
+        const statuses = await client.getAccountStatuses(a.id);
+        return statuses.map(s => normalizePost(s, 'mastodon'));
+      }
+      return [];
+    }));
+    const posts = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
 
     // Extract media from posts
     const items: MediaItem[] = [];

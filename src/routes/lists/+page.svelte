@@ -59,31 +59,27 @@
   });
 
   async function loadLists() {
-    for (const [id, entry] of clientEntries) {
+    await Promise.allSettled(Array.from(clientEntries).map(async ([id, entry]) => {
       const client = entry.client;
       const acct = accounts.find(a => a.id === id);
-      if (!acct) continue;
+      if (!acct) return;
 
       if (acct.platform === 'mastodon') {
         const masto = client as MastodonClient;
         const token = masto.getAccessToken();
         if (token) {
-          try {
-            mastoLists = await getMastodonLists(masto.getInstanceUrl(), token) as MastoList[];
-          } catch {}
+          mastoLists = await getMastodonLists(masto.getInstanceUrl(), token) as MastoList[];
         }
       } else {
-        try {
-          const agent = entry.oauthAgent ?? (client as BlueskyClient).getAgent();
-          // Load suggested feeds
-          const feedResp = await agent.api.app.bsky.feed.getSuggestedFeeds({ limit: 20 });
-          bskyFeeds = (feedResp.data.feeds ?? []) as unknown as BskyFeed[];
-          // Load user's own lists
-          const listResp = await agent.api.app.bsky.graph.getLists({ actor: acct!.handle, limit: 50 });
-          bskyLists = (listResp.data.lists ?? []) as unknown as BskyList[];
-        } catch {}
+        const agent = entry.oauthAgent ?? (client as BlueskyClient).getAgent();
+        const [feedResp, listResp] = await Promise.all([
+          agent.api.app.bsky.feed.getSuggestedFeeds({ limit: 20 }),
+          agent.api.app.bsky.graph.getLists({ actor: acct.handle, limit: 50 }),
+        ]);
+        bskyFeeds = (feedResp.data.feeds ?? []) as unknown as BskyFeed[];
+        bskyLists = (listResp.data.lists ?? []) as unknown as BskyList[];
       }
-    }
+    }));
   }
 
   async function selectMastoList(list: MastoList) {

@@ -43,16 +43,12 @@
       clientEntries = result.clients;
 
       const bskyClient = getBskyClient(result.clients);
-      if (bskyClient) {
-        hasBsky = true;
-        await loadBskyTrending(bskyClient);
-      }
-
       const mastoClient = getMastoClient(result.clients);
-      if (mastoClient) {
-        hasMasto = true;
-        await loadMastoTrending(mastoClient);
-      }
+
+      await Promise.all([
+        bskyClient ? loadBskyTrending(bskyClient).then(() => { hasBsky = true; }) : Promise.resolve(),
+        mastoClient ? loadMastoTrending(mastoClient).then(() => { hasMasto = true; }) : Promise.resolve(),
+      ]);
 
       // Default tab: combined if both available
       if (!hasBsky && hasMasto) activeTab = 'tags';
@@ -120,6 +116,12 @@
   function totalUses(history: Array<{ uses: string }>): number {
     return history.reduce((sum, h) => sum + parseInt(h.uses || '0'), 0);
   }
+  function safeHostname(url: string): string {
+    try { return new URL(url).hostname; } catch { return url; }
+  }
+
+  const enrichedTags = $derived(filteredTags.map(t => ({ ...t, uses: totalUses(t.history) })));
+  const enrichedLinks = $derived(filteredLinks.map(l => ({ ...l, uses: totalUses(l.history), host: l.providerName ?? safeHostname(l.url) })));
 </script>
 
 <svelte:head><title>CrispDeck — Discover</title><meta name="description" content="Trending topics and catch-up on Bluesky and Mastodon" /></svelte:head>
@@ -247,10 +249,10 @@
     <!-- Mastodon tags -->
     {#if activeTab === 'tags'}
       <div class="space-y-2">
-        {#each filteredTags as tag}
+        {#each enrichedTags as tag}
           <a href="/search?q=%23{tag.name}" class="flex items-center justify-between p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] hover:border-[var(--color-mastodon)] transition-colors">
             <span class="text-sm font-medium">#{tag.name}</span>
-            <span class="text-xs text-[var(--color-text-muted)]">{totalUses(tag.history)} uses</span>
+            <span class="text-xs text-[var(--color-text-muted)]">{tag.uses} uses</span>
           </a>
         {/each}
         {#if filteredTags.length === 0}<p class="text-center py-8 text-sm text-[var(--color-text-muted)]">No trending tags{filterLatin ? ' (try disabling Latin filter)' : ''}.</p>{/if}
@@ -260,7 +262,7 @@
     <!-- Mastodon links -->
     {#if activeTab === 'links'}
       <div class="space-y-3">
-        {#each filteredLinks as link}
+        {#each enrichedLinks as link}
           <a href={link.url} target="_blank" rel="noopener noreferrer" class="flex gap-3 p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] hover:border-[var(--color-mastodon)] transition-colors">
             {#if link.image}
               <img loading="lazy" src={link.image} alt="" class="w-20 h-14 rounded object-cover flex-shrink-0" />
@@ -268,7 +270,7 @@
             <div class="flex-1 min-w-0">
               <h3 class="text-sm font-medium line-clamp-1">{link.title}</h3>
               <p class="text-xs text-[var(--color-text-muted)] line-clamp-1">{link.description}</p>
-              <span class="text-[10px] text-[var(--color-text-muted)]">{link.providerName ?? new URL(link.url).hostname} · {totalUses(link.history)} shares</span>
+              <span class="text-[10px] text-[var(--color-text-muted)]">{link.host} · {link.uses} shares</span>
             </div>
           </a>
         {/each}

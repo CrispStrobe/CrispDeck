@@ -55,16 +55,24 @@ export function importOPML(opmlText: string): RssFeed[] {
   const parser = new DOMParser();
   const doc = parser.parseFromString(opmlText, 'text/xml');
   const outlines = doc.querySelectorAll('outline[xmlUrl], outline[xmlurl]');
+  const feeds = listFeeds();
   const imported: RssFeed[] = [];
 
   for (const outline of outlines) {
     const url = outline.getAttribute('xmlUrl') || outline.getAttribute('xmlurl');
     const title = outline.getAttribute('title') || outline.getAttribute('text') || url;
     if (url) {
-      imported.push(addFeed(url, title ?? undefined));
+      const feed: RssFeed = {
+        id: `rss-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        url: url.trim(),
+        title: title?.trim() || url,
+      };
+      feeds.push(feed);
+      imported.push(feed);
     }
   }
 
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(feeds));
   return imported;
 }
 
