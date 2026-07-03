@@ -50,92 +50,50 @@
     }
   });
 
-  /** Collect starter packs from a handle, deduplicated */
-  async function fetchPacksForHandle(
-    agent: any, handle: string, seen: Set<string>, allPacks: StarterPack[],
-  ) {
-    try {
-      const resp = await agent.api.app.bsky.graph.getActorStarterPacks({ actor: handle });
-      for (const sp of resp.data.starterPacks ?? []) {
-        const pack = sp as unknown as StarterPack;
-        if (!seen.has(pack.uri)) {
-          seen.add(pack.uri);
-          allPacks.push(pack);
-        }
-      }
-    } catch {}
-  }
-
   async function search() {
     if (!searchQuery.trim() || !bskyEntry) return;
     searching = true;
     error = '';
     try {
       const agent = bskyEntry.oauthAgent ?? (bskyEntry.client as BlueskyClient).getAgent();
-      const bskyClient = bskyEntry.client as BlueskyClient;
       const allPacks: StarterPack[] = [];
       const seen = new Set<string>();
-      const q = searchQuery.toLowerCase();
 
-      // Strategy 1: Direct handle lookup (fast path)
+      // Strategy 1: Direct handle lookup
       if (searchQuery.includes('.') || searchQuery.includes('@')) {
         const handle = searchQuery.replace(/^@/, '');
-        await fetchPacksForHandle(agent, handle, seen, allPacks);
-      }
-
-      // Strategy 2: Search posts mentioning "starter pack" + query
-      // Run multiple search variants in parallel for broader coverage
-      const searchVariants = [
-        `${searchQuery} starter pack`,
-        `${searchQuery} starterpack`,
-        `"starter pack" ${searchQuery}`,
-      ];
-      const postSearches = searchVariants.map(async (sq) => {
         try {
-          const searchResp = await fetch(
-            `https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=${encodeURIComponent(sq)}&limit=50`
-          );
-          if (!searchResp.ok) return new Set<string>();
-          const searchData = await searchResp.json();
-          const handles = new Set<string>();
-          for (const post of searchData.posts ?? []) {
-            handles.add(post.author.handle);
-            // Extract @mentions and bsky.app starter pack URLs from text
-            const text = post.record?.text ?? '';
-            for (const m of text.matchAll(/@([\w.-]+)/g)) handles.add(m[1]);
-            for (const m of text.matchAll(/bsky\.app\/starter-pack\/([\w.-]+)\//g)) handles.add(m[1]);
+          const resp = await agent.api.app.bsky.graph.getActorStarterPacks({ actor: handle });
+          for (const sp of resp.data.starterPacks ?? []) {
+            const pack = sp as unknown as StarterPack;
+            if (!seen.has(pack.uri)) { seen.add(pack.uri); allPacks.push(pack); }
           }
-          return handles;
-        } catch { return new Set<string>(); }
-      });
-      const handleSets = await Promise.all(postSearches);
-      const uniqueHandles = new Set<string>();
-      for (const s of handleSets) for (const h of s) uniqueHandles.add(h);
-
-      // Fetch starter packs from discovered handles in parallel (batches of 10)
-      const handleArray = [...uniqueHandles].slice(0, 40);
-      for (let i = 0; i < handleArray.length; i += 10) {
-        const batch = handleArray.slice(i, i + 10);
-        await Promise.all(batch.map(h => fetchPacksForHandle(agent, h, seen, allPacks)));
+        } catch {}
       }
 
-      // Strategy 3: Search actors by query and fetch their starter packs
-      try {
-        const actors = await bskyClient.searchActors(searchQuery);
-        await Promise.all(
-          actors.slice(0, 15).map(a => fetchPacksForHandle(agent, a.handle, seen, allPacks))
-        );
-      } catch {}
+      // Strategy 2: Use the official searchStarterPacks API
+      // Paginate to get comprehensive results
+      let cursor: string | undefined;
+      for (let page = 0; page < 3; page++) {
+        try {
+          const resp = await agent.api.app.bsky.graph.searchStarterPacks({
+            q: searchQuery.trim(),
+            limit: 25,
+            cursor,
+          });
+          for (const sp of resp.data.starterPacks ?? []) {
+            const pack = sp as unknown as StarterPack;
+            if (!seen.has(pack.uri)) { seen.add(pack.uri); allPacks.push(pack); }
+          }
+          cursor = resp.data.cursor;
+          if (!cursor) break;
+        } catch {
+          break; // API not available, stop paginating
+        }
+      }
 
-      // Strategy 4: Search actors by query + "starter pack" keyword
-      try {
-        const actors2 = await bskyClient.searchActors(searchQuery + ' starter pack');
-        await Promise.all(
-          actors2.slice(0, 10).map(a => fetchPacksForHandle(agent, a.handle, seen, allPacks))
-        );
-      } catch {}
-
-      // Sort: packs whose name/desc matches the query rank highest, then by member count
+      // Sort by member count (API results are already relevance-sorted, but tie-break on size)
+      const q = searchQuery.toLowerCase();
       allPacks.sort((a, b) => {
         const aName = a.record.name?.toLowerCase() ?? '';
         const aDesc = a.record.description?.toLowerCase() ?? '';
