@@ -39,23 +39,27 @@ function openDB(): Promise<IDBDatabase> {
 
 export async function addBookmark(post: UnifiedPost): Promise<void> {
   const db = await openDB();
-  const record: BookmarkedPost = {
-    uri: post.uri,
-    platform: post.platform,
-    text: post.text,
-    authorHandle: post.author.handle,
-    authorName: post.author.displayName ?? post.author.handle,
-    authorAvatar: post.author.avatar,
-    createdAt: post.createdAt,
-    likeCount: post.likeCount ?? 0,
-    repostCount: post.repostCount ?? 0,
-    bookmarkedAt: new Date().toISOString(),
-    raw: post.raw,
-  };
   return new Promise((resolve, reject) => {
+    const record: BookmarkedPost = {
+      uri: post.uri,
+      platform: post.platform,
+      text: post.text,
+      authorHandle: post.author.handle,
+      authorName: post.author.displayName ?? post.author.handle,
+      authorAvatar: post.author.avatar,
+      createdAt: post.createdAt,
+      likeCount: post.likeCount ?? 0,
+      repostCount: post.repostCount ?? 0,
+      bookmarkedAt: new Date().toISOString(),
+      raw: post.raw,
+    };
     const txn = db.transaction(STORE, 'readwrite');
     txn.objectStore(STORE).put(record);
-    txn.oncomplete = () => resolve();
+    txn.oncomplete = () => {
+      // Update in-memory cache
+      _bookmarkUriCache?.add(post.uri);
+      resolve();
+    };
     txn.onerror = () => reject(txn.error);
   });
 }
@@ -65,16 +69,34 @@ export async function removeBookmark(uri: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const txn = db.transaction(STORE, 'readwrite');
     txn.objectStore(STORE).delete(uri);
-    txn.oncomplete = () => resolve();
+    txn.oncomplete = () => {
+      // Update in-memory cache
+      _bookmarkUriCache?.delete(uri);
+      resolve();
+    };
     txn.onerror = () => reject(txn.error);
   });
 }
 
+/**
+ * In-memory cache of bookmarked URIs — avoids 50+ IndexedDB lookups per feed render.
+ * Populated on first call to isBookmarked(), invalidated on add/remove.
+ */
+let _bookmarkUriCache: Set<string> | null = null;
+
 export async function isBookmarked(uri: string): Promise<boolean> {
+  if (!_bookmarkUriCache) {
+    _bookmarkUriCache = await getAllBookmarkedUris();
+  }
+  return _bookmarkUriCache.has(uri);
+}
+
+/** Fetch all bookmarked URIs in a single IndexedDB transaction */
+async function getAllBookmarkedUris(): Promise<Set<string>> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const req = db.transaction(STORE, 'readonly').objectStore(STORE).get(uri);
-    req.onsuccess = () => resolve(!!req.result);
+    const req = db.transaction(STORE, 'readonly').objectStore(STORE).getAllKeys();
+    req.onsuccess = () => resolve(new Set(req.result.map(k => String(k))));
     req.onerror = () => reject(req.error);
   });
 }
@@ -114,13 +136,15 @@ export async function getBookmarkCount(): Promise<number> {
 /**
  * Import bookmarks from platform APIs into local IndexedDB.
  * Skips posts that are already bookmarked locally (by URI).
+ * Uses batch URI check to avoid N+1 IndexedDB lookups.
  * Returns the number of newly imported bookmarks.
  */
 export async function importPlatformBookmarks(posts: UnifiedPost[]): Promise<number> {
+  // Single batch fetch of existing URIs
+  const existing = await getAllBookmarkedUris();
   let imported = 0;
   for (const post of posts) {
-    const already = await isBookmarked(post.uri);
-    if (!already) {
+    if (!existing.has(post.uri)) {
       await addBookmark(post);
       imported++;
     }

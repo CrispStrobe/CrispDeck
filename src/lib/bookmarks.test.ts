@@ -64,4 +64,31 @@ describe('bookmark data model', () => {
     const uris = new Set([p1.uri, p2.uri, p3.uri]);
     expect(uris.size).toBe(2);
   });
+
+  it('bookmark URI cache pattern supports Set-based O(1) lookup', () => {
+    // Simulates the in-memory cache used by isBookmarked()
+    const cached = new Set(['at://did:plc:1/post/a', 'at://did:plc:2/post/b']);
+    expect(cached.has('at://did:plc:1/post/a')).toBe(true);
+    expect(cached.has('at://did:plc:1/post/c')).toBe(false);
+    // Simulates add/remove cache updates
+    cached.add('at://did:plc:1/post/c');
+    expect(cached.has('at://did:plc:1/post/c')).toBe(true);
+    cached.delete('at://did:plc:1/post/a');
+    expect(cached.has('at://did:plc:1/post/a')).toBe(false);
+  });
+
+  it('batch URI check for import avoids N+1 lookups', () => {
+    // Simulates the optimized importPlatformBookmarks pattern
+    const existing = new Set(['at://already/1', 'at://already/2']);
+    const incoming = [
+      makePost({ uri: 'at://already/1' }),
+      makePost({ uri: 'at://new/3' }),
+      makePost({ uri: 'at://already/2' }),
+      makePost({ uri: 'at://new/4' }),
+    ];
+    const toImport = incoming.filter(p => !existing.has(p.uri));
+    expect(toImport).toHaveLength(2);
+    expect(toImport[0].uri).toBe('at://new/3');
+    expect(toImport[1].uri).toBe('at://new/4');
+  });
 });

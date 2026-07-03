@@ -16,6 +16,20 @@ export default defineConfig(async () => ({
     __GIT_HASH__: JSON.stringify(gitHash),
   },
 
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // Split large vendor dependencies into separate cacheable chunks
+          if (id.includes('node_modules/@atproto')) return 'vendor-atproto';
+          if (id.includes('node_modules/masto')) return 'vendor-masto';
+          if (id.includes('node_modules/@lucide')) return 'vendor-icons';
+        },
+      },
+    },
+    chunkSizeWarningLimit: 500,
+  },
+
   test: {
     include: ['src/**/*.test.ts'],
     environment: 'node',
