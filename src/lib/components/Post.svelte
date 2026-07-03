@@ -380,12 +380,84 @@
     return (raw.reblog ? raw.reblog.content : raw.content) ?? '';
   }
 
-  /** Intercept clicks on links in post HTML — route hashtags and handles in-app */
+  /** Render Bluesky post text with facets (mentions, links, hashtags) as HTML */
+  function getBskyHtml(): string {
+    if (post.platform !== 'bluesky') return '';
+    const raw = post.raw as any;
+    const record = raw?.post?.record;
+    const text: string = record?.text ?? post.text;
+    const facets: any[] = record?.facets;
+    if (!facets || facets.length === 0) {
+      // No facets — still linkify URLs and @handles with regex
+      return linkifyPlainText(text);
+    }
+
+    // Convert string to byte array for correct facet indexing (Bluesky uses UTF-8 byte offsets)
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+    const bytes = encoder.encode(text);
+
+    // Sort facets by byte start
+    const sorted = [...facets].sort((a, b) => (a.index?.byteStart ?? 0) - (b.index?.byteStart ?? 0));
+
+    let result = '';
+    let lastEnd = 0;
+
+    for (const facet of sorted) {
+      const start = facet.index?.byteStart ?? 0;
+      const end = facet.index?.byteEnd ?? 0;
+      if (start < lastEnd || end > bytes.length) continue;
+
+      // Text before this facet
+      result += escapeHtml(decoder.decode(bytes.slice(lastEnd, start)));
+
+      const segment = decoder.decode(bytes.slice(start, end));
+      const feature = facet.features?.[0];
+
+      if (feature?.$type === 'app.bsky.richtext.facet#link') {
+        result += `<a href="${escapeHtml(feature.uri)}" target="_blank" rel="noopener noreferrer">${escapeHtml(segment)}</a>`;
+      } else if (feature?.$type === 'app.bsky.richtext.facet#mention') {
+        result += `<a href="/profile?handle=${encodeURIComponent(feature.did)}&platform=bluesky" data-mention="${escapeHtml(feature.did)}">${escapeHtml(segment)}</a>`;
+      } else if (feature?.$type === 'app.bsky.richtext.facet#tag') {
+        result += `<a href="/search?q=${encodeURIComponent('#' + feature.tag)}" data-tag="${escapeHtml(feature.tag)}">${escapeHtml(segment)}</a>`;
+      } else {
+        result += escapeHtml(segment);
+      }
+      lastEnd = end;
+    }
+
+    // Remaining text after last facet
+    result += escapeHtml(decoder.decode(bytes.slice(lastEnd)));
+    return result;
+  }
+
+  function escapeHtml(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  /** Linkify URLs and @handles in plain text (fallback when no facets) */
+  function linkifyPlainText(text: string): string {
+    return escapeHtml(text)
+      .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')
+      .replace(/@([\w.-]+\.[\w.-]+)/g, (match, handle) => {
+        return `<a href="/profile?handle=${encodeURIComponent(handle)}&platform=bluesky" data-mention="${escapeHtml(handle)}">${match}</a>`;
+      });
+  }
+
+  /** Intercept clicks on links in post HTML — route hashtags, handles, and in-app links */
   function handlePostLinkClick(e: MouseEvent) {
     const target = (e.target as HTMLElement).closest('a');
     if (!target || !(target instanceof HTMLAnchorElement)) return;
-    const href = target.href;
+    const href = target.getAttribute('href');
     if (!href) return;
+
+    // In-app links (mentions, tags, profiles) — href starts with /
+    if (href.startsWith('/')) {
+      e.preventDefault();
+      e.stopPropagation();
+      goto(href);
+      return;
+    }
 
     try {
       const url = new URL(href);
@@ -405,7 +477,6 @@
         e.preventDefault();
         e.stopPropagation();
         const handle = decodeURIComponent(handleMatch[1]);
-        // If it contains @, it's already fully qualified; otherwise qualify with instance
         const fullHandle = handle.includes('@') ? handle : `${handle}@${url.hostname}`;
         goto(`/profile?handle=${encodeURIComponent(fullHandle)}`);
         return;
@@ -532,6 +603,7 @@
   const threadsQuote = $derived(getThreadsQuote());
   const bskyVideo = $derived(getBskyVideo());
   const mastodonHtml = $derived(sanitizeHtml(getMastodonHtml()));
+  const bskyHtml = $derived(getBskyHtml());
   const platformColor = $derived(`var(--color-${post.platform})`);
 
   // Labels on Bluesky posts
@@ -624,8 +696,13 @@
       <a href={getThreadUrl(post)} class="block min-w-0 hover:bg-[var(--color-surface-hover)]/30 rounded -mx-1 px-1 transition-colors">
         {#if post.platform === 'mastodon' && mastodonHtml}
           <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-          <div class="text-sm text-[var(--color-text)] break-words prose-invert [&_a]:text-blue-400 [&_a]:hover:underline" onclick={handlePostLinkClick}>
+          <div class="text-sm text-[var(--color-text)] break-words whitespace-pre-wrap prose-invert [&_a]:text-blue-400 [&_a]:hover:underline" onclick={handlePostLinkClick}>
             {@html mastodonHtml}
+          </div>
+        {:else if post.platform === 'bluesky' && bskyHtml}
+          <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+          <div class="text-sm text-[var(--color-text)] break-words whitespace-pre-wrap [&_a]:text-blue-400 [&_a]:hover:underline" onclick={handlePostLinkClick}>
+            {@html bskyHtml}
           </div>
         {:else}
           <p class="text-sm text-[var(--color-text)] whitespace-pre-wrap break-words">{post.text}</p>
@@ -651,14 +728,14 @@
     <div class="mt-2 pl-13">
       <!-- Bluesky images -->
       {#if bskyImages.length > 0}
-        <div class="grid grid-cols-2 gap-2 pt-2">
+        <div class="{bskyImages.length === 1 ? '' : 'grid grid-cols-2 gap-2'} pt-2">
           {#each bskyImages as image, i}
             <button
               type="button"
               onclick={() => openLightbox(bskyImages.map(img => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), i)}
-              class="cursor-pointer text-left"
+              class="cursor-pointer text-left w-full"
             >
-              <img loading="lazy" src={image.thumb} alt={image.alt || ''} class="rounded-md w-full aspect-video object-cover" />
+              <img loading="lazy" src={image.thumb} alt={image.alt || ''} class="rounded-md w-full {bskyImages.length === 1 ? 'max-h-96 object-contain bg-black/20' : 'aspect-square object-cover'}" />
             </button>
           {/each}
         </div>
@@ -764,16 +841,16 @@
 
       <!-- Mastodon images -->
       {#if mastodonMedia.length > 0}
-        <div class="grid grid-cols-2 gap-2 pt-2">
+        <div class="{mastodonMedia.length === 1 ? '' : 'grid grid-cols-2 gap-2'} pt-2">
           {#each mastodonMedia as attachment, i}
             {@const imageUrl = attachment.previewUrl || attachment.url || attachment.remoteUrl}
             {#if imageUrl}
               <button
                 type="button"
                 onclick={() => openLightbox(mastodonMedia.map(a => ({ url: a.url || a.previewUrl || a.remoteUrl || '', thumb: a.previewUrl || a.url || '', alt: a.description })), i)}
-                class="cursor-pointer text-left"
+                class="cursor-pointer text-left w-full"
               >
-                <img loading="lazy" src={imageUrl} alt={attachment.description || `Image ${i + 1}`} class="rounded-md w-full aspect-video object-cover bg-[var(--color-surface-hover)]" />
+                <img loading="lazy" src={imageUrl} alt={attachment.description || `Image ${i + 1}`} class="rounded-md w-full {mastodonMedia.length === 1 ? 'max-h-96 object-contain bg-black/20' : 'aspect-square object-cover'} bg-[var(--color-surface-hover)]" />
               </button>
             {/if}
           {/each}

@@ -168,9 +168,9 @@
 
 <div class="p-6 max-w-3xl mx-auto">
   <div class="flex items-center justify-between mb-4">
-    <a href="/feed" class="flex items-center gap-1 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+    <button onclick={() => history.back()} class="flex items-center gap-1 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
       <ArrowLeft size={14} /> {i18n.t.profile.backToFeed}
-    </a>
+    </button>
     <div class="flex items-center gap-2">
       {#if canSync}
         <button
