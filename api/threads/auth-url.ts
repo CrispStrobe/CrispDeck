@@ -8,37 +8,31 @@
  *   THREADS_CLIENT_ID — Meta App ID
  */
 
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-
 const THREADS_AUTH_URL = 'https://threads.net/oauth/authorize';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Content-Type': 'application/json',
+};
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
+export async function GET(request: Request) {
   const clientId = process.env.THREADS_CLIENT_ID;
 
   if (!clientId) {
-    return res.status(503).json({
+    return new Response(JSON.stringify({
       error: 'Threads API not configured. Set THREADS_CLIENT_ID in Vercel environment variables.',
       configured: false,
-    });
+    }), { status: 503, headers: corsHeaders });
   }
 
-  const redirectUri = req.query.redirect_uri as string;
-  const state = req.query.state as string;
+  const url = new URL(request.url);
+  const redirectUri = url.searchParams.get('redirect_uri');
+  const state = url.searchParams.get('state');
 
   if (!redirectUri || !state) {
-    return res.status(400).json({ error: 'Missing redirect_uri or state' });
+    return new Response(JSON.stringify({ error: 'Missing redirect_uri or state' }), { status: 400, headers: corsHeaders });
   }
 
   const params = new URLSearchParams({
@@ -49,8 +43,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     state,
   });
 
-  return res.status(200).json({
+  return new Response(JSON.stringify({
     auth_url: `${THREADS_AUTH_URL}?${params.toString()}`,
     configured: true,
-  });
+  }), { status: 200, headers: corsHeaders });
+}
+
+export function OPTIONS() {
+  return new Response(null, { status: 200, headers: corsHeaders });
 }

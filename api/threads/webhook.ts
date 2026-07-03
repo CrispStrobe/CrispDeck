@@ -6,18 +6,21 @@
  * happens client-side (localStorage/IndexedDB are per-browser).
  */
 
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Content-Type': 'application/json',
+};
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+export async function POST() {
+  return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders });
+}
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+export async function GET() {
+  return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders });
+}
 
-  // Meta sends POST with signed_request body on deauth/delete
-  // Acknowledge receipt
-  return res.status(200).json({ success: true });
+export function OPTIONS() {
+  return new Response(null, { status: 200, headers: corsHeaders });
 }

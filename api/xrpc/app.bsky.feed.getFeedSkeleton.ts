@@ -11,9 +11,6 @@
  *   cursor — pagination cursor from previous response
  */
 
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { list } from '@vercel/blob';
-
 const BSKY_PUBLIC_API = 'https://public.api.bsky.app';
 
 // Simple in-memory cache: rkey → { query, expiry }
@@ -21,14 +18,13 @@ const queryCache = new Map<string, { query: string; expiry: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 async function getQueryForRkey(rkey: string): Promise<string | null> {
-  // Check cache first
   const cached = queryCache.get(rkey);
   if (cached && cached.expiry > Date.now()) {
     return cached.query;
   }
 
-  // Look up from Vercel Blob
   try {
+    const { list } = await import('@vercel/blob');
     const blobs = await list({ prefix: `feeds/${rkey}.json` });
     if (blobs.blobs.length === 0) return null;
 
@@ -48,36 +44,33 @@ async function getQueryForRkey(rkey: string): Promise<string | null> {
   }
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  // Cache feed responses for 60s at the CDN layer
-  res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Content-Type': 'application/json',
+  'Cache-Control': 's-maxage=60, stale-while-revalidate=300',
+};
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-
-  const feedUri = req.query.feed as string;
-  const limit = Math.min(Number(req.query.limit) || 30, 100);
-  const cursor = req.query.cursor as string | undefined;
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const feedUri = url.searchParams.get('feed');
+  const limit = Math.min(Number(url.searchParams.get('limit')) || 30, 100);
+  const cursor = url.searchParams.get('cursor');
 
   if (!feedUri) {
-    return res.status(400).json({ error: 'Missing feed parameter' });
+    return new Response(JSON.stringify({ error: 'Missing feed parameter' }), { status: 400, headers: corsHeaders });
   }
 
-  // Parse AT URI: at://<did>/app.bsky.feed.generator/<rkey>
   const match = feedUri.match(/^at:\/\/([^/]+)\/app\.bsky\.feed\.generator\/(.+)$/);
   if (!match) {
-    return res.status(400).json({ error: 'Invalid feed URI' });
+    return new Response(JSON.stringify({ error: 'Invalid feed URI' }), { status: 400, headers: corsHeaders });
   }
 
   const rkey = match[2];
-
-  // Look up the feed query from Vercel Blob
   const query = await getQueryForRkey(rkey);
   if (!query) {
-    return res.status(404).json({ error: 'Feed not found', rkey });
+    return new Response(JSON.stringify({ error: 'Feed not found', rkey }), { status: 404, headers: corsHeaders });
   }
 
   try {
@@ -93,19 +86,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!resp.ok) {
       const text = await resp.text();
-      return res.status(502).json({ error: `Bluesky API error: ${resp.status}`, detail: text });
+      return new Response(JSON.stringify({ error: `Bluesky API error: ${resp.status}`, detail: text }), { status: 502, headers: corsHeaders });
     }
 
     const data = await resp.json();
-
-    // Return feed skeleton (just post URIs)
     const feed = (data.posts ?? []).map((p: any) => ({ post: p.uri }));
 
-    return res.status(200).json({
+    return new Response(JSON.stringify({
       feed,
       cursor: data.cursor,
-    });
+    }), { status: 200, headers: corsHeaders });
   } catch (e) {
-    return res.status(500).json({ error: 'Feed generation failed', detail: String(e) });
+    return new Response(JSON.stringify({ error: 'Feed generation failed', detail: String(e) }), { status: 500, headers: corsHeaders });
   }
+}
+
+export function OPTIONS() {
+  return new Response(null, { status: 200, headers: corsHeaders });
 }

@@ -8,32 +8,34 @@
  * Env vars required: BLOB_READ_WRITE_TOKEN (auto-set by Vercel Blob)
  */
 
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { del, list } from '@vercel/blob';
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Content-Type': 'application/json',
+};
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  const { rkey } = req.body ?? {};
+export async function POST(request: Request) {
+  const body = await request.json();
+  const { rkey } = body ?? {};
 
   if (!rkey) {
-    return res.status(400).json({ error: 'Missing required field: rkey' });
+    return new Response(JSON.stringify({ error: 'Missing required field: rkey' }), { status: 400, headers: corsHeaders });
   }
 
   try {
-    // Find and delete the blob
+    const { del, list } = await import('@vercel/blob');
     const blobs = await list({ prefix: `feeds/${rkey}.json` });
     for (const blob of blobs.blobs) {
       await del(blob.url);
     }
 
-    return res.status(200).json({ ok: true });
+    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: corsHeaders });
   } catch (e) {
-    return res.status(500).json({ error: 'Failed to delete feed definition', detail: String(e) });
+    return new Response(JSON.stringify({ error: 'Failed to delete feed definition', detail: String(e) }), { status: 500, headers: corsHeaders });
   }
+}
+
+export function OPTIONS() {
+  return new Response(null, { status: 200, headers: corsHeaders });
 }

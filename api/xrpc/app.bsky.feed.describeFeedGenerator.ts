@@ -5,20 +5,22 @@
  * Called by the Bluesky AppView to verify the generator is valid.
  */
 
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-
 const GENERATOR_DID = 'did:web:crispdeck.vercel.app';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Content-Type': 'application/json',
+};
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-
-  return res.status(200).json({
+export async function GET() {
+  return new Response(JSON.stringify({
     did: GENERATOR_DID,
     feeds: [],
-  });
+  }), { status: 200, headers: corsHeaders });
+}
+
+export function OPTIONS() {
+  return new Response(null, { status: 200, headers: corsHeaders });
 }

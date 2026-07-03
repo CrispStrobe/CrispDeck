@@ -2,49 +2,41 @@
  * Vercel serverless function: Threads OAuth token exchange.
  *
  * Proxies the authorization code → access token exchange so the
- * client_secret never leaves the server. Users just click
- * "Connect Threads" — no Meta Developer account needed.
+ * client_secret never leaves the server.
  *
  * Env vars required on Vercel:
  *   THREADS_CLIENT_ID     — Meta App ID
  *   THREADS_CLIENT_SECRET — Meta App Secret
  */
 
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-
 const THREADS_TOKEN_URL = 'https://graph.threads.net/oauth/access_token';
 const THREADS_API_BASE = 'https://graph.threads.net/v1.0';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Content-Type': 'application/json',
+};
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
+export async function POST(request: Request) {
   const clientId = process.env.THREADS_CLIENT_ID;
   const clientSecret = process.env.THREADS_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
-    return res.status(503).json({
+    return new Response(JSON.stringify({
       error: 'Threads API not configured. Set THREADS_CLIENT_ID and THREADS_CLIENT_SECRET in Vercel environment variables.',
-    });
+    }), { status: 503, headers: corsHeaders });
   }
 
-  const { code, redirect_uri, action } = req.body ?? {};
+  const body = await request.json();
+  const { code, redirect_uri, action, access_token } = body ?? {};
 
   try {
     // Action: exchange code for short-lived token, then immediately get long-lived token
     if (action === 'exchange' || !action) {
       if (!code || !redirect_uri) {
-        return res.status(400).json({ error: 'Missing code or redirect_uri' });
+        return new Response(JSON.stringify({ error: 'Missing code or redirect_uri' }), { status: 400, headers: corsHeaders });
       }
 
       // Step 1: Exchange code for short-lived token
@@ -62,16 +54,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (!tokenResp.ok) {
         const err = await tokenResp.json().catch(() => ({}));
-        return res.status(tokenResp.status).json({
+        return new Response(JSON.stringify({
           error: err.error_message || `Token exchange failed: ${tokenResp.statusText}`,
-        });
+        }), { status: tokenResp.status, headers: corsHeaders });
       }
 
       // Parse response as text first to preserve large user_id precision
-      // (user IDs exceed Number.MAX_SAFE_INTEGER, JSON.parse would corrupt them)
       const shortLivedText = await tokenResp.text();
       const shortLived = JSON.parse(shortLivedText);
-      // Extract user_id as string from raw text to avoid precision loss
       const userIdMatch = shortLivedText.match(/"user_id"\s*:\s*(\d+)/);
       const safeUserId = userIdMatch ? userIdMatch[1] : String(shortLived.user_id);
 
@@ -86,31 +76,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       );
 
       if (!longLivedResp.ok) {
-        // Return short-lived token if long-lived exchange fails
-        return res.status(200).json({
+        return new Response(JSON.stringify({
           access_token: shortLived.access_token,
           token_type: 'bearer',
           user_id: safeUserId,
           long_lived: false,
-        });
+        }), { status: 200, headers: corsHeaders });
       }
 
       const longLived = await longLivedResp.json();
 
-      return res.status(200).json({
+      return new Response(JSON.stringify({
         access_token: longLived.access_token,
         token_type: 'bearer',
         expires_in: longLived.expires_in,
         user_id: safeUserId,
         long_lived: true,
-      });
+      }), { status: 200, headers: corsHeaders });
     }
 
     // Action: refresh a long-lived token
     if (action === 'refresh') {
-      const { access_token } = req.body ?? {};
       if (!access_token) {
-        return res.status(400).json({ error: 'Missing access_token' });
+        return new Response(JSON.stringify({ error: 'Missing access_token' }), { status: 400, headers: corsHeaders });
       }
 
       const refreshResp = await fetch(
@@ -123,21 +111,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (!refreshResp.ok) {
         const err = await refreshResp.json().catch(() => ({}));
-        return res.status(refreshResp.status).json({
+        return new Response(JSON.stringify({
           error: err.error_message || `Token refresh failed: ${refreshResp.statusText}`,
-        });
+        }), { status: refreshResp.status, headers: corsHeaders });
       }
 
       const refreshed = await refreshResp.json();
-      return res.status(200).json({
+      return new Response(JSON.stringify({
         access_token: refreshed.access_token,
         token_type: 'bearer',
         expires_in: refreshed.expires_in,
-      });
+      }), { status: 200, headers: corsHeaders });
     }
 
-    return res.status(400).json({ error: `Unknown action: ${action}` });
+    return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), { status: 400, headers: corsHeaders });
   } catch (e) {
-    return res.status(500).json({ error: String(e) });
+    return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: corsHeaders });
   }
+}
+
+export function OPTIONS() {
+  return new Response(null, { status: 200, headers: corsHeaders });
 }
