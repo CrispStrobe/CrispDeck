@@ -1,4 +1,6 @@
 <script lang="ts">
+  declare const __VERSION__: string;
+  declare const __GIT_HASH__: string;
   import { onMount } from 'svelte';
   import {
     listAccounts, addAccount as dbAddAccount, deleteAccount as dbDeleteAccount,
@@ -2362,8 +2364,11 @@
     <h2 class="text-lg font-semibold mb-3">{i18n.t.settings.tabAbout}</h2>
     <div class="space-y-4 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
       <div>
-        <p class="text-sm font-medium">CrispDeck v1.0.0</p>
+        <p class="text-sm font-medium">CrispDeck v{__VERSION__}</p>
         <p class="text-xs text-[var(--color-text-muted)] mt-1">Cross-platform social media client for Bluesky, Mastodon, and Threads.</p>
+        {#if __GIT_HASH__}
+          <p class="text-[10px] text-[var(--color-text-muted)] mt-0.5 font-mono">Commit: {__GIT_HASH__}</p>
+        {/if}
       </div>
       <div class="text-xs text-[var(--color-text-muted)] space-y-1">
         <p>Licensed under <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">AGPL-3.0</a></p>
