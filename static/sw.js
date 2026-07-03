@@ -7,7 +7,9 @@
  * Cache version rotates on each deploy.
  */
 
-const VERSION = '1.0.0';
+// Version updated on each deploy — triggers old cache cleanup
+// Update this value when deploying to bust stale caches
+const VERSION = '1.0.0-20260703';
 const CACHE_NAME = `crispdeck-v${VERSION}`;
 const SHELL_URLS = ['/'];
 

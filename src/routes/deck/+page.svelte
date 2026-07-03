@@ -254,19 +254,27 @@
           if (resp.ok) posts.push(...(await resp.json()).map((s: any) => normalizePost(s, 'mastodon')));
         } catch {}
       } else if (col.type === 'tag-group' && col.query) {
-        // query is comma-separated tags
+        // query is comma-separated tags — fetch all in parallel
         const tags = col.query.split(',').filter(Boolean);
+        const tagFetchers: Promise<UnifiedPost[]>[] = [];
         for (const tag of tags) {
-          if (bskyClient) try {
-            const r = await bskyClient.searchPosts(`#${tag}`);
-            for (const p of r.posts) posts.push({ uri: p.uri, text: (p.record as any).text ?? '', author: { handle: p.author.handle, displayName: p.author.displayName, avatar: p.author.avatar }, createdAt: (p.record as any).createdAt ?? p.indexedAt, platform: 'bluesky', likeCount: p.likeCount, repostCount: p.repostCount, isRepost: false, raw: p });
-          } catch {}
-          if (mastoClient) try {
-            const token = mastoClient.getAccessToken();
-            const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/timelines/tag/${tag}?limit=20`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-            if (resp.ok) posts.push(...(await resp.json()).map((s: any) => normalizePost(s, 'mastodon')));
-          } catch {}
+          if (bskyClient) tagFetchers.push((async () => {
+            try {
+              const r = await bskyClient.searchPosts(`#${tag}`);
+              return r.posts.map(p => ({ uri: p.uri, text: (p.record as any).text ?? '', author: { handle: p.author.handle, displayName: p.author.displayName, avatar: p.author.avatar }, createdAt: (p.record as any).createdAt ?? p.indexedAt, platform: 'bluesky' as const, likeCount: p.likeCount, repostCount: p.repostCount, isRepost: false, raw: p }));
+            } catch { return []; }
+          })());
+          if (mastoClient) tagFetchers.push((async () => {
+            try {
+              const token = mastoClient.getAccessToken();
+              const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/timelines/tag/${tag}?limit=20`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+              if (resp.ok) return (await resp.json()).map((s: any) => normalizePost(s, 'mastodon'));
+              return [];
+            } catch { return []; }
+          })());
         }
+        const tagResults = await Promise.all(tagFetchers);
+        posts.push(...tagResults.flat());
       } else if (col.type === 'rss' && col.query) {
         try {
           const items = await fetchFeed(col.query);
@@ -311,41 +319,47 @@
       } else if (col.type === 'keyword-monitor' && col.query) {
         const entries = parseKeywords(col.query);
         const matches = buildKeywordMatcher(entries);
-        // Search all connected networks for keyword matches
+        // Search all connected networks in parallel for keyword matches
         const searchTerms = entries.filter(e => !e.isRegex).map(e => e.value);
         const searchQuery = searchTerms.length > 0 ? searchTerms.join(' OR ') : entries[0]?.value ?? '';
         if (searchQuery) {
-          if (bskyClient) try {
-            const r = await bskyClient.searchPosts(searchQuery);
-            for (const p of r.posts) {
-              const text = (p.record as any).text ?? '';
-              if (matches(text)) {
-                posts.push({ uri: p.uri, text, author: { handle: p.author.handle, displayName: p.author.displayName, avatar: p.author.avatar }, createdAt: (p.record as any).createdAt ?? p.indexedAt, platform: 'bluesky', likeCount: p.likeCount, repostCount: p.repostCount, isRepost: false, raw: p });
-              }
-            }
-          } catch {}
-          if (mastoClient) try {
+          const kwFetchers: Promise<UnifiedPost[]>[] = [];
+
+          if (bskyClient) kwFetchers.push((async () => {
+            try {
+              const r = await bskyClient.searchPosts(searchQuery);
+              return r.posts
+                .map(p => ({ uri: p.uri, text: (p.record as any).text ?? '', author: { handle: p.author.handle, displayName: p.author.displayName, avatar: p.author.avatar }, createdAt: (p.record as any).createdAt ?? p.indexedAt, platform: 'bluesky' as const, likeCount: p.likeCount, repostCount: p.repostCount, isRepost: false, raw: p }))
+                .filter(p => matches(p.text));
+            } catch { return []; }
+          })());
+
+          if (mastoClient) {
             const token = mastoClient.getAccessToken();
             const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-            // Mastodon search doesn't support OR — search each term
-            for (const term of (searchTerms.length > 0 ? searchTerms : [searchQuery])) {
-              const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v2/search?q=${encodeURIComponent(term)}&type=statuses&limit=20`, { headers });
-              if (resp.ok) {
-                const data = await resp.json();
-                for (const s of data.statuses ?? []) {
-                  const normalized = normalizePost(s, 'mastodon');
-                  if (matches(normalized.text)) posts.push(normalized);
-                }
-              }
+            // Mastodon search doesn't support OR — search each term in parallel
+            const terms = searchTerms.length > 0 ? searchTerms : [searchQuery];
+            for (const term of terms) {
+              kwFetchers.push((async () => {
+                try {
+                  const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v2/search?q=${encodeURIComponent(term)}&type=statuses&limit=20`, { headers });
+                  if (!resp.ok) return [];
+                  const data = await resp.json();
+                  return (data.statuses ?? []).map((s: any) => normalizePost(s, 'mastodon')).filter((p: UnifiedPost) => matches(p.text));
+                } catch { return []; }
+              })());
             }
-          } catch {}
-          if (threadsClient) try {
-            const results = await threadsClient.keywordSearch(searchQuery, { searchType: 'RECENT', limit: 25 });
-            for (const p of results) {
-              const normalized = normalizePost(p, 'threads');
-              if (matches(normalized.text)) posts.push(normalized);
-            }
-          } catch {}
+          }
+
+          if (threadsClient) kwFetchers.push((async () => {
+            try {
+              const results = await threadsClient.keywordSearch(searchQuery, { searchType: 'RECENT', limit: 25 });
+              return results.map(p => normalizePost(p, 'threads')).filter(p => matches(p.text));
+            } catch { return []; }
+          })());
+
+          const kwResults = await Promise.all(kwFetchers);
+          posts.push(...kwResults.flat());
         }
       } else if (col.type === 'threads-search' && col.query && threadsClient) {
         try {

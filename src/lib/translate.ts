@@ -87,7 +87,11 @@ const DB_NAME = 'crispdeck-translations';
 const STORE_NAME = 'cache';
 const DB_VERSION = 1;
 
+/** Cached DB connection — avoids re-opening IndexedDB on every translate call */
+let _dbInstance: IDBDatabase | null = null;
+
 function openDB(): Promise<IDBDatabase> {
+  if (_dbInstance) return Promise.resolve(_dbInstance);
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
@@ -96,7 +100,12 @@ function openDB(): Promise<IDBDatabase> {
         db.createObjectStore(STORE_NAME, { keyPath: 'key' });
       }
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      _dbInstance = req.result;
+      // Reset on unexpected close
+      _dbInstance.onclose = () => { _dbInstance = null; };
+      resolve(_dbInstance);
+    };
     req.onerror = () => reject(req.error);
   });
 }
