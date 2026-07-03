@@ -13,7 +13,7 @@
   import { MastodonClient } from '$lib/api/mastodon';
   import { crosspostThread, graphemeLength, type PostResult, type ComposeOptions, type ThreadGate, type PollOptions } from '$lib/compose/adapter';
   import { splitForPlatform, planThread, type ThreadPlan } from '$lib/compose/thread';
-  import { validateMediaFile, createPreviewUrl, revokePreviewUrl } from '$lib/compose/media';
+  import { validateMediaFile, createPreviewUrl, revokePreviewUrl, isVideoFile } from '$lib/compose/media';
   import { tryVoiceCommand, looksLikeCommand } from '$lib/voice-commands';
   import { runAIAction, isAIConfigured, type AIAction } from '$lib/compose/ai';
   import { computeBestHour, formatHour, type PostingTimeInsight } from '$lib/posting-times';
@@ -61,6 +61,9 @@
   let pollOptions = $state(['', '']);
   let pollExpiry = $state(86400); // 24h default
   let pollMultiple = $state(false);
+
+  // Video upload status
+  let videoUploadStatus = $state('');
 
   // AI compose
   let showAIMenu = $state(false);
@@ -308,6 +311,7 @@
       poll: showPoll && pollOptions.filter(o => o.trim()).length >= 2
         ? { options: pollOptions.filter(o => o.trim()), expiresIn: pollExpiry, multiple: pollMultiple }
         : undefined,
+      onVideoProgress: (status: string) => { videoUploadStatus = status; },
     };
 
     try {
@@ -353,6 +357,7 @@
       toast.error('Post failed — see details above');
     } finally {
       posting = false;
+      videoUploadStatus = '';
     }
   }
 
@@ -707,7 +712,12 @@
             {#each mediaPreviews as preview, i}
               <div class="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
                 <div class="relative aspect-video">
-                  <img loading="lazy" src={preview} alt={altTexts[i] || ''} class="w-full h-full object-cover" />
+                  {#if mediaFiles[i] && isVideoFile(mediaFiles[i])}
+                    <!-- svelte-ignore a11y_media_has_caption -->
+                    <video src={preview} class="w-full h-full object-cover" muted></video>
+                  {:else}
+                    <img loading="lazy" src={preview} alt={altTexts[i] || ''} class="w-full h-full object-cover" />
+                  {/if}
                   <button
                     onclick={() => removeMedia(i)}
                     class="absolute top-1 right-1 p-1 bg-black/70 rounded-full text-white hover:bg-black"
@@ -905,6 +915,12 @@
           {/if}
 
           <div class="flex items-center gap-2">
+            {#if videoUploadStatus}
+              <span class="flex items-center gap-1.5 text-xs text-blue-300">
+                <Loader2 size={12} class="animate-spin" />
+                {videoUploadStatus === 'uploading' ? 'Uploading video...' : videoUploadStatus === 'processing' ? 'Processing video...' : videoUploadStatus === 'JOB_STATE_COMPLETED' ? 'Video ready' : `Video: ${videoUploadStatus}`}
+              </span>
+            {/if}
             <button
               onclick={handleSaveDraft}
               disabled={!text.trim()}

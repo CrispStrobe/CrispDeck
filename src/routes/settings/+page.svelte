@@ -3,14 +3,35 @@
   import {
     listAccounts, addAccount as dbAddAccount, deleteAccount as dbDeleteAccount,
     updateAccount as dbUpdateAccount, startMastodonOAuth as dbStartOAuth,
-    completeMastodonOAuth as dbCompleteOAuth
+    completeMastodonOAuth as dbCompleteOAuth, getDecryptedCredentials
   } from '$lib/db';
   import { Settings, Plus, Trash2, Star, ExternalLink, Loader2, Shield, Download, Upload, EyeOff } from '@lucide/svelte';
   import { startBlueskyOAuth } from '$lib/api/bluesky-oauth';
   import { goto } from '$app/navigation';
   import { invalidateClientCache } from '$lib/api/client-factory';
   import { i18n, type Language } from '$lib/i18n.svelte';
-  import { requestPermission, getPermission, isSupported as notifSupported } from '$lib/push-notifications';
+
+  type SettingsTab = 'account' | 'appearance' | 'content' | 'compose' | 'advanced' | 'about';
+  const tabs: { id: SettingsTab; labelKey: 'tabAccount' | 'tabAppearance' | 'tabContent' | 'tabCompose' | 'tabAdvanced' | 'tabAbout' }[] = [
+    { id: 'account', labelKey: 'tabAccount' },
+    { id: 'appearance', labelKey: 'tabAppearance' },
+    { id: 'content', labelKey: 'tabContent' },
+    { id: 'compose', labelKey: 'tabCompose' },
+    { id: 'advanced', labelKey: 'tabAdvanced' },
+    { id: 'about', labelKey: 'tabAbout' },
+  ];
+  const validTabs = new Set<string>(tabs.map(t => t.id));
+  let activeTab = $state<SettingsTab>(
+    (typeof window !== 'undefined' && validTabs.has(new URL(window.location.href).searchParams.get('tab') ?? ''))
+      ? (new URL(window.location.href).searchParams.get('tab') as SettingsTab)
+      : 'account'
+  );
+
+  function switchTab(tab: SettingsTab) {
+    activeTab = tab;
+    goto(`/settings?tab=${tab}`, { replaceState: true, noScroll: true });
+  }
+  import { requestPermission, getPermission, isSupported as notifSupported, subscribeWebPush, unsubscribeWebPush, getPushSubscription } from '$lib/push-notifications';
   import { getTranslateConfig, setTranslateConfig, type TranslateProvider } from '$lib/translate';
   import { jetstream } from '$lib/jetstream';
   import { getAIComposeConfig, setAIComposeConfig, type AIProvider } from '$lib/compose/ai';
@@ -20,6 +41,8 @@
   import { listFeeds, addFeed, removeFeed, importOPML, type RssFeed } from '$lib/rss';
   import { getThreadsConfig, setThreadsConfig, getThreadsAuthUrl, exchangeCodeForToken, exchangeForLongLivedToken, ThreadsClient, getProxyAuthUrl, isThreadsAvailable } from '$lib/api/threads';
   import { listMutedWords, addMutedWord, removeMutedWord, toggleMutedWord, type MutedWord } from '$lib/muted-words';
+  import { MastodonClient } from '$lib/api/mastodon';
+  import { invalidateFilterCache, isFilterExpired, type MastodonFilter, type FilterContext, type CreateFilterParams } from '$lib/mastodon-filters';
   import { listKeywordSets, saveKeywordSet, removeKeywordSet, createKeywordSet, parseKeywords, type KeywordSet } from '$lib/keyword-monitor';
   import { getAlertSettings, setAlertSettings } from '$lib/notification-alerts';
   import { exportSettings, importSettings, type SettingsExport } from '$lib/settings-export';
@@ -110,6 +133,12 @@
   let notifPermission = $state<'granted' | 'denied' | 'default'>('default');
   let notifLoading = $state(false);
 
+  // Web Push
+  let webPushSubscribed = $state(false);
+  let webPushLoading = $state(false);
+  let webPushError = $state('');
+  let vapidKeyAvailable = $state(false);
+
   // Model manager
   let isTauri = $state(false);
   let crispasrAvailable = $state(false);
@@ -121,6 +150,14 @@
     if (notifSupported()) {
       notifPermission = await getPermission();
     }
+
+    // Check Web Push subscription status
+    try {
+      const sub = await getPushSubscription();
+      webPushSubscribed = sub !== null;
+      const resp = await fetch('/api/push/vapid-key');
+      vapidKeyAvailable = resp.ok;
+    } catch {}
 
     // Check Tauri + CrispASR availability
     if (typeof (globalThis as any).__TAURI_INTERNALS__ !== 'undefined') {
@@ -269,6 +306,62 @@
   let newKeywordSetWords = $state('');
   let newMutedWord = $state('');
   let newMutedIsRegex = $state(false);
+
+  // Server filters (Mastodon)
+  let serverFilters: MastodonFilter[] = $state([]);
+  let serverFilterLoading = $state(false);
+  let mastodonClientForFilters: MastodonClient | null = $state(null);
+  let newFilterTitle = $state('');
+  let newFilterContexts: FilterContext[] = $state(['home']);
+  let newFilterAction: 'warn' | 'hide' = $state('warn');
+  let newFilterExpiry: number | null = $state(null);
+  let newFilterKeywords = $state('');
+  let newFilterWholeWord = $state(true);
+  let filterSaving = $state(false);
+
+  async function loadServerFilters() {
+    if (!mastodonClientForFilters) return;
+    serverFilterLoading = true;
+    try {
+      serverFilters = await mastodonClientForFilters.getFilters();
+    } catch { serverFilters = []; }
+    serverFilterLoading = false;
+  }
+
+  async function deleteServerFilter(id: string) {
+    if (!mastodonClientForFilters) return;
+    try {
+      await mastodonClientForFilters.deleteFilter(id);
+      serverFilters = serverFilters.filter(f => f.id !== id);
+      invalidateFilterCache();
+    } catch (e) { error = String(e); }
+  }
+
+  async function addServerFilter() {
+    if (!mastodonClientForFilters || !newFilterTitle.trim() || !newFilterKeywords.trim()) return;
+    filterSaving = true;
+    try {
+      const keywords = newFilterKeywords.split('\n').map(k => k.trim()).filter(Boolean);
+      const params: CreateFilterParams = {
+        title: newFilterTitle.trim(),
+        context: newFilterContexts,
+        filter_action: newFilterAction,
+        expires_in: newFilterExpiry,
+        keywords_attributes: keywords.map(k => ({ keyword: k, whole_word: newFilterWholeWord })),
+      };
+      const created = await mastodonClientForFilters.createFilter(params);
+      serverFilters = [...serverFilters, created];
+      invalidateFilterCache();
+      newFilterTitle = '';
+      newFilterKeywords = '';
+      newFilterContexts = ['home'];
+      newFilterAction = 'warn';
+      newFilterExpiry = null;
+      newFilterWholeWord = true;
+    } catch (e) { error = String(e); }
+    filterSaving = false;
+  }
+
   function handleHideEngagementChange() {
     localStorage.setItem('crispdeck-hide-engagement', String(hideEngagement));
   }
@@ -302,6 +395,19 @@
   async function loadAccounts() {
     try {
       accounts = await listAccounts();
+      // Initialize Mastodon client for server filters (use first Mastodon account)
+      const mastoAcct = accounts.find(a => a.platform === 'mastodon');
+      if (mastoAcct) {
+        try {
+          const credsJson = await getDecryptedCredentials(mastoAcct.id);
+          const creds = JSON.parse(credsJson);
+          const token = creds.access_token ?? creds.accessToken;
+          if (token && mastoAcct.instance_url) {
+            mastodonClientForFilters = new MastodonClient(mastoAcct.instance_url, token);
+            loadServerFilters();
+          }
+        } catch { /* non-critical */ }
+      }
     } catch (e) {
       error = String(e);
     } finally {
@@ -537,10 +643,23 @@
     <h1 class="text-2xl font-bold">{i18n.t.settings.title}</h1>
   </div>
 
-  <!-- Settings tabs -->
+  <!-- Page-level tabs (Settings / Instance Info) -->
   <div class="flex items-center gap-1 mb-4">
     <a href="/settings" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Settings</a>
     <a href="/instance" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Instance Info</a>
+  </div>
+
+  <!-- Settings section tabs -->
+  <div class="flex gap-1 border-b border-[var(--color-border)] mb-6 overflow-x-auto">
+    {#each tabs as tab}
+      <button
+        onclick={() => switchTab(tab.id)}
+        class="px-4 py-2 text-sm whitespace-nowrap transition-colors
+          {activeTab === tab.id ? 'text-[var(--color-primary)] border-b-2 border-[var(--color-primary)] font-medium' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+      >
+        {i18n.t.settings[tab.labelKey]}
+      </button>
+    {/each}
   </div>
 
   {#if error}
@@ -550,6 +669,7 @@
     </div>
   {/if}
 
+  {#if activeTab === 'account'}
   <!-- Bluesky Accounts -->
   <section class="mb-8">
     <div class="flex items-center justify-between mb-3">
@@ -968,7 +1088,10 @@
     {/if}
   </section>
 
-  <!-- Preferences -->
+  {/if}
+
+  {#if activeTab === 'appearance'}
+  <!-- Appearance Preferences -->
   <section class="mb-8">
     <h2 class="text-lg font-semibold mb-3">{i18n.t.settings.preferences}</h2>
     <div class="space-y-4 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
@@ -1004,42 +1127,6 @@
           <option value="dashboard">{i18n.t.settings.homeDashboard}</option>
           <option value="feed">{i18n.t.settings.homeFeed}</option>
           <option value="deck">{i18n.t.settings.homeDeck}</option>
-        </select>
-      </div>
-
-      <!-- Push notifications -->
-      <div class="flex items-center justify-between">
-        <div>
-          <span class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.pushNotifications}</span>
-          <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.pushHint}</p>
-        </div>
-        {#if notifPermission === 'granted'}
-          <span class="text-xs text-green-400 px-2 py-1 bg-green-900/20 rounded">{i18n.t.settings.pushEnabled}</span>
-        {:else if notifPermission === 'denied'}
-          <span class="text-xs text-red-400 px-2 py-1 bg-red-900/20 rounded">{i18n.t.settings.pushBlocked}</span>
-        {:else}
-          <button
-            onclick={async () => { notifLoading = true; notifPermission = await requestPermission(); notifLoading = false; }}
-            disabled={notifLoading}
-            class="px-3 py-1.5 text-xs bg-[var(--color-primary)] text-white rounded-md disabled:opacity-50"
-          >
-            {notifLoading ? '...' : i18n.t.settings.pushEnable}
-          </button>
-        {/if}
-      </div>
-
-      <!-- Alt text enforcement -->
-      <div class="flex items-center justify-between">
-        <label for="alt-text-mode" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.altTextMode}</label>
-        <select
-          id="alt-text-mode"
-          bind:value={altTextMode}
-          onchange={handleAltTextModeChange}
-          class="px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none"
-        >
-          <option value="off">{i18n.t.settings.altTextOff}</option>
-          <option value="warn">{i18n.t.settings.altTextWarn}</option>
-          <option value="require">{i18n.t.settings.altTextRequire}</option>
         </select>
       </div>
 
@@ -1087,21 +1174,6 @@
         </select>
       </div>
 
-      <!-- Live counters -->
-      <div class="flex items-center justify-between">
-        <div>
-          <label for="live-counters" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.liveCounters}</label>
-          <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.liveCountersHint}</p>
-        </div>
-        <input
-          id="live-counters"
-          type="checkbox"
-          bind:checked={liveCounters}
-          onchange={handleLiveCountersChange}
-          class="w-4 h-4 accent-[var(--color-primary)]"
-        />
-      </div>
-
       <!-- Display settings -->
       <div class="border-t border-[var(--color-border)] pt-3 mt-3">
         <h3 class="text-sm font-medium mb-2">Display</h3>
@@ -1133,58 +1205,11 @@
           </div>
         </div>
       </div>
-
-      <!-- Cache management -->
-      <div class="border-t border-[var(--color-border)] pt-3 mt-3">
-        <h3 class="text-sm font-medium mb-2">Cache & Storage</h3>
-
-        <div class="flex items-center justify-between mb-3">
-          <div>
-            <label for="feed-cache-size" class="text-xs text-[var(--color-text-muted)]">Feed cache size: {feedCacheSize} posts</label>
-            <p class="text-[10px] text-[var(--color-text-muted)]">Posts cached for instant display on page revisit</p>
-          </div>
-          <input id="feed-cache-size" type="range" min="50" max="500" step="50" bind:value={feedCacheSize}
-            oninput={() => localStorage.setItem('crispdeck-feed-cache-size', String(feedCacheSize))}
-            class="w-28 accent-[var(--color-primary)]" />
-        </div>
-
-        <div class="text-[10px] text-[var(--color-text-muted)] space-y-1 mb-2">
-          <p>localStorage: {formatBytes(cacheStats.localStorage * 2)}</p>
-          {#if cacheStats.indexedDB}<p>IndexedDB (archive, bookmarks, translations): {cacheStats.indexedDB}</p>{/if}
-        </div>
-        <div class="flex gap-2">
-          <button onclick={purgeViewCache} class="px-2 py-1 text-[10px] bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
-            Clear feed cache
-          </button>
-          <button onclick={purgeAllData} class="px-2 py-1 text-[10px] bg-red-900/20 border border-red-800/30 rounded text-red-400 hover:text-red-300 transition-colors">
-            Purge all cached data
-          </button>
-          <button onclick={calcCacheStats} class="px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      <!-- Notification sound -->
-      <div class="flex items-center justify-between">
-        <div>
-          <label for="alert-sound" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.alertSound}</label>
-          <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.alertSoundHint}</p>
-        </div>
-        <input id="alert-sound" type="checkbox" bind:checked={alertSound} onchange={saveAlerts} class="w-4 h-4 accent-[var(--color-primary)]" />
-      </div>
-
-      <!-- Desktop notifications -->
-      <div class="flex items-center justify-between">
-        <div>
-          <label for="alert-desktop" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.alertDesktop}</label>
-          <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.alertDesktopHint}</p>
-        </div>
-        <input id="alert-desktop" type="checkbox" bind:checked={alertDesktop} onchange={saveAlerts} class="w-4 h-4 accent-[var(--color-primary)]" />
-      </div>
     </div>
   </section>
+  {/if}
 
+  {#if activeTab === 'content'}
   <!-- Muted Words -->
   <section class="mb-8">
     <h2 class="text-lg font-semibold mb-3 flex items-center gap-2">
@@ -1246,59 +1271,143 @@
     </div>
   </section>
 
-  <!-- Export / Import Settings -->
+  <!-- Server Filters (Mastodon) -->
+  {#if mastodonClientForFilters}
   <section class="mb-8">
     <h2 class="text-lg font-semibold mb-3 flex items-center gap-2">
-      <Download size={18} />
-      {i18n.t.settings.exportImportTitle}
+      <Shield size={18} />
+      {i18n.t.settings.serverFiltersTitle}
     </h2>
     <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
-      <p class="text-[11px] text-[var(--color-text-muted)]">{i18n.t.settings.exportImportHint}</p>
-      <div class="flex gap-2">
-        <button
-          onclick={() => {
-            const data = exportSettings();
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `crispdeck-settings-${new Date().toISOString().split('T')[0]}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-          }}
-          class="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--color-primary)] rounded-md hover:opacity-90"
-        >
-          <Download size={14} />
-          {i18n.t.settings.exportBtn}
-        </button>
-        <label class="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-md cursor-pointer hover:bg-[var(--color-bg)]">
-          <Upload size={14} />
-          {i18n.t.settings.importBtn}
-          <input
-            type="file"
-            accept=".json"
-            class="hidden"
-            onchange={(e) => {
-              const file = (e.target as HTMLInputElement).files?.[0];
-              if (file) {
-                const reader = new FileReader();
-                reader.onload = () => {
-                  try {
-                    const data = JSON.parse(reader.result as string);
-                    const count = importSettings(data);
-                    alert(`Imported ${count} settings. Reload to apply all changes.`);
-                  } catch (err) {
-                    alert(`Import failed: ${err}`);
+      <p class="text-[11px] text-[var(--color-text-muted)]">{i18n.t.settings.serverFiltersHint}</p>
+
+      {#if serverFilterLoading}
+        <div class="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
+          <Loader2 size={14} class="animate-spin" />
+          Loading...
+        </div>
+      {:else if serverFilters.length > 0}
+        <div class="space-y-1">
+          {#each serverFilters as filter}
+            <div class="flex items-center justify-between p-2 bg-[var(--color-bg)] rounded-md {isFilterExpired(filter) ? 'opacity-50' : ''}">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-medium truncate">{filter.title}</span>
+                  <span class="text-[9px] px-1 py-0.5 rounded {filter.filter_action === 'hide' ? 'bg-red-900/30 text-red-400' : 'bg-yellow-900/30 text-yellow-400'}">
+                    {filter.filter_action}
+                  </span>
+                  {#if isFilterExpired(filter)}
+                    <span class="text-[9px] px-1 py-0.5 bg-gray-800 text-gray-400 rounded">{i18n.t.settings.serverFilterExpired}</span>
+                  {/if}
+                </div>
+                <div class="flex gap-1 mt-0.5 flex-wrap">
+                  {#each filter.context as ctx}
+                    <span class="text-[9px] px-1 py-0.5 bg-[var(--color-surface)] text-[var(--color-text-muted)] rounded">{ctx}</span>
+                  {/each}
+                  <span class="text-[9px] text-[var(--color-text-muted)]">
+                    {i18n.t.settings.serverFilterKeywordCount.replace('{count}', String(filter.keywords.length))}
+                  </span>
+                  {#if filter.expires_at}
+                    <span class="text-[9px] text-[var(--color-text-muted)]">
+                      {i18n.t.settings.serverFilterExpiry}: {new Date(filter.expires_at).toLocaleString()}
+                    </span>
+                  {/if}
+                </div>
+              </div>
+              <button
+                onclick={() => deleteServerFilter(filter.id)}
+                class="text-[var(--color-text-muted)] hover:text-[var(--color-danger)] p-1 flex-shrink-0"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <p class="text-xs text-[var(--color-text-muted)]">{i18n.t.settings.serverFilterNoFilters}</p>
+      {/if}
+
+      <!-- Add filter form -->
+      <div class="space-y-2 pt-2 border-t border-[var(--color-border)]">
+        <input
+          type="text"
+          bind:value={newFilterTitle}
+          placeholder={i18n.t.settings.serverFilterTitle}
+          class="w-full px-2 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
+        />
+        <div class="flex flex-wrap gap-2">
+          <span class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.serverFilterContexts}:</span>
+          {#each ['home', 'notifications', 'thread', 'public', 'account'] as ctx}
+            <label class="flex items-center gap-1 text-[10px] text-[var(--color-text-muted)] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={newFilterContexts.includes(ctx as FilterContext)}
+                onchange={() => {
+                  const c = ctx as FilterContext;
+                  if (newFilterContexts.includes(c)) {
+                    newFilterContexts = newFilterContexts.filter(x => x !== c);
+                  } else {
+                    newFilterContexts = [...newFilterContexts, c];
                   }
-                };
-                reader.readAsText(file);
-              }
-            }}
-          />
-        </label>
+                }}
+                class="w-3 h-3 accent-[var(--color-primary)]"
+              />
+              {i18n.t.settings[`serverFilterContext${ctx.charAt(0).toUpperCase() + ctx.slice(1)}` as keyof typeof i18n.t.settings] || ctx}
+            </label>
+          {/each}
+        </div>
+        <div class="flex gap-4">
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.serverFilterAction}:</span>
+            <label class="flex items-center gap-1 text-[10px] text-[var(--color-text-muted)] cursor-pointer">
+              <input type="radio" bind:group={newFilterAction} value="warn" class="w-3 h-3 accent-[var(--color-primary)]" />
+              {i18n.t.settings.serverFilterActionWarn}
+            </label>
+            <label class="flex items-center gap-1 text-[10px] text-[var(--color-text-muted)] cursor-pointer">
+              <input type="radio" bind:group={newFilterAction} value="hide" class="w-3 h-3 accent-[var(--color-primary)]" />
+              {i18n.t.settings.serverFilterActionHide}
+            </label>
+          </div>
+        </div>
+        <div class="flex gap-2 items-center">
+          <span class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.serverFilterExpiry}:</span>
+          <select
+            bind:value={newFilterExpiry}
+            class="px-2 py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-xs text-[var(--color-text)]"
+          >
+            <option value={null}>{i18n.t.settings.serverFilterExpiryNever}</option>
+            <option value={1800}>{i18n.t.settings.serverFilterExpiry30m}</option>
+            <option value={3600}>{i18n.t.settings.serverFilterExpiry1h}</option>
+            <option value={21600}>{i18n.t.settings.serverFilterExpiry6h}</option>
+            <option value={43200}>{i18n.t.settings.serverFilterExpiry12h}</option>
+            <option value={86400}>{i18n.t.settings.serverFilterExpiry1d}</option>
+            <option value={604800}>{i18n.t.settings.serverFilterExpiry1w}</option>
+          </select>
+        </div>
+        <textarea
+          bind:value={newFilterKeywords}
+          placeholder={i18n.t.settings.serverFilterKeywords}
+          rows="3"
+          class="w-full px-2 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none resize-y"
+        ></textarea>
+        <div class="flex items-center justify-between">
+          <label class="flex items-center gap-1 text-[10px] text-[var(--color-text-muted)] cursor-pointer">
+            <input type="checkbox" bind:checked={newFilterWholeWord} class="w-3 h-3 accent-[var(--color-primary)]" />
+            {i18n.t.settings.serverFilterWholeWord}
+          </label>
+          <button
+            onclick={addServerFilter}
+            disabled={!newFilterTitle.trim() || !newFilterKeywords.trim() || newFilterContexts.length === 0 || filterSaving}
+            class="px-3 py-1.5 text-xs bg-[var(--color-primary)] text-white rounded-md disabled:opacity-30 flex items-center gap-1"
+          >
+            {#if filterSaving}<Loader2 size={10} class="animate-spin" />{/if}
+            {i18n.t.settings.serverFilterAdd}
+          </button>
+        </div>
       </div>
     </div>
   </section>
+  {/if}
 
   <!-- Tag Groups -->
   <section class="mb-8">
@@ -1421,6 +1530,44 @@
         />
         {i18n.t.settings.importOPML}
       </label>
+    </div>
+  </section>
+
+  <!-- Feed cache size (Content tab) -->
+  <section class="mb-8">
+    <h2 class="text-lg font-semibold mb-3">Feed Cache</h2>
+    <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+      <div class="flex items-center justify-between">
+        <div>
+          <label for="feed-cache-size" class="text-xs text-[var(--color-text-muted)]">Feed cache size: {feedCacheSize} posts</label>
+          <p class="text-[10px] text-[var(--color-text-muted)]">Posts cached for instant display on page revisit</p>
+        </div>
+        <input id="feed-cache-size" type="range" min="50" max="500" step="50" bind:value={feedCacheSize}
+          oninput={() => localStorage.setItem('crispdeck-feed-cache-size', String(feedCacheSize))}
+          class="w-28 accent-[var(--color-primary)]" />
+      </div>
+    </div>
+  </section>
+  {/if}
+
+  {#if activeTab === 'compose'}
+  <!-- Alt text enforcement -->
+  <section class="mb-8">
+    <h2 class="text-lg font-semibold mb-3">{i18n.t.settings.altTextMode}</h2>
+    <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+      <div class="flex items-center justify-between">
+        <label for="alt-text-mode" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.altTextMode}</label>
+        <select
+          id="alt-text-mode"
+          bind:value={altTextMode}
+          onchange={handleAltTextModeChange}
+          class="px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none"
+        >
+          <option value="off">{i18n.t.settings.altTextOff}</option>
+          <option value="warn">{i18n.t.settings.altTextWarn}</option>
+          <option value="require">{i18n.t.settings.altTextRequire}</option>
+        </select>
+      </div>
     </div>
   </section>
 
@@ -1833,6 +1980,9 @@
     </div>
   </section>
 
+  {/if}
+
+  {#if activeTab === 'content'}
   <!-- Keyword Monitors -->
   <section class="mb-8">
     <h2 class="text-lg font-semibold mb-3">{i18n.t.settings.keywordMonitorsTitle}</h2>
@@ -1894,6 +2044,123 @@
         >
           <Plus size={12} />
         </button>
+      </div>
+    </div>
+  </section>
+
+  {/if}
+
+  {#if activeTab === 'advanced'}
+  <!-- Push notifications -->
+  <section class="mb-8">
+    <h2 class="text-lg font-semibold mb-3">{i18n.t.settings.pushNotifications}</h2>
+    <div class="space-y-4 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.pushNotifications}</span>
+          <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.pushHint}</p>
+        </div>
+        {#if notifPermission === 'granted'}
+          <span class="text-xs text-green-400 px-2 py-1 bg-green-900/20 rounded">{i18n.t.settings.pushEnabled}</span>
+        {:else if notifPermission === 'denied'}
+          <span class="text-xs text-red-400 px-2 py-1 bg-red-900/20 rounded">{i18n.t.settings.pushBlocked}</span>
+        {:else}
+          <button
+            onclick={async () => { notifLoading = true; notifPermission = await requestPermission(); notifLoading = false; }}
+            disabled={notifLoading}
+            class="px-3 py-1.5 text-xs bg-[var(--color-primary)] text-white rounded-md disabled:opacity-50"
+          >
+            {notifLoading ? '...' : i18n.t.settings.pushEnable}
+          </button>
+        {/if}
+      </div>
+
+      <!-- Web Push Notifications -->
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.webPushTitle}</span>
+          <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.webPushHint}</p>
+        </div>
+        {#if webPushSubscribed}
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-green-400 px-2 py-1 bg-green-900/20 rounded">{i18n.t.settings.webPushActive}</span>
+            <button
+              onclick={async () => {
+                webPushLoading = true;
+                webPushError = '';
+                try {
+                  await unsubscribeWebPush();
+                  await fetch('/api/push/subscribe', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: 'default' }) });
+                  webPushSubscribed = false;
+                } catch (e) { webPushError = String(e); }
+                webPushLoading = false;
+              }}
+              disabled={webPushLoading}
+              class="px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-md disabled:opacity-50"
+            >
+              {webPushLoading ? '...' : i18n.t.settings.webPushDisable}
+            </button>
+          </div>
+        {:else if !vapidKeyAvailable}
+          <span class="text-xs text-[var(--color-text-muted)] px-2 py-1 bg-[var(--color-surface)] rounded">{i18n.t.settings.webPushNotConfigured}</span>
+        {:else}
+          <button
+            onclick={async () => {
+              webPushLoading = true;
+              webPushError = '';
+              try {
+                const resp = await fetch('/api/push/vapid-key');
+                const { key } = await resp.json();
+                const sub = await subscribeWebPush(key);
+                if (sub) {
+                  await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub, userId: 'default' }) });
+                  webPushSubscribed = true;
+                }
+              } catch (e) { webPushError = String(e); }
+              webPushLoading = false;
+            }}
+            disabled={webPushLoading}
+            class="px-3 py-1.5 text-xs bg-[var(--color-primary)] text-white rounded-md disabled:opacity-50"
+          >
+            {webPushLoading ? '...' : i18n.t.settings.webPushEnable}
+          </button>
+        {/if}
+      </div>
+      {#if webPushError}
+        <p class="text-xs text-red-400 mt-1">{webPushError}</p>
+      {/if}
+
+      <!-- Live counters -->
+      <div class="flex items-center justify-between">
+        <div>
+          <label for="live-counters" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.liveCounters}</label>
+          <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.liveCountersHint}</p>
+        </div>
+        <input
+          id="live-counters"
+          type="checkbox"
+          bind:checked={liveCounters}
+          onchange={handleLiveCountersChange}
+          class="w-4 h-4 accent-[var(--color-primary)]"
+        />
+      </div>
+
+      <!-- Notification sound -->
+      <div class="flex items-center justify-between">
+        <div>
+          <label for="alert-sound" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.alertSound}</label>
+          <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.alertSoundHint}</p>
+        </div>
+        <input id="alert-sound" type="checkbox" bind:checked={alertSound} onchange={saveAlerts} class="w-4 h-4 accent-[var(--color-primary)]" />
+      </div>
+
+      <!-- Desktop notifications -->
+      <div class="flex items-center justify-between">
+        <div>
+          <label for="alert-desktop" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.alertDesktop}</label>
+          <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.alertDesktopHint}</p>
+        </div>
+        <input id="alert-desktop" type="checkbox" bind:checked={alertDesktop} onchange={saveAlerts} class="w-4 h-4 accent-[var(--color-primary)]" />
       </div>
     </div>
   </section>
@@ -2065,4 +2332,97 @@
       {/if}
     </div>
   </section>
+
+  <!-- Cache & Storage -->
+  <section class="mb-8">
+    <h2 class="text-lg font-semibold mb-3">Cache & Storage</h2>
+    <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+      <div class="text-[10px] text-[var(--color-text-muted)] space-y-1 mb-2">
+        <p>localStorage: {formatBytes(cacheStats.localStorage * 2)}</p>
+        {#if cacheStats.indexedDB}<p>IndexedDB (archive, bookmarks, translations): {cacheStats.indexedDB}</p>{/if}
+      </div>
+      <div class="flex gap-2">
+        <button onclick={purgeViewCache} class="px-2 py-1 text-[10px] bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
+          Clear feed cache
+        </button>
+        <button onclick={purgeAllData} class="px-2 py-1 text-[10px] bg-red-900/20 border border-red-800/30 rounded text-red-400 hover:text-red-300 transition-colors">
+          Purge all cached data
+        </button>
+        <button onclick={calcCacheStats} class="px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+          Refresh
+        </button>
+      </div>
+    </div>
+  </section>
+  {/if}
+
+  {#if activeTab === 'about'}
+  <!-- About -->
+  <section class="mb-8">
+    <h2 class="text-lg font-semibold mb-3">{i18n.t.settings.tabAbout}</h2>
+    <div class="space-y-4 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+      <div>
+        <p class="text-sm font-medium">CrispDeck v1.0.0</p>
+        <p class="text-xs text-[var(--color-text-muted)] mt-1">Cross-platform social media client for Bluesky, Mastodon, and Threads.</p>
+      </div>
+      <div class="text-xs text-[var(--color-text-muted)] space-y-1">
+        <p>Licensed under <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">AGPL-3.0</a></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Export / Import Settings -->
+  <section class="mb-8">
+    <h2 class="text-lg font-semibold mb-3 flex items-center gap-2">
+      <Download size={18} />
+      {i18n.t.settings.exportImportTitle}
+    </h2>
+    <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
+      <p class="text-[11px] text-[var(--color-text-muted)]">{i18n.t.settings.exportImportHint}</p>
+      <div class="flex gap-2">
+        <button
+          onclick={() => {
+            const data = exportSettings();
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `crispdeck-settings-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+          class="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--color-primary)] rounded-md hover:opacity-90"
+        >
+          <Download size={14} />
+          {i18n.t.settings.exportBtn}
+        </button>
+        <label class="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-md cursor-pointer hover:bg-[var(--color-bg)]">
+          <Upload size={14} />
+          {i18n.t.settings.importBtn}
+          <input
+            type="file"
+            accept=".json"
+            class="hidden"
+            onchange={(e) => {
+              const file = (e.target as HTMLInputElement).files?.[0];
+              if (file) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                  try {
+                    const data = JSON.parse(reader.result as string);
+                    const count = importSettings(data);
+                    alert(`Imported ${count} settings. Reload to apply all changes.`);
+                  } catch (err) {
+                    alert(`Import failed: ${err}`);
+                  }
+                };
+                reader.readAsText(file);
+              }
+            }}
+          />
+        </label>
+      </div>
+    </div>
+  </section>
+  {/if}
 </div>

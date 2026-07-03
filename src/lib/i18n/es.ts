@@ -47,7 +47,8 @@ export default {
       newPosts: '{count} publicación(es) nueva(s) — clic para actualizar',
     },
     settings: {
-      title: 'Configuración', preferences: 'Preferencias', language: 'Idioma',
+      title: 'Configuración', tabAccount: 'Cuenta', tabAppearance: 'Apariencia', tabContent: 'Contenido', tabCompose: 'Redactar', tabAdvanced: 'Avanzado', tabAbout: 'Acerca de',
+      preferences: 'Preferencias', language: 'Idioma',
       translateTarget: 'Idioma de traducción', altTextMode: 'Aplicación de texto alt',
       altTextOff: 'Desactivado', altTextWarn: 'Advertir si falta', altTextRequire: 'Requerir para todas',
       blueskyAccounts: 'Cuentas Bluesky', mastodonAccounts: 'Cuentas Mastodon', threadsAccounts: 'Cuentas Threads',

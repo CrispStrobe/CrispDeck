@@ -1,4 +1,5 @@
 import { createRestAPIClient, type mastodon } from 'masto';
+import type { MastodonFilter, CreateFilterParams } from '$lib/mastodon-filters';
 
 export type MastodonPost = mastodon.v1.Status;
 
@@ -125,6 +126,60 @@ export class MastodonClient {
     });
     if (!resp.ok) throw new Error(`${resp.status}: ${resp.statusText}`);
     return resp.json();
+  }
+
+  private async authedPut(endpoint: string, body?: unknown): Promise<any> {
+    if (!this.accessToken) throw new Error('Auth required');
+    const headers: Record<string, string> = { Authorization: `Bearer ${this.accessToken}` };
+    const init: RequestInit = { method: 'PUT', headers };
+    if (body !== undefined) {
+      headers['Content-Type'] = 'application/json';
+      init.body = JSON.stringify(body);
+    }
+    const resp = await fetch(`${this.instanceUrl}${endpoint}`, init);
+    if (!resp.ok) throw new Error(`${resp.status}: ${resp.statusText}`);
+    return resp.json();
+  }
+
+  private async authedDelete(endpoint: string): Promise<void> {
+    if (!this.accessToken) throw new Error('Auth required');
+    const resp = await fetch(`${this.instanceUrl}${endpoint}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${this.accessToken}` },
+    });
+    if (!resp.ok) throw new Error(`${resp.status}: ${resp.statusText}`);
+  }
+
+  // ── Server-side filters (v2) ──────────────────────────────────────────────
+
+  async getFilters(): Promise<MastodonFilter[]> {
+    if (!this.accessToken) return [];
+    try {
+      const resp = await fetch(`${this.instanceUrl}/api/v2/filters`, {
+        headers: { Authorization: `Bearer ${this.accessToken}` },
+      });
+      if (!resp.ok) return []; // 404 = instance doesn't support v2 filters
+      return resp.json();
+    } catch { return []; }
+  }
+
+  async createFilter(params: CreateFilterParams): Promise<MastodonFilter> {
+    if (!this.accessToken) throw new Error('Auth required');
+    const resp = await fetch(`${this.instanceUrl}/api/v2/filters`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${this.accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    if (!resp.ok) throw new Error(`${resp.status}: ${resp.statusText}`);
+    return resp.json();
+  }
+
+  async updateFilter(id: string, params: CreateFilterParams): Promise<MastodonFilter> {
+    return this.authedPut(`/api/v2/filters/${id}`, params);
+  }
+
+  async deleteFilter(id: string): Promise<void> {
+    return this.authedDelete(`/api/v2/filters/${id}`);
   }
 
   async favourite(statusId: string) { return this.authedPost(`/api/v1/statuses/${statusId}/favourite`); }

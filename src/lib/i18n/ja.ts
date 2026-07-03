@@ -47,7 +47,8 @@ export default {
       newPosts: '{count}件の新しい投稿 — クリックで更新',
     },
     settings: {
-      title: '設定', preferences: '環境設定', language: '言語',
+      title: '設定', tabAccount: 'アカウント', tabAppearance: '外観', tabContent: 'コンテンツ', tabCompose: '作成', tabAdvanced: '詳細', tabAbout: '概要',
+      preferences: '環境設定', language: '言語',
       translateTarget: '翻訳先言語', altTextMode: '代替テキストの要件',
       altTextOff: 'オフ（任意）', altTextWarn: '未記入時に警告', altTextRequire: '全画像に必須',
       blueskyAccounts: 'Blueskyアカウント', mastodonAccounts: 'Mastodonアカウント',

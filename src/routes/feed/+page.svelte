@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal, RefreshCw } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
+  import DelayedSpinner from '$lib/components/DelayedSpinner.svelte';
   import Post from '$lib/components/Post.svelte';
   import CrosspostGroup from '$lib/components/CrosspostGroup.svelte';
   import SkeletonPost from '$lib/components/SkeletonPost.svelte';
@@ -19,6 +20,7 @@
   import { searchArchive } from '$lib/archive';
   import { jetstream } from '$lib/jetstream';
   import { applyMuteFilter } from '$lib/muted-words';
+  import { buildFilterMatcher, getCachedFilters, setCachedFilters, type MastodonFilter } from '$lib/mastodon-filters';
   import { saveReadPosition, getReadPosition } from '$lib/read-position';
   import { getCached, setCache } from '$lib/view-cache';
 
@@ -39,6 +41,7 @@
 
   let cursors: Record<number, string | undefined> = $state({});
   let loadingMore = $state(false);
+  let mastodonFilters: MastodonFilter[] = $state([]);
 
   let filters: Filters = $state({
     searchTerm: '',
@@ -73,6 +76,19 @@
       // Sync Bluesky server muted words (non-blocking)
       for (const [, entry] of clientEntries) {
         if (entry.oauthAgent) syncMutedWordsFromServer(entry.oauthAgent);
+      }
+      // Fetch Mastodon server-side filters (non-blocking, cached 5 min)
+      for (const [, entry] of clientEntries) {
+        if (entry.platform === 'mastodon') {
+          const masto = entry.client as MastodonClient;
+          const cached = getCachedFilters(masto.getInstanceUrl());
+          if (cached) {
+            mastodonFilters = cached;
+          } else {
+            masto.getFilters().then(f => { mastodonFilters = f; setCachedFilters(masto.getInstanceUrl(), f); }).catch(() => {});
+          }
+          break; // Only need to fetch once per unique instance for now
+        }
       }
       // Load confirmed identities for crosspost dedup + affinity for "For You"
       try {
@@ -432,7 +448,22 @@
   const platformFiltered = $derived(
     platformFilter === 'all' ? posts : posts.filter(p => p.platform === platformFilter)
   );
-  const filtered = $derived(applyMuteFilter(filterPosts(platformFiltered, filters)));
+  const filtered = $derived.by(() => {
+    let result = applyMuteFilter(filterPosts(platformFiltered, filters));
+    if (mastodonFilters.length > 0) {
+      const match = buildFilterMatcher(mastodonFilters, 'home');
+      result = result.filter(p => {
+        if (p.platform !== 'mastodon') return true;
+        const hit = match(p.text);
+        if (!hit) return true;
+        if (hit.action === 'hide') return false;
+        // 'warn' — set contentWarning so Post.svelte shows it collapsed
+        p.contentWarning = hit.title;
+        return true;
+      });
+    }
+    return result;
+  });
   const sorted = $derived(
     feedMode === 'for-you'
       ? rankForYou(filtered, affinityMap)
@@ -633,8 +664,10 @@
       <!-- Infinite scroll sentinel + loading indicator -->
       <div bind:this={scrollSentinel} class="py-6 text-center">
         {#if loadingMore}
-          <Loader2 size={24} class="text-[var(--color-text-muted)] animate-spin mx-auto" />
-          <p class="text-xs text-[var(--color-text-muted)] mt-2">{i18n.t.feed.loadingMore}</p>
+          <DelayedSpinner>
+            <Loader2 size={24} class="text-[var(--color-text-muted)] animate-spin mx-auto" />
+            <p class="text-xs text-[var(--color-text-muted)] mt-2">{i18n.t.feed.loadingMore}</p>
+          </DelayedSpinner>
         {:else if hasMoreContent}
           <p class="text-xs text-[var(--color-text-muted)]">{i18n.t.feed.scrollMore}</p>
         {:else}

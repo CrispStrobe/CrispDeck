@@ -3,6 +3,8 @@
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Columns3, Plus, Loader2 } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
+  import { haptic } from '$lib/haptics';
+  import DelayedSpinner from '$lib/components/DelayedSpinner.svelte';
   import DeckColumn from '$lib/components/deck/DeckColumn.svelte';
   import type { ColumnType } from '$lib/components/deck/DeckColumn.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
@@ -22,8 +24,99 @@
     type DeckColumnConfig,
   } from '$lib/deck-layouts';
 
-  // Drag-and-drop reorder state
+  // Drag-and-drop reorder state (mouse)
   let draggedColumnId: string | null = $state(null);
+
+  // Touch drag-and-drop reorder state
+  let touchDragColumnId: string | null = $state(null);
+  let touchDropTargetId: string | null = $state(null);
+  let touchDragX = $state(0);
+  let touchDragY = $state(0);
+  let touchLongPressTimer: ReturnType<typeof setTimeout> | null = null;
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let deckContainerEl: HTMLDivElement | undefined = $state();
+
+  function handleTouchStart(colId: string, e: TouchEvent) {
+    const touch = e.touches[0];
+    touchStartX = touch.clientX;
+    touchStartY = touch.clientY;
+
+    touchLongPressTimer = setTimeout(() => {
+      touchDragColumnId = colId;
+      touchDragX = touch.clientX;
+      touchDragY = touch.clientY;
+      haptic('medium');
+    }, 500);
+  }
+
+  function handleTouchMove(e: TouchEvent) {
+    const touch = e.touches[0];
+
+    // If we haven't entered drag mode yet, check if touch moved too far (cancel long-press)
+    if (!touchDragColumnId && touchLongPressTimer) {
+      const dx = touch.clientX - touchStartX;
+      const dy = touch.clientY - touchStartY;
+      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+        clearTimeout(touchLongPressTimer);
+        touchLongPressTimer = null;
+      }
+      return;
+    }
+
+    if (!touchDragColumnId) return;
+
+    // Prevent scrolling while dragging
+    e.preventDefault();
+
+    touchDragX = touch.clientX;
+    touchDragY = touch.clientY;
+
+    // Determine which column the touch is over by checking column wrapper divs
+    let foundTarget: string | null = null;
+    if (deckContainerEl) {
+      const wrappers = deckContainerEl.children;
+      for (let i = 0; i < wrappers.length; i++) {
+        const colId = columns[i]?.id;
+        if (!colId || colId === touchDragColumnId) continue;
+        const rect = wrappers[i].getBoundingClientRect();
+        if (touch.clientX >= rect.left && touch.clientX <= rect.right) {
+          foundTarget = colId;
+          break;
+        }
+      }
+    }
+    touchDropTargetId = foundTarget;
+  }
+
+  function handleTouchEnd() {
+    // Clear long-press timer
+    if (touchLongPressTimer) {
+      clearTimeout(touchLongPressTimer);
+      touchLongPressTimer = null;
+    }
+
+    if (!touchDragColumnId) return;
+
+    // Perform the reorder if we have a valid drop target
+    if (touchDropTargetId && touchDropTargetId !== touchDragColumnId) {
+      const fromIdx = columns.findIndex(c => c.id === touchDragColumnId);
+      const toIdx = columns.findIndex(c => c.id === touchDropTargetId);
+      if (fromIdx >= 0 && toIdx >= 0) {
+        const moved = columns[fromIdx];
+        const updated = [...columns];
+        updated.splice(fromIdx, 1);
+        updated.splice(toIdx, 0, moved);
+        columns = updated;
+        saveColumns();
+        haptic('light');
+      }
+    }
+
+    // Reset state
+    touchDragColumnId = null;
+    touchDropTargetId = null;
+  }
 
   let accounts: Account[] = $state([]);
   let loading = $state(true);
@@ -669,7 +762,9 @@
   <!-- Columns -->
   {#if loading}
     <div class="flex-1 flex items-center justify-center">
-      <Loader2 size={32} class="text-[var(--color-text-muted)] animate-spin" />
+      <DelayedSpinner>
+        <Loader2 size={32} class="text-[var(--color-text-muted)] animate-spin" />
+      </DelayedSpinner>
     </div>
   {:else if accounts.length === 0}
     <div class="flex-1 flex items-center justify-center">
@@ -679,9 +774,20 @@
       </div>
     </div>
   {:else}
-    <div class="flex-1 flex overflow-x-auto">
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      bind:this={deckContainerEl}
+      class="flex-1 flex overflow-x-auto"
+      ontouchmove={handleTouchMove}
+      ontouchend={handleTouchEnd}
+      ontouchcancel={handleTouchEnd}
+    >
       {#each columns as col (col.id)}
-        <div class="transition-opacity duration-200 {draggedColumnId === col.id ? 'opacity-40' : draggedColumnId ? 'hover:ring-2 hover:ring-[var(--color-primary)]/30 hover:rounded-lg' : ''}">
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="transition-all duration-200 {draggedColumnId === col.id || touchDragColumnId === col.id ? 'opacity-40 scale-[0.95]' : ''} {touchDropTargetId === col.id ? 'ring-2 ring-[var(--color-primary)] rounded-lg' : draggedColumnId && draggedColumnId !== col.id ? 'hover:ring-2 hover:ring-[var(--color-primary)]/30 hover:rounded-lg' : ''}"
+          ontouchstart={(e) => handleTouchStart(col.id, e)}
+        >
           <DeckColumn
             id={col.id}
             title={col.title}
@@ -704,5 +810,18 @@
         </div>
       {/each}
     </div>
+  {/if}
+
+  <!-- Touch drag floating indicator -->
+  {#if touchDragColumnId}
+    {@const dragCol = columns.find(c => c.id === touchDragColumnId)}
+    {#if dragCol}
+      <div
+        class="fixed z-[100] pointer-events-none px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white text-xs font-medium shadow-lg whitespace-nowrap"
+        style="left: {touchDragX}px; top: {touchDragY - 40}px; transform: translateX(-50%)"
+      >
+        {dragCol.title}
+      </div>
+    {/if}
   {/if}
 </div>

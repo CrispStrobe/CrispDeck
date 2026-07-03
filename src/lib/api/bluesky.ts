@@ -239,6 +239,74 @@ export class BlueskyClient {
     });
   }
 
+  /** Upload a video to Bluesky via video.bsky.app */
+  async uploadVideo(file: File, onProgress?: (status: string) => void): Promise<any> {
+    if (!this.authAgent) throw new Error('Auth required for video upload');
+
+    // 1. Get the service auth token for video.bsky.app
+    const serviceAuth = await this.authAgent.api.com.atproto.server.getServiceAuth({
+      aud: `did:web:video.bsky.app`,
+      lxm: 'app.bsky.video.uploadVideo',
+      exp: Math.floor(Date.now() / 1000) + 60 * 30, // 30 min
+    });
+
+    // 2. Upload raw bytes to video.bsky.app
+    const uploadUrl = new URL('https://video.bsky.app/xrpc/app.bsky.video.uploadVideo');
+    uploadUrl.searchParams.set('did', this.authAgent.session?.did ?? '');
+    uploadUrl.searchParams.set('name', file.name || 'video.mp4');
+
+    onProgress?.('uploading');
+    const uploadResp = await fetch(uploadUrl.toString(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': file.type || 'video/mp4',
+        'Authorization': `Bearer ${serviceAuth.data.token}`,
+      },
+      body: file,
+    });
+
+    if (!uploadResp.ok) {
+      const errText = await uploadResp.text();
+      throw new Error(`Video upload failed (${uploadResp.status}): ${errText}`);
+    }
+
+    const uploadResult = await uploadResp.json();
+    const jobId = uploadResult.jobId;
+
+    if (!jobId) {
+      // Some responses return the blob directly without a job
+      if (uploadResult.blob) return uploadResult.blob;
+      throw new Error('No jobId or blob in upload response');
+    }
+
+    // 3. Poll job status until completed (max 120s, every 2s)
+    onProgress?.('processing');
+    const maxAttempts = 60;
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+
+      const statusResp = await fetch(
+        `https://video.bsky.app/xrpc/app.bsky.video.getJobStatus?jobId=${encodeURIComponent(jobId)}`,
+        { headers: { 'Authorization': `Bearer ${serviceAuth.data.token}` } }
+      );
+
+      if (!statusResp.ok) continue;
+      const status = await statusResp.json();
+      const jobStatus = status.jobStatus;
+
+      onProgress?.(jobStatus?.state ?? 'processing');
+
+      if (jobStatus?.state === 'JOB_STATE_COMPLETED') {
+        return jobStatus.blob;
+      }
+      if (jobStatus?.state === 'JOB_STATE_FAILED') {
+        throw new Error(`Video processing failed: ${jobStatus.error ?? 'unknown error'}`);
+      }
+    }
+
+    throw new Error('Video processing timed out after 120 seconds');
+  }
+
   /** Unpin profile post */
   async unpinFromProfile(): Promise<void> {
     const agent = this.authAgent;

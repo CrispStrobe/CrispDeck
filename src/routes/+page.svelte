@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { listAccounts } from '$lib/db';
+  import { listAccounts, addAccount as dbAddAccount, startMastodonOAuth as dbStartOAuth } from '$lib/db';
+  import { startBlueskyOAuth } from '$lib/api/bluesky-oauth';
   import { Rss, PenSquare, Users, ScanSearch, Columns3, Bell, Search, TrendingUp, BarChart3, Bookmark, MessageSquare, Keyboard } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import Onboarding from '$lib/components/Onboarding.svelte';
@@ -35,6 +36,48 @@
   const mastoAccounts = $derived(accounts.filter(a => a.platform === 'mastodon'));
   const threadsAccounts = $derived(accounts.filter(a => a.platform === 'threads'));
   let showMoreActions = $state(false);
+
+  async function handleConnectBluesky() {
+    // OAuth flow — prompts are handled by the OAuth library
+    await startBlueskyOAuth('');
+  }
+
+  async function handleConnectBlueskyPassword(handle: string, password: string) {
+    const cleanHandle = handle.replace(/^@/, '');
+    const { BlueskyClient } = await import('$lib/api/bluesky');
+    const testClient = new BlueskyClient(cleanHandle, password);
+    await testClient.login();
+    const profile = await testClient.getProfile(cleanHandle);
+    await dbAddAccount({
+      platform: 'bluesky',
+      handle: profile.handle ?? cleanHandle,
+      display_name: profile.displayName,
+      avatar_url: profile.avatar,
+      did: profile.did,
+      credentials: JSON.stringify({ app_password: password }),
+      is_primary: true,
+    });
+    localStorage.setItem('crispdeck-first-run-complete', 'true');
+    goto('/feed');
+  }
+
+  async function handleConnectMastodon(instanceUrl: string) {
+    const instance = instanceUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const url = `https://${instance}`;
+    const oauthState = await dbStartOAuth(url);
+    localStorage.setItem('crispdeck-oauth-state', JSON.stringify({
+      instance_url: url,
+      client_id: oauthState.client_id,
+      client_secret: oauthState.client_secret,
+      redirect_uri: oauthState.redirect_uri,
+    }));
+    localStorage.setItem('crispdeck-first-run-complete', 'true');
+    window.location.href = oauthState.auth_url;
+  }
+
+  function handleConnectThreads() {
+    goto('/settings');
+  }
 </script>
 
 <svelte:head><title>CrispDeck</title></svelte:head>
@@ -45,7 +88,12 @@
   {#if loading}
     <p class="text-[var(--color-text-muted)]">{i18n.t.common.loading}</p>
   {:else if accounts.length === 0}
-    <Onboarding ongetstarted={() => goto('/settings')} />
+    <Onboarding
+      onconnectbluesky={handleConnectBluesky}
+      onconnectblueskypassword={handleConnectBlueskyPassword}
+      onconnectmastodon={handleConnectMastodon}
+      onconnectthreads={handleConnectThreads}
+    />
   {:else}
     <!-- Account summary -->
     <div class="grid grid-cols-3 gap-4 mb-8">

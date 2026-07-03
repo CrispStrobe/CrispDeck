@@ -4,6 +4,7 @@ import type { MastodonClient } from '$lib/api/mastodon';
 import type { ThreadsClient } from '$lib/api/threads';
 import type { Platform } from '$lib/types';
 import { resolveMentionsForPlatform } from './mentions';
+import { isVideoFile } from './media';
 
 export interface PostResult {
   platform: Platform;
@@ -29,6 +30,7 @@ export interface ComposeOptions {
   selfLabel?: string;      // Bluesky: content self-label (graphic-media, nudity, porn, gore)
   disableQuotes?: boolean; // Bluesky: disable quoting via postgate
   poll?: PollOptions;      // Mastodon: attach a poll
+  onVideoProgress?: (status: string) => void; // Video upload progress callback
 }
 
 export interface PollOptions {
@@ -58,39 +60,68 @@ export async function postToBluesky(
 
     // Upload media if present
     if (options.mediaFiles && options.mediaFiles.length > 0) {
-      const images: Array<{
-        alt: string;
-        image: { $type: string; ref: { $link: string }; mimeType: string; size: number };
-      }> = [];
+      // Check if any file is a video — video takes priority over images
+      const videoFile = options.mediaFiles.find(f => isVideoFile(f));
 
-      for (let idx = 0; idx < Math.min(options.mediaFiles.length, 4); idx++) {
-        const file = options.mediaFiles[idx];
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        const resp = await agent.uploadBlob(bytes, { encoding: file.type });
-        images.push({
-          alt: options.altTexts?.[idx] ?? '',
-          image: resp.data.blob,
-        });
-      }
+      if (videoFile) {
+        // Video upload: only one video per post, no mixing with images
+        const videoIdx = options.mediaFiles.indexOf(videoFile);
+        const blobRef = await client.uploadVideo(videoFile, options.onVideoProgress);
 
-      if (options.quoteUri && options.quoteCid) {
-        // Images + quote: use recordWithMedia embed
-        record.embed = {
-          $type: 'app.bsky.embed.recordWithMedia',
-          record: {
-            $type: 'app.bsky.embed.record',
-            record: { uri: options.quoteUri, cid: options.quoteCid },
-          },
-          media: {
+        const videoEmbed: Record<string, unknown> = {
+          $type: 'app.bsky.embed.video',
+          video: blobRef,
+          alt: options.altTexts?.[videoIdx] ?? '',
+        };
+
+        if (options.quoteUri && options.quoteCid) {
+          record.embed = {
+            $type: 'app.bsky.embed.recordWithMedia',
+            record: {
+              $type: 'app.bsky.embed.record',
+              record: { uri: options.quoteUri, cid: options.quoteCid },
+            },
+            media: videoEmbed,
+          };
+        } else {
+          record.embed = videoEmbed;
+        }
+      } else {
+        // Image upload (existing logic)
+        const images: Array<{
+          alt: string;
+          image: { $type: string; ref: { $link: string }; mimeType: string; size: number };
+        }> = [];
+
+        for (let idx = 0; idx < Math.min(options.mediaFiles.length, 4); idx++) {
+          const file = options.mediaFiles[idx];
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          const resp = await agent.uploadBlob(bytes, { encoding: file.type });
+          images.push({
+            alt: options.altTexts?.[idx] ?? '',
+            image: resp.data.blob,
+          });
+        }
+
+        if (options.quoteUri && options.quoteCid) {
+          // Images + quote: use recordWithMedia embed
+          record.embed = {
+            $type: 'app.bsky.embed.recordWithMedia',
+            record: {
+              $type: 'app.bsky.embed.record',
+              record: { uri: options.quoteUri, cid: options.quoteCid },
+            },
+            media: {
+              $type: 'app.bsky.embed.images',
+              images,
+            },
+          };
+        } else {
+          record.embed = {
             $type: 'app.bsky.embed.images',
             images,
-          },
-        };
-      } else {
-        record.embed = {
-          $type: 'app.bsky.embed.images',
-          images,
-        };
+          };
+        }
       }
     } else if (options.quoteUri && options.quoteCid) {
       // Quote without images

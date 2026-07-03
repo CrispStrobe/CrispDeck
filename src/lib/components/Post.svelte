@@ -700,6 +700,14 @@
   const hiddenByLabel = $derived(postLabels.some(shouldHideLabel));
   const warnedLabels = $derived(postLabels.filter(shouldWarnLabel));
   let labelRevealed = $state(false);
+
+  // Alt text badge popover — tracks which image index is showing alt text (null = none)
+  let altPopoverIndex: number | null = $state(null);
+
+  function toggleAltPopover(index: number, e: MouseEvent) {
+    e.stopPropagation();
+    altPopoverIndex = altPopoverIndex === index ? null : index;
+  }
 </script>
 
 {#if hiddenByLabel && !labelRevealed}
@@ -808,9 +816,23 @@
             <button
               type="button"
               onclick={() => openLightbox(bskyImages.map(img => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), i)}
-              class="cursor-pointer text-left w-full"
+              class="cursor-pointer text-left w-full relative"
             >
               <img loading="lazy" src={image.thumb} alt={image.alt || ''} class="rounded-md w-full {bskyImages.length === 1 ? 'max-h-96 object-contain bg-black/20' : 'aspect-square object-cover'}" />
+              {#if image.alt}
+                <span
+                  class="absolute bottom-1 left-1 px-1 py-0.5 text-[9px] font-bold bg-black/70 text-white rounded cursor-pointer"
+                  onclick={(e) => toggleAltPopover(i, e)}
+                  role="button"
+                  tabindex="-1"
+                  aria-label="Show alt text"
+                >ALT</span>
+                {#if altPopoverIndex === i}
+                  <div class="absolute bottom-full left-0 mb-1 p-2 bg-black/90 text-white text-xs rounded-lg max-w-[250px] z-10">
+                    {image.alt}
+                  </div>
+                {/if}
+              {/if}
             </button>
           {/each}
         </div>
@@ -919,13 +941,28 @@
         <div class="{mastodonMedia.length === 1 ? '' : 'grid grid-cols-2 gap-2'} pt-2">
           {#each mastodonMedia as attachment, i}
             {@const imageUrl = attachment.previewUrl || attachment.url || attachment.remoteUrl}
+            {@const mastoAltIndex = bskyImages.length + i}
             {#if imageUrl}
               <button
                 type="button"
                 onclick={() => openLightbox(mastodonMedia.map(a => ({ url: a.url || a.previewUrl || a.remoteUrl || '', thumb: a.previewUrl || a.url || '', alt: a.description })), i)}
-                class="cursor-pointer text-left w-full"
+                class="cursor-pointer text-left w-full relative"
               >
                 <img loading="lazy" src={imageUrl} alt={attachment.description || `Image ${i + 1}`} class="rounded-md w-full {mastodonMedia.length === 1 ? 'max-h-96 object-contain bg-black/20' : 'aspect-square object-cover'} bg-[var(--color-surface-hover)]" />
+                {#if attachment.description}
+                  <span
+                    class="absolute bottom-1 left-1 px-1 py-0.5 text-[9px] font-bold bg-black/70 text-white rounded cursor-pointer"
+                    onclick={(e) => toggleAltPopover(mastoAltIndex, e)}
+                    role="button"
+                    tabindex="-1"
+                    aria-label="Show alt text"
+                  >ALT</span>
+                  {#if altPopoverIndex === mastoAltIndex}
+                    <div class="absolute bottom-full left-0 mb-1 p-2 bg-black/90 text-white text-xs rounded-lg max-w-[250px] z-10">
+                      {attachment.description}
+                    </div>
+                  {/if}
+                {/if}
               </button>
             {/if}
           {/each}

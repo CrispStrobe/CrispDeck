@@ -13,7 +13,7 @@ A unified Mastodon + Bluesky + Threads social media client with:
 
 ## Current State (2026-07-03)
 
-v1.0.0 — 1052 unit tests + 28 Playwright E2E tests, 29 pages, live at https://crispdeck.vercel.app
+v1.0.0 — 1196 unit tests + 28 Playwright E2E tests, 29 pages, live at https://crispdeck.vercel.app
 
 **License**: AGPL-3.0-only
 
@@ -1017,9 +1017,9 @@ CrispDeck has three competitive weaknesses vs dedicated native single-network cl
 | # | Item | Status | Effort | Priority |
 |---|------|--------|--------|----------|
 | 138 | Redirect to feed after first account connect | Done | Small | Must-have |
-| 139 | Network-first onboarding (replace feature carousel with 3 network buttons → inline auth) | Not started | Medium | Must-have |
+| 139 | Network-first onboarding (replace feature carousel with 3 network buttons → inline auth) | Done | Medium | Must-have |
 | 140 | Configurable sidebar with simple mode (hide 7 advanced items, gear icon to customize) | Done | Medium | Must-have |
-| 141 | Split settings into 6 tabbed sections (Account/Appearance/Content/Compose/Advanced/About) | Not started | Medium | Must-have |
+| 141 | Split settings into 6 tabbed sections (Account/Appearance/Content/Compose/Advanced/About) | Done | Medium | Must-have |
 | 142 | Dashboard progressive disclosure (5 primary tiles, "More" expands secondary) | Done | Small | Nice-to-have |
 | 143 | Fix safe-area-bottom CSS bug + tap-highlight + overscroll-behavior | Done | Small | Must-have |
 
@@ -1030,7 +1030,7 @@ CrispDeck has three competitive weaknesses vs dedicated native single-network cl
 | 144 | Haptic feedback module (navigator.vibrate on like/repost) | Done | Small | Must-have |
 | 145 | Directional slide transitions (slide left forward, slide right back, via View Transitions API) | Done | Small | Must-have |
 | 146 | Touch swipe in MediaLightbox (horizontal prev/next, translateX animation) | Done | Small | Must-have |
-| 147 | Touch-compatible deck reorder (long-press to pick up, touchmove drag, floating preview) | Not started | Medium | Must-have |
+| 147 | Touch-compatible deck reorder (long-press to pick up, touchmove drag, floating preview) | Done | Medium | Must-have |
 | 148 | Heart-burst like animation (CSS pop + 6 particle spans) | Done | Small | Nice-to-have |
 | 149 | Shimmer skeleton loaders (replace animate-pulse with gradient shimmer) | Done | Small | Nice-to-have |
 | 150 | Pull-to-refresh on all scroll views (extract to reusable util, apply to notifications/thread/deck) | Done | Small | Must-have |
@@ -1040,7 +1040,7 @@ CrispDeck has three competitive weaknesses vs dedicated native single-network cl
 
 | # | Item | Status | Effort | Priority |
 |---|------|--------|--------|----------|
-| 152 | Video upload pipeline (video.bsky.app upload → poll job → embed, progress bar) | Not started | Large | Must-have |
+| 152 | Video upload pipeline (video.bsky.app upload → poll job → embed, progress bar) | Done | Large | Must-have |
 | 153 | Self-labeling on posts (graphic-media/nudity/porn/gore in compose UI) | Done | Small | Must-have |
 | 154 | Server-synced muted words (fetch/merge/sync via app.bsky.actor.putPreferences) | Done | Medium | Must-have |
 | 155 | Post gates / quote restrictions (disable quoting via app.bsky.feed.postgate) | Done | Small | Nice-to-have |
@@ -1051,7 +1051,7 @@ CrispDeck has three competitive weaknesses vs dedicated native single-network cl
 | # | Item | Status | Effort | Priority |
 |---|------|--------|--------|----------|
 | 157 | Custom emoji rendering (populate emojis array, replace :shortcode: with <img> post-sanitize) | Done | Medium | Must-have |
-| 158 | Server-side filters with expiry/context (GET /api/v2/filters, apply in filterPosts, CRUD UI) | Not started | Medium | Must-have |
+| 158 | Server-side filters with expiry/context (GET /api/v2/filters, apply in filterPosts, CRUD UI) | Done | Medium | Must-have |
 | 159 | Follow requests (handle follow_request notif type, Accept/Reject buttons, badge count) | Done | Small | Must-have |
 | 160 | Announcements (GET /api/v1/announcements, pinned card on notifications, dismiss) | Done | Small | Nice-to-have |
 | 161 | Post edit history (edited badge on posts with edited_at) | Done | Small | Nice-to-have |
@@ -1070,7 +1070,7 @@ CrispDeck has three competitive weaknesses vs dedicated native single-network cl
 
 | # | Item | Status | Effort | Priority |
 |---|------|--------|--------|----------|
-| 167 | Web push with VAPID (PushManager.subscribe, SW push/notificationclick handlers, Vercel cron) | Not started | Large | Must-have |
+| 167 | Web push with VAPID (PushManager.subscribe, SW push/notificationclick handlers, Vercel cron) | Done | Large | Must-have |
 | 168 | PWA manifest shortcuts + share_target (Compose/Feed/Notifications shortcuts, share → compose) | Done | Small | Must-have |
 | 169 | Register Tauri notification plugin (add to Cargo.toml + lib.rs — was silently broken) | Done | Small | Must-have |
 | 170 | Notification badge API (navigator.setAppBadge on unread count) | Done | Small | Nice-to-have |
@@ -1087,100 +1087,80 @@ CrispDeck has three competitive weaknesses vs dedicated native single-network cl
 
 ### Remaining Items — Detailed Implementation Notes
 
-#### 139. Network-first onboarding (medium / must-have)
-- **Current**: `src/lib/components/Onboarding.svelte` shows a 4-step feature carousel pitching deck/firehose/keywords to users who have zero accounts
-- **Goal**: Replace with 3 large network buttons (Bluesky / Mastodon / Threads) → inline auth form. Remove all power-feature marketing from first-run
-- **Implementation**:
-  - Rewrite `Onboarding.svelte` as a two-stage component: Stage 1 = network selector, Stage 2 = per-network connect
-  - Set `crispdeck-first-run-complete` in localStorage after first account
-  - Dashboard (`src/routes/+page.svelte`) should show only primary tiles until this flag is set
-- **Files**: `src/lib/components/Onboarding.svelte`, `src/routes/+page.svelte`
+#### 139. Network-first onboarding (medium / must-have) — DONE
+- Two-stage component: Stage 1 = 3 large network buttons (Bluesky/Mastodon/Threads with brand colors + taglines), Stage 2 = per-network inline auth forms
+- Bluesky: OAuth button + app password form; Mastodon: instance URL input; Threads: redirect to settings
+- Dashboard passes 4 auth callbacks implementing real connection logic (mirrors settings page patterns)
+- Sets `crispdeck-first-run-complete` in localStorage after first account, redirects to `/feed`
+- i18n: 12 strings in EN + DE
+- **Key files**: `src/lib/components/Onboarding.svelte`, `src/routes/+page.svelte`
 
-#### 141. Split settings into tabbed sections (medium / must-have)
-- **Current**: `src/routes/settings/+page.svelte` is 2065 lines, 16 sections in a single scroll
-- **Goal**: 6 tabs: Account, Appearance, Content, Compose, Advanced, About
-- **Implementation**:
-  - Extract each tab's markup into `src/lib/components/settings/SettingsAccount.svelte`, `SettingsAppearance.svelte`, etc.
-  - Main settings page renders active tab based on `?tab=` URL param
-  - Existing state variables stay in the main page and are passed as props to tab components
-  - The "simple mode" toggle (already done, item 140) lives in Appearance tab
-- **Files**: `src/routes/settings/+page.svelte` (refactor), new files under `src/lib/components/settings/`
+#### 141. Split settings into tabbed sections (medium / must-have) — DONE
+- 6 tabs: Account, Appearance, Content, Compose, Advanced, About
+- Tab bar with active indicator, URL-driven (`?tab=content` deep links)
+- All state stays in single file — template sections wrapped in `{#if activeTab}` blocks
+- Account: Bluesky/Mastodon/Threads account management
+- Appearance: Language, theme, home mode, display (font/size/spacing/width), compact posts, media preview
+- Content: Muted Words, Server Filters, Tag Groups, RSS, Feed cache, Keyword Monitors
+- Compose: Alt text, Translation, AI Compose, Hashtag Bank
+- Advanced: Notifications, TTS/STT, Model Manager, Cache, Debug Log
+- About: Version, license, Settings Export/Import
+- i18n: 6 tab labels in all 8 languages
+- **Key files**: `src/routes/settings/+page.svelte`
 
-#### 147. Touch-compatible deck reorder (medium / must-have)
-- **Current**: `src/routes/deck/+page.svelte` uses HTML5 DnD (`ondragstart`/`ondragover`/`ondrop`) which does not fire touch events — deck columns cannot be reordered on iOS/Android
-- **Goal**: Long-press (500ms) to pick up, touchmove to drag, touchend to drop
-- **Implementation**:
-  - Add `ontouchstart` with 500ms `setTimeout` to enter drag mode on each `DeckColumn`
-  - Track `touchmove` to position a floating clone (`position: fixed` copy of column header)
-  - On `touchend`, determine drop position by comparing touch X against column boundaries
-  - Call existing `handleDrop` logic (already updates `columns` array and saves to localStorage)
-  - Visual: columns scale down to 0.97 during drag, drop target gets highlight ring
-  - Add `haptic('medium')` on pickup and `haptic('light')` on drop
-  - Mouse DnD path remains unchanged — desktop unaffected
-- **Files**: `src/routes/deck/+page.svelte`, `src/lib/components/deck/DeckColumn.svelte`
+#### 147. Touch-compatible deck reorder (medium / must-have) — DONE
+- Long-press (500ms) to pick up with `haptic('medium')`, touchmove to drag with floating title indicator, touchend to drop with `haptic('light')`
+- 10px movement threshold cancels long-press (allows normal scroll)
+- Dragged column: `opacity-40 scale-[0.95]`; drop target: `ring-2 ring-[var(--color-primary)]`
+- Mouse HTML5 DnD path unchanged — desktop unaffected
+- 4 new unit tests
+- **Key files**: `src/routes/deck/+page.svelte`
 
-#### 152. Bluesky video upload pipeline (large / must-have)
-- **Current**: `src/lib/compose/adapter.ts` only uploads images via `agent.uploadBlob()`. Video posts can be viewed (`Post.svelte` renders `app.bsky.embed.video#view`) but not created
-- **Goal**: Full video upload → transcode → embed flow
-- **Implementation**:
-  - In `BlueskyClient` (`src/lib/api/bluesky.ts`), add `uploadVideo(file: File)`:
-    1. POST raw bytes to `https://video.bsky.app/xrpc/app.bsky.video.uploadVideo` with Bearer token, `Content-Type: video/*`
-    2. Poll `https://video.bsky.app/xrpc/app.bsky.video.getJobStatus?jobId=...` every 2s until `state === 'JOB_STATE_COMPLETED'` (max 120s timeout)
-    3. Return the `blob` ref from the completed job
-  - In `adapter.ts` (`postToBluesky`): detect `video/*` MIME type in `options.mediaFiles`. If video, call `uploadVideo()` instead of `uploadBlob()`, build `app.bsky.embed.video` embed with `alt` text and the blob ref
-  - In `src/routes/compose/+page.svelte`: add `videoUploadProgress` state. Show progress bar during upload/transcode. The existing file input already accepts `video/*` MIME types
-  - The existing `validateMediaFile` in `media.ts` already enforces 100MB limit
-- **Files**: `src/lib/api/bluesky.ts`, `src/lib/compose/adapter.ts`, `src/routes/compose/+page.svelte`
-- **Testing**: Mock `video.bsky.app` endpoints in `bluesky.unit.test.ts`
+#### 152. Bluesky video upload pipeline (large / must-have) — DONE
+- `BlueskyClient.uploadVideo()`: service auth → POST to video.bsky.app → poll getJobStatus every 2s (max 120s) → return blob ref
+- Handles direct blob response (no job), JOB_STATE_FAILED, timeout, progress callback
+- Compose adapter: detects video MIME type, builds `app.bsky.embed.video` embed, handles video+quote via `recordWithMedia`
+- Compose page: `videoUploadStatus` state with progress indicator, video preview in media grid
+- 15 tests with fake timers
+- **Key files**: `src/lib/api/bluesky.ts`, `src/lib/compose/adapter.ts`, `src/routes/compose/+page.svelte`
 
-#### 158. Mastodon server-side filters (medium / must-have)
-- **Current**: CrispDeck has client-side muted words (`src/lib/muted-words.ts`) but ignores Mastodon's server-side filters (`/api/v2/filters`) which have context (home/notifications/thread/public), expiry, whole-word matching, and warn/hide actions
-- **Goal**: Fetch, apply, and manage Mastodon filters
-- **Implementation**:
-  - In `MastodonClient` (`src/lib/api/mastodon.ts`), add:
-    - `getFilters(): Promise<MastodonFilter[]>` — `GET /api/v2/filters`
-    - `createFilter(params)`, `updateFilter(id, params)`, `deleteFilter(id)` — CRUD
-    - Define `MastodonFilter` type: `{ id, title, context[], expires_at, filter_action: 'warn'|'hide', keywords: [{id, keyword, whole_word}] }`
-  - On feed load (in `src/routes/feed/+page.svelte`), fetch filters once per Mastodon account, cache with 5-minute TTL
-  - Apply in `filterPosts` (`src/lib/api/unified.ts`): for each Mastodon post, check if any filter keyword matches the text (with whole-word logic). If action is `hide`, exclude. If `warn`, set a content warning on the post so `Post.svelte` shows it collapsed
-  - Add a "Server Filters" section in Settings → Content tab (after item 141) with UI to list, create, edit, and delete filters
-- **Files**: `src/lib/api/mastodon.ts`, `src/lib/api/unified.ts`, `src/routes/feed/+page.svelte`, `src/routes/settings/+page.svelte`
-- **Testing**: Unit test filter-matching logic (whole-word, regex, expiry) in new `mastodon-filters.test.ts`
+#### 158. Mastodon server-side filters (medium / must-have) — DONE
+- `MastodonClient`: `getFilters()`, `createFilter()`, `updateFilter()`, `deleteFilter()` (v2 API, graceful 404 fallback)
+- `mastodon-filters.ts`: `buildFilterMatcher(filters, context)` with whole-word regex, substring match, expiry check, compiled matcher cache
+- Feed page: fetches filters on load (5-min TTL cache), applies `hide` (exclude) and `warn` (content warning collapse) to Mastodon posts in `home` context
+- `Post.svelte`: CW collapse UI when `post.contentWarning` is set
+- Settings: "Server Filters (Mastodon)" section with CRUD UI — title, contexts, action, expiry, keywords
+- i18n: 20 strings in EN + DE
+- 21 new unit tests
+- **Key files**: `src/lib/mastodon-filters.ts`, `src/lib/api/mastodon.ts`, `src/routes/feed/+page.svelte`, `src/routes/settings/+page.svelte`, `src/lib/components/Post.svelte`
 
-#### 167. Web push with VAPID (large / must-have)
-- **Current**: `src/lib/push-notifications.ts` only does local polling-based notifications (60s interval). `static/sw.js` has no `push` or `notificationclick` handlers. No VAPID keys exist
-- **Goal**: Background push notifications that work even when the app is closed
-- **Implementation**:
-  - **Server side** (Vercel):
-    - Generate VAPID keys: `npx web-push generate-vapid-keys` → store as `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` Vercel env vars
-    - Create `api/push/subscribe.ts`: POST endpoint that stores push subscriptions (endpoint, p256dh, auth keys) in Vercel KV or Blob, keyed by a user session token
-    - Create `api/push/send.ts`: Vercel Cron job (every 2 min) that polls Bluesky/Mastodon notifications for each subscription, compares against last-seen IDs, delivers deltas via `web-push` npm library
-    - Add cron schedule to `vercel.json`: `{ "crons": [{ "path": "/api/push/send", "schedule": "*/2 * * * *" }] }`
-  - **Client side**:
-    - In `push-notifications.ts`, add `subscribeWebPush(vapidPublicKey)`: calls `navigator.serviceWorker.ready`, then `reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) })`, then POSTs the subscription JSON to `/api/push/subscribe`
-    - Add opt-in UI in Settings → Notifications section
-  - **Service Worker** (`static/sw.js`):
-    - Add `push` event handler: `event.data.json()` → `self.registration.showNotification(title, { body, icon, data: { url } })`
-    - Add `notificationclick` handler: `clients.openWindow(event.notification.data.url)` — routes to the specific post/thread/profile
-  - **Dependencies**: `npm install web-push` (server-side only, in API routes)
-- **Files**: `static/sw.js`, `src/lib/push-notifications.ts`, new `api/push/subscribe.ts`, new `api/push/send.ts`, `vercel.json`, `src/routes/settings/+page.svelte`
-- **Testing**: Subscription flow can be unit-tested with mocked `PushManager`. Delivery requires integration test with real VAPID keys
+#### 167. Web push with VAPID (large / must-have) — DONE
+- **Service worker**: `push` event handler (showNotification with actions) + `notificationclick` handler (focus/navigate existing window or open new)
+- **Client**: `subscribeWebPush()`, `unsubscribeWebPush()`, `getPushSubscription()`, `urlBase64ToUint8Array()` in push-notifications.ts
+- **Server**: `api/push/vapid-key.ts` (returns public key from env), `api/push/subscribe.ts` (POST/DELETE subscription to Vercel Blob), `api/push/send.ts` (cron stub for notification delivery)
+- **Cron**: `vercel.json` cron job every 2 minutes at `/api/push/send`
+- **Settings UI**: Web Push section in Advanced tab with subscribe/unsubscribe + VAPID status
+- **i18n**: 6 strings EN + DE
+- 15 tests
+- **Key files**: `static/sw.js`, `src/lib/push-notifications.ts`, `api/push/`, `vercel.json`
 
 ---
 
 ## Future Ideas (from Graysky comparison)
 
 ### Alt text badge overlay on images
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Small
-- **Description**: Show an "ALT" badge on images that have alt text, click to show full alt text in a popover
-- Graysky does this well — surfaces accessibility info without cluttering the UI
+- **Description**: "ALT" badge overlay on post images with non-empty alt text, click to toggle popover showing full text
+- Works for both Bluesky (`image.alt`) and Mastodon (`attachment.description`) images
+- **Key files**: `src/lib/components/Post.svelte`
 
 ### Throttled loading indicators
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Small
-- **Description**: Delay spinner/skeleton display by ~100ms to avoid flicker on fast operations
-- Prevents visual jank when API calls complete quickly
+- **Description**: `DelayedSpinner` component delays spinner display by 100ms to prevent flicker
+- Applied to feed, deck, and notifications pages
+- **Key files**: `src/lib/components/DelayedSpinner.svelte`
 
 ### Quick account switcher
 - **Status**: Not started

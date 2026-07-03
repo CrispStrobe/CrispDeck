@@ -47,7 +47,8 @@ export default {
       newPosts: '{count} nouvelle(s) publication(s) — cliquer pour rafraîchir',
     },
     settings: {
-      title: 'Paramètres', preferences: 'Préférences', language: 'Langue',
+      title: 'Paramètres', tabAccount: 'Compte', tabAppearance: 'Apparence', tabContent: 'Contenu', tabCompose: 'Rédaction', tabAdvanced: 'Avancé', tabAbout: 'À propos',
+      preferences: 'Préférences', language: 'Langue',
       translateTarget: 'Langue de traduction', altTextMode: "Application du texte alternatif",
       altTextOff: 'Désactivé', altTextWarn: 'Avertir si manquant', altTextRequire: 'Requis pour toutes les images',
       blueskyAccounts: 'Comptes Bluesky', mastodonAccounts: 'Comptes Mastodon',

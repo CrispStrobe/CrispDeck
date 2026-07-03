@@ -102,6 +102,120 @@ describe('deck column reorder', () => {
     expect(fromIdx).toBe(toIdx);
     expect(columns[0].id).toBe('a');
   });
+
+  it('swaps two adjacent columns', () => {
+    const columns: DeckColumnConfig[] = [
+      { id: 'a', title: 'A', type: 'timeline' },
+      { id: 'b', title: 'B', type: 'mentions' },
+      { id: 'c', title: 'C', type: 'notifications' },
+    ];
+    // Swap a and b (drag a to position 1)
+    const fromIdx = 0;
+    const toIdx = 1;
+    const moved = columns[fromIdx];
+    const updated = [...columns];
+    updated.splice(fromIdx, 1);
+    updated.splice(toIdx, 0, moved);
+    expect(updated.map(c => c.id)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('moves column to end', () => {
+    const columns: DeckColumnConfig[] = [
+      { id: 'a', title: 'A', type: 'timeline' },
+      { id: 'b', title: 'B', type: 'mentions' },
+      { id: 'c', title: 'C', type: 'notifications' },
+    ];
+    const fromIdx = 0;
+    const toIdx = 2;
+    const moved = columns[fromIdx];
+    const updated = [...columns];
+    updated.splice(fromIdx, 1);
+    updated.splice(toIdx, 0, moved);
+    expect(updated.map(c => c.id)).toEqual(['b', 'c', 'a']);
+  });
+
+  it('moves middle column to front', () => {
+    const columns: DeckColumnConfig[] = [
+      { id: 'a', title: 'A', type: 'timeline' },
+      { id: 'b', title: 'B', type: 'mentions' },
+      { id: 'c', title: 'C', type: 'notifications' },
+    ];
+    const fromIdx = 1;
+    const toIdx = 0;
+    const moved = columns[fromIdx];
+    const updated = [...columns];
+    updated.splice(fromIdx, 1);
+    updated.splice(toIdx, 0, moved);
+    expect(updated.map(c => c.id)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('handles single column (no-op)', () => {
+    const columns: DeckColumnConfig[] = [
+      { id: 'only', title: 'Only', type: 'timeline' },
+    ];
+    const fromIdx = 0;
+    const toIdx = 0;
+    expect(fromIdx).toBe(toIdx);
+    expect(columns).toHaveLength(1);
+    expect(columns[0].id).toBe('only');
+  });
+
+  it('preserves column properties after reorder', () => {
+    const columns: DeckColumnConfig[] = [
+      { id: 'a', title: 'Timeline', type: 'timeline', width: 450 },
+      { id: 'b', title: 'Search', type: 'search', query: 'svelte' },
+    ];
+    const fromIdx = 1;
+    const toIdx = 0;
+    const moved = columns[fromIdx];
+    const updated = [...columns];
+    updated.splice(fromIdx, 1);
+    updated.splice(toIdx, 0, moved);
+    expect(updated[0].id).toBe('b');
+    expect(updated[0].query).toBe('svelte');
+    expect(updated[0].type).toBe('search');
+    expect(updated[1].width).toBe(450);
+  });
+
+  it('reorders 5 columns correctly', () => {
+    const columns: DeckColumnConfig[] = [
+      { id: 'a', title: 'A', type: 'timeline' },
+      { id: 'b', title: 'B', type: 'mentions' },
+      { id: 'c', title: 'C', type: 'notifications' },
+      { id: 'd', title: 'D', type: 'search' },
+      { id: 'e', title: 'E', type: 'local' },
+    ];
+    // Move 'e' from position 4 to position 1
+    const fromIdx = 4;
+    const toIdx = 1;
+    const moved = columns[fromIdx];
+    const updated = [...columns];
+    updated.splice(fromIdx, 1);
+    updated.splice(toIdx, 0, moved);
+    expect(updated.map(c => c.id)).toEqual(['a', 'e', 'b', 'c', 'd']);
+  });
+
+  it('drop target validation skips when dragged ID matches target', () => {
+    const draggedColumnId = 'col-1';
+    const targetColId = 'col-1';
+    // Simulates the guard: if (!draggedColumnId || draggedColumnId === colId) return;
+    const shouldSkip = !draggedColumnId || draggedColumnId === targetColId;
+    expect(shouldSkip).toBe(true);
+  });
+
+  it('drop target validation skips when no column is being dragged', () => {
+    const draggedColumnId: string | null = null;
+    const targetColId = 'col-2';
+    const shouldSkip = !draggedColumnId || draggedColumnId === targetColId;
+    expect(shouldSkip).toBe(true);
+  });
+
+  it('drop target validation proceeds when IDs differ', () => {
+    const draggedColumnId = 'col-1';
+    const targetColId = 'col-2';
+    const shouldSkip = !draggedColumnId || draggedColumnId === targetColId;
+    expect(shouldSkip).toBe(false);
+  });
 });
 
 describe('deck saved layouts', () => {

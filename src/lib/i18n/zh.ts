@@ -46,7 +46,8 @@ export default {
       newPosts: '{count}条新帖子 — 点击刷新',
     },
     settings: {
-      title: '设置', preferences: '偏好', language: '语言',
+      title: '设置', tabAccount: '账户', tabAppearance: '外观', tabContent: '内容', tabCompose: '撰写', tabAdvanced: '高级', tabAbout: '关于',
+      preferences: '偏好', language: '语言',
       translateTarget: '翻译目标语言', altTextMode: '替代文本要求',
       altTextOff: '关闭（可选）', altTextWarn: '缺少时警告', altTextRequire: '所有图片必填',
       blueskyAccounts: 'Bluesky账户', mastodonAccounts: 'Mastodon账户',

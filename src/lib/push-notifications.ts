@@ -90,3 +90,57 @@ export async function notifyNewPosts(count: number, platform?: string): Promise<
 export async function notifyNewMessage(from: string): Promise<void> {
   await notify('New Message', `From ${from}`);
 }
+
+// --- Web Push (VAPID) ---
+
+/**
+ * Subscribe to web push notifications.
+ * Returns the PushSubscription JSON to send to the server.
+ */
+export async function subscribeWebPush(vapidPublicKey: string): Promise<PushSubscriptionJSON | null> {
+  if (!('serviceWorker' in navigator) || !('PushManager' in globalThis)) return null;
+
+  const registration = await navigator.serviceWorker.ready;
+
+  // Check existing subscription
+  let subscription = await registration.pushManager.getSubscription();
+  if (subscription) return subscription.toJSON();
+
+  // Create new subscription
+  const convertedKey = urlBase64ToUint8Array(vapidPublicKey);
+  subscription = await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: convertedKey,
+  });
+
+  return subscription.toJSON();
+}
+
+/**
+ * Unsubscribe from web push notifications.
+ */
+export async function unsubscribeWebPush(): Promise<boolean> {
+  if (!('serviceWorker' in navigator)) return false;
+  const registration = await navigator.serviceWorker.ready;
+  const subscription = await registration.pushManager.getSubscription();
+  if (!subscription) return true;
+  return subscription.unsubscribe();
+}
+
+/**
+ * Get current push subscription status.
+ */
+export async function getPushSubscription(): Promise<PushSubscriptionJSON | null> {
+  if (!('serviceWorker' in navigator)) return null;
+  const registration = await navigator.serviceWorker.ready;
+  const subscription = await registration.pushManager.getSubscription();
+  return subscription?.toJSON() ?? null;
+}
+
+/** Convert VAPID public key from base64 to Uint8Array */
+export function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from(rawData, (char) => char.charCodeAt(0));
+}

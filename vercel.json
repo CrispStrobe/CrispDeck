@@ -29,6 +29,9 @@
       ]
     }
   ],
+  "crons": [
+    { "path": "/api/push/send", "schedule": "*/2 * * * *" }
+  ],
   "rewrites": [
     { "source": "/client-metadata.json", "destination": "/client-metadata.json" },
     { "source": "/.well-known/did.json", "destination": "/.well-known/did.json" },

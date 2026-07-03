@@ -344,3 +344,92 @@ describe('formatDate', () => {
     expect(formatDate('garbage')).toBe('—');
   });
 });
+
+// ── Settings tab URL parsing ───────────────────────────────────────────────
+
+describe('settings tab URL parameter parsing', () => {
+  const VALID_TABS = ['account', 'appearance', 'content', 'compose', 'advanced', 'about'] as const;
+  type SettingsTab = typeof VALID_TABS[number];
+  const DEFAULT_TAB: SettingsTab = 'account';
+
+  function parseSettingsTab(param: string | null | undefined): SettingsTab {
+    if (!param) return DEFAULT_TAB;
+    const lower = param.toLowerCase();
+    if ((VALID_TABS as readonly string[]).includes(lower)) return lower as SettingsTab;
+    return DEFAULT_TAB;
+  }
+
+  it('returns default tab when no param provided', () => {
+    expect(parseSettingsTab(null)).toBe('account');
+    expect(parseSettingsTab(undefined)).toBe('account');
+  });
+
+  it('returns default tab for empty string', () => {
+    expect(parseSettingsTab('')).toBe('account');
+  });
+
+  it('parses valid tab: account', () => {
+    expect(parseSettingsTab('account')).toBe('account');
+  });
+
+  it('parses valid tab: appearance', () => {
+    expect(parseSettingsTab('appearance')).toBe('appearance');
+  });
+
+  it('parses valid tab: content', () => {
+    expect(parseSettingsTab('content')).toBe('content');
+  });
+
+  it('parses valid tab: compose', () => {
+    expect(parseSettingsTab('compose')).toBe('compose');
+  });
+
+  it('parses valid tab: advanced', () => {
+    expect(parseSettingsTab('advanced')).toBe('advanced');
+  });
+
+  it('parses valid tab: about', () => {
+    expect(parseSettingsTab('about')).toBe('about');
+  });
+
+  it('is case-insensitive', () => {
+    expect(parseSettingsTab('Account')).toBe('account');
+    expect(parseSettingsTab('APPEARANCE')).toBe('appearance');
+    expect(parseSettingsTab('About')).toBe('about');
+  });
+
+  it('returns default for invalid tab names', () => {
+    expect(parseSettingsTab('invalid')).toBe('account');
+    expect(parseSettingsTab('settings')).toBe('account');
+    expect(parseSettingsTab('general')).toBe('account');
+    expect(parseSettingsTab('notifications')).toBe('account');
+  });
+
+  it('returns default for numeric input', () => {
+    expect(parseSettingsTab('0')).toBe('account');
+    expect(parseSettingsTab('1')).toBe('account');
+  });
+
+  it('returns default for special characters', () => {
+    expect(parseSettingsTab('<script>')).toBe('account');
+    expect(parseSettingsTab('../etc/passwd')).toBe('account');
+  });
+
+  it('has exactly 6 valid tabs', () => {
+    expect(VALID_TABS).toHaveLength(6);
+  });
+
+  it('extracts tab from URLSearchParams', () => {
+    const params1 = new URLSearchParams('?tab=appearance');
+    expect(parseSettingsTab(params1.get('tab'))).toBe('appearance');
+
+    const params2 = new URLSearchParams('?tab=invalid');
+    expect(parseSettingsTab(params2.get('tab'))).toBe('account');
+
+    const params3 = new URLSearchParams('?other=value');
+    expect(parseSettingsTab(params3.get('tab'))).toBe('account');
+
+    const params4 = new URLSearchParams('');
+    expect(parseSettingsTab(params4.get('tab'))).toBe('account');
+  });
+});

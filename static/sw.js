@@ -29,6 +29,52 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// Push notification handler
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+
+  const data = event.data.json();
+  const { title, body, icon, badge, tag, data: notifData } = data;
+
+  event.waitUntil(
+    self.registration.showNotification(title || 'CrispDeck', {
+      body: body || '',
+      icon: icon || '/favicon.png',
+      badge: badge || '/favicon.png',
+      tag: tag,
+      data: notifData || {},
+      actions: [
+        { action: 'open', title: 'Open' },
+        { action: 'dismiss', title: 'Dismiss' },
+      ],
+    })
+  );
+});
+
+// Notification click handler
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  if (event.action === 'dismiss') return;
+
+  const url = event.notification.data?.url || '/notifications';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Focus existing window if available
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.focus();
+          client.navigate(url);
+          return;
+        }
+      }
+      // Otherwise open new window
+      return clients.openWindow(url);
+    })
+  );
+});
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);

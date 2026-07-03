@@ -89,6 +89,7 @@ export interface UnifiedPost {
   raw?: unknown;
   sourceAccount?: string; // handle of account that loaded this post (multi-account feed indicator)
   emojis?: Array<{ shortcode: string; url: string }>; // Mastodon custom emoji
+  contentWarning?: string; // Content warning text (Mastodon CW or server filter warn action)
 }
 
 export interface CrosspostGroup {

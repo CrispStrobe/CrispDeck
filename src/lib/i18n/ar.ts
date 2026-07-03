@@ -52,7 +52,8 @@ export default {
       newPosts: '{count} منشورات جديدة — انقر للتحديث',
     },
     settings: {
-      title: 'الإعدادات', preferences: 'التفضيلات', language: 'اللغة',
+      title: 'الإعدادات', tabAccount: 'الحساب', tabAppearance: 'المظهر', tabContent: 'المحتوى', tabCompose: 'إنشاء', tabAdvanced: 'متقدم', tabAbout: 'حول',
+      preferences: 'التفضيلات', language: 'اللغة',
       translateTarget: 'لغة الترجمة', altTextMode: 'متطلبات النص البديل',
       altTextOff: 'معطل (اختياري)', altTextWarn: 'تحذير عند الغياب', altTextRequire: 'مطلوب لجميع الصور',
       blueskyAccounts: 'حسابات بلوسكاي', mastodonAccounts: 'حسابات ماستودون',

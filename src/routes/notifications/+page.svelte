@@ -10,6 +10,7 @@
   import { groupNotifications, type UnifiedNotification, type NotificationGroup } from '$lib/notification-grouping';
   import { getCached, setCache } from '$lib/view-cache';
   import SkeletonNotification from '$lib/components/SkeletonNotification.svelte';
+  import DelayedSpinner from '$lib/components/DelayedSpinner.svelte';
 
   let accounts: Account[] = $state([]);
   let groups: NotificationGroup[] = $state([]);
@@ -274,11 +275,13 @@
   {/if}
 
   {#if loading}
-    <div class="space-y-1">
-      {#each { length: 8 } as _}
-        <SkeletonNotification />
-      {/each}
-    </div>
+    <DelayedSpinner>
+      <div class="space-y-1">
+        {#each { length: 8 } as _}
+          <SkeletonNotification />
+        {/each}
+      </div>
+    </DelayedSpinner>
   {:else if groups.length === 0}
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <Bell size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
