@@ -40,4 +40,25 @@ describe('pinned posts', () => {
     const pins = listPinnedPosts();
     expect(pins[0].uri).toBe('at://2');
   });
+
+  it('isPinned uses cached Set for O(1) lookup', () => {
+    pinPost({ uri: 'at://cache-test', text: 'Cache', author: { handle: 'a' }, platform: 'bluesky' });
+    // Multiple isPinned calls should be fast (cached)
+    expect(isPinned('at://cache-test')).toBe(true);
+    expect(isPinned('at://cache-test')).toBe(true);
+    expect(isPinned('at://nonexistent')).toBe(false);
+  });
+
+  it('cache invalidates on pin', () => {
+    expect(isPinned('at://new')).toBe(false);
+    pinPost({ uri: 'at://new', text: 'New', author: { handle: 'a' }, platform: 'bluesky' });
+    expect(isPinned('at://new')).toBe(true);
+  });
+
+  it('cache invalidates on unpin', () => {
+    pinPost({ uri: 'at://del', text: 'Del', author: { handle: 'a' }, platform: 'bluesky' });
+    expect(isPinned('at://del')).toBe(true);
+    unpinPost('at://del');
+    expect(isPinned('at://del')).toBe(false);
+  });
 });

@@ -9,7 +9,9 @@
   import ScrollToTop from '$lib/components/ScrollToTop.svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { installLogInterceptors } from '$lib/debug-log';
+  import { preloadSanitizer } from '$lib/sanitize';
   installLogInterceptors();
+  preloadSanitizer(); // Start loading DOMPurify before any posts render
 
   declare const __VERSION__: string;
 

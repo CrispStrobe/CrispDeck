@@ -32,13 +32,28 @@ export function pinPost(post: { uri: string; text: string; author: { handle: str
     pinnedAt: new Date().toISOString(),
   });
   localStorage.setItem(STORAGE_KEY, JSON.stringify(pins));
+  _pinnedUriCache = null; // invalidate cache
 }
 
 export function unpinPost(uri: string): void {
   const pins = listPinnedPosts().filter(p => p.uri !== uri);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(pins));
+  _pinnedUriCache = null; // invalidate cache
+}
+
+/**
+ * Cached pinned URI set — avoids repeated JSON.parse for every Post component.
+ * Invalidated on pin/unpin.
+ */
+let _pinnedUriCache: Set<string> | null = null;
+
+function getPinnedUriSet(): Set<string> {
+  if (!_pinnedUriCache) {
+    _pinnedUriCache = new Set(listPinnedPosts().map(p => p.uri));
+  }
+  return _pinnedUriCache;
 }
 
 export function isPinned(uri: string): boolean {
-  return listPinnedPosts().some(p => p.uri === uri);
+  return getPinnedUriSet().has(uri);
 }
