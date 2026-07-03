@@ -141,8 +141,11 @@ describe('BlueskyClient.uploadVideo', () => {
     });
 
     const promise = client.uploadVideo(mockFile);
+    // Attach the rejection handler before advancing timers — the promise
+    // rejects mid-advance and would otherwise count as an unhandled rejection
+    const expectation = expect(promise).rejects.toThrow('Video processing failed: codec not supported');
     await vi.advanceTimersByTimeAsync(2100);
-    await expect(promise).rejects.toThrow('Video processing failed: codec not supported');
+    await expectation;
   });
 
   it('throws on upload HTTP error', async () => {
@@ -184,11 +187,13 @@ describe('BlueskyClient.uploadVideo', () => {
     }
 
     const promise = client.uploadVideo(mockFile);
+    // Attach the rejection handler before advancing timers (see above)
+    const expectation = expect(promise).rejects.toThrow('Video processing timed out after 120 seconds');
     // Advance through all 60 polling intervals (2s each)
     for (let i = 0; i < 60; i++) {
       await vi.advanceTimersByTimeAsync(2100);
     }
-    await expect(promise).rejects.toThrow('Video processing timed out after 120 seconds');
+    await expectation;
   }, 30_000);
 });
 

@@ -6,7 +6,7 @@
 import { BlueskyClient } from './bluesky';
 import { MastodonClient } from './mastodon';
 import { ThreadsClient } from './threads';
-import { initBlueskyOAuth } from './bluesky-oauth';
+import { initBlueskyOAuth, restoreBlueskyOAuthSession, maybeSilentReauth } from './bluesky-oauth';
 import { listAccounts, getDecryptedCredentials } from '$lib/db';
 import { Agent } from '@atproto/api';
 import type { Account, Platform } from '$lib/types';
@@ -23,7 +23,7 @@ export interface ClientEntry {
 // Module-level cache: avoids re-initializing clients when navigating between pages
 let _cachedResult: { accounts: Account[]; clients: Map<number, ClientEntry> } | null = null;
 let _cacheTime = 0;
-const _CACHE_TTL = 300000; // 5 minutes
+let _cacheTtl = 300000; // 5 minutes; shortened when an OAuth restore failed transiently
 
 /**
  * Initialize clients for all accounts.
@@ -34,87 +34,118 @@ const _CACHE_TTL = 300000; // 5 minutes
  */
 export async function initAllClients(): Promise<{ accounts: Account[]; clients: Map<number, ClientEntry> }> {
   const now = Date.now();
-  if (_cachedResult && now - _cacheTime < _CACHE_TTL) return _cachedResult;
+  if (_cachedResult && now - _cacheTime < _cacheTtl) return _cachedResult;
   const accounts = await listAccounts();
   const clients = new Map<number, ClientEntry>();
+  let transientOAuthFailure = false;
 
-  // Try to resume a Bluesky OAuth session (with retry)
+  // Process a pending OAuth callback (if the URL has params) and resume the
+  // "current" session. Accounts not covered by this are restored by DID below.
   let oauthSession: { did: string; agent: Agent } | null = null;
   try {
     oauthSession = await initBlueskyOAuth();
   } catch {}
-  // If first attempt failed, try once more (token refresh can be flaky)
-  if (!oauthSession) {
-    try { oauthSession = await initBlueskyOAuth(); } catch {}
-  }
 
-  for (const acct of accounts) {
+  // Init all accounts in parallel — each app-password login / OAuth restore
+  // is a network round-trip, and doing them sequentially delays the first
+  // feed fetch by the sum of all of them.
+  const entries = await Promise.all(accounts.map(async (acct): Promise<ClientEntry | null> => {
     try {
       const credsJson = await getDecryptedCredentials(acct.id);
       const creds = JSON.parse(credsJson);
 
       if (acct.platform === 'bluesky') {
-        // Check if this account has an active OAuth session
-        if (creds.auth_method === 'oauth' && oauthSession && oauthSession.did === acct.did) {
-          const client = BlueskyClient.readOnly(acct.handle);
-          clients.set(acct.id, {
+        // OAuth accounts: use the already-resumed session if it matches,
+        // otherwise restore this account's session directly by DID.
+        let oauthAgent: Agent | undefined;
+        let oauthDead = false;
+        const did = acct.did ?? creds.did;
+        if (creds.auth_method === 'oauth' && did) {
+          if (oauthSession && oauthSession.did === did) {
+            oauthAgent = oauthSession.agent;
+          } else {
+            const restored = await restoreBlueskyOAuthSession(did);
+            if (restored.status === 'ok') {
+              oauthAgent = restored.agent;
+            } else if (restored.status === 'expired') {
+              oauthDead = true;
+            } else {
+              transientOAuthFailure = true;
+            }
+          }
+        }
+
+        if (oauthAgent) {
+          return {
             accountId: acct.id,
             platform: 'bluesky',
             handle: acct.handle,
-            client,
-            oauthAgent: oauthSession.agent,
-          });
-        } else if (creds.app_password) {
+            client: BlueskyClient.readOnly(acct.handle),
+            oauthAgent,
+          };
+        }
+        if (oauthDead && did && (await maybeSilentReauth(acct.handle, did))) {
+          // Refresh token is dead but the user likely still has a live
+          // bsky.social cookie — silent re-auth redirects and comes back
+          // with a fresh session, no user interaction needed.
+          // (maybeSilentReauth redirects the page; we won't get here.)
+          return null;
+        }
+        if (creds.app_password) {
           // App password auth
           const client = new BlueskyClient(acct.handle, creds.app_password);
           await client.login();
-          clients.set(acct.id, {
+          return {
             accountId: acct.id,
             platform: 'bluesky',
             handle: acct.handle,
             client,
-          });
-        } else {
-          // OAuth account but session expired, or no credentials
-          // Use read-only client — pages will show appropriate messages
-          const client = BlueskyClient.readOnly(acct.handle);
-          clients.set(acct.id, {
-            accountId: acct.id,
-            platform: 'bluesky',
-            handle: acct.handle,
-            client,
-          });
-          if (creds.auth_method === 'oauth') {
-            console.warn(`OAuth session expired for ${acct.handle}. Reconnect in Settings > Account.`);
-          }
+          };
         }
+        // OAuth account but session expired, or no credentials
+        // Use read-only client — pages will show appropriate messages
+        if (creds.auth_method === 'oauth') {
+          console.warn(`OAuth session expired for ${acct.handle}. Reconnect in Settings > Account.`);
+        }
+        return {
+          accountId: acct.id,
+          platform: 'bluesky',
+          handle: acct.handle,
+          client: BlueskyClient.readOnly(acct.handle),
+        };
       } else if (acct.platform === 'threads') {
-        const client = new ThreadsClient(creds.access_token, creds.user_id ?? acct.threads_user_id ?? '');
-        clients.set(acct.id, {
+        return {
           accountId: acct.id,
           platform: 'threads',
           handle: acct.handle,
-          client,
-        });
+          client: new ThreadsClient(creds.access_token, creds.user_id ?? acct.threads_user_id ?? ''),
+        };
       } else {
-        const client = new MastodonClient(
-          acct.instance_url ?? `https://${acct.handle.split('@').pop()}`,
-          creds.access_token,
-        );
-        clients.set(acct.id, {
+        return {
           accountId: acct.id,
           platform: 'mastodon',
           handle: acct.handle,
-          client,
-        });
+          client: new MastodonClient(
+            acct.instance_url ?? `https://${acct.handle.split('@').pop()}`,
+            creds.access_token,
+          ),
+        };
       }
     } catch (e) {
       console.error(`Failed to init client for ${acct.handle}:`, e);
+      return null;
     }
+  }));
+  // Insert in account order so "first bluesky/mastodon entry" stays deterministic
+  for (const entry of entries) {
+    if (entry) clients.set(entry.accountId, entry);
   }
 
   _cachedResult = { accounts, clients };
   _cacheTime = Date.now();
+  // A transient OAuth failure must not lock users into a degraded read-only
+  // state for 5 minutes — retry on the next navigation instead.
+  _cacheTtl = transientOAuthFailure ? 15000 : 300000;
   return _cachedResult;
 }
 

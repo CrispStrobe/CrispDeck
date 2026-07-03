@@ -1,15 +1,26 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { addAccount, listAccounts } from '$lib/db';
-  import { initBlueskyOAuth } from '$lib/api/bluesky-oauth';
+  import { addAccount, updateAccount, listAccounts } from '$lib/db';
+  import { initBlueskyOAuth, wasSilentReauthAttempt, clearSilentReauthFlag, OAUTH_RETURN_TO_KEY } from '$lib/api/bluesky-oauth';
   import { invalidateClientCache } from '$lib/api/client-factory';
   import { Loader2, Check, AlertTriangle } from '@lucide/svelte';
 
   let status: 'loading' | 'success' | 'error' = $state('loading');
   let errorMsg = $state('');
 
+  function takeReturnTo(): string | null {
+    try {
+      const path = sessionStorage.getItem(OAUTH_RETURN_TO_KEY);
+      sessionStorage.removeItem(OAUTH_RETURN_TO_KEY);
+      return path && path.startsWith('/') ? path : null;
+    } catch {
+      return null;
+    }
+  }
+
   onMount(async () => {
+    const silent = wasSilentReauthAttempt();
     try {
       // init() processes the OAuth callback params in the URL automatically
       const result = await initBlueskyOAuth();
@@ -18,22 +29,49 @@
       const { did, agent } = result;
       const profile = await agent.getProfile({ actor: did });
 
-      await addAccount({
-        platform: 'bluesky',
-        handle: profile.data.handle,
-        display_name: profile.data.displayName,
-        avatar_url: profile.data.avatar,
-        did,
-        credentials: JSON.stringify({ auth_method: 'oauth', did }),
-        is_primary: false,
-      });
+      // Re-auth of an already-connected account must update it, not duplicate it
+      const allAccounts = await listAccounts();
+      const existing = allAccounts.find((a) => a.platform === 'bluesky' && a.did === did);
+      if (existing) {
+        await updateAccount({
+          id: existing.id,
+          display_name: profile.data.displayName,
+          avatar_url: profile.data.avatar,
+        });
+      } else {
+        await addAccount({
+          platform: 'bluesky',
+          handle: profile.data.handle,
+          display_name: profile.data.displayName,
+          avatar_url: profile.data.avatar,
+          did,
+          credentials: JSON.stringify({ auth_method: 'oauth', did }),
+          is_primary: false,
+        });
+      }
 
       invalidateClientCache();
+      clearSilentReauthFlag();
       status = 'success';
-      const allAccounts = await listAccounts();
-      const dest = allAccounts.length === 1 ? '/feed' : '/settings';
+      const returnTo = takeReturnTo();
+      if (silent && returnTo) {
+        // Silent re-auth round-trip: go straight back, no success screen needed
+        goto(returnTo);
+        return;
+      }
+      const dest = returnTo ?? ((await listAccounts()).length === 1 ? '/feed' : '/settings');
       setTimeout(() => goto(dest), 1500);
     } catch (e) {
+      clearSilentReauthFlag();
+      if (silent) {
+        // Silent re-auth failed (e.g. login_required: no live bsky.social
+        // cookie). Return the user where they were — pages already show a
+        // reconnect hint; never strand them on an error screen they
+        // didn't ask for.
+        console.warn('Silent Bluesky re-auth failed:', e);
+        goto(takeReturnTo() ?? '/feed');
+        return;
+      }
       status = 'error';
       errorMsg = String(e);
       console.error('Bluesky OAuth callback failed:', e);
