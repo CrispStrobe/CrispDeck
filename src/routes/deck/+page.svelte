@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
+  import { initAllClients, invalidateClientCache, type ClientEntry } from '$lib/api/client-factory';
   import { Columns3, Plus, Loader2 } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { haptic } from '$lib/haptics';
@@ -176,7 +176,11 @@
 
   onMount(async () => {
     try {
-      const result = await initAllClients();
+      let result = await initAllClients();
+      if (result.accounts.length === 0) {
+        invalidateClientCache();
+        result = await initAllClients();
+      }
       accounts = result.accounts;
       clientEntries = result.clients;
       rebuildClientGroups();

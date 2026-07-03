@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation';
   import { addAccount, listAccounts } from '$lib/db';
   import { initBlueskyOAuth } from '$lib/api/bluesky-oauth';
+  import { invalidateClientCache } from '$lib/api/client-factory';
   import { Loader2, Check, AlertTriangle } from '@lucide/svelte';
 
   let status: 'loading' | 'success' | 'error' = $state('loading');
@@ -27,6 +28,7 @@
         is_primary: false,
       });
 
+      invalidateClientCache();
       status = 'success';
       const allAccounts = await listAccounts();
       const dest = allAccounts.length === 1 ? '/feed' : '/settings';

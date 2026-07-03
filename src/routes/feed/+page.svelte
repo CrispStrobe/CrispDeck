@@ -11,7 +11,7 @@
   import { MastodonClient } from '$lib/api/mastodon';
   import { ThreadsClient } from '$lib/api/threads';
   import { notifyNewPosts, getPermission } from '$lib/push-notifications';
-  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
+  import { initAllClients, invalidateClientCache, type ClientEntry } from '$lib/api/client-factory';
   import { normalizePost, filterPosts, sortPosts, detectCrossposts, buildIdentityPairs } from '$lib/api/unified';
   import { listIdentities } from '$lib/db';
   import type { UnifiedPost, FeedItem, Filters, Account, Platform, CrosspostGroup as CrosspostGroupType } from '$lib/types';
@@ -70,7 +70,12 @@
 
   onMount(async () => {
     try {
-      const result = await initAllClients();
+      let result = await initAllClients();
+      // If cache returned 0 accounts but DB might have some, force re-init
+      if (result.accounts.length === 0) {
+        invalidateClientCache();
+        result = await initAllClients();
+      }
       accounts = result.accounts;
       clientEntries = result.clients;
       // Sync Bluesky server muted words (non-blocking)
