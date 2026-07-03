@@ -6,8 +6,8 @@ import tailwindcss from "@tailwindcss/vite";
 import { readFileSync, writeFileSync } from "fs";
 import { execSync } from "child_process";
 const pkg = JSON.parse(readFileSync("./package.json", "utf8"));
-let gitHash = '';
-try { gitHash = execSync('git rev-parse --short HEAD').toString().trim(); } catch {}
+let gitHash = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? '';
+if (!gitHash) try { gitHash = execSync('git rev-parse --short HEAD').toString().trim(); } catch {}
 
 /** Inject version into static/sw.js at build time */
 function swVersionPlugin() {
