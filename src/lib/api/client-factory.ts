@@ -74,26 +74,9 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
             handle: acct.handle,
             client,
           });
-        } else if (creds.auth_method === 'oauth') {
-          // OAuth account but session expired — auto-trigger re-auth
-          console.warn(`OAuth session expired for ${acct.handle}. Re-authenticating...`);
-          try {
-            const { startBlueskyOAuth } = await import('./bluesky-oauth');
-            await startBlueskyOAuth(acct.handle);
-            // startBlueskyOAuth redirects the page, so this won't continue
-          } catch (e) {
-            console.error('Auto re-auth failed:', e);
-            // Fall back to read-only so the app doesn't crash entirely
-            const client = BlueskyClient.readOnly(acct.handle);
-            clients.set(acct.id, {
-              accountId: acct.id,
-              platform: 'bluesky',
-              handle: acct.handle,
-              client,
-            });
-          }
         } else {
-          // No credentials at all — read-only
+          // OAuth account but session expired, or no credentials
+          // Use read-only client — pages will show appropriate messages
           const client = BlueskyClient.readOnly(acct.handle);
           clients.set(acct.id, {
             accountId: acct.id,
@@ -101,6 +84,9 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
             handle: acct.handle,
             client,
           });
+          if (creds.auth_method === 'oauth') {
+            console.warn(`OAuth session expired for ${acct.handle}. Reconnect in Settings > Account.`);
+          }
         }
       } else if (acct.platform === 'threads') {
         const client = new ThreadsClient(creds.access_token, creds.user_id ?? acct.threads_user_id ?? '');
