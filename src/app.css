@@ -160,12 +160,6 @@ html {
   }
 }
 
-/* Skip layout/paint for off-screen post cards */
-[data-post-uri] {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 140px;
-}
-
 /* Focus indicators for keyboard navigation */
 
 :focus-visible {
