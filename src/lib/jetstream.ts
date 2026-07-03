@@ -28,6 +28,7 @@ class JetstreamClient {
   private listeners = new Set<CountListener>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private enabled = false;
+  private reconnectAttempts = 0;
   private visibilityHandler: (() => void) | null = null;
 
   /** Start listening for real-time events */
@@ -42,6 +43,8 @@ class JetstreamClient {
       });
       this.ws = new WebSocket(`${JETSTREAM_URL}?${params}`);
 
+      this.ws.onopen = () => { this.reconnectAttempts = 0; };
+
       this.ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
@@ -54,7 +57,9 @@ class JetstreamClient {
       this.ws.onclose = () => {
         this.ws = null;
         if (this.enabled && !(typeof document !== 'undefined' && document.hidden)) {
-          this.reconnectTimer = setTimeout(() => this.connect(), 5000);
+          const delay = Math.min(5000 * Math.pow(2, this.reconnectAttempts), 60000);
+          this.reconnectAttempts++;
+          this.reconnectTimer = setTimeout(() => this.connect(), delay);
         }
       };
 
@@ -69,6 +74,7 @@ class JetstreamClient {
   /** Stop listening */
   disconnect() {
     this.enabled = false;
+    this.reconnectAttempts = 0;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;

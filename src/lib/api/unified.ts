@@ -150,8 +150,8 @@ function areIdentityMatched(handle1: string, handle2: string, identityPairs: Set
 let _crosspostCache: { key: string; result: FeedItem[] } | null = null;
 
 export function detectCrossposts(posts: UnifiedPost[], identityPairs?: Set<string>): FeedItem[] {
-  // Cache key: sorted URIs — if the same posts come in, return cached result
-  const cacheKey = posts.map(p => p.uri).join('|');
+  // Cache key: length + boundary URIs (avoids O(N) string join)
+  const cacheKey = `${posts.length}:${posts[0]?.uri ?? ''}:${posts[posts.length - 1]?.uri ?? ''}`;
   if (_crosspostCache && _crosspostCache.key === cacheKey) return _crosspostCache.result;
 
   const DEFAULT_THRESHOLD = 0.9;

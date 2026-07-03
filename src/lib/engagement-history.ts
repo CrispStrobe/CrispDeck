@@ -16,11 +16,18 @@ export interface EngagementSnapshot {
   timestamp: string;
 }
 
+let _engagementDb: IDBDatabase | null = null;
+
 function openDB(): Promise<IDBDatabase> {
+  if (_engagementDb) return Promise.resolve(_engagementDb);
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onerror = () => reject(req.error);
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      _engagementDb = req.result;
+      _engagementDb.onclose = () => { _engagementDb = null; };
+      resolve(_engagementDb);
+    };
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE)) {

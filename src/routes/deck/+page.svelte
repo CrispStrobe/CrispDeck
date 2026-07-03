@@ -86,6 +86,7 @@
       const result = await initAllClients();
       accounts = result.accounts;
       clientEntries = result.clients;
+      rebuildClientGroups();
 
       // Load saved column config or use defaults
       const saved = localStorage.getItem('crispdeck-deck-columns');
@@ -109,9 +110,9 @@
       if (document.hidden) return;
       columns.forEach(col => loadColumn(col));
     }, 300000);
-    // Refresh on tab re-focus after being hidden
+    // Refresh on tab re-focus — stagger to avoid thundering herd
     const handleVisibility = () => {
-      if (!document.hidden) columns.forEach(col => loadColumn(col));
+      if (!document.hidden) columns.forEach((col, i) => setTimeout(() => loadColumn(col), i * 150));
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => {
@@ -126,14 +127,20 @@
     localStorage.setItem('crispdeck-deck-columns', JSON.stringify(columns));
   }
 
+  // Precomputed client groups — rebuilt after initAllClients
+  let allBsky: [number, ClientEntry][] = [];
+  let allMasto: [number, ClientEntry][] = [];
+  let allThreads: [number, ClientEntry][] = [];
+  function rebuildClientGroups() {
+    allBsky = [...clientEntries.entries()].filter(([id]) => accounts.find(a => a.id === id)?.platform === 'bluesky');
+    allMasto = [...clientEntries.entries()].filter(([id]) => accounts.find(a => a.id === id)?.platform === 'mastodon');
+    allThreads = [...clientEntries.entries()].filter(([id]) => accounts.find(a => a.id === id)?.platform === 'threads');
+  }
+
   async function loadColumn(col: DeckColumnConfig) {
     columnLoading[col.id] = true;
     const posts: UnifiedPost[] = [];
 
-    // Collect ALL clients per platform (multi-account merge)
-    const allBsky = [...clientEntries.entries()].filter(([id]) => accounts.find(a => a.id === id)?.platform === 'bluesky');
-    const allMasto = [...clientEntries.entries()].filter(([id]) => accounts.find(a => a.id === id)?.platform === 'mastodon');
-    const allThreads = [...clientEntries.entries()].filter(([id]) => accounts.find(a => a.id === id)?.platform === 'threads');
     // First client per platform (for single-client operations)
     const bskyEntry = allBsky[0]?.[1];
     const mastoEntry = allMasto[0]?.[1];

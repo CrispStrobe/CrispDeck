@@ -24,6 +24,7 @@ class MastodonStream {
   private listeners = new Set<StreamListener>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private enabled = false;
+  private reconnectAttempts = 0;
   private instanceUrl: string;
   private accessToken: string;
   private streamType: string;
@@ -42,6 +43,8 @@ class MastodonStream {
       this.ws = new WebSocket(
         `${wsUrl}/api/v1/streaming?access_token=${this.accessToken}&stream=${this.streamType}`,
       );
+
+      this.ws.onopen = () => { this.reconnectAttempts = 0; };
 
       this.ws.onmessage = (event) => {
         try {
@@ -84,7 +87,9 @@ class MastodonStream {
       this.ws.onclose = () => {
         this.ws = null;
         if (this.enabled) {
-          this.reconnectTimer = setTimeout(() => this.connect(), 5000);
+          const delay = Math.min(5000 * Math.pow(2, this.reconnectAttempts), 60000);
+          this.reconnectAttempts++;
+          this.reconnectTimer = setTimeout(() => this.connect(), delay);
         }
       };
 
@@ -98,6 +103,7 @@ class MastodonStream {
 
   disconnect() {
     this.enabled = false;
+    this.reconnectAttempts = 0;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -136,6 +142,7 @@ class BlueskyStream {
   private listeners = new Set<StreamListener>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private enabled = false;
+  private reconnectAttempts = 0;
   private watchedDids = new Set<string>();
 
   connect() {
@@ -150,6 +157,8 @@ class BlueskyStream {
         params.append('wantedDids', did);
       }
       this.ws = new WebSocket(`${JETSTREAM_URL}?${params}`);
+
+      this.ws.onopen = () => { this.reconnectAttempts = 0; };
 
       this.ws.onmessage = (event) => {
         try {
@@ -193,7 +202,9 @@ class BlueskyStream {
       this.ws.onclose = () => {
         this.ws = null;
         if (this.enabled) {
-          this.reconnectTimer = setTimeout(() => this.connect(), 5000);
+          const delay = Math.min(5000 * Math.pow(2, this.reconnectAttempts), 60000);
+          this.reconnectAttempts++;
+          this.reconnectTimer = setTimeout(() => this.connect(), delay);
         }
       };
 
@@ -207,6 +218,7 @@ class BlueskyStream {
 
   disconnect() {
     this.enabled = false;
+    this.reconnectAttempts = 0;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;

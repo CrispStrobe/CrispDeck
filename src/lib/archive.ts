@@ -27,11 +27,18 @@ export interface ArchivedPost {
   indexedAt: string;
 }
 
+let _archiveDb: IDBDatabase | null = null;
+
 function openArchiveDB(): Promise<IDBDatabase> {
+  if (_archiveDb) return Promise.resolve(_archiveDb);
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onerror = () => reject(req.error);
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      _archiveDb = req.result;
+      _archiveDb.onclose = () => { _archiveDb = null; };
+      resolve(_archiveDb);
+    };
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
@@ -83,7 +90,7 @@ export async function archivePosts(posts: UnifiedPost[], type: ArchiveType): Pro
   });
 }
 
-/** Get archive stats */
+/** Get archive stats using index counts (O(1) per count instead of full scan) */
 export async function getArchiveStats(): Promise<{
   total: number;
   byType: Record<ArchiveType, number>;
@@ -91,28 +98,40 @@ export async function getArchiveStats(): Promise<{
   dateRange: { oldest: string; newest: string } | null;
 }> {
   const db = await openArchiveDB();
-  const all = await new Promise<ArchivedPost[]>((resolve, reject) => {
-    const req = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll();
+  const store = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME);
+
+  const idbCount = (index: IDBIndex, key: IDBValidKey) => new Promise<number>((resolve, reject) => {
+    const req = index.count(key);
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
+  const idbCursorValue = (index: IDBIndex, dir: IDBCursorDirection) => new Promise<ArchivedPost | null>((resolve, reject) => {
+    const req = index.openCursor(null, dir);
+    req.onsuccess = () => resolve(req.result?.value ?? null);
+    req.onerror = () => reject(req.error);
+  });
 
-  const byType: Record<string, number> = { post: 0, like: 0, repost: 0, reply: 0 };
-  const byPlatform: Record<string, number> = { bluesky: 0, mastodon: 0 };
-  let oldest = '', newest = '';
+  const typeIndex = store.index('type');
+  const platformIndex = store.index('platform');
+  const dateIndex = store.index('createdAt');
 
-  for (const p of all) {
-    byType[p.type] = (byType[p.type] ?? 0) + 1;
-    byPlatform[p.platform] = (byPlatform[p.platform] ?? 0) + 1;
-    if (!oldest || p.createdAt < oldest) oldest = p.createdAt;
-    if (!newest || p.createdAt > newest) newest = p.createdAt;
-  }
+  const [postCount, likeCount, repostCount, replyCount, bskyCount, mastoCount, oldest, newest] = await Promise.all([
+    idbCount(typeIndex, 'post'),
+    idbCount(typeIndex, 'like'),
+    idbCount(typeIndex, 'repost'),
+    idbCount(typeIndex, 'reply'),
+    idbCount(platformIndex, 'bluesky'),
+    idbCount(platformIndex, 'mastodon'),
+    idbCursorValue(dateIndex, 'next'),
+    idbCursorValue(dateIndex, 'prev'),
+  ]);
 
+  const total = postCount + likeCount + repostCount + replyCount;
   return {
-    total: all.length,
-    byType: byType as Record<ArchiveType, number>,
-    byPlatform: byPlatform as Record<Platform, number>,
-    dateRange: all.length > 0 ? { oldest, newest } : null,
+    total,
+    byType: { post: postCount, like: likeCount, repost: repostCount, reply: replyCount },
+    byPlatform: { bluesky: bskyCount, mastodon: mastoCount, threads: total - bskyCount - mastoCount } as Record<Platform, number>,
+    dateRange: total > 0 ? { oldest: oldest!.createdAt, newest: newest!.createdAt } : null,
   };
 }
 

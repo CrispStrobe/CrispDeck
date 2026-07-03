@@ -167,35 +167,28 @@
     // Prepend new posts instead of reloading everything
     newPostsAvailable = 0;
     const newestDate = posts[0]?.createdAt;
-    const newPosts: UnifiedPost[] = [];
-
-    for (const acct of accounts) {
+    const results = await Promise.allSettled(accounts.map(async (acct) => {
       const entry = clientEntries.get(acct.id);
-      if (!entry) continue;
-      try {
-        if (acct.platform === 'bluesky') {
-          if (entry.oauthAgent) {
-            const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 50 });
-            const newer = r.data.feed
-              .map(p => normalizePost(p, 'bluesky'))
-              .filter(p => !newestDate || p.createdAt > newestDate);
-            newPosts.push(...newer);
-          }
-        } else if (acct.platform === 'mastodon') {
-          const masto = entry.client as MastodonClient;
-          const statuses = await masto.getHomeTimeline();
-          const newer = statuses
-            .map((s: any) => normalizePost(s, 'mastodon'))
-            .filter(p => !newestDate || p.createdAt > newestDate);
-          newPosts.push(...newer);
-        } else if (acct.platform === 'threads') {
-          const threads = entry.client as ThreadsClient;
-          const posts = await threads.getOwnPosts(25);
-          const newer = posts.map(p => normalizePost(p, 'threads')).filter(p => !newestDate || p.createdAt > newestDate);
-          newPosts.push(...newer);
-        }
-      } catch {}
-    }
+      if (!entry) return [];
+      if (acct.platform === 'bluesky' && entry.oauthAgent) {
+        const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 50 });
+        return r.data.feed
+          .map(p => normalizePost(p, 'bluesky'))
+          .filter(p => !newestDate || p.createdAt > newestDate);
+      } else if (acct.platform === 'mastodon') {
+        const masto = entry.client as MastodonClient;
+        const statuses = await masto.getHomeTimeline();
+        return statuses
+          .map((s: any) => normalizePost(s, 'mastodon'))
+          .filter(p => !newestDate || p.createdAt > newestDate);
+      } else if (acct.platform === 'threads') {
+        const threads = entry.client as ThreadsClient;
+        const threadsPosts = await threads.getOwnPosts(25);
+        return threadsPosts.map(p => normalizePost(p, 'threads')).filter(p => !newestDate || p.createdAt > newestDate);
+      }
+      return [];
+    }));
+    const newPosts = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
 
     if (newPosts.length > 0) {
       // Prepend new posts, deduplicating by URI

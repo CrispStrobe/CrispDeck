@@ -627,6 +627,15 @@
   const bskyVideo = $derived(getBskyVideo());
   const mastodonHtml = $derived(sanitizeHtml(getMastodonHtml()));
   const bskyHtml = $derived(getBskyHtml());
+  const bskyExternalHost = $derived.by(() => {
+    if (!bskyExternal) return '';
+    try { return new URL(bskyExternal.uri).hostname; } catch { return bskyExternal.uri; }
+  });
+  const mastodonCardHost = $derived.by(() => {
+    if (!mastodonCard) return '';
+    try { return new URL(mastodonCard.url).hostname; } catch { return mastodonCard.url; }
+  });
+  const relAge = $derived(relativeTime(post.createdAt));
   const platformColor = $derived(`var(--color-${post.platform})`);
 
   // Labels on Bluesky posts
@@ -721,7 +730,7 @@
           <span class="w-2 h-2 rounded-full flex-shrink-0" style="background: {platformColor}"></span>
         </a>
         <a href={getThreadUrl(post)} class="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:underline flex-shrink-0 ml-auto" title={formatDate(post.createdAt)}>
-          {relativeTime(post.createdAt)}
+          {relAge}
         </a>
       </div>
       <a href={getThreadUrl(post)} class="block min-w-0 hover:bg-[var(--color-surface-hover)]/30 rounded -mx-1 px-1 transition-colors">
@@ -779,7 +788,7 @@
             <img loading="lazy" src={bskyExternal.thumb} alt="" class="w-full h-32 object-cover" />
           {/if}
           <div class="p-3">
-            <p class="text-xs text-[var(--color-text-muted)]">{new URL(bskyExternal.uri).hostname}</p>
+            <p class="text-xs text-[var(--color-text-muted)]">{bskyExternalHost}</p>
             <p class="font-semibold text-sm text-[var(--color-text)]">{bskyExternal.title}</p>
             {#if bskyExternal.description}
               <p class="text-xs text-[var(--color-text-muted)] line-clamp-2">{bskyExternal.description}</p>
@@ -895,7 +904,7 @@
             <img loading="lazy" src={mastodonCard.image} alt="" class="w-full h-32 object-cover" />
           {/if}
           <div class="p-3">
-            <p class="text-xs text-[var(--color-text-muted)]">{mastodonCard.provider_name || new URL(mastodonCard.url).hostname}</p>
+            <p class="text-xs text-[var(--color-text-muted)]">{mastodonCard.provider_name || mastodonCardHost}</p>
             <p class="font-semibold text-sm text-[var(--color-text)]">{mastodonCard.title}</p>
             {#if mastodonCard.description}
               <p class="text-xs text-[var(--color-text-muted)] line-clamp-2">{mastodonCard.description}</p>

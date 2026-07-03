@@ -516,11 +516,15 @@
   const hasBsky = $derived(selectedAccounts.some(a => a.platform === 'bluesky'));
   const hasMasto = $derived(selectedAccounts.some(a => a.platform === 'mastodon'));
   const hasThreads = $derived(selectedAccounts.some(a => a.platform === 'threads'));
+  const trimmedText = $derived(text.trim());
   const bskyLen = $derived(graphemeLength(text));
   const mastoLen = $derived(text.length);
   const threadsLen = $derived(text.length);
   const bskyNeedsThread = $derived(hasBsky && bskyLen > 300);
   const mastoNeedsThread = $derived(hasMasto && mastoLen > 500);
+  const bskyPlan = $derived(hasBsky && trimmedText ? splitForPlatform(trimmedText, 'bluesky') : null);
+  const mastoPlan = $derived(hasMasto && trimmedText ? splitForPlatform(trimmedText, 'mastodon') : null);
+  const threadsPlan = $derived(hasThreads && trimmedText ? splitForPlatform(trimmedText, 'threads') : null);
   const threadsNeedsThread = $derived(hasThreads && threadsLen > 500);
   const needsThread = $derived(bskyNeedsThread || mastoNeedsThread || threadsNeedsThread);
 </script>
@@ -950,11 +954,10 @@
         <AccountPicker {accounts} bind:selected={selectedAccountIds} />
 
         <!-- Platform preview with thread splitting -->
-        {#if text.trim()}
+        {#if trimmedText}
           <div class="space-y-2">
             <span class="text-xs text-[var(--color-text-muted)] uppercase tracking-wider font-medium">{i18n.t.compose.preview}</span>
-            {#if hasBsky}
-              {@const bskyPlan = splitForPlatform(text.trim(), 'bluesky')}
+            {#if bskyPlan}
               <div class="p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
                 <div class="flex items-center justify-between mb-2">
                   <div class="flex items-center gap-2">
@@ -973,8 +976,7 @@
                 {/each}
               </div>
             {/if}
-            {#if hasMasto}
-              {@const mastoPlan = splitForPlatform(text.trim(), 'mastodon')}
+            {#if mastoPlan}
               <div class="p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
                 <div class="flex items-center justify-between mb-2">
                   <div class="flex items-center gap-2">
@@ -999,8 +1001,7 @@
                 {/each}
               </div>
             {/if}
-            {#if hasThreads}
-              {@const threadsPlan = splitForPlatform(text.trim(), 'threads')}
+            {#if threadsPlan}
               <div class="p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
                 <div class="flex items-center justify-between mb-2">
                   <div class="flex items-center gap-2">
