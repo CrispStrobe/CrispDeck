@@ -48,50 +48,52 @@
     hasSearched = true;
 
     const resultsByPlatform = new Map<Platform, UnifiedPost[]>();
+    const q = query.trim();
 
-    for (const acct of accounts) {
+    const searchResults = await Promise.allSettled(accounts.map(async (acct) => {
       const entry = clientEntries.get(acct.id);
-      if (!entry) continue;
+      if (!entry) return { platform: acct.platform, posts: [] as UnifiedPost[] };
 
-      try {
-        if (acct.platform === 'bluesky') {
-          const bsky = entry.client as BlueskyClient;
-          const resp = await bsky.searchPosts(query.trim());
-          const normalized = resp.posts.map(post => ({
-            uri: post.uri,
-            text: (post.record as any).text ?? '',
-            author: {
-              handle: post.author.handle,
-              displayName: post.author.displayName,
-              avatar: post.author.avatar,
-            },
-            createdAt: (post.record as any).createdAt ?? post.indexedAt,
-            platform: 'bluesky' as const,
-            replyCount: post.replyCount,
-            repostCount: post.repostCount,
-            likeCount: post.likeCount,
-            isRepost: false,
-            embeds: post.embed,
-            raw: post,
-          }));
-          resultsByPlatform.set('bluesky', [...(resultsByPlatform.get('bluesky') ?? []), ...normalized]);
-        } else if (acct.platform === 'mastodon') {
-          const masto = entry.client as MastodonClient;
-          const token = masto.getAccessToken();
-          if (!token) continue;
-          const statuses = await searchMastodon(query.trim(), masto.getInstanceUrl(), token, 40);
-          const normalized = statuses.map((s: any) => normalizePost(s, 'mastodon'));
-          resultsByPlatform.set('mastodon', [...(resultsByPlatform.get('mastodon') ?? []), ...normalized]);
-        } else if (acct.platform === 'threads') {
-          const threads = entry.client as ThreadsClient;
-          const token = threads.getAccessToken?.();
-          if (!token) continue;
-          const threadsPosts = await searchThreads(query.trim(), token, 25);
-          const normalized = threadsPosts.map((p: any) => threads.normalizePost(p));
-          resultsByPlatform.set('threads', [...(resultsByPlatform.get('threads') ?? []), ...normalized]);
-        }
-      } catch (e) {
-        console.error(`Search failed for ${acct.handle}:`, e);
+      if (acct.platform === 'bluesky') {
+        const bsky = entry.client as BlueskyClient;
+        const resp = await bsky.searchPosts(q);
+        return { platform: acct.platform, posts: resp.posts.map(post => ({
+          uri: post.uri,
+          text: (post.record as any).text ?? '',
+          author: {
+            handle: post.author.handle,
+            displayName: post.author.displayName,
+            avatar: post.author.avatar,
+          },
+          createdAt: (post.record as any).createdAt ?? post.indexedAt,
+          platform: 'bluesky' as const,
+          replyCount: post.replyCount,
+          repostCount: post.repostCount,
+          likeCount: post.likeCount,
+          isRepost: false,
+          embeds: post.embed,
+          raw: post,
+        })) };
+      } else if (acct.platform === 'mastodon') {
+        const masto = entry.client as MastodonClient;
+        const token = masto.getAccessToken();
+        if (!token) return { platform: acct.platform, posts: [] };
+        const statuses = await searchMastodon(q, masto.getInstanceUrl(), token, 40);
+        return { platform: acct.platform, posts: statuses.map((s: any) => normalizePost(s, 'mastodon')) };
+      } else if (acct.platform === 'threads') {
+        const threads = entry.client as ThreadsClient;
+        const token = threads.getAccessToken?.();
+        if (!token) return { platform: acct.platform, posts: [] };
+        const threadsPosts = await searchThreads(q, token, 25);
+        return { platform: acct.platform, posts: threadsPosts.map((p: any) => threads.normalizePost(p)) };
+      }
+      return { platform: acct.platform, posts: [] as UnifiedPost[] };
+    }));
+
+    for (const result of searchResults) {
+      if (result.status === 'fulfilled' && result.value.posts.length > 0) {
+        const p = result.value.platform;
+        resultsByPlatform.set(p, [...(resultsByPlatform.get(p) ?? []), ...result.value.posts]);
       }
     }
 

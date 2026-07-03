@@ -301,44 +301,48 @@
     if (loadingMore || !hasMoreContent) return;
     loadingMore = true;
 
-    const newPosts: UnifiedPost[] = [];
-
-    for (const acct of accounts) {
+    const moreResults = await Promise.allSettled(accounts.map(async (acct) => {
       const cursor = cursors[acct.id];
-      if (!cursor) continue;
+      if (!cursor) return { posts: [] as UnifiedPost[], acct, cursor: undefined as string | undefined };
 
       const entry = clientEntries.get(acct.id);
-      if (!entry) continue;
+      if (!entry) return { posts: [] as UnifiedPost[], acct, cursor: undefined as string | undefined };
 
-      try {
-        if (acct.platform === 'bluesky') {
-          if (feedMode === 'timeline' && entry.oauthAgent) {
-            const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 50, cursor });
-            newPosts.push(...r.data.feed.map(p => normalizePost(p, 'bluesky')));
-            cursors[acct.id] = r.data.cursor;
-          } else {
-            const bsky = entry.client as BlueskyClient;
-            const result = await bsky.getAuthorFeed(acct.handle, cursor);
-            newPosts.push(...result.feed.map(p => normalizePost(p, 'bluesky')));
-            cursors[acct.id] = result.cursor;
-          }
-        } else if (acct.platform === 'threads') {
-          // Threads has no pagination cursor — skip in loadMore
+      const acctPosts: UnifiedPost[] = [];
+      let newCursor: string | undefined;
+
+      if (acct.platform === 'bluesky') {
+        if (feedMode === 'timeline' && entry.oauthAgent) {
+          const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 50, cursor });
+          acctPosts.push(...r.data.feed.map(p => normalizePost(p, 'bluesky')));
+          newCursor = r.data.cursor;
         } else {
-          const masto = entry.client as MastodonClient;
-          if (feedMode === 'timeline') {
-            const statuses = await masto.getHomeTimeline(cursor);
-            newPosts.push(...statuses.map(p => normalizePost(p, 'mastodon')));
-            cursors[acct.id] = statuses.length > 0 ? statuses[statuses.length - 1].id : undefined;
-          } else {
-            const account = await masto.getAccountByHandle(acct.handle);
-            const statuses = await masto.getAccountStatuses(account.id, cursor);
-            newPosts.push(...statuses.map(p => normalizePost(p, 'mastodon')));
-            cursors[acct.id] = statuses.length > 0 ? statuses[statuses.length - 1].id : undefined;
-          }
+          const bsky = entry.client as BlueskyClient;
+          const result = await bsky.getAuthorFeed(acct.handle, cursor);
+          acctPosts.push(...result.feed.map(p => normalizePost(p, 'bluesky')));
+          newCursor = result.cursor;
         }
-      } catch (e) {
-        console.error(`Failed to load more from ${acct.handle}:`, e);
+      } else if (acct.platform !== 'threads') {
+        const masto = entry.client as MastodonClient;
+        if (feedMode === 'timeline') {
+          const statuses = await masto.getHomeTimeline(cursor);
+          acctPosts.push(...statuses.map(p => normalizePost(p, 'mastodon')));
+          newCursor = statuses.length > 0 ? statuses[statuses.length - 1].id : undefined;
+        } else {
+          const account = await masto.getAccountByHandle(acct.handle);
+          const statuses = await masto.getAccountStatuses(account.id, cursor);
+          acctPosts.push(...statuses.map(p => normalizePost(p, 'mastodon')));
+          newCursor = statuses.length > 0 ? statuses[statuses.length - 1].id : undefined;
+        }
+      }
+      return { posts: acctPosts, acct, cursor: newCursor };
+    }));
+
+    const newPosts: UnifiedPost[] = [];
+    for (const result of moreResults) {
+      if (result.status === 'fulfilled') {
+        newPosts.push(...result.value.posts);
+        if (result.value.cursor) cursors[result.value.acct.id] = result.value.cursor;
       }
     }
 

@@ -65,10 +65,6 @@ html, body {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Font display optimization — prevent FOIT */
-@font-face {
-  font-display: swap;
-}
 
 /* Mobile: hide sidebar by default, show as overlay */
 @media (max-width: 768px) {

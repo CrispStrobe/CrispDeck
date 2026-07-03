@@ -246,7 +246,7 @@
     <article class="bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] p-6 md:p-8">
       <div class="flex items-center gap-3 mb-6 pb-4 border-b border-[var(--color-border)]">
         {#if mainPost.author.avatar}
-          <img src={mainPost.author.avatar} alt="" class="w-10 h-10 rounded-full" />
+          <img loading="lazy" decoding="async" src={mainPost.author.avatar} alt="" width="40" height="40" class="w-10 h-10 rounded-full" />
         {/if}
         <div>
           <p class="font-semibold">{mainPost.author.displayName || mainPost.author.handle}</p>

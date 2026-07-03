@@ -62,84 +62,72 @@
   });
 
   async function loadConversations() {
-    const all: Conversation[] = [];
-
-    for (const [id, entry] of clientEntries) {
+    const results = await Promise.allSettled(Array.from(clientEntries).map(async ([id, entry]) => {
       const acct = accounts.find(a => a.id === id);
-      if (!acct) continue;
+      if (!acct) return [] as Conversation[];
 
       if (acct.platform === 'bluesky') {
-        // Try OAuth agent from client-factory first, fall back to resumeBlueskyOAuthSession
         const oauthAgent = entry.oauthAgent;
         const oauthSession = oauthAgent ? { agent: oauthAgent, did: acct.did } : await resumeBlueskyOAuthSession();
-        if (oauthSession) {
-          try {
-            const proxyHeaders = { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' };
-            const agent = oauthSession.agent as any;
-            const chatResp = await agent.api.chat.bsky.convo.listConvos(
-              { limit: 50 },
-              { headers: proxyHeaders }
-            );
-            for (const convo of chatResp.data.convos ?? []) {
-              const other = convo.members?.find((m: any) => m.handle !== acct.handle) ?? convo.members?.[0];
-              const handle = other?.handle ?? '?';
-              const isDeleted = handle === 'missing.invalid' || handle === 'handle.invalid';
-              const isBlocked = convo.muted || false;
-              all.push({
-                id: convo.id,
-                platform: 'bluesky',
-                participant: {
-                  handle: isDeleted ? 'Deleted account' : handle,
-                  displayName: isDeleted ? 'Deleted account' : isBlocked ? `${other?.displayName ?? handle} (blocked)` : other?.displayName,
-                  avatar: isDeleted ? undefined : other?.avatar,
-                },
-                lastMessage: (convo.lastMessage as any)?.text,
-                lastDate: (convo.lastMessage as any)?.sentAt,
-                unread: (convo.unreadCount ?? 0) > 0,
-              });
-            }
-          } catch (e) {
-            console.error('Bluesky OAuth DMs:', e);
-            error = (error ? error + '\n' : '') + `Bluesky DMs: ${e}`;
-          }
-        } else {
-          // App passwords can't access DMs
-          bskyDmNote = true;
-        }
+        if (!oauthSession) { bskyDmNote = true; return []; }
+        const proxyHeaders = { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' };
+        const agent = oauthSession.agent as any;
+        const chatResp = await agent.api.chat.bsky.convo.listConvos(
+          { limit: 50 },
+          { headers: proxyHeaders }
+        );
+        return (chatResp.data.convos ?? []).map((convo: any) => {
+          const other = convo.members?.find((m: any) => m.handle !== acct.handle) ?? convo.members?.[0];
+          const handle = other?.handle ?? '?';
+          const isDeleted = handle === 'missing.invalid' || handle === 'handle.invalid';
+          const isBlocked = convo.muted || false;
+          return {
+            id: convo.id,
+            platform: 'bluesky' as const,
+            participant: {
+              handle: isDeleted ? 'Deleted account' : handle,
+              displayName: isDeleted ? 'Deleted account' : isBlocked ? `${other?.displayName ?? handle} (blocked)` : other?.displayName,
+              avatar: isDeleted ? undefined : other?.avatar,
+            },
+            lastMessage: (convo.lastMessage as any)?.text,
+            lastDate: (convo.lastMessage as any)?.sentAt,
+            unread: (convo.unreadCount ?? 0) > 0,
+          } as Conversation;
+        });
       } else if (acct.platform === 'mastodon') {
         const masto = entry.client as MastodonClient;
         const token = masto.getAccessToken();
-        if (!token) continue;
-        try {
-          const resp = await fetch(`${masto.getInstanceUrl()}/api/v1/conversations?limit=40`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (resp.ok) {
-            const raw = await resp.json();
-            for (const convo of raw) {
-              const other = convo.accounts?.[0];
-              all.push({
-                id: convo.id,
-                platform: 'mastodon',
-                participant: {
-                  handle: other ? `@${other.acct}` : '?',
-                  displayName: other?.display_name,
-                  avatar: other?.avatar,
-                },
-                lastMessage: convo.last_status?.content?.replace(/<[^>]*>?/gm, ''),
-                lastDate: convo.last_status?.created_at,
-                unread: convo.unread,
-              });
-            }
-          } else {
-            error = (error ? error + '\n' : '') + `Mastodon DMs: ${resp.status} ${resp.statusText}`;
-          }
-        } catch (e) {
-          error = (error ? error + '\n' : '') + `Mastodon DMs: ${e}`;
-        }
+        if (!token) return [];
+        const resp = await fetch(`${masto.getInstanceUrl()}/api/v1/conversations?limit=40`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!resp.ok) { error = (error ? error + '\n' : '') + `Mastodon DMs: ${resp.status} ${resp.statusText}`; return []; }
+        const raw = await resp.json();
+        return raw.map((convo: any) => {
+          const other = convo.accounts?.[0];
+          return {
+            id: convo.id,
+            platform: 'mastodon' as const,
+            participant: {
+              handle: other ? `@${other.acct}` : '?',
+              displayName: other?.display_name,
+              avatar: other?.avatar,
+            },
+            lastMessage: convo.last_status?.content?.replace(/<[^>]*>?/gm, ''),
+            lastDate: convo.last_status?.created_at,
+            unread: convo.unread,
+          } as Conversation;
+        });
+      }
+      return [] as Conversation[];
+    }));
+
+    const all = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
+    for (const r of results) {
+      if (r.status === 'rejected') {
+        error = (error ? error + '\n' : '') + String(r.reason);
       }
     }
-
     conversations = all.sort((a, b) =>
       (b.lastDate ? new Date(b.lastDate).getTime() : 0) - (a.lastDate ? new Date(a.lastDate).getTime() : 0)
     );

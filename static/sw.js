@@ -7,9 +7,9 @@
  * Cache version rotates on each deploy.
  */
 
-// Version updated on each deploy — triggers old cache cleanup
-// Update this value when deploying to bust stale caches
-const VERSION = '1.0.0-20260703';
+// Version injected at build time by vite.config.js swVersionPlugin
+// Falls back to placeholder during dev (no-op since SW is not used in dev)
+const VERSION = '__SW_VERSION__';
 const CACHE_NAME = `crispdeck-v${VERSION}`;
 const SHELL_URLS = ['/'];
 

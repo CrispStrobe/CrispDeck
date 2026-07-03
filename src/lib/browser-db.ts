@@ -18,11 +18,18 @@ import { jaroWinkler } from '$lib/utils/string';
 const DB_NAME = 'crispdeck';
 const DB_VERSION = 1;
 
+let _dbInstance: IDBDatabase | null = null;
+
 function openDB(): Promise<IDBDatabase> {
+  if (_dbInstance) return Promise.resolve(_dbInstance);
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onerror = () => reject(req.error);
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      _dbInstance = req.result;
+      _dbInstance.onclose = () => { _dbInstance = null; };
+      resolve(_dbInstance);
+    };
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains('accounts')) {

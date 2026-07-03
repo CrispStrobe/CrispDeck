@@ -45,28 +45,22 @@
   });
 
   async function loadPosts() {
-    const posts: UnifiedPost[] = [];
-
-    for (const [id, entry] of clientEntries) {
+    const results = await Promise.allSettled(Array.from(clientEntries).map(async ([id, entry]) => {
       const acct = accounts.find(a => a.id === id);
-      if (!acct) continue;
-
-      try {
-        if (acct.platform === 'bluesky') {
-          const bsky = entry.client as BlueskyClient;
-          const r = await bsky.getTimeline();
-          posts.push(...r.feed.map(p => normalizePost(p, 'bluesky')));
-        } else if (acct.platform === 'mastodon') {
-          const masto = entry.client as MastodonClient;
-          const statuses = await masto.getHomeTimeline();
-          posts.push(...statuses.map(s => normalizePost(s, 'mastodon')));
-        }
-      } catch (e) {
-        console.error(`Failed to load for ${acct.handle}:`, e);
+      if (!acct) return [];
+      if (acct.platform === 'bluesky') {
+        const bsky = entry.client as BlueskyClient;
+        const r = await bsky.getTimeline();
+        return r.feed.map(p => normalizePost(p, 'bluesky'));
+      } else if (acct.platform === 'mastodon') {
+        const masto = entry.client as MastodonClient;
+        const statuses = await masto.getHomeTimeline();
+        return statuses.map(s => normalizePost(s, 'mastodon'));
       }
-    }
+      return [];
+    }));
 
-    allPosts = posts;
+    allPosts = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
   }
 
   async function handleLike(post: UnifiedPost) {

@@ -33,6 +33,8 @@
   let showShortcuts = $state(false);
   let offline = $state(false);
   let pendingG = $state(false);
+  let _postElsCache: NodeListOf<Element> | null = null;
+  let _postElsCacheTs = 0;
   let bookmarkCount = $state(0);
   let unreadMessages = $state(0);
 
@@ -146,8 +148,12 @@
       if (routes[e.key]) { goto(routes[e.key]); return; }
     }
 
-    // Vim-style post navigation (j/k/o/l)
-    const postEls = document.querySelectorAll('[data-post-uri]');
+    // Vim-style post navigation (j/k/o/l) — cache DOM query, invalidate after 2s
+    if (!_postElsCache || Date.now() - _postElsCacheTs > 2000) {
+      _postElsCache = document.querySelectorAll('[data-post-uri]');
+      _postElsCacheTs = Date.now();
+    }
+    const postEls = _postElsCache;
     if (postEls.length === 0) return;
     const focused = document.querySelector('[data-post-uri].ring-2') as HTMLElement;
     const currentIdx = focused ? [...postEls].indexOf(focused) : -1;

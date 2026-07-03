@@ -153,14 +153,14 @@
   }
 
   // Filter by date range
-  const cutoffDate = $derived(() => {
+  const cutoffDate = $derived.by(() => {
     if (dateRange === 'all') return 0;
     const days = dateRange === '7d' ? 7 : dateRange === '30d' ? 30 : 90;
     return Date.now() - days * 86400000;
   });
 
   const rangedPosts = $derived(
-    cutoffDate() === 0 ? posts : posts.filter(p => new Date(p.createdAt).getTime() >= cutoffDate())
+    cutoffDate === 0 ? posts : posts.filter(p => new Date(p.createdAt).getTime() >= cutoffDate)
   );
   const originalPosts = $derived(rangedPosts.filter(p => !p.isRepost));
   const totalLikes = $derived(originalPosts.reduce((s, p) => s + (p.likeCount ?? 0), 0));

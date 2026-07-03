@@ -142,12 +142,32 @@ export async function getBookmarkCount(): Promise<number> {
 export async function importPlatformBookmarks(posts: UnifiedPost[]): Promise<number> {
   // Single batch fetch of existing URIs
   const existing = await getAllBookmarkedUris();
-  let imported = 0;
-  for (const post of posts) {
-    if (!existing.has(post.uri)) {
-      await addBookmark(post);
-      imported++;
+  const toImport = posts.filter(p => !existing.has(p.uri));
+  if (toImport.length === 0) return 0;
+
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
+    const txn = db.transaction(STORE, 'readwrite');
+    const store = txn.objectStore(STORE);
+    const now = new Date().toISOString();
+    for (const post of toImport) {
+      store.put({
+        uri: post.uri,
+        platform: post.platform,
+        text: post.text,
+        authorHandle: post.author.handle,
+        authorName: post.author.displayName ?? post.author.handle,
+        authorAvatar: post.author.avatar,
+        createdAt: post.createdAt,
+        likeCount: post.likeCount ?? 0,
+        repostCount: post.repostCount ?? 0,
+        bookmarkedAt: now,
+        raw: post.raw,
+      });
+      _bookmarkUriCache?.add(post.uri);
     }
-  }
-  return imported;
+    txn.oncomplete = () => resolve();
+    txn.onerror = () => reject(txn.error);
+  });
+  return toImport.length;
 }

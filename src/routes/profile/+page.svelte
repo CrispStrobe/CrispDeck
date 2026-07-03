@@ -243,7 +243,7 @@
     } catch (e) { error = String(e); }
   }
 
-  const filteredPosts = $derived(() => {
+  const filteredPosts = $derived.by(() => {
     switch (activeTab) {
       case 'replies': return posts.filter(p => p.replyParentUri);
       case 'media': return posts.filter(p => p.embeds && (Array.isArray(p.embeds) ? (p.embeds as any[]).length > 0 : true));
@@ -253,7 +253,7 @@
 
   interface MediaItem { url: string; thumb: string; alt?: string; postUri: string; type: 'image' | 'video' }
 
-  const mediaGallery = $derived(() => {
+  const mediaGallery = $derived.by(() => {
     const items: MediaItem[] = [];
     for (const post of posts) {
       if (post.platform === 'bluesky' && post.embeds) {
@@ -420,11 +420,11 @@
       {/if}
     {:else if activeTab === 'media'}
       <!-- Media gallery grid -->
-      {#if mediaGallery().length === 0}
+      {#if mediaGallery.length === 0}
         <p class="text-center py-8 text-sm text-[var(--color-text-muted)]">No media to show.</p>
       {:else}
         <div class="grid grid-cols-3 gap-1">
-          {#each mediaGallery() as item}
+          {#each mediaGallery as item}
             <a
               href={item.url}
               target="_blank"
@@ -451,10 +451,10 @@
     {:else}
       <!-- Posts -->
       <div class="space-y-3">
-        {#each filteredPosts() as post (post.uri)}
+        {#each filteredPosts as post (post.uri)}
           <Post {post} />
         {/each}
-        {#if filteredPosts().length === 0}
+        {#if filteredPosts.length === 0}
           <p class="text-center py-8 text-sm text-[var(--color-text-muted)]">No {activeTab} to show.</p>
         {/if}
       </div>
