@@ -11,9 +11,9 @@ A unified Mastodon + Bluesky + Threads social media client with:
 
 **Tech stack**: SvelteKit 2, Svelte 5 (runes), Tailwind CSS 4, Vite 6, Tauri 2, TypeScript + Rust, Vitest
 
-## Current State (2026-06-10)
+## Current State (2026-07-03)
 
-v1.0.0 — 947 unit tests + 28 Playwright E2E tests, 29 pages, live at https://crispdeck.vercel.app
+v1.0.0 — 977 unit tests + 28 Playwright E2E tests, 29 pages, live at https://crispdeck.vercel.app
 
 **License**: AGPL-3.0-only
 
@@ -480,11 +480,13 @@ Goal: reduce sidebar from 25 items to ~14 by merging related views into tabbed p
 - **Status**: Done
 - **Effort**: Medium
 - **Description**: Post HTML content contains `<a>` tags pointing to external Mastodon/Bluesky URLs for @mentions and #hashtags. These should route in-app instead.
+- **Mastodon**: Intercept `<a>` clicks in rendered HTML, match `/@user` and `/tags/tagname` patterns, route via `goto()`
+- **Bluesky**: Parse AT Protocol facets (mentions, links, tags) from post records to render rich HTML with clickable links. Fallback regex linkification for posts without facets
 - **@handles**: Click `@user@instance.social` → open CrispDeck profile page `/profile?handle=user@instance.social`
 - **#hashtags**: Click `#svelte` → open CrispDeck search `/search?q=%23svelte` or add as deck column
-- Intercept `<a>` clicks in post HTML rendering, match known patterns, route via `goto()`
-- External links (URLs to articles etc.) should still open in browser
-- **Key files**: `src/lib/components/Post.svelte` (post text rendering)
+- External links (URLs to articles etc.) still open in browser
+- In-app href links (starting with `/`) routed via `goto()` without full page reload
+- **Key files**: `src/lib/components/Post.svelte` (post text rendering, `getBskyHtml()`, `handlePostLinkClick()`)
 
 ### 89. Platform filter shows only logged-in platforms
 - **Status**: Done
@@ -498,9 +500,10 @@ Goal: reduce sidebar from 25 items to ~14 by merging related views into tabbed p
 - **Status**: Done
 - **Effort**: Small
 - **Description**: Navigating from a post/thread back to feed should return to the scroll position where the user was
+- Thread and profile page back buttons use `history.back()` instead of hardcoded `/feed` link
+- Preserves scroll position regardless of navigation source (feed, deck, search, etc.)
 - `src/lib/read-position.ts` already exists — wire it into feed/deck navigation
-- Save scroll position on route leave, restore on route enter
-- **Key files**: `src/routes/feed/+page.svelte`, `src/lib/read-position.ts`
+- **Key files**: `src/routes/thread/+page.svelte`, `src/routes/profile/+page.svelte`, `src/lib/read-position.ts`
 
 ### 91. Share-as-image error visibility
 - **Status**: Done
@@ -669,11 +672,21 @@ Goal: close gaps in unit test coverage for untested TypeScript modules. Current:
 
 ### Bluesky embed types handled
 Post component (`src/lib/components/Post.svelte`) handles:
-- `app.bsky.embed.images#view` — image grid
+- `app.bsky.embed.images#view` — image grid (single: full image; multi: square grid)
 - `app.bsky.embed.external#view` — link card with thumbnail
-- `app.bsky.embed.record#view` — quoted post
+- `app.bsky.embed.record#view` — quoted post (clickable, navigates to thread)
 - `app.bsky.embed.video#view` — video with thumbnail + play button
 - `app.bsky.embed.recordWithMedia#view` — nested: extracts both media and quote
+
+### Threads embed types handled
+- `quoted_post` — quoted post (clickable, opens permalink on threads.com)
+- Media (images/video) rendered via Mastodon-compatible attachment format
+
+### Bluesky rich text facets
+- `app.bsky.richtext.facet#link` — clickable URL
+- `app.bsky.richtext.facet#mention` — clickable @handle → in-app profile
+- `app.bsky.richtext.facet#tag` — clickable #hashtag → in-app search
+- UTF-8 byte-offset indexing for correct positioning with unicode
 
 ### Translation providers (5)
 - **Lingva Translate** (default) — free Google Translate proxy, no API key, no commercial restriction, public instances
@@ -735,3 +748,70 @@ Key competitive advantages: deck+multi-network+Threads (unique combo), cross-pla
 - **Status**: Done
 - **Effort**: Small
 - **Description**: Final README pass — update test counts, version references, stats section. Update PLAN.md and memory file.
+
+---
+
+## Phase 15: Post Interactivity & Notifications (2026-07-03)
+
+### 110. Interactive embedded/quoted posts
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Embedded/quoted posts in feed were static, non-clickable previews. Now:
+- **Bluesky quotes**: Clickable button navigating to quoted post's thread view (`/thread?uri=...&platform=bluesky`)
+- **Threads quotes**: Clickable button opening quoted post's permalink on threads.com
+- Hover states (border brightens, background shifts), cursor pointer
+- Larger text (`text-sm` instead of `text-xs`), primary color, 6-line clamp (was 3)
+- Larger image previews (`max-h-48`), "+N more" indicator for multi-image quotes
+- Image clicks in quotes still open lightbox (stopPropagation prevents navigation)
+- **Key files**: `src/lib/components/Post.svelte` (`getBskyQuote()`, `getThreadsQuote()`)
+
+### 111. Better image display in posts
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Images in posts were aggressively cropped to 16:9 aspect-video, cutting off most of the content
+- Single images now show full picture scaled down (`object-contain`, `max-h-96`, dark background fill)
+- Multi-image grids use square aspect ratio (`aspect-square`) instead of video crop
+- Applies to both Bluesky and Mastodon/Threads images
+- **Key files**: `src/lib/components/Post.svelte`
+
+### 112. Bluesky rich text rendering with facets
+- **Status**: Done
+- **Effort**: Medium
+- **Description**: Bluesky post text was rendered as plain text with no clickable elements
+- Now parses AT Protocol facets from post records for pixel-accurate rich text
+- Handles: `app.bsky.richtext.facet#link` (URLs), `#mention` (@handles → profile), `#tag` (#hashtags → search)
+- UTF-8 byte-offset indexing for correct facet positioning with unicode text
+- Fallback regex linkification for posts without facets (URLs and @handle.bsky.social patterns)
+- Same `handlePostLinkClick()` handler routes in-app links via `goto()`
+- **Key files**: `src/lib/components/Post.svelte` (`getBskyHtml()`, `escapeHtml()`, `linkifyPlainText()`)
+
+### 113. Fix notifications for OAuth Bluesky accounts
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Notifications page showed empty because OAuth Bluesky accounts used read-only BlueskyClient that threw "Auth required"
+- Root cause: `client-factory.ts` creates `BlueskyClient.readOnly()` for OAuth accounts (no `authAgent`), but stores `oauthAgent` in `ClientEntry` — never used
+- Fix: notifications page now checks for `entry.oauthAgent` and calls `agent.api.app.bsky.notification.listNotifications()` directly for OAuth accounts
+- App-password accounts continue using `BlueskyClient.getNotifications()` as before
+- **Key files**: `src/routes/notifications/+page.svelte`, `src/lib/api/client-factory.ts`
+
+---
+
+## Future Ideas (from Graysky comparison)
+
+### Alt text badge overlay on images
+- **Status**: Not started
+- **Effort**: Small
+- **Description**: Show an "ALT" badge on images that have alt text, click to show full alt text in a popover
+- Graysky does this well — surfaces accessibility info without cluttering the UI
+
+### Throttled loading indicators
+- **Status**: Not started
+- **Effort**: Small
+- **Description**: Delay spinner/skeleton display by ~100ms to avoid flicker on fast operations
+- Prevents visual jank when API calls complete quickly
+
+### Quick account switcher
+- **Status**: Not started
+- **Effort**: Medium
+- **Description**: Popover/drawer for switching between accounts without navigating to full Identities page
+- Show account avatars in sidebar footer, click to switch active account
