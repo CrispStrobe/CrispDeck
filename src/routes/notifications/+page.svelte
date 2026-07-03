@@ -16,6 +16,10 @@
   let loading = $state(true);
   let error = $state('');
   let refreshing = $state(false);
+  let announcements: Array<{ id: string; content: string; publishedAt: string }> = $state([]);
+  const dismissedAnnouncementIds = new Set<string>(
+    JSON.parse(localStorage.getItem('crispdeck-dismissed-announcements') ?? '[]')
+  );
   let expandedGroups: Set<string> = $state(new Set());
 
   let clientEntries: Map<number, ClientEntry> = new Map();
@@ -103,6 +107,18 @@
 
     const results = await Promise.all(fetchers);
     const all = results.flat();
+
+    // Fetch Mastodon announcements
+    for (const [, entry] of clientEntries) {
+      if (entry.platform !== 'mastodon') continue;
+      const masto = entry.client as MastodonClient;
+      try {
+        const anns = await masto.getAnnouncements();
+        announcements = anns
+          .filter((a: any) => !dismissedAnnouncementIds.has(a.id))
+          .map((a: any) => ({ id: a.id, content: a.content, publishedAt: a.published_at ?? a.created_at }));
+      } catch {}
+    }
     groups = groupNotifications(all);
     setCache('notifications', groups);
   }
@@ -130,6 +146,17 @@
   }
 
   const ptr = createPullToRefresh(async () => { await loadNotifications(); });
+
+  function dismissAnnouncement(id: string) {
+    dismissedAnnouncementIds.add(id);
+    localStorage.setItem('crispdeck-dismissed-announcements', JSON.stringify([...dismissedAnnouncementIds]));
+    announcements = announcements.filter(a => a.id !== id);
+    // Also dismiss on server
+    for (const [, entry] of clientEntries) {
+      if (entry.platform !== 'mastodon') continue;
+      (entry.client as MastodonClient).dismissAnnouncement(id).catch(() => {});
+    }
+  }
 
   function toggleGroup(groupId: string) {
     const next = new Set(expandedGroups);
@@ -204,6 +231,17 @@
       <RefreshCw size={20} class="text-[var(--color-primary)] {ptr.state.pullRefreshing ? 'animate-spin' : ''}" style="opacity: {ptr.state.pullDistance / 60}; transform: rotate({ptr.state.pullDistance * 3}deg)" />
     </div>
   {/if}
+
+  <!-- Instance announcements -->
+  {#each announcements as ann (ann.id)}
+    <div class="mb-4 p-3 bg-[var(--color-mastodon)]/10 border border-[var(--color-mastodon)]/30 rounded-lg">
+      <div class="flex items-start justify-between gap-2">
+        <div class="text-sm text-[var(--color-text)]">{@html ann.content}</div>
+        <button onclick={() => dismissAnnouncement(ann.id)} class="text-[var(--color-text-muted)] hover:text-[var(--color-text)] flex-shrink-0 text-xs">Dismiss</button>
+      </div>
+    </div>
+  {/each}
+
   <div class="flex items-center justify-between mb-6">
     <div class="flex items-center gap-2">
       <Bell size={24} />

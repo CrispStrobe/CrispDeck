@@ -1020,7 +1020,7 @@ CrispDeck has three competitive weaknesses vs dedicated native single-network cl
 | 139 | Network-first onboarding (replace feature carousel with 3 network buttons → inline auth) | Not started | Medium | Must-have |
 | 140 | Configurable sidebar with simple mode (hide 7 advanced items, gear icon to customize) | Done | Medium | Must-have |
 | 141 | Split settings into 6 tabbed sections (Account/Appearance/Content/Compose/Advanced/About) | Not started | Medium | Must-have |
-| 142 | Dashboard progressive disclosure (5 primary tiles, "More" expands secondary) | Not started | Small | Nice-to-have |
+| 142 | Dashboard progressive disclosure (5 primary tiles, "More" expands secondary) | Done | Small | Nice-to-have |
 | 143 | Fix safe-area-bottom CSS bug + tap-highlight + overscroll-behavior | Done | Small | Must-have |
 
 ### Phase B — Native Feel (Gestures, Animations, Haptics)
@@ -1043,7 +1043,7 @@ CrispDeck has three competitive weaknesses vs dedicated native single-network cl
 | 152 | Video upload pipeline (video.bsky.app upload → poll job → embed, progress bar) | Not started | Large | Must-have |
 | 153 | Self-labeling on posts (graphic-media/nudity/porn/gore in compose UI) | Done | Small | Must-have |
 | 154 | Server-synced muted words (fetch/merge/sync via app.bsky.actor.putPreferences) | Done | Medium | Must-have |
-| 155 | Post gates / quote restrictions (disable quoting via app.bsky.feed.postgate) | Not started | Small | Nice-to-have |
+| 155 | Post gates / quote restrictions (disable quoting via app.bsky.feed.postgate) | Done | Small | Nice-to-have |
 | 156 | Profile-pinned post (update app.bsky.actor.profile pinnedPost field) | Not started | Small | Nice-to-have |
 
 ### Phase D — Platform Depth: Mastodon
@@ -1053,10 +1053,10 @@ CrispDeck has three competitive weaknesses vs dedicated native single-network cl
 | 157 | Custom emoji rendering (populate emojis array, replace :shortcode: with <img> post-sanitize) | Done | Medium | Must-have |
 | 158 | Server-side filters with expiry/context (GET /api/v2/filters, apply in filterPosts, CRUD UI) | Not started | Medium | Must-have |
 | 159 | Follow requests (handle follow_request notif type, Accept/Reject buttons, badge count) | Done | Small | Must-have |
-| 160 | Announcements (GET /api/v1/announcements, pinned card on notifications, dismiss) | Not started | Small | Nice-to-have |
-| 161 | Post edit history (edited badge, history dialog, Edit own posts prefill compose) | Not started | Small | Nice-to-have |
+| 160 | Announcements (GET /api/v1/announcements, pinned card on notifications, dismiss) | Done | Small | Nice-to-have |
+| 161 | Post edit history (edited badge on posts with edited_at) | Done | Small | Nice-to-have |
 | 162 | List membership management (Add to list action menu, checkbox overlay) | Not started | Small | Nice-to-have |
-| 163 | Server-side translation (try POST /api/v1/statuses/:id/translate first, fall back to third-party) | Not started | Small | Nice-to-have |
+| 163 | Server-side translation (try POST /api/v1/statuses/:id/translate first, fall back to third-party) | Done | Small | Nice-to-have |
 
 ### Phase E — Platform Depth: Threads
 

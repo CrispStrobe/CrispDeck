@@ -34,6 +34,7 @@
   const bskyAccounts = $derived(accounts.filter(a => a.platform === 'bluesky'));
   const mastoAccounts = $derived(accounts.filter(a => a.platform === 'mastodon'));
   const threadsAccounts = $derived(accounts.filter(a => a.platform === 'threads'));
+  let showMoreActions = $state(false);
 </script>
 
 <svelte:head><title>CrispDeck</title></svelte:head>
@@ -80,7 +81,7 @@
       </div>
     </div>
 
-    <!-- Quick actions -->
+    <!-- Quick actions — primary -->
     <h2 class="text-lg font-semibold mb-3">{i18n.t.dashboard.quickActions}</h2>
     <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
       <a href="/feed" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
@@ -91,43 +92,52 @@
         <PenSquare size={20} />
         <span>{i18n.t.nav.compose}</span>
       </a>
-      <a href="/deck" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
-        <Columns3 size={20} />
-        <span>{i18n.t.nav.deck}</span>
-      </a>
       <a href="/notifications" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
         <Bell size={20} />
         <span>{i18n.t.nav.notifications}</span>
       </a>
-      <a href="/trending" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
-        <TrendingUp size={20} />
-        <span>{i18n.t.nav.trending}</span>
-      </a>
       <a href="/search" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
         <Search size={20} />
         <span>{i18n.t.nav.search}</span>
-      </a>
-      <a href="/identities" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
-        <Users size={20} />
-        <span>{i18n.t.nav.identities}</span>
-      </a>
-      <a href="/analytics" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
-        <BarChart3 size={20} />
-        <span>{i18n.t.nav.analytics}</span>
-      </a>
-      <a href="/identities?scan=1" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
-        <ScanSearch size={20} />
-        <span>{i18n.t.dashboard.scanIdentities}</span>
-      </a>
-      <a href="/bookmarks" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
-        <Bookmark size={20} />
-        <span>{i18n.t.nav.bookmarks}</span>
       </a>
       <a href="/messages" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
         <MessageSquare size={20} />
         <span>{i18n.t.nav.messages}</span>
       </a>
     </div>
+
+    <!-- Quick actions — secondary (expandable) -->
+    {#if showMoreActions}
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3">
+        <a href="/deck" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
+          <Columns3 size={20} />
+          <span>{i18n.t.nav.deck}</span>
+        </a>
+        <a href="/trending" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
+          <TrendingUp size={20} />
+          <span>{i18n.t.nav.trending}</span>
+        </a>
+        <a href="/bookmarks" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
+          <Bookmark size={20} />
+          <span>{i18n.t.nav.bookmarks}</span>
+        </a>
+        <a href="/identities" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
+          <Users size={20} />
+          <span>{i18n.t.nav.identities}</span>
+        </a>
+        <a href="/analytics" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
+          <BarChart3 size={20} />
+          <span>{i18n.t.nav.analytics}</span>
+        </a>
+        <a href="/identities?scan=1" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
+          <ScanSearch size={20} />
+          <span>{i18n.t.dashboard.scanIdentities}</span>
+        </a>
+      </div>
+    {/if}
+    <button onclick={() => showMoreActions = !showMoreActions} class="mt-2 text-xs text-[var(--color-primary)] hover:underline">
+      {showMoreActions ? 'Show less' : 'More actions...'}
+    </button>
 
     <!-- Tips -->
     <div class="mt-8 flex items-center gap-3 px-4 py-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] text-xs text-[var(--color-text-muted)]">

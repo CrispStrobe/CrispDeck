@@ -206,6 +206,24 @@
     translating = true;
     translateError = '';
     try {
+      // Try Mastodon server-side translation first (free, private)
+      if (post.platform === 'mastodon') {
+        const raw = post.raw as any;
+        const statusId = raw?.id ?? raw?.reblog?.id;
+        const instanceUrl = raw?.uri ? new URL(raw.uri).origin : null;
+        if (statusId && instanceUrl) {
+          try {
+            const resp = await fetch(`${instanceUrl}/api/v1/statuses/${statusId}/translate`, { method: 'POST' });
+            if (resp.ok) {
+              const data = await resp.json();
+              if (data.content) {
+                translation = { text: data.content.replace(/<[^>]*>/g, ''), source: data.detected_source_language ?? '', provider: 'Instance' };
+                return;
+              }
+            }
+          } catch { /* fall through to client-side */ }
+        }
+      }
       const sourceText = post.platform === 'mastodon' ? mastodonHtml || post.text : post.text;
       translation = await translateText(sourceText);
     } catch (e) {
@@ -746,6 +764,9 @@
         <a href={getThreadUrl(post)} class="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:underline flex-shrink-0 ml-auto" title={formatDate(post.createdAt)}>
           {relAge}
         </a>
+        {#if post.platform === 'mastodon' && (post.raw as any)?.edited_at}
+          <span class="text-[9px] text-[var(--color-text-muted)] opacity-60" title="Edited {formatDate((post.raw as any).edited_at)}">(edited)</span>
+        {/if}
       </div>
       <a href={getThreadUrl(post)} class="block min-w-0 hover:bg-[var(--color-surface-hover)]/30 rounded -mx-1 px-1 transition-colors">
         {#if post.platform === 'mastodon' && mastodonHtml}

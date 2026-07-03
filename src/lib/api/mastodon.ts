@@ -132,6 +132,19 @@ export class MastodonClient {
   async reblog(statusId: string) { return this.authedPost(`/api/v1/statuses/${statusId}/reblog`); }
   async unreblog(statusId: string) { return this.authedPost(`/api/v1/statuses/${statusId}/unreblog`); }
 
+  // Announcements
+  async getAnnouncements(): Promise<any[]> {
+    if (!this.accessToken) return [];
+    try {
+      const resp = await fetch(`${this.instanceUrl}/api/v1/announcements`, {
+        headers: { Authorization: `Bearer ${this.accessToken}` },
+      });
+      if (!resp.ok) return [];
+      return resp.json();
+    } catch { return []; }
+  }
+  async dismissAnnouncement(id: string) { return this.authedPost(`/api/v1/announcements/${id}/dismiss`); }
+
   // Follow requests
   async getFollowRequests(): Promise<any[]> {
     if (!this.accessToken) return [];
@@ -143,6 +156,25 @@ export class MastodonClient {
   }
   async authorizeFollowRequest(accountId: string) { return this.authedPost(`/api/v1/follow_requests/${accountId}/authorize`); }
   async rejectFollowRequest(accountId: string) { return this.authedPost(`/api/v1/follow_requests/${accountId}/reject`); }
+
+  // Server-side translation (Mastodon 4.0+)
+  async translateStatus(statusId: string, lang?: string): Promise<{ content: string; detectedSourceLanguage: string } | null> {
+    if (!this.accessToken) return null;
+    try {
+      const body = lang ? JSON.stringify({ lang }) : undefined;
+      const resp = await fetch(`${this.instanceUrl}/api/v1/statuses/${statusId}/translate`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.accessToken}`,
+          ...(body ? { 'Content-Type': 'application/json' } : {}),
+        },
+        body,
+      });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      return { content: data.content, detectedSourceLanguage: data.detected_source_language ?? '' };
+    } catch { return null; }
+  }
 
   getInstanceUrl() { return this.instanceUrl; }
   getAccessToken() { return this.accessToken; }

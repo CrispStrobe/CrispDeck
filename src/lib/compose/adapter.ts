@@ -27,6 +27,7 @@ export interface ComposeOptions {
   quoteUrl?: string;   // Web URL for Mastodon (appended to text)
   threadGate?: ThreadGate; // Bluesky: who can reply
   selfLabel?: string;      // Bluesky: content self-label (graphic-media, nudity, porn, gore)
+  disableQuotes?: boolean; // Bluesky: disable quoting via postgate
   poll?: PollOptions;      // Mastodon: attach a poll
 }
 
@@ -133,6 +134,22 @@ export async function postToBluesky(
           post: resp.data.uri,
           createdAt: new Date().toISOString(),
           allow,
+        },
+      });
+    }
+
+    // Create post gate if quoting disabled
+    if (options.disableQuotes) {
+      const rkey = resp.data.uri.split('/').pop()!;
+      await agent.api.com.atproto.repo.createRecord({
+        repo: agent.session!.did,
+        collection: 'app.bsky.feed.postgate',
+        rkey,
+        record: {
+          $type: 'app.bsky.feed.postgate',
+          post: resp.data.uri,
+          createdAt: new Date().toISOString(),
+          embeddingRules: [{ $type: 'app.bsky.feed.postgate#disableRule' }],
         },
       });
     }

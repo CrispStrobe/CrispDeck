@@ -25,7 +25,12 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **Mastodon custom emoji**: inline rendering of instance-specific custom emoji in posts
 - **Mastodon follow requests**: Accept/Reject buttons on notification cards for locked accounts
 - **Bluesky muted words sync**: server-side muted words synced from Bluesky preferences
+- **Bluesky post gates**: disable quoting on individual posts via `app.bsky.feed.postgate`
+- **Mastodon announcements**: instance announcements shown as pinned cards on notifications page with dismiss
+- **Mastodon edit history**: "(edited)" badge on modified posts with timestamp
+- **Mastodon server-side translation**: tries instance translation first (free, private), falls back to third-party
 - **Notification badge**: PWA app icon badge count via Badging API
+- **Dashboard progressive disclosure**: 5 primary tiles, "More actions" expands advanced features
 
 ### Compose & Crosspost
 - Write once, post to all 3 platforms — **thread auto-splitting** per platform (300 bsky / 500 masto / 500 threads)

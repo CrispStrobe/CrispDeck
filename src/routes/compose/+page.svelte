@@ -54,6 +54,7 @@
   let threadGate: ThreadGate = $state('everyone');
   // Self-label (Bluesky content warning)
   let selfLabel = $state<'none' | 'graphic-media' | 'nudity' | 'porn' | 'gore'>('none');
+  let disableQuotes = $state(false);
 
   // Poll (Mastodon)
   let showPoll = $state(false);
@@ -303,6 +304,7 @@
       quoteUrl,
       threadGate: threadGate !== 'everyone' ? threadGate : undefined,
       selfLabel: selfLabel !== 'none' ? selfLabel : undefined,
+      disableQuotes: disableQuotes || undefined,
       poll: showPoll && pollOptions.filter(o => o.trim()).length >= 2
         ? { options: pollOptions.filter(o => o.trim()), expiresIn: pollExpiry, multiple: pollMultiple }
         : undefined,
@@ -883,6 +885,10 @@
                 <option value="porn">Porn</option>
                 <option value="gore">Gore</option>
               </select>
+              <label class="flex items-center gap-1 text-xs text-[var(--color-text-muted)] cursor-pointer" title="Disable quoting (Bluesky post gate)">
+                <input type="checkbox" bind:checked={disableQuotes} class="rounded" />
+                No quotes
+              </label>
             {/if}
           </div>
 
