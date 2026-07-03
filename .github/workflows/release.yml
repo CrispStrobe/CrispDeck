@@ -93,17 +93,19 @@ jobs:
           tagName: ${{ inputs.tag || 'v__VERSION__' }}
           releaseName: 'CrispDeck ${{ inputs.tag || ''v__VERSION__'' }}'
           releaseBody: |
-            ## What's New
+            ## What's New in 1.1.0
 
-            - **GIF picker** — search/browse Tenor GIFs in compose
-            - **Inline translation** — translate any post (MyMemory API, cached)
-            - **Internationalization** — English + German UI, language selector
-            - **Share as image** — render any post as branded PNG
-            - **Custom PDS** — federated Bluesky PDS instances work automatically
-            - **Alt text enforcement** — off / warn / require modes
-            - **256 tests** (up from 118)
+            - **Bluesky video upload** — full pipeline wired into compose
+            - **Web push notifications** — VAPID + service worker + daily cron
+            - **Self-healing Bluesky OAuth sessions** — no more surprise "session expired"; silent re-auth via prompt=none
+            - **Mastodon depth** — server-side filters, list management, follow requests, announcements, edit history, server translation, custom emoji
+            - **Bluesky depth** — post gates, self-labels, profile pins, synced muted words, rebuilt starter pack search
+            - **Threads engagement** — like, repost, quote
+            - **Native feel** — network-first onboarding, tabbed settings, configurable sidebar, touch deck reorder, pull-to-refresh, haptics, animations
+            - **Performance** — parallelized API calls, SWR caching, eager media loading, faster startup
+            - **1,177 unit + 29 E2E + 15 Rust tests**, CI green on all platforms
 
-            See the [changelog](https://github.com/CrispStrobe/CrispDeck/commits/main) for details.
+            Full details in the [CHANGELOG](https://github.com/CrispStrobe/CrispDeck/blob/main/CHANGELOG.md).
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.tauri_args }}

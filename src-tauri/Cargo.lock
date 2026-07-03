@@ -742,7 +742,7 @@ source = "git+https://github.com/CrispStrobe/CrispASR#f35185b876fc482fcb2053a81a
 
 [[package]]
 name = "crispdeck"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "aes-gcm",
  "anyhow",

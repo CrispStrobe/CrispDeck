@@ -6,6 +6,7 @@ Works as a **web app** (Vercel), **desktop app** (Windows/macOS/Linux via Tauri 
 
 **Live**: https://crispdeck.vercel.app
 **Repo**: https://github.com/CrispStrobe/CrispDeck
+**Changelog**: [CHANGELOG.md](CHANGELOG.md)
 
 Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/) + [Svelte 5](https://svelte.dev/) + [Rust](https://www.rust-lang.org/) + [CrispASR](https://github.com/CrispStrobe/CrispASR) (optional, for local translation/TTS/STT).
 
@@ -169,7 +170,7 @@ Threads users' posts can also be read via **Mastodon federation** (`@user@thread
 - **HTML sanitization**: DOMPurify on all Mastodon HTML (XSS prevention)
 - **Security headers**: CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy
 - **Encryption**: AES-256-GCM with 600k PBKDF2 iterations + per-device random salt
-- 1052 unit tests across 77 test files + 28 Playwright E2E tests
+- 1,177 unit tests across 86 test files + 29 Playwright E2E tests
 
 ## Architecture
 
@@ -272,9 +273,9 @@ npx vercel deploy --prod
 ### Run tests
 
 ```bash
-npm test              # 947 frontend unit tests
+npm test              # 1,177 frontend unit tests
 npm run test:watch    # watch mode
-npm run test:e2e      # 28 Playwright E2E browser tests (requires build first)
+npm run test:e2e      # 29 Playwright E2E browser tests (requires build first)
 
 # Rust tests (requires CrispASR sibling checkout for --features crispasr)
 cd src-tauri
@@ -351,16 +352,17 @@ scripts/
 
 ## CI/CD
 
-- **CI** (`ci.yml`): 947 frontend tests + frontend build + Rust check on Linux/macOS/Windows — every push and PR
+- **CI** (`ci.yml`): 1,177 frontend tests + frontend build + Playwright E2E + Rust check on Linux/macOS/Windows — every push and PR
 - **Mobile** (`mobile.yml`): iOS + Android builds via Tauri 2 — triggers on `v*` tags
 - **Release** (`release.yml`): Cross-platform Tauri builds — triggers on `v*` tags, creates GitHub Releases with `.deb`, `.dmg`, `.msi`
 
 ### Creating a release
 
 ```bash
-# Bump version in package.json + src-tauri/tauri.conf.json + src-tauri/Cargo.toml
-git tag v1.0.0
-git push origin v1.0.0
+# Bump version in package.json + src-tauri/tauri.conf.json + src-tauri/Cargo.toml,
+# add a CHANGELOG.md section, update releaseBody in .github/workflows/release.yml
+git tag v1.1.0
+git push origin v1.1.0
 ```
 
 ### Mobile builds (Tauri 2)
@@ -377,7 +379,7 @@ OAuth on mobile uses the `crispdeck://` URL scheme (registered in AndroidManifes
 
 ## Stats
 
-- 1032 frontend unit tests + 28 Playwright E2E tests + 15 Rust tests
+- 1,177 frontend unit tests + 29 Playwright E2E tests + 15 Rust tests
 - 29 pages, 15 deck column types
 - 3 networks: Bluesky (OAuth + app password), Mastodon (OAuth), Threads (OAuth with server proxy)
 - 8 UI languages (EN, DE, ES, FR, JA, PT, ZH, AR — all 100%) with RTL support

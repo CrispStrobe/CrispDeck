@@ -13,7 +13,7 @@ A unified Mastodon + Bluesky + Threads social media client with:
 
 ## Current State (2026-07-03)
 
-v1.0.0 — 1196 unit tests + 28 Playwright E2E tests, 29 pages, live at https://crispdeck.vercel.app
+v1.1.0 — 1,177 unit tests + 29 Playwright E2E tests, 29 pages, CI fully green, live at https://crispdeck.vercel.app. Self-healing Bluesky OAuth sessions (restore by DID + silent re-auth) shipped July 2026; see CHANGELOG.md.
 
 **License**: AGPL-3.0-only
 

@@ -1,6 +1,6 @@
 {
   "name": "crispdeck",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Cross-platform Mastodon + Bluesky client with crossposting and identity mapping",
   "type": "module",
   "scripts": {

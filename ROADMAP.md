@@ -100,6 +100,20 @@
 - [x] Cargo-license fallback: Cargo.toml parser generates Rust dep licenses when cargo-license not installed (50 total: 12 NPM + 38 Rust)
 - [x] About page: source filter (All / NPM / Rust) for license browser
 
-## Done
+## Shipped in v1.1.0 (July 2026)
 
-All planned features shipped. 947 frontend + 15 Rust = 962 tests. v0.9.6, 8 languages at 100%, Vercel Blob feed generator, mobile compat.
+- [x] Sprint 1 — native feel: haptics, directional slide transitions, lightbox swipe, PWA shortcuts/share target, safe-area fixes; Threads like/repost/quote
+- [x] Sprint 2 — configurable sidebar + simple mode, Mastodon follow requests, Bluesky self-labels, pull-to-refresh
+- [x] Sprint 3 — Mastodon custom emoji, Bluesky server-synced muted words, like animation, shimmer skeletons, PWA badge
+- [x] Sprint 4 — Bluesky post gates, Mastodon server translation / edit history / announcements, dashboard progressive disclosure
+- [x] Sprint 5 — Bluesky profile-pinned posts, Mastodon list membership management
+- [x] Sprint 6 — Bluesky video upload pipeline, web push (VAPID + cron), Mastodon v2 filters, touch deck reorder, network-first onboarding, tabbed settings
+- [x] Performance phases 17–21 — parallelized APIs, SWR caching, IDB singletons, leak fixes, vendor chunk splitting, SW cache auto-versioning
+- [x] Reliability — self-healing Bluesky OAuth sessions (restore by DID, transient-error retries, silent re-auth), deck fixes for OAuth accounts, starter pack search on official API
+- [x] CI fully green — 1,177 frontend + 29 E2E + 15 Rust tests
+
+## Next (candidates)
+
+- [ ] Measure and tune post-media loading on the live deploy (eager vs. below-fold lazy)
+- [ ] Longer-lived OAuth sessions via a confidential-client backend (atproto `private_key_jwt`)
+- [ ] Threads home-timeline workarounds as the API evolves
