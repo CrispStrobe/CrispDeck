@@ -243,6 +243,7 @@
     const mastoEntry = allMasto[0]?.[1];
     const threadsEntry = allThreads[0]?.[1];
     const bskyClient = bskyEntry?.client as BlueskyClient | undefined;
+    const bskyAgent = bskyEntry?.oauthAgent ?? (bskyClient ? (() => { try { const a = bskyClient.getAgent(); return a?.session ? a : null; } catch { return null; } })() : null);
     const mastoClient = mastoEntry?.client as MastodonClient | undefined;
     const threadsClient = threadsEntry?.client as ThreadsClient | undefined;
     const bskyAcct = accounts.find(a => a.platform === 'bluesky');
@@ -254,8 +255,13 @@
         for (const [id, entry] of allBsky) {
           const acct = accounts.find(a => a.id === id);
           try {
-            const r = await (entry.client as BlueskyClient).getTimeline();
-            posts.push(...r.feed.map(p => ({ ...normalizePost(p, 'bluesky'), sourceAccount: acct?.handle })));
+            if (entry.oauthAgent) {
+              const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 50 });
+              posts.push(...r.data.feed.map(p => ({ ...normalizePost(p, 'bluesky'), sourceAccount: acct?.handle })));
+            } else {
+              const r = await (entry.client as BlueskyClient).getTimeline();
+              posts.push(...r.feed.map(p => ({ ...normalizePost(p, 'bluesky'), sourceAccount: acct?.handle })));
+            }
           } catch {}
         }
         for (const [id, entry] of allMasto) {
@@ -292,7 +298,12 @@
           } catch {}
         }
       } else if (col.type === 'mentions') {
-        if (bskyClient) try {
+        if (bskyAgent) try {
+          const r = await bskyAgent.api.app.bsky.notification.listNotifications({ limit: 50 });
+          for (const n of (r.data.notifications ?? []).filter(n => n.reason === 'mention' || n.reason === 'reply')) {
+            if ((n.record as any)?.text) posts.push({ uri: n.uri, text: (n.record as any).text, author: { handle: n.author.handle, displayName: n.author.displayName, avatar: n.author.avatar }, createdAt: n.indexedAt, platform: 'bluesky', isRepost: false, raw: n });
+          }
+        } catch {} else if (bskyClient) try {
           const { notifications } = await bskyClient.getNotifications();
           for (const n of notifications.filter(n => n.reason === 'mention' || n.reason === 'reply')) {
             if ((n.record as any)?.text) posts.push({ uri: n.uri, text: (n.record as any).text, author: { handle: n.author.handle, displayName: n.author.displayName, avatar: n.author.avatar }, createdAt: n.indexedAt, platform: 'bluesky', isRepost: false, raw: n });
@@ -308,7 +319,20 @@
       } else if (col.type === 'notifications') {
         // Fetch from both platforms and group
         const allNotifs: UnifiedNotification[] = [];
-        if (bskyClient) try {
+        if (bskyAgent) try {
+          const r = await bskyAgent.api.app.bsky.notification.listNotifications({ limit: 50 });
+          for (const n of r.data.notifications ?? []) {
+            allNotifs.push({
+              id: `bsky-${n.uri}`,
+              platform: 'bluesky',
+              type: n.reason,
+              createdAt: n.indexedAt,
+              author: { handle: n.author.handle, displayName: n.author.displayName, avatar: n.author.avatar },
+              text: (n.record as any)?.text,
+              postUri: n.reasonSubject,
+            });
+          }
+        } catch {} else if (bskyClient) try {
           const { notifications } = await bskyClient.getNotifications();
           for (const n of notifications) {
             allNotifs.push({
