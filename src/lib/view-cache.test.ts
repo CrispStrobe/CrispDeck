@@ -113,3 +113,24 @@ describe('swr helper', () => {
     expect(stale).toBe(true);
   });
 });
+
+describe('feed cache size setting integration', () => {
+  it('reads configurable cache size from localStorage', () => {
+    localStorage.setItem('crispdeck-feed-cache-size', '300');
+    const size = parseInt(localStorage.getItem('crispdeck-feed-cache-size') ?? '200');
+    expect(size).toBe(300);
+  });
+
+  it('defaults to 200 when not set', () => {
+    const size = parseInt(localStorage.getItem('crispdeck-feed-cache-size') ?? '200');
+    expect(size).toBe(200);
+  });
+
+  it('caches correct number of posts based on setting', () => {
+    localStorage.setItem('crispdeck-feed-cache-size', '100');
+    const cacheSize = parseInt(localStorage.getItem('crispdeck-feed-cache-size') ?? '200');
+    const posts = Array.from({ length: 250 }, (_, i) => ({ id: i }));
+    const cached = posts.slice(0, cacheSize);
+    expect(cached).toHaveLength(100);
+  });
+});

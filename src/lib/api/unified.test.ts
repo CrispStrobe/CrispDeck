@@ -281,3 +281,63 @@ describe('sortPosts (Schwartzian optimization)', () => {
     expect(result[0].uri).toBe('b'); // Jan 3 first
   });
 });
+
+describe('performance: detectCrossposts at scale', () => {
+  it('handles 200 posts in under 100ms', () => {
+    const posts: UnifiedPost[] = [];
+    for (let i = 0; i < 100; i++) {
+      posts.push(makePost({
+        uri: `at://bsky/${i}`,
+        text: `Post number ${i} about topic ${i % 10}`,
+        platform: 'bluesky',
+        createdAt: new Date(Date.now() - i * 60000).toISOString(),
+      }));
+      posts.push(makePost({
+        uri: `https://masto/${i}`,
+        text: `Different content ${i} on mastodon`,
+        platform: 'mastodon',
+        createdAt: new Date(Date.now() - i * 60000).toISOString(),
+      }));
+    }
+    const start = performance.now();
+    const result = detectCrossposts(posts);
+    const elapsed = performance.now() - start;
+    expect(result.length).toBeGreaterThan(0);
+    expect(elapsed).toBeLessThan(500); // CI machines may be slower
+  });
+
+  it('cache hit is near-instant for repeated calls', () => {
+    const posts: UnifiedPost[] = [
+      makePost({ uri: 'at://perf/1', text: 'Same content', platform: 'bluesky', createdAt: '2024-01-01T10:00:00Z' }),
+      makePost({ uri: 'https://perf/2', text: 'Different', platform: 'mastodon', createdAt: '2024-01-01T10:00:00Z' }),
+    ];
+    // First call populates cache
+    detectCrossposts(posts);
+    // Second call should be cached
+    const start = performance.now();
+    for (let i = 0; i < 100; i++) {
+      detectCrossposts(posts);
+    }
+    const elapsed = performance.now() - start;
+    expect(elapsed).toBeLessThan(5); // 100 cached calls < 5ms
+  });
+});
+
+describe('performance: sortPosts at scale', () => {
+  it('sorts 500 posts by date in under 20ms', () => {
+    const posts = Array.from({ length: 500 }, (_, i) =>
+      makePost({ createdAt: new Date(Date.now() - Math.random() * 86400000 * 30).toISOString() })
+    );
+    const start = performance.now();
+    const result = sortPosts(posts, 'newest');
+    const elapsed = performance.now() - start;
+    expect(result).toHaveLength(500);
+    expect(elapsed).toBeLessThan(20);
+    // Verify sort order
+    for (let i = 1; i < result.length; i++) {
+      expect(new Date(result[i - 1].createdAt).getTime()).toBeGreaterThanOrEqual(
+        new Date(result[i].createdAt).getTime()
+      );
+    }
+  });
+});

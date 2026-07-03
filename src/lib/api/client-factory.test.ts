@@ -128,4 +128,10 @@ describe('invalidateClientCache', () => {
     invalidateClientCache();
     // No error = success
   });
+
+  it('is exported alongside initAllClients', async () => {
+    const mod = await import('./client-factory');
+    expect(typeof mod.initAllClients).toBe('function');
+    expect(typeof mod.invalidateClientCache).toBe('function');
+  });
 });

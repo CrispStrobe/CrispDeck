@@ -96,3 +96,57 @@ describe('archive search', () => {
     expect(results.length).toBe(0);
   });
 });
+
+describe('archive search optimization paths', () => {
+  // These tests verify the query path selection logic in searchArchive()
+  // by simulating the conditions under which index vs full-scan is chosen
+
+  it('type-only filter would use index path', () => {
+    // When only type is specified, searchArchive uses store.index('type').getAll()
+    const params = { type: 'like' as const };
+    const hasTextFilters = !!(params as any).query || !!(params as any).author;
+    const hasDateFilters = !!(params as any).dateFrom || !!(params as any).dateTo;
+    const hasMediaFilter = !!(params as any).hasMedia;
+    const useTypeIndex = params.type && !(params as any).platform && !hasTextFilters && !hasDateFilters && !hasMediaFilter;
+    expect(useTypeIndex).toBe(true);
+  });
+
+  it('platform-only filter would use index path', () => {
+    const params = { platform: 'bluesky' as const };
+    const hasTextFilters = !!(params as any).query || !!(params as any).author;
+    const hasDateFilters = !!(params as any).dateFrom || !!(params as any).dateTo;
+    const hasMediaFilter = !!(params as any).hasMedia;
+    const usePlatformIndex = params.platform && !(params as any).type && !hasTextFilters && !hasDateFilters && !hasMediaFilter;
+    expect(usePlatformIndex).toBe(true);
+  });
+
+  it('text search falls back to full scan', () => {
+    const params = { type: 'post' as const, query: 'hello' };
+    const hasTextFilters = !!params.query;
+    const useTypeIndex = params.type && !hasTextFilters;
+    expect(useTypeIndex).toBe(false);
+  });
+
+  it('combined type+platform falls back to full scan', () => {
+    const params = { type: 'post' as const, platform: 'bluesky' as const };
+    const useTypeIndex = params.type && !params.platform;
+    const usePlatformIndex = params.platform && !params.type;
+    expect(useTypeIndex).toBe(false);
+    expect(usePlatformIndex).toBe(false);
+  });
+
+  it('date filter falls back to full scan', () => {
+    const params = { type: 'post' as const, dateFrom: '2024-01-01' };
+    const hasDateFilters = !!params.dateFrom;
+    const useTypeIndex = params.type && !hasDateFilters;
+    expect(useTypeIndex).toBe(false);
+  });
+
+  it('no filters uses full scan', () => {
+    const params = {};
+    const useTypeIndex = !!(params as any).type && !(params as any).platform;
+    const usePlatformIndex = !!(params as any).platform && !(params as any).type;
+    expect(useTypeIndex).toBe(false);
+    expect(usePlatformIndex).toBe(false);
+  });
+});

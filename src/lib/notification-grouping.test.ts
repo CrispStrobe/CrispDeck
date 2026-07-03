@@ -194,5 +194,43 @@ describe('notification-grouping', () => {
       const groups = groupNotifications(notifs);
       expect(groups[0].text).toBe('Hello world');
     });
+
+    it('Set-based dedup is O(1) per actor check', () => {
+      // With 100 duplicate actors, should still be fast
+      const postUri = 'at://post/dedup-perf';
+      const notifs = Array.from({ length: 100 }, (_, i) =>
+        makeNotif({ id: `dup-${i}`, author: { handle: 'same-actor' }, postUri })
+      );
+      const start = performance.now();
+      const groups = groupNotifications(notifs);
+      const elapsed = performance.now() - start;
+      expect(groups).toHaveLength(1);
+      expect(groups[0].actors).toHaveLength(1); // all deduped to 1
+      expect(elapsed).toBeLessThan(50); // should be instant
+    });
+
+    it('handles cross-platform actor dedup correctly', () => {
+      const postUri = 'at://post/cross-plat';
+      const notifs = [
+        makeNotif({ id: '1', platform: 'bluesky', author: { handle: 'alice' }, postUri }),
+        makeNotif({ id: '2', platform: 'mastodon', type: 'favourite', author: { handle: 'alice' }, postUri }),
+      ];
+      const groups = groupNotifications(notifs);
+      // Same handle but different platform = 2 separate actors
+      expect(groups[0].actors).toHaveLength(2);
+    });
+
+    it('scales to many unique actors without performance degradation', () => {
+      const postUri = 'at://post/scale';
+      const notifs = Array.from({ length: 500 }, (_, i) =>
+        makeNotif({ id: `scale-${i}`, author: { handle: `user-${i}` }, postUri })
+      );
+      const start = performance.now();
+      const groups = groupNotifications(notifs);
+      const elapsed = performance.now() - start;
+      expect(groups).toHaveLength(1);
+      expect(groups[0].actors).toHaveLength(500);
+      expect(elapsed).toBeLessThan(100);
+    });
   });
 });
