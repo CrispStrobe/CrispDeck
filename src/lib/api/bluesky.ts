@@ -222,4 +222,35 @@ export class BlueskyClient {
   }
 
   getHandle() { return this.handle; }
+
+  /** Pin a post to your Bluesky profile (visible to all users) */
+  async pinToProfile(postUri: string): Promise<void> {
+    const agent = this.authAgent;
+    const did = agent.session!.did;
+    // Fetch current profile record to preserve other fields
+    const { data } = await agent.api.com.atproto.repo.getRecord({
+      repo: did, collection: 'app.bsky.actor.profile', rkey: 'self',
+    });
+    const record = (data.value ?? {}) as Record<string, unknown>;
+    record.pinnedPost = { uri: postUri };
+    await agent.api.com.atproto.repo.putRecord({
+      repo: did, collection: 'app.bsky.actor.profile', rkey: 'self',
+      record: { ...record, $type: 'app.bsky.actor.profile' },
+    });
+  }
+
+  /** Unpin profile post */
+  async unpinFromProfile(): Promise<void> {
+    const agent = this.authAgent;
+    const did = agent.session!.did;
+    const { data } = await agent.api.com.atproto.repo.getRecord({
+      repo: did, collection: 'app.bsky.actor.profile', rkey: 'self',
+    });
+    const record = (data.value ?? {}) as Record<string, unknown>;
+    delete record.pinnedPost;
+    await agent.api.com.atproto.repo.putRecord({
+      repo: did, collection: 'app.bsky.actor.profile', rkey: 'self',
+      record: { ...record, $type: 'app.bsky.actor.profile' },
+    });
+  }
 }

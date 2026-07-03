@@ -132,6 +132,40 @@ export class MastodonClient {
   async reblog(statusId: string) { return this.authedPost(`/api/v1/statuses/${statusId}/reblog`); }
   async unreblog(statusId: string) { return this.authedPost(`/api/v1/statuses/${statusId}/unreblog`); }
 
+  // List membership management
+  async getLists(): Promise<any[]> {
+    if (!this.accessToken) return [];
+    const resp = await fetch(`${this.instanceUrl}/api/v1/lists`, {
+      headers: { Authorization: `Bearer ${this.accessToken}` },
+    });
+    if (!resp.ok) return [];
+    return resp.json();
+  }
+  async getListAccounts(listId: string): Promise<any[]> {
+    if (!this.accessToken) return [];
+    const resp = await fetch(`${this.instanceUrl}/api/v1/lists/${listId}/accounts`, {
+      headers: { Authorization: `Bearer ${this.accessToken}` },
+    });
+    if (!resp.ok) return [];
+    return resp.json();
+  }
+  async addToList(listId: string, accountIds: string[]): Promise<void> {
+    if (!this.accessToken) return;
+    await fetch(`${this.instanceUrl}/api/v1/lists/${listId}/accounts`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${this.accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account_ids: accountIds }),
+    });
+  }
+  async removeFromList(listId: string, accountIds: string[]): Promise<void> {
+    if (!this.accessToken) return;
+    await fetch(`${this.instanceUrl}/api/v1/lists/${listId}/accounts`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${this.accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account_ids: accountIds }),
+    });
+  }
+
   // Announcements
   async getAnnouncements(): Promise<any[]> {
     if (!this.accessToken) return [];

@@ -347,3 +347,46 @@ describe('normalizePost — timestamp ordering invariants', () => {
     expect(posts[3].isRepost).toBe(false); // Regular Bluesky
   });
 });
+
+// ── Mastodon custom emoji ───────────────────────────────────────────────
+
+describe('Mastodon custom emoji in normalizePost', () => {
+  it('populates emojis array from status emojis', () => {
+    const post = makeMastoPost({
+      emojis: [
+        { shortcode: 'blobcat', url: 'https://mastodon.social/emoji/blobcat.png', static_url: 'https://mastodon.social/emoji/blobcat_static.png' },
+        { shortcode: 'fire', url: 'https://mastodon.social/emoji/fire.gif' },
+      ],
+    });
+    const result = normalizePost(post as any, 'mastodon');
+    expect(result.emojis).toHaveLength(2);
+    expect(result.emojis![0].shortcode).toBe('blobcat');
+    expect(result.emojis![0].url).toBe('https://mastodon.social/emoji/blobcat.png');
+    expect(result.emojis![1].shortcode).toBe('fire');
+  });
+
+  it('handles posts with no emojis', () => {
+    const post = makeMastoPost();
+    const result = normalizePost(post as any, 'mastodon');
+    expect(result.emojis).toBeUndefined();
+  });
+
+  it('handles posts with empty emojis array', () => {
+    const post = makeMastoPost({ emojis: [] });
+    const result = normalizePost(post as any, 'mastodon');
+    expect(result.emojis).toHaveLength(0);
+  });
+});
+
+// ── Bluesky self-labeling ───────────────────────────────────────────────
+
+describe('Bluesky posts preserve labels', () => {
+  it('normalizes posts with labels in raw data', () => {
+    const post = makeBskyPost();
+    (post.post as any).labels = [{ val: 'nudity', neg: false }];
+    const result = normalizePost(post as any, 'bluesky');
+    expect(result.raw).toBeDefined();
+    const raw = result.raw as any;
+    expect(raw.post.labels[0].val).toBe('nudity');
+  });
+});

@@ -211,4 +211,71 @@ describe('ThreadsClient API methods', () => {
       await expect(client.getOwnPosts()).rejects.toThrow('Threads API error');
     });
   });
+
+  describe('like', () => {
+    it('posts to /{userId}/likes with media_id', async () => {
+      const fetchMock = mockFetch({ success: true });
+      vi.stubGlobal('fetch', fetchMock);
+      const client = new ThreadsClient(TOKEN, USER_ID);
+      await client.like('media-123');
+      expect(fetchMock).toHaveBeenCalled();
+      const body = fetchMock.mock.calls[0][1].body;
+      expect(body.toString()).toContain('media_id=media-123');
+    });
+  });
+
+  describe('unlike', () => {
+    it('sends DELETE to /{userId}/likes', async () => {
+      const fetchMock = mockFetch({ success: true });
+      vi.stubGlobal('fetch', fetchMock);
+      const client = new ThreadsClient(TOKEN, USER_ID);
+      await client.unlike('media-123');
+      expect(fetchMock.mock.calls[0][1].method).toBe('DELETE');
+    });
+
+    it('throws on error response', async () => {
+      vi.stubGlobal('fetch', mockFetch({ error: { message: 'Not found' } }, false, 404));
+      const client = new ThreadsClient(TOKEN, USER_ID);
+      await expect(client.unlike('bad-id')).rejects.toThrow('Not found');
+    });
+  });
+
+  describe('repost', () => {
+    it('creates container then publishes', async () => {
+      let callCount = 0;
+      const fetchMock = vi.fn().mockImplementation(() => {
+        callCount++;
+        return Promise.resolve({
+          ok: true, status: 200, statusText: 'OK',
+          json: () => Promise.resolve(callCount === 1 ? { id: 'container-1' } : { id: 'published-1' }),
+        });
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      const client = new ThreadsClient(TOKEN, USER_ID);
+      const result = await client.repost('media-456');
+      expect(result.id).toBe('published-1');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('quote', () => {
+    it('creates container with quote_post_id then publishes', async () => {
+      let callCount = 0;
+      const fetchMock = vi.fn().mockImplementation(() => {
+        callCount++;
+        return Promise.resolve({
+          ok: true, status: 200, statusText: 'OK',
+          json: () => Promise.resolve(callCount === 1 ? { id: 'container-q' } : { id: 'published-q' }),
+        });
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      const client = new ThreadsClient(TOKEN, USER_ID);
+      const result = await client.quote('media-789', 'Great post!');
+      expect(result.id).toBe('published-q');
+      // First call should include quote_post_id and text
+      const firstBody = fetchMock.mock.calls[0][1].body;
+      expect(firstBody.toString()).toContain('quote_post_id=media-789');
+      expect(firstBody.toString()).toContain('text=Great+post');
+    });
+  });
 });

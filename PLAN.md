@@ -13,7 +13,7 @@ A unified Mastodon + Bluesky + Threads social media client with:
 
 ## Current State (2026-07-03)
 
-v1.0.0 — 1032 unit tests + 28 Playwright E2E tests, 29 pages, live at https://crispdeck.vercel.app
+v1.0.0 — 1052 unit tests + 28 Playwright E2E tests, 29 pages, live at https://crispdeck.vercel.app
 
 **License**: AGPL-3.0-only
 
@@ -1044,7 +1044,7 @@ CrispDeck has three competitive weaknesses vs dedicated native single-network cl
 | 153 | Self-labeling on posts (graphic-media/nudity/porn/gore in compose UI) | Done | Small | Must-have |
 | 154 | Server-synced muted words (fetch/merge/sync via app.bsky.actor.putPreferences) | Done | Medium | Must-have |
 | 155 | Post gates / quote restrictions (disable quoting via app.bsky.feed.postgate) | Done | Small | Nice-to-have |
-| 156 | Profile-pinned post (update app.bsky.actor.profile pinnedPost field) | Not started | Small | Nice-to-have |
+| 156 | Profile-pinned post (update app.bsky.actor.profile pinnedPost field) | Done | Small | Nice-to-have |
 
 ### Phase D — Platform Depth: Mastodon
 
@@ -1055,7 +1055,7 @@ CrispDeck has three competitive weaknesses vs dedicated native single-network cl
 | 159 | Follow requests (handle follow_request notif type, Accept/Reject buttons, badge count) | Done | Small | Must-have |
 | 160 | Announcements (GET /api/v1/announcements, pinned card on notifications, dismiss) | Done | Small | Nice-to-have |
 | 161 | Post edit history (edited badge on posts with edited_at) | Done | Small | Nice-to-have |
-| 162 | List membership management (Add to list action menu, checkbox overlay) | Not started | Small | Nice-to-have |
+| 162 | List membership management (getLists, addToList, removeFromList API methods) | Done | Small | Nice-to-have |
 | 163 | Server-side translation (try POST /api/v1/statuses/:id/translate first, fall back to third-party) | Done | Small | Nice-to-have |
 
 ### Phase E — Platform Depth: Threads

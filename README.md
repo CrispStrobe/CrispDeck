@@ -26,6 +26,8 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **Mastodon follow requests**: Accept/Reject buttons on notification cards for locked accounts
 - **Bluesky muted words sync**: server-side muted words synced from Bluesky preferences
 - **Bluesky post gates**: disable quoting on individual posts via `app.bsky.feed.postgate`
+- **Bluesky profile pin**: pin a post to your profile (visible to all users via `app.bsky.actor.profile`)
+- **Mastodon list management**: getLists, addToList, removeFromList API methods for list membership
 - **Mastodon announcements**: instance announcements shown as pinned cards on notifications page with dismiss
 - **Mastodon edit history**: "(edited)" badge on modified posts with timestamp
 - **Mastodon server-side translation**: tries instance translation first (free, private), falls back to third-party
@@ -167,7 +169,7 @@ Threads users' posts can also be read via **Mastodon federation** (`@user@thread
 - **HTML sanitization**: DOMPurify on all Mastodon HTML (XSS prevention)
 - **Security headers**: CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy
 - **Encryption**: AES-256-GCM with 600k PBKDF2 iterations + per-device random salt
-- 1032 unit tests across 77 test files + 28 Playwright E2E tests
+- 1052 unit tests across 77 test files + 28 Playwright E2E tests
 
 ## Architecture
 
