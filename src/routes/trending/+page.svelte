@@ -5,6 +5,7 @@
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import { normalizePost, sortPosts } from '$lib/api/unified';
+  import { getCached, setCache, isStale } from '$lib/view-cache';
   import Post from '$lib/components/Post.svelte';
   import type { Account, UnifiedPost } from '$lib/types';
 
@@ -37,7 +38,24 @@
     return latin.length > text.length * 0.4;
   }
 
+  const TRENDING_TTL = 10 * 60 * 1000; // 10 minutes
+
   onMount(async () => {
+    // Show cached trending data instantly
+    const cached = getCached<{ bskyTopics: BskyTrendingTopic[]; tags: TrendingTag[]; links: TrendingLink[]; trendingPosts: UnifiedPost[] }>('trending');
+    if (cached) {
+      bskyTopics = cached.data.bskyTopics ?? [];
+      tags = cached.data.tags ?? [];
+      links = cached.data.links ?? [];
+      trendingPosts = cached.data.trendingPosts ?? [];
+      hasBsky = bskyTopics.length > 0;
+      hasMasto = tags.length > 0 || links.length > 0;
+      if (!hasBsky && hasMasto) activeTab = 'tags';
+      else activeTab = 'combined';
+      if (!isStale(cached, TRENDING_TTL)) { loading = false; return; }
+      loading = false; // Show cached while refreshing
+    }
+
     try {
       const result = await initAllClients();
       clientEntries = result.clients;
@@ -50,7 +68,9 @@
         mastoClient ? loadMastoTrending(mastoClient).then(() => { hasMasto = true; }) : Promise.resolve(),
       ]);
 
-      // Default tab: combined if both available
+      // Cache the results
+      setCache('trending', { bskyTopics, tags, links, trendingPosts });
+
       if (!hasBsky && hasMasto) activeTab = 'tags';
       else activeTab = 'combined';
     } catch (e) {

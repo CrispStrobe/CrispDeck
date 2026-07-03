@@ -6,6 +6,7 @@
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import { normalizePost, sortPosts } from '$lib/api/unified';
+  import { getCached, setCache, isStale } from '$lib/view-cache';
   import Post from '$lib/components/Post.svelte';
   import type { UnifiedPost, Account, Platform } from '$lib/types';
 
@@ -39,11 +40,22 @@
       return;
     }
 
+    // Show cached profile instantly while refreshing
+    const cacheKey = `profile-${platform}-${handle}`;
+    const cached = getCached<{ profile: any; posts: UnifiedPost[] }>(cacheKey);
+    if (cached) {
+      profile = cached.data.profile;
+      posts = cached.data.posts;
+      if (!isStale(cached, 5 * 60 * 1000)) { loading = false; return; }
+      loading = false; // show cached while refreshing
+    }
+
     try {
       const result = await initAllClients();
       accounts = result.accounts;
       clientEntries = result.clients;
       await loadProfile();
+      setCache(cacheKey, { profile, posts });
     } catch (e) {
       error = String(e);
     } finally {
