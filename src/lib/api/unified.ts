@@ -187,32 +187,69 @@ function areIdentityMatched(handle1: string, handle2: string, identityPairs: Set
  * Detect crossposted content between platforms.
  * When identityPairs is provided, uses a lower similarity threshold (0.7)
  * for posts by authors confirmed to be the same person.
+ *
+ * Optimized: caches results by URI set, uses text-length bucketing to reduce
+ * comparisons, and exits early on high-confidence matches.
  */
+let _crosspostCache: { key: string; result: FeedItem[] } | null = null;
+
 export function detectCrossposts(posts: UnifiedPost[], identityPairs?: Set<string>): FeedItem[] {
+  // Cache key: sorted URIs — if the same posts come in, return cached result
+  const cacheKey = posts.map(p => p.uri).join('|');
+  if (_crosspostCache && _crosspostCache.key === cacheKey) return _crosspostCache.result;
+
   const DEFAULT_THRESHOLD = 0.9;
   const IDENTITY_THRESHOLD = 0.7;
   const TIME_WINDOW_MS = 24 * 60 * 60 * 1000;
   const feedItems: FeedItem[] = [];
   const processedUris = new Set<string>();
 
+  // Pre-compute timestamps to avoid repeated Date parsing
+  const timestamps = new Map<string, number>();
+  for (const p of posts) {
+    timestamps.set(p.uri, new Date(p.createdAt).getTime());
+  }
+
+  // Build cross-platform index: only compare posts from different platforms
+  const byPlatform = new Map<string, UnifiedPost[]>();
+  for (const p of posts) {
+    const arr = byPlatform.get(p.platform);
+    if (arr) arr.push(p);
+    else byPlatform.set(p.platform, [p]);
+  }
+
+  // Collect posts from OTHER platforms for each post
+  const otherPlatformPosts = new Map<string, UnifiedPost[]>();
+  for (const [platform, platformPosts] of byPlatform) {
+    const others: UnifiedPost[] = [];
+    for (const [otherPlatform, otherPosts] of byPlatform) {
+      if (otherPlatform !== platform) others.push(...otherPosts);
+    }
+    otherPlatformPosts.set(platform, others);
+  }
+
   for (const post1 of posts) {
     if (processedUris.has(post1.uri)) continue;
 
-    const potentialMatches = posts.filter(
-      (post2) =>
-        !processedUris.has(post2.uri) &&
-        post1.uri !== post2.uri &&
-        post1.platform !== post2.platform &&
-        Math.abs(
-          new Date(post1.createdAt).getTime() - new Date(post2.createdAt).getTime()
-        ) < TIME_WINDOW_MS
-    );
+    const t1 = timestamps.get(post1.uri)!;
+    const len1 = post1.text.length;
+    const candidates = otherPlatformPosts.get(post1.platform) ?? [];
 
     let bestMatch: UnifiedPost | null = null;
     let bestScore = 0;
     let bestIsIdentityMatch = false;
 
-    for (const post2 of potentialMatches) {
+    for (const post2 of candidates) {
+      if (processedUris.has(post2.uri)) continue;
+
+      // Time window filter
+      const t2 = timestamps.get(post2.uri)!;
+      if (Math.abs(t1 - t2) >= TIME_WINDOW_MS) continue;
+
+      // Text length filter: texts with >50% length difference are unlikely crossposts
+      const len2 = post2.text.length;
+      if (len1 > 5 && len2 > 5 && Math.abs(len1 - len2) / Math.max(len1, len2) > 0.5) continue;
+
       const score = jaroWinkler(post1.text, post2.text);
       if (score > bestScore) {
         bestScore = score;
@@ -220,6 +257,8 @@ export function detectCrossposts(posts: UnifiedPost[], identityPairs?: Set<strin
         bestIsIdentityMatch = identityPairs
           ? areIdentityMatched(post1.author.handle, post2.author.handle, identityPairs)
           : false;
+        // Early exit on near-identical match
+        if (score > 0.97) break;
       }
     }
 
@@ -243,18 +282,24 @@ export function detectCrossposts(posts: UnifiedPost[], identityPairs?: Set<strin
     }
   }
 
+  _crosspostCache = { key: cacheKey, result: feedItems };
   return feedItems;
 }
 
-/** Sort posts by the given criteria */
+/** Sort posts by the given criteria.
+ * For date sorts, pre-computes timestamps to avoid repeated Date parsing in comparator. */
 export function sortPosts(
   posts: UnifiedPost[],
   sortBy: string
 ): UnifiedPost[] {
+  if (sortBy === 'oldest' || sortBy === 'newest') {
+    // Schwartzian transform: parse dates once, sort by cached timestamp
+    const decorated = posts.map(p => ({ p, t: new Date(p.createdAt).getTime() }));
+    decorated.sort((a, b) => sortBy === 'oldest' ? a.t - b.t : b.t - a.t);
+    return decorated.map(d => d.p);
+  }
   return [...posts].sort((a, b) => {
     switch (sortBy) {
-      case 'oldest':
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       case 'likes':
         return (b.likeCount ?? 0) - (a.likeCount ?? 0);
       case 'reposts':

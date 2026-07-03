@@ -70,15 +70,29 @@ export function scoreForYou(
 /**
  * Rank posts for "For You" feed.
  * Filters out reposts and sorts by personalized score.
+ * Optimized: pre-computes timestamps to avoid repeated Date parsing.
  */
 export function rankForYou(
   posts: UnifiedPost[],
   affinityMap: Map<string, number>,
 ): UnifiedPost[] {
   const now = Date.now();
-  return posts
-    .filter(p => !p.isRepost)
-    .map(p => ({ post: p, score: scoreForYou(p, affinityMap, now) }))
-    .sort((a, b) => b.score - a.score)
-    .map(({ post }) => post);
+  const filtered = posts.filter(p => !p.isRepost);
+
+  // Pre-compute timestamps and handle lookups to avoid repeated work in scoring
+  const scored = filtered.map(p => {
+    const handle = p.author.handle.toLowerCase();
+    const affinity = affinityMap.get(handle) ?? 0;
+    const engagement = Math.min(
+      (p.likeCount ?? 0) * 1 + (p.repostCount ?? 0) * 2 + (p.replyCount ?? 0) * 1.5,
+      100
+    );
+    const ageMs = now - new Date(p.createdAt).getTime();
+    const recency = Math.pow(0.5, ageMs / (1000 * 60 * 60 * 6));
+    const score = (affinity * 10 + engagement) * recency;
+    return { post: p, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.map(({ post }) => post);
 }

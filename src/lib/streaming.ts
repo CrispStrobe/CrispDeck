@@ -266,9 +266,12 @@ class StreamManager {
   private blueskyStream: BlueskyStream | null = null;
   private blueskyFirehose: BlueskyStream | null = null; // Separate unfiltered stream for keyword monitoring
   private columnListeners = new Map<string, () => void>(); // cleanup fns
+  private visibilityHandler: (() => void) | null = null;
+  private wasConnected = false; // track if we were streaming before hiding
 
   /** Enable streaming for a deck column */
   enableColumn(config: ColumnStreamConfig, listener: StreamListener): () => void {
+    this.ensureVisibilityHandler();
     const taggedListener: StreamListener = (event) => {
       listener({ ...event, columnId: config.columnId });
     };
@@ -348,6 +351,30 @@ class StreamManager {
     this.blueskyFirehose?.disconnect();
     this.blueskyFirehose = null;
     this.columnListeners.clear();
+    if (this.visibilityHandler) {
+      document.removeEventListener('visibilitychange', this.visibilityHandler);
+      this.visibilityHandler = null;
+    }
+  }
+
+  /** Install visibility handler to pause/resume streams when tab hidden/visible */
+  private ensureVisibilityHandler() {
+    if (this.visibilityHandler || typeof document === 'undefined') return;
+    this.visibilityHandler = () => {
+      if (document.hidden) {
+        // Pause all streams to save bandwidth
+        this.wasConnected = this.columnListeners.size > 0;
+        for (const [, stream] of this.mastodonStreams) stream.setEnabled(false);
+        this.blueskyStream?.setEnabled(false);
+        this.blueskyFirehose?.setEnabled(false);
+      } else if (this.wasConnected) {
+        // Resume streams when tab becomes visible
+        for (const [, stream] of this.mastodonStreams) stream.setEnabled(true);
+        this.blueskyStream?.setEnabled(true);
+        this.blueskyFirehose?.setEnabled(true);
+      }
+    };
+    document.addEventListener('visibilitychange', this.visibilityHandler);
   }
 
   /** Check if a column is streaming */

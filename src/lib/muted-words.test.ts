@@ -118,6 +118,40 @@ describe('muted words', () => {
     });
   });
 
+  describe('buildMuteFilter caching', () => {
+    it('returns cached filter for identical word lists', () => {
+      const words = [createMutedWord('spam')];
+      const filter1 = buildMuteFilter(words);
+      const filter2 = buildMuteFilter(words);
+      // Same function reference = cache hit
+      expect(filter1).toBe(filter2);
+    });
+
+    it('recomputes filter when words change', () => {
+      const words1 = [createMutedWord('spam')];
+      const filter1 = buildMuteFilter(words1);
+
+      const words2 = [createMutedWord('crypto')];
+      const filter2 = buildMuteFilter(words2);
+
+      expect(filter1).not.toBe(filter2);
+      expect(filter1('spam alert')).toBe(true);
+      expect(filter2('crypto scam')).toBe(true);
+    });
+
+    it('invalidates cache when word value changes', () => {
+      const word = createMutedWord('old-value');
+      const filter1 = buildMuteFilter([word]);
+
+      const updated = { ...word, value: 'new-value' };
+      const filter2 = buildMuteFilter([updated]);
+
+      expect(filter1).not.toBe(filter2);
+      expect(filter2('new-value content')).toBe(true);
+      expect(filter2('old-value content')).toBe(false);
+    });
+  });
+
   describe('applyMuteFilter', () => {
     it('filters posts by muted words', () => {
       const posts = [

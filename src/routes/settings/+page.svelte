@@ -7,6 +7,7 @@
   } from '$lib/db';
   import { Settings, Plus, Trash2, Star, ExternalLink, Loader2, Shield, Download, Upload, EyeOff } from '@lucide/svelte';
   import { startBlueskyOAuth } from '$lib/api/bluesky-oauth';
+  import { invalidateClientCache } from '$lib/api/client-factory';
   import { i18n, type Language } from '$lib/i18n.svelte';
   import { requestPermission, getPermission, isSupported as notifSupported } from '$lib/push-notifications';
   import { getTranslateConfig, setTranslateConfig, type TranslateProvider } from '$lib/translate';
@@ -169,6 +170,7 @@
   let compactPosts = $state(localStorage.getItem('crispdeck-compact-posts') === 'true');
   let mediaPreview = $state<'lightbox' | 'browser'>((localStorage.getItem('crispdeck-media-preview') as 'lightbox' | 'browser') || 'lightbox');
   let liveCounters = $state(localStorage.getItem('crispdeck-live-counters') === 'true');
+  let feedCacheSize = $state(parseInt(localStorage.getItem('crispdeck-feed-cache-size') ?? '200'));
 
   // Display settings
   type FontFamily = 'system' | 'inter' | 'georgia' | 'mono';
@@ -358,6 +360,7 @@
       bskyHandle = '';
       bskyAppPassword = '';
       showBskyForm = false;
+      invalidateClientCache();
       await loadAccounts();
     } catch (e) {
       error = String(e);
@@ -398,6 +401,7 @@
   async function removeAccount(id: number) {
     try {
       await dbDeleteAccount(id);
+      invalidateClientCache();
       await loadAccounts();
     } catch (e) {
       error = String(e);
@@ -504,6 +508,7 @@
         is_primary: false,
       });
 
+      invalidateClientCache();
       accounts = await listAccounts();
       showThreadsForm = false;
       threadsManualToken = '';
@@ -1128,6 +1133,17 @@
       <!-- Cache management -->
       <div class="border-t border-[var(--color-border)] pt-3 mt-3">
         <h3 class="text-sm font-medium mb-2">Cache & Storage</h3>
+
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <label for="feed-cache-size" class="text-xs text-[var(--color-text-muted)]">Feed cache size: {feedCacheSize} posts</label>
+            <p class="text-[10px] text-[var(--color-text-muted)]">Posts cached for instant display on page revisit</p>
+          </div>
+          <input id="feed-cache-size" type="range" min="50" max="500" step="50" bind:value={feedCacheSize}
+            oninput={() => localStorage.setItem('crispdeck-feed-cache-size', String(feedCacheSize))}
+            class="w-28 accent-[var(--color-primary)]" />
+        </div>
+
         <div class="text-[10px] text-[var(--color-text-muted)] space-y-1 mb-2">
           <p>localStorage: {formatBytes(cacheStats.localStorage * 2)}</p>
           {#if cacheStats.indexedDB}<p>IndexedDB (archive, bookmarks, translations): {cacheStats.indexedDB}</p>{/if}

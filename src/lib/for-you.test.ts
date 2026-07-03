@@ -120,4 +120,42 @@ describe('rankForYou', () => {
     const result = rankForYou(posts, new Map());
     expect(result).toHaveLength(10);
   });
+
+  it('handles large post arrays efficiently', () => {
+    const posts = Array.from({ length: 500 }, (_, i) =>
+      makePost({
+        uri: `post-${i}`,
+        author: { handle: `user${i % 50}.bsky.social` },
+        likeCount: Math.floor(Math.random() * 100),
+        repostCount: Math.floor(Math.random() * 50),
+        replyCount: Math.floor(Math.random() * 20),
+      })
+    );
+    const map = new Map<string, number>();
+    for (let i = 0; i < 20; i++) {
+      map.set(`user${i}.bsky.social`, i * 5);
+    }
+
+    const start = performance.now();
+    const result = rankForYou(posts, map);
+    const elapsed = performance.now() - start;
+
+    expect(result).toHaveLength(500);
+    // Should complete in under 50ms for 500 posts
+    expect(elapsed).toBeLessThan(50);
+  });
+
+  it('produces consistent ordering for identical inputs', () => {
+    const posts = [
+      makePost({ uri: 'a', author: { handle: 'high.bsky.social' }, likeCount: 100, createdAt: '2026-06-05T12:00:00Z' }),
+      makePost({ uri: 'b', author: { handle: 'low.bsky.social' }, likeCount: 1, createdAt: '2026-06-05T12:00:00Z' }),
+      makePost({ uri: 'c', author: { handle: 'mid.bsky.social' }, likeCount: 50, createdAt: '2026-06-05T12:00:00Z' }),
+    ];
+    const map = new Map([['high.bsky.social', 20], ['mid.bsky.social', 10]]);
+
+    const result1 = rankForYou(posts, map);
+    const result2 = rankForYou(posts, map);
+
+    expect(result1.map(p => p.uri)).toEqual(result2.map(p => p.uri));
+  });
 });

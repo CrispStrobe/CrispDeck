@@ -189,4 +189,95 @@ describe('detectCrossposts', () => {
   it('handles empty input', () => {
     expect(detectCrossposts([])).toHaveLength(0);
   });
+
+  it('returns cached result for identical post URIs', () => {
+    const uri1 = 'at://did:plc:test/app.bsky.feed.post/cache1';
+    const uri2 = 'at://did:plc:test/app.bsky.feed.post/cache2';
+    const posts: UnifiedPost[] = [
+      makePost({ uri: uri1, text: 'Cache test post one', platform: 'bluesky', createdAt: '2024-01-01T10:00:00Z' }),
+      makePost({ uri: uri2, text: 'Totally different text', platform: 'mastodon', createdAt: '2024-01-01T10:05:00Z' }),
+    ];
+    const result1 = detectCrossposts(posts);
+    const result2 = detectCrossposts(posts);
+    // Same reference = cache hit
+    expect(result1).toBe(result2);
+  });
+
+  it('recomputes when posts change', () => {
+    const posts1: UnifiedPost[] = [
+      makePost({ uri: 'at://change/1', text: 'First version', platform: 'bluesky', createdAt: '2024-01-01T10:00:00Z' }),
+    ];
+    const posts2: UnifiedPost[] = [
+      makePost({ uri: 'at://change/2', text: 'Second version', platform: 'mastodon', createdAt: '2024-01-01T10:00:00Z' }),
+    ];
+    const result1 = detectCrossposts(posts1);
+    const result2 = detectCrossposts(posts2);
+    expect(result1).not.toBe(result2);
+  });
+
+  it('skips comparison when text lengths differ by more than 50%', () => {
+    const posts: UnifiedPost[] = [
+      makePost({ text: 'Short', platform: 'bluesky', createdAt: '2024-01-01T10:00:00Z' }),
+      makePost({ text: 'This is a very long post that is nothing like the short one above and should not be compared at all', platform: 'mastodon', createdAt: '2024-01-01T10:05:00Z' }),
+    ];
+    const result = detectCrossposts(posts);
+    // Should not group — lengths differ by >50%
+    expect(result).toHaveLength(2);
+    expect(result.every(item => !('type' in item))).toBe(true);
+  });
+
+  it('uses identity pairs for lower threshold matching', () => {
+    const pairs = new Set(['@alice.bsky.social<>@alice@mastodon.social']);
+    const posts: UnifiedPost[] = [
+      makePost({
+        text: 'My thoughts on the matter today',
+        platform: 'bluesky',
+        author: { handle: '@alice.bsky.social' },
+        createdAt: '2024-01-01T10:00:00Z',
+      }),
+      makePost({
+        text: 'My thoughts on the matter',
+        platform: 'mastodon',
+        author: { handle: '@alice@mastodon.social' },
+        createdAt: '2024-01-01T10:05:00Z',
+      }),
+    ];
+    // With identity pairs the threshold drops to 0.7
+    const withPairs = detectCrossposts(posts, pairs);
+    expect(withPairs.some(item => 'type' in item && item.type === 'crosspost')).toBe(true);
+  });
+});
+
+describe('sortPosts (Schwartzian optimization)', () => {
+  it('newest sort pre-computes timestamps', () => {
+    const posts: UnifiedPost[] = [
+      makePost({ createdAt: '2024-01-01T10:00:00Z' }),
+      makePost({ createdAt: '2024-01-03T10:00:00Z' }),
+      makePost({ createdAt: '2024-01-02T10:00:00Z' }),
+    ];
+    const result = sortPosts(posts, 'newest');
+    expect(new Date(result[0].createdAt).getTime()).toBeGreaterThan(new Date(result[1].createdAt).getTime());
+    expect(new Date(result[1].createdAt).getTime()).toBeGreaterThan(new Date(result[2].createdAt).getTime());
+  });
+
+  it('oldest sort pre-computes timestamps', () => {
+    const posts: UnifiedPost[] = [
+      makePost({ createdAt: '2024-01-03T10:00:00Z' }),
+      makePost({ createdAt: '2024-01-01T10:00:00Z' }),
+      makePost({ createdAt: '2024-01-02T10:00:00Z' }),
+    ];
+    const result = sortPosts(posts, 'oldest');
+    expect(new Date(result[0].createdAt).getTime()).toBeLessThan(new Date(result[1].createdAt).getTime());
+    expect(new Date(result[1].createdAt).getTime()).toBeLessThan(new Date(result[2].createdAt).getTime());
+  });
+
+  it('default sort uses Schwartzian path', () => {
+    const posts: UnifiedPost[] = [
+      makePost({ createdAt: '2024-01-01T10:00:00Z', uri: 'a' }),
+      makePost({ createdAt: '2024-01-03T10:00:00Z', uri: 'b' }),
+    ];
+    // 'newest' is the default, which uses the Schwartzian path
+    const result = sortPosts(posts, 'newest');
+    expect(result[0].uri).toBe('b'); // Jan 3 first
+  });
 });

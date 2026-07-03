@@ -1,9 +1,10 @@
 /**
- * Tests for client factory helper functions — getBskyAgent, getBskyClient, getMastoClient.
+ * Tests for client factory helper functions — getBskyAgent, getBskyClient, getMastoClient,
+ * and client cache invalidation.
  * These are pure functions that operate on a Map, no network needed.
  */
 import { describe, it, expect } from 'vitest';
-import { getBskyAgent, getBskyClient, getMastoClient, type ClientEntry } from './client-factory';
+import { getBskyAgent, getBskyClient, getMastoClient, invalidateClientCache, type ClientEntry } from './client-factory';
 import { BlueskyClient } from './bluesky';
 import { MastodonClient } from './mastodon';
 
@@ -109,5 +110,22 @@ describe('getBskyAgent', () => {
       oauthAgent: fakeAgent,
     });
     expect(getBskyAgent(map)).toBe(fakeAgent);
+  });
+});
+
+describe('invalidateClientCache', () => {
+  it('is a callable function', () => {
+    expect(typeof invalidateClientCache).toBe('function');
+  });
+
+  it('does not throw when called', () => {
+    expect(() => invalidateClientCache()).not.toThrow();
+  });
+
+  it('can be called multiple times safely', () => {
+    invalidateClientCache();
+    invalidateClientCache();
+    invalidateClientCache();
+    // No error = success
   });
 });

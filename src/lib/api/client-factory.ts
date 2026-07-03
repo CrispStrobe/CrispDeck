@@ -20,12 +20,21 @@ export interface ClientEntry {
   oauthAgent?: Agent;
 }
 
+// Module-level cache: avoids re-initializing clients when navigating between pages
+let _cachedResult: { accounts: Account[]; clients: Map<number, ClientEntry> } | null = null;
+let _cacheTime = 0;
+const _CACHE_TTL = 300000; // 5 minutes
+
 /**
  * Initialize clients for all accounts.
+ * Caches result for 5 minutes to avoid redundant DB reads and login calls
+ * when navigating between feed/deck/notifications pages.
  * For Bluesky: tries OAuth session first, falls back to app password.
  * For Mastodon: uses access token.
  */
 export async function initAllClients(): Promise<{ accounts: Account[]; clients: Map<number, ClientEntry> }> {
+  const now = Date.now();
+  if (_cachedResult && now - _cacheTime < _CACHE_TTL) return _cachedResult;
   const accounts = await listAccounts();
   const clients = new Map<number, ClientEntry>();
 
@@ -98,7 +107,15 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
     }
   }
 
-  return { accounts, clients };
+  _cachedResult = { accounts, clients };
+  _cacheTime = Date.now();
+  return _cachedResult;
+}
+
+/** Invalidate the client cache (e.g. after adding/removing an account) */
+export function invalidateClientCache(): void {
+  _cachedResult = null;
+  _cacheTime = 0;
 }
 
 /**

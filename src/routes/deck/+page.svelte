@@ -104,12 +104,19 @@
       loading = false;
     }
 
-    // Auto-refresh every 3 minutes (not 2 — less aggressive)
+    // Auto-refresh every 5 minutes, skip when tab is hidden
     const interval = setInterval(() => {
+      if (document.hidden) return;
       columns.forEach(col => loadColumn(col));
-    }, 180000);
+    }, 300000);
+    // Refresh on tab re-focus after being hidden
+    const handleVisibility = () => {
+      if (!document.hidden) columns.forEach(col => loadColumn(col));
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
     return () => {
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
       streamManager.disconnectAll();
       streamCleanups.clear();
     };

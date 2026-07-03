@@ -58,10 +58,17 @@ export function toggleMutedWord(id: string): MutedWord[] {
 /**
  * Build a filter function from the current muted words list.
  * Returns a function that returns true if the text should be HIDDEN.
+ * Caches compiled matchers to avoid recompiling regexes on every call.
  */
+let _muteCache: { key: string; filter: (text: string) => boolean } | null = null;
+
 export function buildMuteFilter(words?: MutedWord[]): (text: string) => boolean {
   const active = (words ?? listMutedWords()).filter(w => w.enabled && w.value.trim());
   if (active.length === 0) return () => false;
+
+  // Cache key: serialize active words so we only recompile when they change
+  const cacheKey = active.map(w => `${w.id}:${w.value}:${w.isRegex}`).join('|');
+  if (_muteCache && _muteCache.key === cacheKey) return _muteCache.filter;
 
   const matchers: ((text: string) => boolean)[] = active.map(w => {
     if (w.isRegex) {
@@ -78,7 +85,9 @@ export function buildMuteFilter(words?: MutedWord[]): (text: string) => boolean 
     return (text: string) => text.toLowerCase().includes(lower);
   });
 
-  return (text: string) => matchers.some(m => m(text));
+  const filter = (text: string) => matchers.some(m => m(text));
+  _muteCache = { key: cacheKey, filter };
+  return filter;
 }
 
 /**

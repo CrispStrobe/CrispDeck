@@ -109,8 +109,10 @@
       initialLoading = false;
     }
 
-    // Poll for new posts every 60 seconds
-    const pollInterval = setInterval(checkForNewPosts, 60000);
+    // Poll for new posts every 60 seconds, skip when tab is hidden
+    const pollInterval = setInterval(() => {
+      if (!document.hidden) checkForNewPosts();
+    }, 60000);
     return () => { observer?.disconnect(); clearInterval(pollInterval); };
   });
 
@@ -288,7 +290,8 @@
     if (allPosts.length > 0) {
       posts = sortPosts(allPosts, 'newest');
       progress = posts.length;
-      setCache('feed-' + feedMode, posts.slice(0, 50));
+      const cacheSize = parseInt(localStorage.getItem('crispdeck-feed-cache-size') ?? '200');
+      setCache('feed-' + feedMode, posts.slice(0, cacheSize));
     }
     loading = false;
   }

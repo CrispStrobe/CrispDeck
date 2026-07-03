@@ -11,6 +11,22 @@
   import MediaLightbox from '$lib/components/MediaLightbox.svelte';
   import type { LightboxItem } from '$lib/components/MediaLightbox.svelte';
 
+  // Shared post preferences — read once from localStorage, cached across all Post instances
+  // Avoids 50+ localStorage reads per feed render
+  let _postPrefsCache: { hideEngagement: boolean; mediaPreview: 'lightbox' | 'browser'; compact: boolean; ts: number } | null = null;
+  function getPostPrefs() {
+    const now = Date.now();
+    if (_postPrefsCache && now - _postPrefsCache.ts < 10000) return _postPrefsCache;
+    _postPrefsCache = {
+      hideEngagement: localStorage.getItem('crispdeck-hide-engagement') === 'true',
+      mediaPreview: (localStorage.getItem('crispdeck-media-preview') as 'lightbox' | 'browser') || 'lightbox',
+      compact: localStorage.getItem('crispdeck-compact-posts') === 'true',
+      ts: now,
+    };
+    return _postPrefsCache;
+  }
+  const _postPrefs = getPostPrefs();
+
   let { post, hideMedia = false, compact = false, onlike, onboost, onreply, onquote, onfollow }: {
     post: UnifiedPost;
     hideMedia?: boolean;
@@ -53,31 +69,29 @@
     if (pinned) { unpinPost(post.uri); pinned = false; }
     else { pinPost(post); pinned = true; }
   }
-  let unsubJetstream: (() => void) | null = null;
+  // Per-URI Jetstream listener — only fires for this post's URI (no broadcast filtering)
+  const jetstreamListener = (update: import('$lib/jetstream').CountUpdate) => {
+    if (update.type === 'like') localLikeCount += update.delta;
+    if (update.type === 'repost') localBoostCount += update.delta;
+  };
 
   onMount(async () => {
     bookmarked = await isBookmarked(post.uri);
     pinned = isPinned(post.uri);
-    hideEngagement = localStorage.getItem('crispdeck-hide-engagement') === 'true';
-    mediaPreviewMode = (localStorage.getItem('crispdeck-media-preview') as 'lightbox' | 'browser') || 'lightbox';
-    if (!compact) compact = localStorage.getItem('crispdeck-compact-posts') === 'true';
+    hideEngagement = _postPrefs.hideEngagement;
+    mediaPreviewMode = _postPrefs.mediaPreview;
+    if (!compact) compact = _postPrefs.compact;
 
-    // Subscribe to real-time count updates for this post
+    // Register per-URI listener for real-time count updates
     if (post.platform === 'bluesky') {
-      jetstream.watchPost(post.uri);
-      unsubJetstream = jetstream.subscribe((update) => {
-        if (update.uri !== post.uri) return;
-        if (update.type === 'like') localLikeCount += update.delta;
-        if (update.type === 'repost') localBoostCount += update.delta;
-      });
+      jetstream.watchPost(post.uri, jetstreamListener);
     }
   });
 
   onDestroy(() => {
     if (post.platform === 'bluesky') {
-      jetstream.unwatchPost(post.uri);
+      jetstream.unwatchPost(post.uri, jetstreamListener);
     }
-    unsubJetstream?.();
   });
 
   let copied = $state(false);
@@ -618,14 +632,22 @@
     return labels.filter((l: any) => !l.neg).map((l: any) => l.val);
   });
 
-  // Check label preferences
+  // Check label preferences (cached to avoid repeated JSON.parse per post)
+  let _labelPrefsCache: { prefs: Record<string, string>; ts: number } | null = null;
+  function getLabelPrefs(): Record<string, string> {
+    const now = Date.now();
+    if (_labelPrefsCache && now - _labelPrefsCache.ts < 10000) return _labelPrefsCache.prefs;
+    _labelPrefsCache = { prefs: JSON.parse(localStorage.getItem('crispdeck-label-prefs') ?? '{}'), ts: now };
+    return _labelPrefsCache.prefs;
+  }
+
   function shouldWarnLabel(label: string): boolean {
-    const prefs = JSON.parse(localStorage.getItem('crispdeck-label-prefs') ?? '{}');
+    const prefs = getLabelPrefs();
     return prefs[label] === 'warn' || (!prefs[label] && ['porn', 'sexual', 'graphic-media', 'nudity'].includes(label));
   }
 
   function shouldHideLabel(label: string): boolean {
-    const prefs = JSON.parse(localStorage.getItem('crispdeck-label-prefs') ?? '{}');
+    const prefs = getLabelPrefs();
     return prefs[label] === 'hide';
   }
 

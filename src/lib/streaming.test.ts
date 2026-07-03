@@ -431,4 +431,32 @@ describe('streamManager', () => {
     expect(streamManager.isColumnStreaming('fh1')).toBe(false);
     expect(streamManager.isColumnStreaming('reg1')).toBe(false);
   });
+
+  it('installs visibility handler when columns are enabled', () => {
+    const mockDoc = { hidden: false, addEventListener: vi.fn(), removeEventListener: vi.fn() };
+    vi.stubGlobal('document', mockDoc);
+
+    streamManager.enableColumn({
+      columnId: 'vis-test',
+      platform: 'bluesky',
+    }, vi.fn());
+
+    expect(mockDoc.addEventListener).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
+
+    streamManager.disconnectAll();
+  });
+
+  it('removes visibility handler on disconnectAll', () => {
+    const mockDoc = { hidden: false, addEventListener: vi.fn(), removeEventListener: vi.fn() };
+    vi.stubGlobal('document', mockDoc);
+
+    streamManager.enableColumn({
+      columnId: 'vis-cleanup',
+      platform: 'bluesky',
+    }, vi.fn());
+
+    streamManager.disconnectAll();
+
+    expect(mockDoc.removeEventListener).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
+  });
 });

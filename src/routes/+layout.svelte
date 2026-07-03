@@ -34,19 +34,9 @@
   let bookmarkCount = $state(0);
   let unreadMessages = $state(0);
 
-  // Cache initAllClients result to avoid rebuilding clients every 30s
-  let cachedClients: { accounts: any[]; clients: Map<number, any> } | null = null;
-  let clientsCacheTime = 0;
-  const CLIENTS_CACHE_TTL = 300000; // 5 minutes
-
   async function getCachedClients() {
-    const now = Date.now();
-    if (!cachedClients || now - clientsCacheTime > CLIENTS_CACHE_TTL) {
-      const { initAllClients } = await import('$lib/api/client-factory');
-      cachedClients = await initAllClients();
-      clientsCacheTime = now;
-    }
-    return cachedClients;
+    const { initAllClients } = await import('$lib/api/client-factory');
+    return await initAllClients();
   }
 
   // Page transitions via View Transitions API (progressive enhancement)
@@ -92,13 +82,23 @@
     bookmarkCount = await getBookmarkCount();
     // Check unread messages on load
     checkUnreadMessages();
-    // Refresh counts periodically
+    // Refresh counts periodically — skip when tab is hidden to save API calls
     const interval = setInterval(async () => {
+      if (document.hidden) return;
       bookmarkCount = await getBookmarkCount();
       checkUnreadMessages();
-    }, 30000);
+    }, 60000);
+    // Resume immediately when tab becomes visible after being hidden
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        getBookmarkCount().then(c => bookmarkCount = c);
+        checkUnreadMessages();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
     return () => {
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };

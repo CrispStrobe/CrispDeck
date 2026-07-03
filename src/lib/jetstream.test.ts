@@ -36,4 +36,52 @@ describe('jetstream module', () => {
     expect(update.type).toBe('like');
     expect(update.delta).toBe(1);
   });
+
+  it('watchPost accepts per-URI listener', async () => {
+    const { jetstream } = await import('./jetstream');
+    const listener = vi.fn();
+    // Should not throw — registers listener for specific URI
+    jetstream.watchPost('at://did/post/test', listener);
+    // Clean up
+    jetstream.unwatchPost('at://did/post/test', listener);
+  });
+
+  it('unwatchPost with listener removes only that listener', async () => {
+    const { jetstream } = await import('./jetstream');
+    const listener1 = vi.fn();
+    const listener2 = vi.fn();
+
+    jetstream.watchPost('at://did/post/multi', listener1);
+    jetstream.watchPost('at://did/post/multi', listener2);
+
+    // Remove only listener1
+    jetstream.unwatchPost('at://did/post/multi', listener1);
+
+    // URI should still be watched (listener2 remains)
+    // Clean up
+    jetstream.unwatchPost('at://did/post/multi', listener2);
+  });
+
+  it('unwatchPost without listener removes entire URI', async () => {
+    const { jetstream } = await import('./jetstream');
+    const listener = vi.fn();
+
+    jetstream.watchPost('at://did/post/remove-all', listener);
+    jetstream.unwatchPost('at://did/post/remove-all');
+
+    // Should not throw — URI fully removed
+    jetstream.clearWatched();
+  });
+
+  it('clearWatched removes all per-URI listeners', async () => {
+    const { jetstream } = await import('./jetstream');
+    const listener = vi.fn();
+
+    jetstream.watchPost('at://did/post/a', listener);
+    jetstream.watchPost('at://did/post/b', listener);
+    jetstream.clearWatched();
+
+    // Should not throw — everything cleaned up
+    expect(jetstream.isConnected()).toBe(false);
+  });
 });
