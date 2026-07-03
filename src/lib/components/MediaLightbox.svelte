@@ -1,5 +1,6 @@
 <script lang="ts">
   import { X, ChevronLeft, ChevronRight, ExternalLink } from '@lucide/svelte';
+  import { haptic } from '$lib/haptics';
 
   export interface LightboxItem {
     url: string;
@@ -23,8 +24,29 @@
   $effect(() => { currentIndex = index; });
 
   function close() { onclose?.(); }
-  function prev() { if (currentIndex > 0) currentIndex--; }
-  function next() { if (currentIndex < items.length - 1) currentIndex++; }
+  function prev() { if (currentIndex > 0) { currentIndex--; haptic('selection'); } }
+  function next() { if (currentIndex < items.length - 1) { currentIndex++; haptic('selection'); } }
+
+  // Touch swipe support
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let swipeX = $state(0);
+
+  function onTouchStart(e: TouchEvent) {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    swipeX = 0;
+  }
+  function onTouchMove(e: TouchEvent) {
+    swipeX = e.touches[0].clientX - touchStartX;
+  }
+  function onTouchEnd() {
+    const deltaY = 0; // vertical tracked via swipeX proxy — use separate if needed
+    if (Math.abs(swipeX) > 50) {
+      if (swipeX < 0) next(); else prev();
+    }
+    swipeX = 0;
+  }
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') close();
@@ -98,7 +120,14 @@
     {/if}
 
     <!-- Media -->
-    <div class="max-w-[90vw] max-h-[85vh] flex flex-col items-center" onclick={(e) => e.stopPropagation()}>
+    <div
+      class="max-w-[90vw] max-h-[85vh] flex flex-col items-center"
+      onclick={(e) => e.stopPropagation()}
+      ontouchstart={onTouchStart}
+      ontouchmove={onTouchMove}
+      ontouchend={onTouchEnd}
+      style="transform: translateX({swipeX * 0.4}px); transition: {swipeX === 0 ? 'transform 0.2s ease-out' : 'none'}"
+    >
       {#if current.type === 'video' || current.type === 'gifv'}
         <!-- svelte-ignore a11y_media_has_caption -->
         <video

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { completeMastodonOAuth, addAccount } from '$lib/db';
+  import { completeMastodonOAuth, addAccount, listAccounts } from '$lib/db';
   import { Loader2, Check, AlertTriangle } from '@lucide/svelte';
 
   let status: 'loading' | 'success' | 'error' = $state('loading');
@@ -64,8 +64,10 @@
 
       status = 'success';
 
-      // Redirect to settings after a brief delay
-      setTimeout(() => goto('/settings'), 1500);
+      // Redirect: first account → feed, otherwise → settings
+      const allAccounts = await listAccounts();
+      const dest = allAccounts.length === 1 ? '/feed' : '/settings';
+      setTimeout(() => goto(dest), 1500);
     } catch (e) {
       status = 'error';
       errorMsg = String(e);

@@ -10,6 +10,7 @@
     "dialog:default",
     "store:default",
     "fs:default",
+    "notification:default",
     "fs:read-all",
     "fs:write-all",
     {

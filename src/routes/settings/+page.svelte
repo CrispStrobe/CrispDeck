@@ -7,6 +7,7 @@
   } from '$lib/db';
   import { Settings, Plus, Trash2, Star, ExternalLink, Loader2, Shield, Download, Upload, EyeOff } from '@lucide/svelte';
   import { startBlueskyOAuth } from '$lib/api/bluesky-oauth';
+  import { goto } from '$app/navigation';
   import { invalidateClientCache } from '$lib/api/client-factory';
   import { i18n, type Language } from '$lib/i18n.svelte';
   import { requestPermission, getPermission, isSupported as notifSupported } from '$lib/push-notifications';
@@ -362,7 +363,9 @@
       bskyAppPassword = '';
       showBskyForm = false;
       invalidateClientCache();
+      const wasFirst = accounts.length === 0;
       await loadAccounts();
+      if (wasFirst && accounts.length > 0) { goto('/feed'); return; }
     } catch (e) {
       error = String(e);
     } finally {

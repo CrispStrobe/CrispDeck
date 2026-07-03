@@ -12,6 +12,7 @@
     "fs:default",
     "shell:default",
     "process:default",
+    "notification:default",
     "fs:read-all",
     "fs:write-all",
     {

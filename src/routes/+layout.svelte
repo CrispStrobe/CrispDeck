@@ -46,10 +46,15 @@
   // Page transitions via View Transitions API (progressive enhancement)
   onNavigate((navigation) => {
     if (!document.startViewTransition) return;
+    // Determine navigation direction for slide animation
+    const fromDepth = window.location.pathname.split('/').filter(Boolean).length;
+    const toDepth = navigation.to?.url.pathname.split('/').filter(Boolean).length ?? fromDepth;
+    document.documentElement.dataset.navDirection = toDepth > fromDepth ? 'forward' : 'back';
     return new Promise((resolve) => {
       document.startViewTransition(async () => {
         resolve();
         await navigation.complete;
+        delete document.documentElement.dataset.navDirection;
       });
     });
   });

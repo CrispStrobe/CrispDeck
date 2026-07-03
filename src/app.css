@@ -83,6 +83,20 @@ html, body {
   }
 }
 
+/* Mobile touch fixes */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Prevent scroll chaining on mobile (parent scroll bleed) */
+.overflow-y-auto, .overflow-y-scroll, [role="feed"] {
+  overscroll-behavior: contain;
+}
+
 /* Touch target sizing for mobile */
 @media (pointer: coarse) {
   button, a {
@@ -178,13 +192,30 @@ button:focus-visible, a:focus-visible {
   to { transform: translateX(0); }
 }
 
-/* Page transitions (View Transitions API) */
+/* Page transitions (View Transitions API) — directional slides */
 ::view-transition-old(root) {
   animation: fade-out 0.15s ease-out;
 }
 ::view-transition-new(root) {
   animation: fade-in 0.15s ease-in;
 }
+
+/* Forward navigation: slide left */
+[data-nav-direction="forward"]::view-transition-old(root) {
+  animation: slide-out-left 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+[data-nav-direction="forward"]::view-transition-new(root) {
+  animation: slide-in-right 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Back navigation: slide right */
+[data-nav-direction="back"]::view-transition-old(root) {
+  animation: slide-out-right 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+[data-nav-direction="back"]::view-transition-new(root) {
+  animation: slide-in-from-left 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 @keyframes fade-out {
   from { opacity: 1; }
   to { opacity: 0; }
@@ -192,6 +223,22 @@ button:focus-visible, a:focus-visible {
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+@keyframes slide-out-left {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(-30%); }
+}
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(30%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes slide-out-right {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(30%); }
+}
+@keyframes slide-in-from-left {
+  from { opacity: 0; transform: translateX(-30%); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 /* Respect reduced motion globally */

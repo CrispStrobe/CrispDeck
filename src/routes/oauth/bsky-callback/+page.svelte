@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { addAccount } from '$lib/db';
+  import { addAccount, listAccounts } from '$lib/db';
   import { initBlueskyOAuth } from '$lib/api/bluesky-oauth';
   import { Loader2, Check, AlertTriangle } from '@lucide/svelte';
 
@@ -28,7 +28,9 @@
       });
 
       status = 'success';
-      setTimeout(() => goto('/settings'), 1500);
+      const allAccounts = await listAccounts();
+      const dest = allAccounts.length === 1 ? '/feed' : '/settings';
+      setTimeout(() => goto(dest), 1500);
     } catch (e) {
       status = 'error';
       errorMsg = String(e);

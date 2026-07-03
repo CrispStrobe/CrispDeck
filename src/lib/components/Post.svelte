@@ -9,6 +9,7 @@
   import type { UnifiedPost } from '$lib/types';
   import { sanitizeHtml } from '$lib/sanitize';
   import MediaLightbox from '$lib/components/MediaLightbox.svelte';
+  import { haptic } from '$lib/haptics';
   import type { LightboxItem } from '$lib/components/MediaLightbox.svelte';
 
   // Shared post preferences — read once from localStorage, cached across all Post instances
@@ -333,6 +334,7 @@
     if (!onlike) return;
     liked = !liked;
     localLikeCount += liked ? 1 : -1;
+    haptic('light');
     onlike(post);
   }
 
@@ -340,6 +342,7 @@
     if (!onboost) return;
     boosted = !boosted;
     localBoostCount += boosted ? 1 : -1;
+    haptic('medium');
     onboost(post);
   }
 

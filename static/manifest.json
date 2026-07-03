@@ -2,8 +2,11 @@
   "name": "CrispDeck",
   "short_name": "CrispDeck",
   "description": "Full-featured cross-platform client for Mastodon, Bluesky, and Threads",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
   "background_color": "#0f172a",
   "theme_color": "#6366f1",
   "icons": [
@@ -29,5 +32,32 @@
       "type": "image/png",
       "purpose": "maskable"
     }
-  ]
+  ],
+  "shortcuts": [
+    {
+      "name": "New Post",
+      "short_name": "Compose",
+      "url": "/compose",
+      "icons": [{ "src": "/favicon.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Feed",
+      "url": "/feed",
+      "icons": [{ "src": "/favicon.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Notifications",
+      "url": "/notifications",
+      "icons": [{ "src": "/favicon.png", "sizes": "192x192" }]
+    }
+  ],
+  "share_target": {
+    "action": "/compose",
+    "method": "GET",
+    "params": {
+      "text": "text",
+      "url": "url",
+      "title": "title"
+    }
+  }
 }

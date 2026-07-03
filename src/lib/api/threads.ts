@@ -542,6 +542,50 @@ export class ThreadsClient {
       raw: post,
     };
   }
+
+  // ── Engagement actions ────────────────────────────────────────────────────
+
+  /** Like a Threads post */
+  async like(mediaId: string): Promise<void> {
+    await this.apiPost(`/${this.userId}/likes`, { media_id: mediaId });
+  }
+
+  /** Unlike a Threads post */
+  async unlike(mediaId: string): Promise<void> {
+    // Threads API: DELETE /{user-id}/likes with media_id param
+    const resp = await fetch(`${THREADS_API_BASE}/${this.userId}/likes`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ access_token: this.accessToken, media_id: mediaId }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `Threads unlike failed: ${resp.statusText}`);
+    }
+  }
+
+  /** Repost a Threads post */
+  async repost(mediaId: string): Promise<{ id: string }> {
+    const resp = await this.apiPost<{ id: string }>(`/${this.userId}/threads`, {
+      media_type: 'REPOST',
+      repost_id: mediaId,
+    });
+    return this.apiPost<{ id: string }>(`/${this.userId}/threads_publish`, {
+      creation_id: resp.id,
+    });
+  }
+
+  /** Quote a Threads post with text */
+  async quote(mediaId: string, text: string): Promise<{ id: string; permalink?: string }> {
+    const resp = await this.apiPost<{ id: string }>(`/${this.userId}/threads`, {
+      media_type: 'TEXT',
+      text,
+      quote_post_id: mediaId,
+    });
+    return this.apiPost<{ id: string; permalink?: string }>(`/${this.userId}/threads_publish`, {
+      creation_id: resp.id,
+    });
+  }
 }
 
 // ── OAuth config storage (localStorage) ──────────────────────────────────────

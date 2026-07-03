@@ -20,6 +20,7 @@ tauri-plugin-http = "2"
 tauri-plugin-store = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
+tauri-plugin-notification = "2"
 tauri-plugin-shell = { version = "2", optional = true }
 tauri-plugin-process = { version = "2", optional = true }
 

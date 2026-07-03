@@ -367,6 +367,8 @@
           } else {
             await (entry.client as BlueskyClient).like(raw.post.uri, raw.post.cid);
           }
+        } else if (post.platform === 'threads') {
+          await (entry.client as ThreadsClient).like((post.raw as any).id);
         } else {
           await (entry.client as MastodonClient).favourite((post.raw as any).id);
         }
@@ -388,6 +390,8 @@
           } else {
             await (entry.client as BlueskyClient).repost(raw.post.uri, raw.post.cid);
           }
+        } else if (post.platform === 'threads') {
+          await (entry.client as ThreadsClient).repost((post.raw as any).id);
         } else {
           await (entry.client as MastodonClient).reblog((post.raw as any).id);
         }

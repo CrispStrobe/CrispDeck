@@ -169,6 +169,14 @@
       quoteAuthor = params.get('quoteAuthor') ?? '';
       quoteText = params.get('quoteText') ?? '';
 
+      // Handle shared content from PWA share_target
+      const sharedText = params.get('text') ?? '';
+      const sharedUrl = params.get('url') ?? '';
+      const sharedTitle = params.get('title') ?? '';
+      if ((sharedText || sharedUrl) && !text) {
+        text = [sharedTitle, sharedText, sharedUrl].filter(Boolean).join('\n');
+      }
+
       // Auto-restore unsent text (only if no draft/reply/quote context)
       if (!text && !replyTo && !quoteUri && !draftId) {
         const saved = localStorage.getItem(AUTOSAVE_KEY);
