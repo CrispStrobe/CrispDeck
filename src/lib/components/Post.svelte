@@ -744,7 +744,7 @@
     <div class="relative group/avatar">
       <a href={getProfileUrl(post)}>
         {#if post.author.avatar}
-          <img loading="lazy" decoding="async" src={post.author.avatar} alt="" width="40" height="40" class="{compact ? 'w-7 h-7' : 'w-10 h-10'} rounded-full bg-[var(--color-surface-hover)]" />
+          <img decoding="async" src={post.author.avatar} alt="" width="40" height="40" class="{compact ? 'w-7 h-7' : 'w-10 h-10'} rounded-full bg-[var(--color-surface-hover)]" />
         {:else}
           <div class="{compact ? 'w-7 h-7 text-[9px]' : 'w-10 h-10 text-xs'} rounded-full bg-[var(--color-surface-hover)] flex items-center justify-center text-[var(--color-text-muted)]">
             {post.author.handle.charAt(0).toUpperCase()}
@@ -840,18 +840,36 @@
 
       <!-- Bluesky external link -->
       {#if bskyExternal}
-        <a href={bskyExternal.uri} target="_blank" rel="noopener noreferrer" class="mt-2 block border border-[var(--color-border)] rounded-lg overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
-          {#if bskyExternal.thumb}
-            <img loading="lazy" src={bskyExternal.thumb} alt="" class="w-full h-32 object-cover" />
-          {/if}
-          <div class="p-3">
-            <p class="text-xs text-[var(--color-text-muted)]">{bskyExternalHost}</p>
-            <p class="font-semibold text-sm text-[var(--color-text)]">{bskyExternal.title}</p>
-            {#if bskyExternal.description}
-              <p class="text-xs text-[var(--color-text-muted)] line-clamp-2">{bskyExternal.description}</p>
-            {/if}
+        {@const isGif = /\.gif(\?|$)/i.test(bskyExternal.uri)}
+        {@const gifMp4Match = bskyExternal.uri.match(/[?&]mp4=([^&]+)/)}
+        {#if isGif && gifMp4Match}
+          <!-- Animated GIF with MP4 variant — render as auto-playing muted video -->
+          <div class="mt-2 rounded-lg overflow-hidden border border-[var(--color-border)]">
+            <video autoplay loop muted playsinline class="w-full max-h-64 object-contain bg-black/10">
+              <source src="https://static.klipy.com/v/{gifMp4Match[1]}.mp4" type="video/mp4" />
+              <img src={bskyExternal.thumb || bskyExternal.uri} alt={bskyExternal.title || 'GIF'} class="w-full max-h-64 object-contain" />
+            </video>
           </div>
-        </a>
+        {:else if isGif}
+          <!-- Animated GIF — render inline -->
+          <div class="mt-2 rounded-lg overflow-hidden border border-[var(--color-border)]">
+            <img src={bskyExternal.uri} alt={bskyExternal.title || 'GIF'} class="w-full max-h-64 object-contain bg-black/10" />
+          </div>
+        {:else}
+          <!-- Standard link card -->
+          <a href={bskyExternal.uri} target="_blank" rel="noopener noreferrer" class="mt-2 block border border-[var(--color-border)] rounded-lg overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
+            {#if bskyExternal.thumb}
+              <img src={bskyExternal.thumb} alt="" class="w-full h-32 object-cover" />
+            {/if}
+            <div class="p-3">
+              <p class="text-xs text-[var(--color-text-muted)]">{bskyExternalHost}</p>
+              <p class="font-semibold text-sm text-[var(--color-text)]">{bskyExternal.title}</p>
+              {#if bskyExternal.description}
+                <p class="text-xs text-[var(--color-text-muted)] line-clamp-2">{bskyExternal.description}</p>
+              {/if}
+            </div>
+          </a>
+        {/if}
       {/if}
 
       <!-- Bluesky quoted post -->
@@ -863,7 +881,7 @@
         >
           <div class="flex items-center gap-2 mb-1">
             {#if bskyQuote.author?.avatar}
-              <img loading="lazy" src={bskyQuote.author.avatar} alt="" class="w-5 h-5 rounded-full" />
+              <img src={bskyQuote.author.avatar} alt="" class="w-5 h-5 rounded-full" />
             {/if}
             <span class="text-xs font-medium">{bskyQuote.author?.displayName || bskyQuote.author?.handle}</span>
             <span class="text-[10px] text-[var(--color-text-muted)]">@{bskyQuote.author?.handle}</span>
@@ -874,7 +892,7 @@
             {#if qEmbed.$type === 'app.bsky.embed.images#view' && qEmbed.images?.[0]}
               <!-- svelte-ignore a11y_click_events_have_key_events -->
               <div onclick={(e: MouseEvent) => { e.stopPropagation(); openLightbox(qEmbed.images.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0); }} class="cursor-pointer" role="button" tabindex="-1">
-                <img loading="lazy" src={qEmbed.images[0].thumb} alt={qEmbed.images[0].alt || ''} class="mt-2 rounded w-full max-h-48 object-cover" />
+                <img src={qEmbed.images[0].thumb} alt={qEmbed.images[0].alt || ''} class="mt-2 rounded w-full max-h-48 object-cover" />
                 {#if qEmbed.images.length > 1}
                   <p class="mt-1 text-[10px] text-[var(--color-text-muted)]">+{qEmbed.images.length - 1} more</p>
                 {/if}
@@ -883,7 +901,7 @@
             {#if qEmbed.$type === 'app.bsky.embed.external#view' && qEmbed.external}
               <div class="mt-2 flex items-center gap-2 text-[10px] text-[var(--color-text-muted)]">
                 {#if qEmbed.external.thumb}
-                  <img loading="lazy" src={qEmbed.external.thumb} alt="" class="w-12 h-12 rounded object-cover" />
+                  <img src={qEmbed.external.thumb} alt="" class="w-12 h-12 rounded object-cover" />
                 {/if}
                 <div class="min-w-0">
                   <p class="font-medium truncate">{qEmbed.external.title}</p>
@@ -912,7 +930,7 @@
             <p class="text-sm text-[var(--color-text)] line-clamp-6">{threadsQuote.text}</p>
           {/if}
           {#if threadsQuote.media_url && threadsQuote.media_type !== 'TEXT_POST'}
-            <img loading="lazy" src={threadsQuote.thumbnail_url ?? threadsQuote.media_url} alt="" class="mt-2 rounded w-full max-h-48 object-cover" />
+            <img src={threadsQuote.thumbnail_url ?? threadsQuote.media_url} alt="" class="mt-2 rounded w-full max-h-48 object-cover" />
           {/if}
         </button>
       {/if}
@@ -922,7 +940,7 @@
         <div class="mt-2 rounded-lg overflow-hidden border border-[var(--color-border)]">
           {#if bskyVideo.thumbnail}
             <div class="relative">
-              <img loading="lazy" src={bskyVideo.thumbnail} alt={bskyVideo.alt || 'Video'} class="w-full aspect-video object-cover" />
+              <img src={bskyVideo.thumbnail} alt={bskyVideo.alt || 'Video'} class="w-full aspect-video object-cover" />
               <div class="absolute inset-0 flex items-center justify-center">
                 <div class="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center">
                   <svg class="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
@@ -973,7 +991,7 @@
       {#if mastodonCard}
         <a href={mastodonCard.url} target="_blank" rel="noopener noreferrer" class="mt-2 block border border-[var(--color-border)] rounded-lg overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
           {#if mastodonCard.image}
-            <img loading="lazy" src={mastodonCard.image} alt="" class="w-full h-32 object-cover" />
+            <img src={mastodonCard.image} alt="" class="w-full h-32 object-cover" />
           {/if}
           <div class="p-3">
             <p class="text-xs text-[var(--color-text-muted)]">{mastodonCard.provider_name || mastodonCardHost}</p>
