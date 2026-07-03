@@ -258,10 +258,16 @@
               const result = await bsky.getTimeline();
               acctPosts.push(...result.feed.map(p => tag(normalizePost(p, 'bluesky'))));
               cursor = result.cursor;
-            } catch {
-              const result = await bsky.getAuthorFeed(acct.handle);
-              acctPosts.push(...result.feed.map(p => tag(normalizePost(p, 'bluesky'))));
-              cursor = result.cursor;
+            } catch (e) {
+              console.error(`Timeline failed for ${acct.handle}, trying author feed:`, e);
+              try {
+                const result = await bsky.getAuthorFeed(acct.handle);
+                acctPosts.push(...result.feed.map(p => tag(normalizePost(p, 'bluesky'))));
+                cursor = result.cursor;
+                error = `Timeline unavailable for @${acct.handle} — showing your posts only. Your session may have expired; try reconnecting in Settings.`;
+              } catch (e2) {
+                error = `Failed to load feed for @${acct.handle}: ${e2}`;
+              }
             }
           }
         } else {

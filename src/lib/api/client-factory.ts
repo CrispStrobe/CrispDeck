@@ -38,11 +38,15 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
   const accounts = await listAccounts();
   const clients = new Map<number, ClientEntry>();
 
-  // Try to resume a Bluesky OAuth session
+  // Try to resume a Bluesky OAuth session (with retry)
   let oauthSession: { did: string; agent: Agent } | null = null;
   try {
     oauthSession = await initBlueskyOAuth();
   } catch {}
+  // If first attempt failed, try once more (token refresh can be flaky)
+  if (!oauthSession) {
+    try { oauthSession = await initBlueskyOAuth(); } catch {}
+  }
 
   for (const acct of accounts) {
     try {
@@ -52,8 +56,6 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
       if (acct.platform === 'bluesky') {
         // Check if this account has an active OAuth session
         if (creds.auth_method === 'oauth' && oauthSession && oauthSession.did === acct.did) {
-          // Create a BlueskyClient backed by the OAuth agent for public reads
-          // The OAuth agent is used for authenticated operations
           const client = BlueskyClient.readOnly(acct.handle);
           clients.set(acct.id, {
             accountId: acct.id,
@@ -72,8 +74,26 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
             handle: acct.handle,
             client,
           });
+        } else if (creds.auth_method === 'oauth') {
+          // OAuth account but session expired — auto-trigger re-auth
+          console.warn(`OAuth session expired for ${acct.handle}. Re-authenticating...`);
+          try {
+            const { startBlueskyOAuth } = await import('./bluesky-oauth');
+            await startBlueskyOAuth(acct.handle);
+            // startBlueskyOAuth redirects the page, so this won't continue
+          } catch (e) {
+            console.error('Auto re-auth failed:', e);
+            // Fall back to read-only so the app doesn't crash entirely
+            const client = BlueskyClient.readOnly(acct.handle);
+            clients.set(acct.id, {
+              accountId: acct.id,
+              platform: 'bluesky',
+              handle: acct.handle,
+              client,
+            });
+          }
         } else {
-          // OAuth account but no active session — use read-only
+          // No credentials at all — read-only
           const client = BlueskyClient.readOnly(acct.handle);
           clients.set(acct.id, {
             accountId: acct.id,

@@ -67,11 +67,21 @@
       if (!acct) return [] as Conversation[];
 
       if (acct.platform === 'bluesky') {
-        const oauthAgent = entry.oauthAgent;
-        const oauthSession = oauthAgent ? { agent: oauthAgent, did: acct.did } : await resumeBlueskyOAuthSession();
-        if (!oauthSession) { bskyDmNote = true; return []; }
+        // Try OAuth agent first, then app-password agent, then stored OAuth session
+        let agent: any = entry.oauthAgent;
+        if (!agent) {
+          try {
+            const bsky = entry.client as BlueskyClient;
+            agent = bsky.getAgent();
+            if (!agent?.session) agent = null;
+          } catch { agent = null; }
+        }
+        if (!agent) {
+          const oauthSession = await resumeBlueskyOAuthSession();
+          agent = oauthSession?.agent;
+        }
+        if (!agent) { bskyDmNote = true; return []; }
         const proxyHeaders = { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' };
-        const agent = oauthSession.agent as any;
         const chatResp = await agent.api.chat.bsky.convo.listConvos(
           { limit: 50 },
           { headers: proxyHeaders }
