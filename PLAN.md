@@ -13,7 +13,7 @@ A unified Mastodon + Bluesky + Threads social media client with:
 
 ## Current State (2026-07-03)
 
-v1.0.0 — 977 unit tests + 28 Playwright E2E tests, 29 pages, live at https://crispdeck.vercel.app
+v1.0.0 — 1003 unit tests + 28 Playwright E2E tests, 29 pages, live at https://crispdeck.vercel.app
 
 **License**: AGPL-3.0-only
 
@@ -793,6 +793,71 @@ Key competitive advantages: deck+multi-network+Threads (unique combo), cross-pla
 - Fix: notifications page now checks for `entry.oauthAgent` and calls `agent.api.app.bsky.notification.listNotifications()` directly for OAuth accounts
 - App-password accounts continue using `BlueskyClient.getNotifications()` as before
 - **Key files**: `src/routes/notifications/+page.svelte`, `src/lib/api/client-factory.ts`
+
+---
+
+## Phase 16: Performance Optimizations (2026-07-03)
+
+### 114. detectCrossposts optimization
+- **Status**: Done
+- **Effort**: Medium
+- **Description**: O(n²) Jaro-Winkler crosspost detection was the feed's main bottleneck
+- Result caching by URI set (identical posts → instant return)
+- Platform-indexed lookup (only compare across platforms, not all-vs-all)
+- Pre-computed timestamps, text-length filter (>50% diff → skip)
+- Early exit on >0.97 match score
+- **Key files**: `src/lib/api/unified.ts`
+
+### 115. Visibility-aware polling and WebSocket management
+- **Status**: Done
+- **Effort**: Medium
+- **Description**: All background activity now pauses when tab is hidden
+- Layout polling: 30s→60s, skips when hidden, refreshes on tab focus
+- Deck auto-refresh: 3min→5min, skips when hidden, refreshes on focus
+- Feed new-post polling: skips when hidden
+- Jetstream: WebSocket closes when hidden, reconnects on focus
+- Streaming: all deck WebSockets pause/resume on visibility
+- Saves ~70% of background API calls
+- **Key files**: `src/routes/+layout.svelte`, `src/routes/deck/+page.svelte`, `src/routes/feed/+page.svelte`, `src/lib/jetstream.ts`, `src/lib/streaming.ts`
+
+### 116. Per-component caching (Post, bookmarks, pinned)
+- **Status**: Done
+- **Effort**: Medium
+- **Description**: Eliminated N+1 lookups in feed rendering
+- Jetstream: per-URI listener map (O(1) dispatch vs O(n) broadcast)
+- Post.svelte: shared preferences cache (3 localStorage reads → 1 cached object)
+- Bookmarks: in-memory URI Set cache (50 IndexedDB lookups → 1 batch getAllKeys)
+- Pinned posts: cached URI Set (50 JSON.parse → 1 cached Set)
+- Label prefs: cached JSON.parse with 10s TTL
+- Mute filter: compiled regex cache by word fingerprint
+- **Key files**: `src/lib/components/Post.svelte`, `src/lib/bookmarks.ts`, `src/lib/pinned-posts.ts`, `src/lib/muted-words.ts`, `src/lib/jetstream.ts`
+
+### 117. Client initialization dedup + cache invalidation
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Module-level 5min cache in initAllClients() prevents redundant DB reads and OAuth session init on page navigation
+- invalidateClientCache() called from settings on account add/remove
+- Removed redundant layout-level cache (single source of truth)
+- **Key files**: `src/lib/api/client-factory.ts`, `src/routes/settings/+page.svelte`
+
+### 118. Build optimizations
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Vite and HTML optimizations for faster loading
+- Manual chunks: @atproto/api, masto, lucide-svelte split into separate cacheable vendor bundles
+- DNS prefetch hints for bsky.social, public.api.bsky.app, jetstream2, graph.threads.net
+- DOMPurify preloaded at app startup (no HTML-strip fallback on first render)
+- sortPosts: Schwartzian transform for date sorts (parse once, not per-comparison)
+- rankForYou: inlined scoring to avoid redundant lookups
+- **Key files**: `vite.config.js`, `src/app.html`, `src/lib/sanitize.ts`, `src/lib/api/unified.ts`, `src/lib/for-you.ts`
+
+### 119. Feed cache size setting
+- **Status**: Done
+- **Effort**: Small
+- **Description**: Configurable feed cache size (50-500 posts) in Settings UI
+- Slider control in Cache & Storage section
+- Persisted in localStorage, included in settings export/import
+- **Key files**: `src/routes/settings/+page.svelte`, `src/routes/feed/+page.svelte`
 
 ---
 
