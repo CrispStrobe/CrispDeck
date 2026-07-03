@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { X, RefreshCw, Loader2, GripVertical, Heart, Repeat, UserPlus, MessageCircle, AtSign, Bell, Quote, ChevronDown, ChevronUp, Radio } from '@lucide/svelte';
   import Post from '$lib/components/Post.svelte';
   import type { UnifiedPost } from '$lib/types';
@@ -117,6 +117,9 @@
     filterTimer = setTimeout(() => { debouncedFilter = value; }, 200);
   }
 
+  const POST_PAGE_SIZE = 50;
+  let visiblePostCount = $state(POST_PAGE_SIZE);
+
   const filteredPosts = $derived(
     debouncedFilter
       ? posts.filter(p => {
@@ -125,6 +128,8 @@
         })
       : posts
   );
+  const visiblePosts = $derived(filteredPosts.slice(0, visiblePostCount));
+  const hasMorePosts = $derived(filteredPosts.length > visiblePostCount);
 
   // Resize handle
   let resizing = $state(false);
@@ -153,6 +158,11 @@
     document.removeEventListener('mouseup', onResizeEnd);
     onwidthchange?.(width);
   }
+
+  onDestroy(() => {
+    document.removeEventListener('mousemove', onResizeMove);
+    document.removeEventListener('mouseup', onResizeEnd);
+  });
 </script>
 
 <div
@@ -275,9 +285,17 @@
         {/if}
       </div>
     {:else}
-      {#each filteredPosts as post (post.uri)}
+      {#each visiblePosts as post (post.uri)}
         <Post {post} {onlike} {onboost} />
       {/each}
+      {#if hasMorePosts}
+        <button
+          onclick={() => visiblePostCount += POST_PAGE_SIZE}
+          class="w-full py-2 text-xs text-[var(--color-primary)] hover:bg-[var(--color-surface-hover)] transition-colors"
+        >
+          Show more ({filteredPosts.length - visiblePostCount} remaining)
+        </button>
+      {/if}
     {/if}
   </div>
 

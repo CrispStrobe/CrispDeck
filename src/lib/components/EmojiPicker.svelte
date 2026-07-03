@@ -14,13 +14,20 @@
     'Symbols': ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💝','💘','💟','☮️','✝️','☪️','🕉️','☸️','✡️','🔯','🕎','☯️','☦️','🛐','⛎','♈','♉','♊','♋','♌','♍','♎','♏','♐','♑','♒','♓','🆔','⚛️','✅','❌','❓','❗','‼️','⁉️','⭕','🔴','🟠','🟡','🟢','🔵','🟣','⚫','⚪','🟤','🔶','🔷','🔸','🔹','▪️','▫️','◾','◽','◼️','◻️'],
   };
 
-  const allEmoji = $derived(() => {
+  // Emoji name lookup for search (map emoji char → lowercase category + position hint)
+  const emojiNames: Map<string, string> = new Map();
+  for (const [cat, emojis] of Object.entries(categories)) {
+    const catLower = cat.toLowerCase();
+    for (const e of emojis) emojiNames.set(e, catLower);
+  }
+
+  const allEmoji = $derived.by(() => {
     if (!search) return categories;
     const q = search.toLowerCase();
     const filtered: Record<string, string[]> = {};
-    // Simple: just show all, browser will handle display
     for (const [cat, emojis] of Object.entries(categories)) {
-      filtered[cat] = emojis;
+      const matching = emojis.filter(e => cat.toLowerCase().includes(q) || emojiNames.get(e)?.includes(q));
+      if (matching.length > 0) filtered[cat] = matching;
     }
     return filtered;
   });
@@ -46,7 +53,7 @@
         />
       </div>
       <div class="flex-1 overflow-y-auto p-2">
-        {#each Object.entries(allEmoji()) as [category, emojis]}
+        {#each Object.entries(allEmoji) as [category, emojis]}
           <p class="text-[9px] text-[var(--color-text-muted)] uppercase tracking-wider mt-2 mb-1 first:mt-0">{category}</p>
           <div class="flex flex-wrap gap-0.5">
             {#each emojis as emoji}

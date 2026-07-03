@@ -131,33 +131,27 @@
     const newestDate = posts[0]?.createdAt;
     if (!newestDate) return;
 
-    let count = 0;
-    for (const acct of accounts) {
+    const results = await Promise.allSettled(accounts.map(async (acct) => {
       const entry = clientEntries.get(acct.id);
-      if (!entry) continue;
-      try {
-        if (acct.platform === 'bluesky' && entry.oauthAgent) {
-          const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 10 });
-          count += r.data.feed.filter(p => {
-            const record = p.post.record as any;
-            return record?.createdAt > newestDate;
-          }).length;
-        } else if (acct.platform === 'mastodon') {
-          const masto = entry.client as MastodonClient;
-          try {
-            const statuses = await masto.getHomeTimeline();
-            count += statuses.filter((s: any) => s.createdAt > newestDate || s.created_at > newestDate).length;
-          } catch {}
-        } else if (acct.platform === 'threads') {
-          // Threads API has no home timeline — check own posts only
-          const threads = entry.client as ThreadsClient;
-          try {
-            const posts = await threads.getOwnPosts(10);
-            count += posts.filter(p => p.timestamp > newestDate).length;
-          } catch {}
-        }
-      } catch {}
-    }
+      if (!entry) return 0;
+      if (acct.platform === 'bluesky' && entry.oauthAgent) {
+        const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 10 });
+        return r.data.feed.filter(p => {
+          const record = p.post.record as any;
+          return record?.createdAt > newestDate;
+        }).length;
+      } else if (acct.platform === 'mastodon') {
+        const masto = entry.client as MastodonClient;
+        const statuses = await masto.getHomeTimeline();
+        return statuses.filter((s: any) => s.createdAt > newestDate || s.created_at > newestDate).length;
+      } else if (acct.platform === 'threads') {
+        const threads = entry.client as ThreadsClient;
+        const posts = await threads.getOwnPosts(10);
+        return posts.filter(p => p.timestamp > newestDate).length;
+      }
+      return 0;
+    }));
+    const count = results.reduce((sum, r) => sum + (r.status === 'fulfilled' ? r.value : 0), 0);
     newPostsAvailable = count; // Replace, don't accumulate
 
     // Send push notification if page is not visible and we have new posts
@@ -230,59 +224,66 @@
     cursors = {};
     const allPosts: UnifiedPost[] = [];
 
-    for (const acct of accounts) {
-      try {
-        const entry = clientEntries.get(acct.id);
-        if (!entry) continue;
+    const feedResults = await Promise.allSettled(accounts.map(async (acct) => {
+      const entry = clientEntries.get(acct.id);
+      if (!entry) return { posts: [] as UnifiedPost[], acct, cursor: undefined as string | undefined };
 
-        const tag = (p: UnifiedPost) => { p.sourceAccount = acct.handle; return p; };
-        if (acct.platform === 'bluesky') {
-          if (feedMode === 'timeline' || feedMode === 'for-you') {
-            // Use OAuth agent for timeline if available (has full access)
-            if (entry.oauthAgent) {
-              const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 50 });
-              allPosts.push(...r.data.feed.map(p => tag(normalizePost(p, 'bluesky'))));
-              cursors[acct.id] = r.data.cursor;
-            } else {
-              const bsky = entry.client as BlueskyClient;
-              try {
-                const result = await bsky.getTimeline();
-                allPosts.push(...result.feed.map(p => tag(normalizePost(p, 'bluesky'))));
-                cursors[acct.id] = result.cursor;
-              } catch {
-                // Fall back to author feed if timeline auth fails
-                const result = await bsky.getAuthorFeed(acct.handle);
-                allPosts.push(...result.feed.map(p => tag(normalizePost(p, 'bluesky'))));
-                cursors[acct.id] = result.cursor;
-              }
-            }
+      const tag = (p: UnifiedPost) => { p.sourceAccount = acct.handle; return p; };
+      const acctPosts: UnifiedPost[] = [];
+      let cursor: string | undefined;
+
+      if (acct.platform === 'bluesky') {
+        if (feedMode === 'timeline' || feedMode === 'for-you') {
+          if (entry.oauthAgent) {
+            const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 50 });
+            acctPosts.push(...r.data.feed.map(p => tag(normalizePost(p, 'bluesky'))));
+            cursor = r.data.cursor;
           } else {
             const bsky = entry.client as BlueskyClient;
-            const result = await bsky.getAuthorFeed(acct.handle);
-            allPosts.push(...result.feed.map(p => tag(normalizePost(p, 'bluesky'))));
-            cursors[acct.id] = result.cursor;
+            try {
+              const result = await bsky.getTimeline();
+              acctPosts.push(...result.feed.map(p => tag(normalizePost(p, 'bluesky'))));
+              cursor = result.cursor;
+            } catch {
+              const result = await bsky.getAuthorFeed(acct.handle);
+              acctPosts.push(...result.feed.map(p => tag(normalizePost(p, 'bluesky'))));
+              cursor = result.cursor;
+            }
           }
-        } else if (acct.platform === 'threads') {
-          const threads = entry.client as ThreadsClient;
-          let posts = await threads.getOwnPosts(50);
-          posts = await threads.resolveReposts(posts);
-          allPosts.push(...posts.map(p => tag(normalizePost(p, 'threads'))));
         } else {
-          const masto = entry.client as MastodonClient;
-          if (feedMode === 'timeline' || feedMode === 'for-you') {
-            const statuses = await masto.getHomeTimeline();
-            allPosts.push(...statuses.map(p => tag(normalizePost(p, 'mastodon'))));
-            cursors[acct.id] = statuses.length > 0 ? statuses[statuses.length - 1].id : undefined;
-          } else {
-            const account = await masto.getAccountByHandle(acct.handle);
-            const statuses = await masto.getAccountStatuses(account.id);
-            allPosts.push(...statuses.map(p => tag(normalizePost(p, 'mastodon'))));
-            cursors[acct.id] = statuses.length > 0 ? statuses[statuses.length - 1].id : undefined;
-          }
+          const bsky = entry.client as BlueskyClient;
+          const result = await bsky.getAuthorFeed(acct.handle);
+          acctPosts.push(...result.feed.map(p => tag(normalizePost(p, 'bluesky'))));
+          cursor = result.cursor;
         }
-      } catch (e) {
-        console.error(`Failed to load feed for ${acct.handle}:`, e);
-        error = (error ? error + '\n' : '') + `${acct.platform}/${acct.handle}: ${e}`;
+      } else if (acct.platform === 'threads') {
+        const threads = entry.client as ThreadsClient;
+        let posts = await threads.getOwnPosts(50);
+        posts = await threads.resolveReposts(posts);
+        acctPosts.push(...posts.map(p => tag(normalizePost(p, 'threads'))));
+      } else {
+        const masto = entry.client as MastodonClient;
+        if (feedMode === 'timeline' || feedMode === 'for-you') {
+          const statuses = await masto.getHomeTimeline();
+          acctPosts.push(...statuses.map(p => tag(normalizePost(p, 'mastodon'))));
+          cursor = statuses.length > 0 ? statuses[statuses.length - 1].id : undefined;
+        } else {
+          const account = await masto.getAccountByHandle(acct.handle);
+          const statuses = await masto.getAccountStatuses(account.id);
+          acctPosts.push(...statuses.map(p => tag(normalizePost(p, 'mastodon'))));
+          cursor = statuses.length > 0 ? statuses[statuses.length - 1].id : undefined;
+        }
+      }
+      return { posts: acctPosts, acct, cursor };
+    }));
+
+    for (const result of feedResults) {
+      if (result.status === 'fulfilled') {
+        allPosts.push(...result.value.posts);
+        if (result.value.cursor) cursors[result.value.acct.id] = result.value.cursor;
+      } else {
+        console.error('Failed to load feed for account:', result.reason);
+        error = (error ? error + '\n' : '') + String(result.reason);
       }
     }
 

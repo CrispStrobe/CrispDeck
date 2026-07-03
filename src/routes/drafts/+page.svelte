@@ -24,18 +24,22 @@
   let scheduleDate = $state('');
   let scheduleTime = $state('');
 
-  onMount(async () => {
-    try {
-      const [draftList, result] = await Promise.all([listDrafts(), initAllClients()]);
-      drafts = draftList;
-      accounts = result.accounts;
-      clientEntries = result.clients;
-      checkScheduledDrafts();
-    } catch (e) {
-      error = String(e);
-    } finally {
-      loading = false;
-    }
+  onMount(() => {
+    let stopScheduler: (() => void) | undefined;
+    (async () => {
+      try {
+        const [draftList, result] = await Promise.all([listDrafts(), initAllClients()]);
+        drafts = draftList;
+        accounts = result.accounts;
+        clientEntries = result.clients;
+        stopScheduler = checkScheduledDrafts();
+      } catch (e) {
+        error = String(e);
+      } finally {
+        loading = false;
+      }
+    })();
+    return () => stopScheduler?.();
   });
 
   function checkScheduledDrafts() {

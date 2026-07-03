@@ -141,7 +141,7 @@
       ...topByEngagement.map((p, i) => `${i + 1}. [${(p.likeCount ?? 0) + (p.repostCount ?? 0)} engagement] ${p.text.substring(0, 80)}...`),
       ``,
       `## Posting Activity by Hour`,
-      ...postsByHour().map((count, h) => count > 0 ? `- ${h}:00 — ${count} posts` : '').filter(Boolean),
+      ...postsByHour.map((count, h) => count > 0 ? `- ${h}:00 — ${count} posts` : '').filter(Boolean),
     ];
     const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
@@ -178,12 +178,12 @@
   const topByReposts = $derived(sortPosts([...originalPosts], 'reposts').slice(0, 5));
   const topByEngagement = $derived(sortPosts([...originalPosts], 'engagement').slice(0, 5));
 
-  const postsByHour = $derived(() => {
+  const postsByHour = $derived.by(() => {
     const hours = Array(24).fill(0);
     originalPosts.forEach(p => { hours[new Date(p.createdAt).getHours()]++; });
     return hours;
   });
-  const maxHourly = $derived(Math.max(...postsByHour(), 1));
+  const maxHourly = $derived(Math.max(...postsByHour, 1));
 
   // Platform breakdown — full stats
   const bskyPosts = $derived(originalPosts.filter(p => p.platform === 'bluesky'));
@@ -202,12 +202,12 @@
   const handle = $derived(accounts[0]?.handle ?? 'user');
 
   // Cross-platform comparison: hourly activity per platform
-  const bskyByHour = $derived(() => {
+  const bskyByHour = $derived.by(() => {
     const hours = Array(24).fill(0);
     bskyPosts.forEach(p => { hours[new Date(p.createdAt).getHours()]++; });
     return hours;
   });
-  const mastoByHour = $derived(() => {
+  const mastoByHour = $derived.by(() => {
     const hours = Array(24).fill(0);
     mastoPosts.forEach(p => { hours[new Date(p.createdAt).getHours()]++; });
     return hours;
@@ -215,19 +215,19 @@
 
   // Day-of-week patterns
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const bskyByDay = $derived(() => {
+  const bskyByDay = $derived.by(() => {
     const days = Array(7).fill(0);
     bskyPosts.forEach(p => { days[new Date(p.createdAt).getDay()]++; });
     return days;
   });
-  const mastoByDay = $derived(() => {
+  const mastoByDay = $derived.by(() => {
     const days = Array(7).fill(0);
     mastoPosts.forEach(p => { days[new Date(p.createdAt).getDay()]++; });
     return days;
   });
 
   // Avg engagement per platform per day of week
-  const bskyEngByDay = $derived(() => {
+  const bskyEngByDay = $derived.by(() => {
     const eng = Array(7).fill(0);
     const cnt = Array(7).fill(0);
     bskyPosts.forEach(p => {
@@ -237,7 +237,7 @@
     });
     return eng.map((e, i) => cnt[i] > 0 ? e / cnt[i] : 0);
   });
-  const mastoEngByDay = $derived(() => {
+  const mastoEngByDay = $derived.by(() => {
     const eng = Array(7).fill(0);
     const cnt = Array(7).fill(0);
     mastoPosts.forEach(p => {
@@ -249,7 +249,7 @@
   });
 
   // Best posting time per platform
-  const bestBskyHour = $derived(() => {
+  const bestBskyHour = $derived.by(() => {
     const eng = Array(24).fill(0);
     const cnt = Array(24).fill(0);
     bskyPosts.forEach(p => {
@@ -260,7 +260,7 @@
     const avg = eng.map((e, i) => cnt[i] > 0 ? e / cnt[i] : 0);
     return avg.indexOf(Math.max(...avg));
   });
-  const bestMastoHour = $derived(() => {
+  const bestMastoHour = $derived.by(() => {
     const eng = Array(24).fill(0);
     const cnt = Array(24).fill(0);
     mastoPosts.forEach(p => {
@@ -476,7 +476,7 @@
         Posting Activity by Hour
       </h3>
       <div class="flex items-end justify-between gap-0.5 h-28 bg-[var(--color-surface)] p-3 rounded-lg border border-[var(--color-border)]">
-        {#each postsByHour() as count, hour}
+        {#each postsByHour as count, hour}
           <div class="flex-1 flex flex-col items-center justify-end group" title="{count} posts at {hour}:00">
             <div
               class="w-full bg-[var(--color-primary)]/40 hover:bg-[var(--color-primary)] rounded-t transition-colors"
@@ -503,7 +503,7 @@
               <span class="w-2 h-2 rounded-full bg-[var(--color-bluesky)]"></span>
               <span class="text-xs font-medium">{i18n.t.analytics.bestTime}</span>
             </div>
-            <div class="text-2xl font-bold text-[var(--color-bluesky)]">{bestBskyHour()}:00</div>
+            <div class="text-2xl font-bold text-[var(--color-bluesky)]">{bestBskyHour}:00</div>
             <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.analytics.bestTimeHint}</p>
           </div>
           <div class="bg-[var(--color-surface)] p-3 rounded-lg border border-[var(--color-border)]">
@@ -511,7 +511,7 @@
               <span class="w-2 h-2 rounded-full bg-[var(--color-mastodon)]"></span>
               <span class="text-xs font-medium">{i18n.t.analytics.bestTime}</span>
             </div>
-            <div class="text-2xl font-bold text-[var(--color-mastodon)]">{bestMastoHour()}:00</div>
+            <div class="text-2xl font-bold text-[var(--color-mastodon)]">{bestMastoHour}:00</div>
             <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.analytics.bestTimeHint}</p>
           </div>
         </div>
@@ -521,9 +521,9 @@
           <h4 class="text-xs font-medium text-[var(--color-text-muted)] mb-3">{i18n.t.analytics.engagementByDay}</h4>
           <div class="grid grid-cols-7 gap-1">
             {#each dayNames as day, i}
-              {@const bskyEng = bskyEngByDay()[i]}
-              {@const mastoEng = mastoEngByDay()[i]}
-              {@const maxEng = Math.max(...bskyEngByDay(), ...mastoEngByDay(), 1)}
+              {@const bskyEng = bskyEngByDay[i]}
+              {@const mastoEng = mastoEngByDay[i]}
+              {@const maxEng = Math.max(...bskyEngByDay, ...mastoEngByDay, 1)}
               <div class="text-center">
                 <div class="text-[9px] text-[var(--color-text-muted)] mb-1">{day}</div>
                 <div class="flex gap-0.5 items-end h-16 justify-center">
@@ -552,9 +552,9 @@
           <h4 class="text-xs font-medium text-[var(--color-text-muted)] mb-3">{i18n.t.analytics.activityByHour}</h4>
           <div class="flex items-end justify-between gap-0.5 h-20">
             {#each Array(24) as _, hour}
-              {@const bskyH = bskyByHour()[hour]}
-              {@const mastoH = mastoByHour()[hour]}
-              {@const maxH = Math.max(...bskyByHour(), ...mastoByHour(), 1)}
+              {@const bskyH = bskyByHour[hour]}
+              {@const mastoH = mastoByHour[hour]}
+              {@const maxH = Math.max(...bskyByHour, ...mastoByHour, 1)}
               <div class="flex-1 flex gap-px items-end" title="{hour}:00 — Bluesky: {bskyH}, Mastodon: {mastoH}">
                 <div class="flex-1 bg-[var(--color-bluesky)]/50 rounded-t" style="height: {(bskyH / maxH) * 100}%; min-height: 1px"></div>
                 <div class="flex-1 bg-[var(--color-mastodon)]/50 rounded-t" style="height: {(mastoH / maxH) * 100}%; min-height: 1px"></div>

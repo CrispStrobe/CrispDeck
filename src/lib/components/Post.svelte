@@ -92,6 +92,11 @@
     if (post.platform === 'bluesky') {
       jetstream.unwatchPost(post.uri, jetstreamListener);
     }
+    if (audioEl) {
+      audioEl.pause();
+      if (audioEl.src?.startsWith('blob:')) URL.revokeObjectURL(audioEl.src);
+      audioEl = null;
+    }
   });
 
   let copied = $state(false);
@@ -625,7 +630,7 @@
   const platformColor = $derived(`var(--color-${post.platform})`);
 
   // Labels on Bluesky posts
-  const postLabels = $derived(() => {
+  const postLabels = $derived.by(() => {
     if (post.platform !== 'bluesky') return [];
     const raw = post.raw as any;
     const labels = raw?.post?.labels ?? raw?.labels ?? [];
@@ -651,14 +656,14 @@
     return prefs[label] === 'hide';
   }
 
-  const hiddenByLabel = $derived(postLabels().some(shouldHideLabel));
-  const warnedLabels = $derived(postLabels().filter(shouldWarnLabel));
+  const hiddenByLabel = $derived(postLabels.some(shouldHideLabel));
+  const warnedLabels = $derived(postLabels.filter(shouldWarnLabel));
   let labelRevealed = $state(false);
 </script>
 
 {#if hiddenByLabel && !labelRevealed}
   <div class="p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] text-center">
-    <p class="text-xs text-[var(--color-text-muted)]">Content hidden: {postLabels().join(', ')}</p>
+    <p class="text-xs text-[var(--color-text-muted)]">Content hidden: {postLabels.join(', ')}</p>
     <button onclick={() => labelRevealed = true} class="text-xs text-[var(--color-primary)] hover:underline mt-1">Show anyway</button>
   </div>
 {:else}
@@ -672,9 +677,9 @@
   {/if}
 
   <!-- Label badges -->
-  {#if postLabels().length > 0}
+  {#if postLabels.length > 0}
     <div class="mb-2 flex items-center gap-1 flex-wrap">
-      {#each postLabels() as label}
+      {#each postLabels as label}
         <span class="text-[9px] px-1.5 py-0.5 bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] rounded">{label}</span>
       {/each}
     </div>

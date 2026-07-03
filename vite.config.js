@@ -17,6 +17,8 @@ export default defineConfig(async () => ({
   },
 
   build: {
+    target: 'es2022',
+    cssMinify: 'lightningcss',
     rollupOptions: {
       output: {
         manualChunks(id) {

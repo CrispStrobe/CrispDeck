@@ -109,28 +109,24 @@
   async function checkUnreadMessages() {
     try {
       const { accounts: accts, clients } = await getCachedClients();
-      let count = 0;
-      for (const [id, entry] of clients) {
+      const results = await Promise.allSettled(Array.from(clients).map(async ([id, entry]) => {
         const acct = accts.find(a => a.id === id);
-        if (!acct) continue;
+        if (!acct) return 0;
         if (acct.platform === 'bluesky' && entry.oauthAgent) {
-          try {
-            const proxyHeaders = { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' };
-            const r = await (entry.oauthAgent as any).api.chat.bsky.convo.listConvos({ limit: 50 }, { headers: proxyHeaders });
-            count += (r.data.convos ?? []).reduce((s: number, c: any) => s + (c.unreadCount ?? 0), 0);
-          } catch {}
+          const proxyHeaders = { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' };
+          const r = await (entry.oauthAgent as any).api.chat.bsky.convo.listConvos({ limit: 50 }, { headers: proxyHeaders });
+          return (r.data.convos ?? []).reduce((s: number, c: any) => s + (c.unreadCount ?? 0), 0);
         } else if (acct.platform === 'mastodon') {
           const masto = entry.client as any;
           const token = masto.getAccessToken();
           if (token) {
-            try {
-              const resp = await fetch(`${masto.getInstanceUrl()}/api/v1/conversations?limit=40`, { headers: { Authorization: `Bearer ${token}` } });
-              if (resp.ok) { const convos = await resp.json(); count += convos.filter((c: any) => c.unread).length; }
-            } catch {}
+            const resp = await fetch(`${masto.getInstanceUrl()}/api/v1/conversations?limit=40`, { headers: { Authorization: `Bearer ${token}` } });
+            if (resp.ok) { const convos = await resp.json(); return convos.filter((c: any) => c.unread).length; }
           }
         }
-      }
-      unreadMessages = count;
+        return 0;
+      }));
+      unreadMessages = results.reduce((sum, r) => sum + (r.status === 'fulfilled' ? r.value : 0), 0);
     } catch {}
   }
 

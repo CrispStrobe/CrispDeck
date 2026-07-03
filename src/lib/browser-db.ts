@@ -13,6 +13,7 @@ import type {
   Draft,
   FollowEntry,
 } from './types';
+import { jaroWinkler } from '$lib/utils/string';
 
 const DB_NAME = 'crispdeck';
 const DB_VERSION = 1;
@@ -125,7 +126,9 @@ async function deriveKey(salt: Uint8Array, iterations: number): Promise<CryptoKe
   );
 }
 
+let _cachedCryptoKey: CryptoKey | null = null;
 async function getCryptoKey(): Promise<CryptoKey> {
+  if (_cachedCryptoKey) return _cachedCryptoKey;
   // New key: per-device random salt + 600k iterations (OWASP 2024).
   let saltB64 = localStorage.getItem(CRYPTO_SALT_NAME);
   if (!saltB64) {
@@ -134,7 +137,8 @@ async function getCryptoKey(): Promise<CryptoKey> {
     localStorage.setItem(CRYPTO_SALT_NAME, saltB64);
   }
   const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
-  return deriveKey(salt, 600000);
+  _cachedCryptoKey = await deriveKey(salt, 600000);
+  return _cachedCryptoKey;
 }
 
 /** Legacy key for migrating existing data (static salt, 100k iterations) */
@@ -366,36 +370,6 @@ export async function removeTag(identityId: number, tag: string): Promise<void> 
 
 // ── Identity detection (JS implementation) ────────────────────────────────
 
-function jaroWinkler(s1: string, s2: string): number {
-  if (s1 === s2) return 1;
-  const len1 = s1.length, len2 = s2.length;
-  if (len1 === 0 || len2 === 0) return 0;
-  const matchWindow = Math.max(0, Math.floor(Math.max(len1, len2) / 2) - 1);
-  const s1M = new Array(len1).fill(false);
-  const s2M = new Array(len2).fill(false);
-  let matches = 0, transpositions = 0;
-  for (let i = 0; i < len1; i++) {
-    for (let j = Math.max(0, i - matchWindow); j < Math.min(i + matchWindow + 1, len2); j++) {
-      if (s2M[j] || s1[i] !== s2[j]) continue;
-      s1M[i] = true; s2M[j] = true; matches++; break;
-    }
-  }
-  if (matches === 0) return 0;
-  let k = 0;
-  for (let i = 0; i < len1; i++) {
-    if (!s1M[i]) continue;
-    while (!s2M[k]) k++;
-    if (s1[i] !== s2[k]) transpositions++;
-    k++;
-  }
-  const jaro = (matches / len1 + matches / len2 + (matches - transpositions / 2) / matches) / 3;
-  let prefix = 0;
-  for (let i = 0; i < Math.min(4, Math.min(len1, len2)); i++) {
-    if (s1[i] === s2[i]) prefix++; else break;
-  }
-  return jaro + prefix * 0.1 * (1 - jaro);
-}
-
 function extractUsername(handle: string): string {
   const h = handle.replace(/^@/, '');
   const at = h.indexOf('@');
@@ -471,13 +445,17 @@ export async function detectIdentities(
 // ── Follows cache ─────────────────────────────────────────────────────────
 
 export async function cacheFollows(ownerAccountId: number, follows: FollowEntry[]): Promise<void> {
-  // Clear old cache
   const old = await getAllByIndex<any>('follows_cache', 'owner_account_id', ownerAccountId);
-  for (const o of old) await del('follows_cache', o.id);
-  // Insert new
-  for (const f of follows) {
-    await add('follows_cache', { ...f, owner_account_id: ownerAccountId, fetched_at: now() });
-  }
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
+    const txn = db.transaction('follows_cache', 'readwrite');
+    const store = txn.objectStore('follows_cache');
+    for (const o of old) store.delete(o.id);
+    const ts = now();
+    for (const f of follows) store.add({ ...f, owner_account_id: ownerAccountId, fetched_at: ts });
+    txn.oncomplete = () => resolve();
+    txn.onerror = () => reject(txn.error);
+  });
 }
 
 export async function getCachedFollows(ownerAccountId: number): Promise<FollowEntry[]> {
