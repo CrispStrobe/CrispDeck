@@ -16,9 +16,18 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **3-network client**: Bluesky + Mastodon + Threads
 - **Timeline feed**: Bluesky + Mastodon home timelines merged, Threads own posts (Threads API has no home timeline), infinite scroll, "new posts" indicator, multi-account merge
 - **Platform filter**: All / Bluesky / Mastodon / Threads toggle
-- **Multi-column Deck**: TweetDeck-style with 15 column types (timeline, mentions, notifications, hashtag, user, local, federated, search, list, feed, my-posts, tag-group, RSS, keyword-monitor, threads-search), per-column filters, saved layouts/workspaces, drag-reorder, column width control, platform-aware column picker
+- **Multi-column Deck**: 20 column types (timeline, mentions, notifications, hashtag, user, local, federated, search, list, feed, my-posts, tag-group, RSS, keyword-monitor, threads-search, messages, trending, activity, likes, followers), per-column filters, saved layouts/workspaces, drag-reorder, column width presets + resize, color coding, collapse/pin, per-column notifications, scroll-lock, platform-aware column picker
 - **Keyword monitoring columns**: real-time streaming filtered by user-defined keywords + regex, with Bluesky Jetstream firehose + Mastodon WebSocket, LIVE indicator
-- **Streaming timelines**: live-push of new posts via Bluesky Jetstream + Mastodon WebSocket
+- **Streaming timelines**: live-push of new posts via Bluesky Jetstream + Mastodon WebSocket, all column types stream
+- **Floating compose panel**: slide-out compose overlay on deck, reply/quote without leaving the view, `n` keyboard shortcut
+- **Column-aware keyboard navigation**: h/l or arrow keys between columns, j/k within, 1-9 jump, `a` to add column, `o` to open, `r` to reply
+- **Per-column notifications**: sound, desktop alerts, or both — configurable per column
+- **Column management**: color coding, collapse/minimize, pin/lock, clear, width presets (narrow/medium/wide), scroll-lock toggle
+- **Display density modes**: compact / comfortable / spacious — single toggle adjusts spacing, avatars, and padding globally
+- **Saved searches**: save and re-access search queries, open as deck columns
+- **Advanced search operators**: per-platform syntax help, quick filter buttons (has media, from me, past week)
+- **Quick-schedule from compose**: date/time picker inline, saves as scheduled draft
+- **Shareable collections**: export/import reading lists as JSON for sharing
 - **Like, boost, reply, quote, bookmark, share, report** interactions (Bluesky + Mastodon + Threads)
 - **Thread view**: click any post to see full parent chain + replies, thread un-rolling ("Read as article") — Bluesky + Mastodon; Threads posts open on threads.com
 - **Profile pages**: any user — avatar/banner/bio/stats, follow/unfollow, block/mute, posts/replies/media gallery/followers/following tabs
@@ -170,7 +179,7 @@ Threads users' posts can also be read via **Mastodon federation** (`@user@thread
 - **HTML sanitization**: DOMPurify on all Mastodon HTML (XSS prevention)
 - **Security headers**: CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy
 - **Encryption**: AES-256-GCM with 600k PBKDF2 iterations + per-device random salt
-- 1,177 unit tests across 86 test files + 29 Playwright E2E tests
+- 1,443 unit tests across 99 test files + 29 Playwright E2E tests
 
 ## Architecture
 
@@ -273,7 +282,7 @@ npx vercel deploy --prod
 ### Run tests
 
 ```bash
-npm test              # 1,177 frontend unit tests
+npm test              # 1,443 frontend unit tests
 npm run test:watch    # watch mode
 npm run test:e2e      # 29 Playwright E2E browser tests (requires build first)
 
@@ -352,7 +361,7 @@ scripts/
 
 ## CI/CD
 
-- **CI** (`ci.yml`): 1,177 frontend tests + frontend build + Playwright E2E + Rust check on Linux/macOS/Windows — every push and PR
+- **CI** (`ci.yml`): 1,443 frontend tests + frontend build + Playwright E2E + Rust check on Linux/macOS/Windows — every push and PR
 - **Mobile** (`mobile.yml`): iOS + Android builds via Tauri 2 — triggers on `v*` tags
 - **Release** (`release.yml`): Cross-platform Tauri builds — triggers on `v*` tags, creates GitHub Releases with `.deb`, `.dmg`, `.msi`
 
@@ -379,7 +388,7 @@ OAuth on mobile uses the `crispdeck://` URL scheme (registered in AndroidManifes
 
 ## Stats
 
-- 1,177 frontend unit tests + 29 Playwright E2E tests + 15 Rust tests
+- 1,443 frontend unit tests + 29 Playwright E2E tests + 15 Rust tests
 - 29 pages, 15 deck column types
 - 3 networks: Bluesky (OAuth + app password), Mastodon (OAuth), Threads (OAuth with server proxy)
 - 8 UI languages (EN, DE, ES, FR, JA, PT, ZH, AR — all 100%) with RTL support

@@ -6,6 +6,8 @@
  * The active layout name is also persisted so it survives reloads.
  */
 
+export type ColumnNotifyMode = 'off' | 'sound' | 'desktop' | 'both';
+
 export interface DeckColumnConfig {
   id: string;
   title: string;
@@ -14,7 +16,22 @@ export interface DeckColumnConfig {
   query?: string;
   width?: number;
   streaming?: boolean;
+  notify?: ColumnNotifyMode;
+  scrollLock?: boolean;
+  color?: string;
+  collapsed?: boolean;
+  pinned?: boolean;
+  muteWords?: string[];
 }
+
+/** Preset column widths. */
+export const COLUMN_WIDTH_PRESETS = {
+  narrow: 280,
+  medium: 350,
+  wide: 450,
+} as const;
+
+export type ColumnWidthPreset = keyof typeof COLUMN_WIDTH_PRESETS;
 
 export interface DeckLayout {
   name: string;

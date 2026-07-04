@@ -98,3 +98,67 @@ export function removePostFromList(listId: string, postUri: string): void {
 export function getListsForPost(postUri: string): ReadingList[] {
   return listReadingLists().filter(l => l.posts.some(p => p.uri === postUri));
 }
+
+// ── Shareable collections ────────────────────────────────────────────────────
+
+export interface ShareableCollection {
+  name: string;
+  description: string;
+  posts: ReadingListPost[];
+  exportedAt: string;
+  version: 1;
+}
+
+/** Export a reading list as a shareable JSON object. */
+export function exportCollection(listId: string): ShareableCollection | null {
+  const list = getReadingList(listId);
+  if (!list) return null;
+  return {
+    name: list.name,
+    description: list.description,
+    posts: list.posts,
+    exportedAt: new Date().toISOString(),
+    version: 1,
+  };
+}
+
+/** Export a reading list as a data URL for sharing. */
+export function exportCollectionAsUrl(listId: string): string | null {
+  const collection = exportCollection(listId);
+  if (!collection) return null;
+  const json = JSON.stringify(collection);
+  const encoded = btoa(unescape(encodeURIComponent(json)));
+  return `data:application/json;base64,${encoded}`;
+}
+
+/** Export a reading list as a shareable text blob (for copy-paste). */
+export function exportCollectionAsText(listId: string): string | null {
+  const collection = exportCollection(listId);
+  if (!collection) return null;
+  return JSON.stringify(collection, null, 2);
+}
+
+/** Import a collection from JSON text, creating a new reading list. */
+export function importCollection(jsonText: string): ReadingList | null {
+  try {
+    const data = JSON.parse(jsonText) as ShareableCollection;
+    if (!data.name || !Array.isArray(data.posts)) return null;
+    const list = createReadingList(data.name, data.description ?? '');
+    list.posts = data.posts.filter(p => p.uri && p.text && p.platform);
+    saveReadingList(list);
+    return list;
+  } catch {
+    return null;
+  }
+}
+
+/** Import a collection from a base64 data URL. */
+export function importCollectionFromUrl(dataUrl: string): ReadingList | null {
+  try {
+    const base64 = dataUrl.replace(/^data:[^;]+;base64,/, '');
+    const json = decodeURIComponent(escape(atob(base64)));
+    return importCollection(json);
+  } catch {
+    return null;
+  }
+}

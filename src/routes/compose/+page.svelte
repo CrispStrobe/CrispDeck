@@ -65,6 +65,33 @@
   // Video upload status
   let videoUploadStatus = $state('');
 
+  // Quick schedule
+  let showSchedule = $state(false);
+  let scheduleDate = $state('');
+  let scheduleTime = $state('');
+
+  async function handleSchedule() {
+    if (!text.trim() || !scheduleDate || !scheduleTime) return;
+    const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
+    try {
+      await dbSaveDraft({
+        text: text.trim(),
+        target_accounts: selectedAccountIds,
+        visibility,
+        content_warning: showCW ? contentWarning : null,
+        scheduled_at: scheduledAt,
+      });
+      toast.success(`Scheduled for ${new Date(scheduledAt).toLocaleString()}`);
+      text = '';
+      showSchedule = false;
+      scheduleDate = '';
+      scheduleTime = '';
+      clearAutoSave();
+    } catch (e) {
+      error = `Failed to schedule: ${e}`;
+    }
+  }
+
   // AI compose
   let showAIMenu = $state(false);
   let aiLoading = $state(false);
@@ -928,6 +955,36 @@
             >
               Save Draft
             </button>
+            <div class="relative">
+              <button
+                onclick={() => showSchedule = !showSchedule}
+                disabled={!text.trim()}
+                class="flex items-center gap-1 px-3 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] disabled:opacity-30"
+              >
+                <Clock size={14} />
+                Schedule
+              </button>
+              {#if showSchedule}
+                <div class="absolute bottom-full right-0 mb-1 p-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl z-50 w-56">
+                  <div class="space-y-2">
+                    <label class="text-xs text-[var(--color-text-muted)]">Date</label>
+                    <input type="date" bind:value={scheduleDate}
+                      min={new Date().toISOString().split('T')[0]}
+                      class="w-full px-2 py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-xs text-[var(--color-text)] focus:outline-none" />
+                    <label class="text-xs text-[var(--color-text-muted)]">Time</label>
+                    <input type="time" bind:value={scheduleTime}
+                      class="w-full px-2 py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-xs text-[var(--color-text)] focus:outline-none" />
+                    <button
+                      onclick={handleSchedule}
+                      disabled={!scheduleDate || !scheduleTime}
+                      class="w-full px-3 py-1.5 bg-[var(--color-primary)] text-white text-xs rounded disabled:opacity-50"
+                    >
+                      Schedule Post
+                    </button>
+                  </div>
+                </div>
+              {/if}
+            </div>
             <button
               onclick={handlePost}
               disabled={posting || (!text.trim() && mediaFiles.length === 0) || selectedAccountIds.length === 0}

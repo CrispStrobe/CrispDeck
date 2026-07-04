@@ -10,8 +10,10 @@
   import { i18n } from '$lib/i18n.svelte';
   import { installLogInterceptors } from '$lib/debug-log';
   import { preloadSanitizer } from '$lib/sanitize';
+  import { initDensity } from '$lib/density';
   installLogInterceptors();
   preloadSanitizer(); // Start loading DOMPurify before any posts render
+  initDensity(); // Apply saved display density CSS custom properties
 
   declare const __VERSION__: string;
 

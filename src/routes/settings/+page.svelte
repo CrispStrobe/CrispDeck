@@ -12,6 +12,7 @@
   import { goto } from '$app/navigation';
   import { invalidateClientCache } from '$lib/api/client-factory';
   import { i18n, type Language } from '$lib/i18n.svelte';
+  import { getDensity, saveDensity, applyDensity, getDensityOptions, type DensityMode } from '$lib/density';
 
   type SettingsTab = 'account' | 'appearance' | 'content' | 'compose' | 'advanced' | 'about';
   const tabs: { id: SettingsTab; labelKey: 'tabAccount' | 'tabAppearance' | 'tabContent' | 'tabCompose' | 'tabAdvanced' | 'tabAbout' }[] = [
@@ -219,6 +220,7 @@
   let lineSpacing = $state(parseFloat(localStorage.getItem('crispdeck-line-spacing') ?? '1.5'));
   let contentWidth = $state(parseInt(localStorage.getItem('crispdeck-content-width') ?? '0')); // 0 = auto
   let homeMode = $state(localStorage.getItem('crispdeck-home-mode') ?? 'dashboard');
+  let density = $state<DensityMode>(getDensity());
 
   const fontMap: Record<FontFamily, string> = {
     system: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif",
@@ -1173,6 +1175,24 @@
         >
           <option value="lightbox">{i18n.t.settings.mediaPreviewLightbox}</option>
           <option value="browser">{i18n.t.settings.mediaPreviewBrowser}</option>
+        </select>
+      </div>
+
+      <!-- Display density -->
+      <div class="flex items-center justify-between">
+        <div>
+          <label for="density-mode" class="text-sm text-[var(--color-text-muted)]">Display density</label>
+          <p class="text-[10px] text-[var(--color-text-muted)]">Adjusts spacing, avatar size, and padding across the entire UI</p>
+        </div>
+        <select
+          id="density-mode"
+          bind:value={density}
+          onchange={() => { saveDensity(density); applyDensity(density); }}
+          class="px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none"
+        >
+          {#each getDensityOptions() as opt}
+            <option value={opt.mode}>{opt.label}</option>
+          {/each}
         </select>
       </div>
 

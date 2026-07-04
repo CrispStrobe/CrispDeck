@@ -7,6 +7,7 @@
   import DelayedSpinner from '$lib/components/DelayedSpinner.svelte';
   import DeckColumn from '$lib/components/deck/DeckColumn.svelte';
   import type { ColumnType } from '$lib/components/deck/DeckColumn.svelte';
+  import FloatingCompose from '$lib/components/FloatingCompose.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import { ThreadsClient } from '$lib/api/threads';
@@ -21,8 +22,10 @@
   import {
     listLayouts, getLayout, saveLayout, deleteLayout,
     getActiveLayoutName, setActiveLayoutName,
-    type DeckColumnConfig,
+    type DeckColumnConfig, type ColumnNotifyMode,
   } from '$lib/deck-layouts';
+  import { notifyColumn } from '$lib/column-notify';
+  import { jetstream } from '$lib/jetstream';
 
   // Drag-and-drop reorder state (mouse)
   let draggedColumnId: string | null = $state(null);
@@ -129,6 +132,141 @@
   let clientEntries: Map<number, ClientEntry> = new Map();
   let streamCleanups: Map<string, () => void> = new Map();
 
+  // Floating compose state
+  let composeOpen = $state(false);
+  let composeReplyTo: UnifiedPost | null = $state(null);
+  let composeQuotePost: UnifiedPost | null = $state(null);
+
+  function openCompose(replyTo?: UnifiedPost, quote?: UnifiedPost) {
+    composeReplyTo = replyTo ?? null;
+    composeQuotePost = quote ?? null;
+    composeOpen = true;
+  }
+
+  function handleReply(post: UnifiedPost) {
+    openCompose(post);
+  }
+
+  function handleQuote(post: UnifiedPost) {
+    openCompose(undefined, post);
+  }
+
+  // Column-aware keyboard navigation
+  let focusedColumnIdx = $state(-1);
+  let focusedPostIdx = $state(-1);
+
+  function focusColumn(idx: number) {
+    if (idx < 0 || idx >= columns.length) return;
+    focusedColumnIdx = idx;
+    focusedPostIdx = -1;
+    // Scroll the column into view
+    if (deckContainerEl) {
+      const wrapper = deckContainerEl.children[idx] as HTMLElement;
+      wrapper?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    }
+  }
+
+  function focusPost(idx: number) {
+    if (focusedColumnIdx < 0) return;
+    const col = columns[focusedColumnIdx];
+    const posts = columnPosts[col?.id] ?? [];
+    if (idx < 0) idx = 0;
+    if (idx >= posts.length) idx = posts.length - 1;
+    focusedPostIdx = idx;
+    // Scroll the post into view within the column
+    if (deckContainerEl) {
+      const colEl = deckContainerEl.children[focusedColumnIdx] as HTMLElement;
+      const postEls = colEl?.querySelectorAll('[data-post-uri]');
+      const postEl = postEls?.[idx] as HTMLElement;
+      postEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  function getFocusedPost(): UnifiedPost | null {
+    if (focusedColumnIdx < 0 || focusedPostIdx < 0) return null;
+    const col = columns[focusedColumnIdx];
+    return (columnPosts[col?.id] ?? [])[focusedPostIdx] ?? null;
+  }
+
+  function handleKeydown(e: KeyboardEvent) {
+    const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement;
+    if (isInput || composeOpen) return;
+
+    // 'n' opens compose
+    if (e.key === 'n') {
+      e.preventDefault();
+      openCompose();
+      return;
+    }
+
+    // Column navigation: h/l or ArrowLeft/ArrowRight
+    if (e.key === 'h' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      focusColumn(focusedColumnIdx <= 0 ? 0 : focusedColumnIdx - 1);
+      return;
+    }
+    if (e.key === 'l' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      focusColumn(focusedColumnIdx < 0 ? 0 : Math.min(focusedColumnIdx + 1, columns.length - 1));
+      return;
+    }
+
+    // Post navigation within focused column: j/k
+    if (e.key === 'j') {
+      e.preventDefault();
+      if (focusedColumnIdx < 0) focusColumn(0);
+      focusPost(focusedPostIdx + 1);
+      return;
+    }
+    if (e.key === 'k') {
+      e.preventDefault();
+      focusPost(focusedPostIdx - 1);
+      return;
+    }
+
+    // 1-9 jump to column by position
+    const num = parseInt(e.key);
+    if (num >= 1 && num <= 9 && num <= columns.length) {
+      e.preventDefault();
+      focusColumn(num - 1);
+      return;
+    }
+
+    // 'o' opens focused post in thread view
+    if (e.key === 'o') {
+      const post = getFocusedPost();
+      if (post) {
+        e.preventDefault();
+        window.location.href = `/thread?uri=${encodeURIComponent(post.uri)}&platform=${post.platform}`;
+      }
+      return;
+    }
+
+    // 'r' replies to focused post
+    if (e.key === 'r') {
+      const post = getFocusedPost();
+      if (post) { e.preventDefault(); handleReply(post); }
+      return;
+    }
+
+    // 'a' opens add column menu
+    if (e.key === 'a') {
+      e.preventDefault();
+      showAddMenu = !showAddMenu;
+      return;
+    }
+
+    // Escape clears column focus or closes add menu
+    if (e.key === 'Escape') {
+      if (showAddMenu) { e.preventDefault(); showAddMenu = false; return; }
+      if (focusedColumnIdx >= 0) {
+        e.preventDefault();
+        focusedColumnIdx = -1;
+        focusedPostIdx = -1;
+      }
+    }
+  }
+
   const hasBsky = $derived(accounts.some(a => a.platform === 'bluesky'));
   const hasMasto = $derived(accounts.some(a => a.platform === 'mastodon'));
   const hasThreads = $derived(accounts.some(a => a.platform === 'threads'));
@@ -155,6 +293,11 @@
     { type: 'rss', label: 'RSS Feed...' },
     { type: 'keyword-monitor', label: 'Monitor Keywords...' },
     { type: 'threads-search', label: 'Threads Search...' },
+    { type: 'messages', label: 'Messages / DMs' },
+    { type: 'trending', label: 'Trending' },
+    { type: 'activity', label: 'Activity (Engagement)' },
+    { type: 'likes', label: 'Liked Posts' },
+    { type: 'followers', label: 'New Followers' },
   ];
 
   // Saved layouts (using deck-layouts.ts module)
@@ -192,6 +335,12 @@
       // Load saved layouts via module
       refreshLayoutList();
 
+      // Enable live engagement counters (Jetstream) if user hasn't disabled them
+      const liveCounters = localStorage.getItem('crispdeck-live-counters') !== 'false';
+      if (liveCounters && accounts.some(a => a.platform === 'bluesky')) {
+        jetstream.setEnabled(true);
+      }
+
       // Load columns one by one (show as they load, don't block all)
       loading = false;
       for (const col of columns) {
@@ -217,6 +366,7 @@
       document.removeEventListener('visibilitychange', handleVisibility);
       streamManager.disconnectAll();
       streamCleanups.clear();
+      jetstream.setEnabled(false);
     };
   });
 
@@ -496,6 +646,175 @@
         } catch (e) {
           console.error('Threads search column failed:', e);
         }
+      } else if (col.type === 'messages') {
+        // Load conversations as pseudo-posts for deck display
+        if (bskyAgent) try {
+          const r = await bskyAgent.api.chat.bsky.convo.listConvos({ limit: 30 });
+          for (const convo of r.data.convos ?? []) {
+            const other = convo.members?.find((m: any) => m.did !== bskyAgent.session?.did);
+            if (other) {
+              posts.push({
+                uri: `chat:bsky:${convo.id}`,
+                text: (convo.lastMessage as any)?.text ?? '(no messages)',
+                author: { handle: other.handle ?? other.did, displayName: other.displayName, avatar: other.avatar },
+                createdAt: (convo.lastMessage as any)?.sentAt ?? new Date().toISOString(),
+                platform: 'bluesky',
+                isRepost: false,
+                raw: convo,
+              });
+            }
+          }
+        } catch {}
+        if (mastoClient) try {
+          const token = mastoClient.getAccessToken();
+          if (token) {
+            const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/conversations?limit=30`, { headers: { Authorization: `Bearer ${token}` } });
+            if (resp.ok) for (const convo of await resp.json()) {
+              const acct = convo.accounts?.[0];
+              posts.push({
+                uri: `chat:masto:${convo.id}`,
+                text: convo.last_status?.content?.replace(/<[^>]*>?/gm, '') ?? '(no messages)',
+                author: { handle: acct?.acct ? `@${acct.acct}` : '?', displayName: acct?.display_name, avatar: acct?.avatar },
+                createdAt: convo.last_status?.created_at ?? new Date().toISOString(),
+                platform: 'mastodon',
+                isRepost: false,
+                raw: convo,
+              });
+            }
+          }
+        } catch {}
+      } else if (col.type === 'trending') {
+        // Load trending topics/posts from both platforms
+        if (bskyClient) try {
+          const agent = bskyEntry?.oauthAgent ?? bskyClient.getAgent();
+          const r = await agent.api.app.bsky.unspecced.getPopularFeedGenerators({ limit: 20 });
+          // Also try trending topics
+          try {
+            const topics = await agent.api.app.bsky.unspecced.getTrendingTopics({});
+            for (const topic of topics.data.topics ?? []) {
+              posts.push({
+                uri: `trending:bsky:${topic.topic}`,
+                text: `🔥 ${topic.topic}${topic.displayName ? ` — ${topic.displayName}` : ''}`,
+                author: { handle: 'trending', displayName: 'Trending on Bluesky' },
+                createdAt: new Date().toISOString(),
+                platform: 'bluesky',
+                isRepost: false,
+                raw: topic,
+              });
+            }
+          } catch {}
+        } catch {}
+        if (mastoClient) try {
+          const token = mastoClient.getAccessToken();
+          const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+          const [tagsResp, linksResp] = await Promise.all([
+            fetch(`${mastoClient.getInstanceUrl()}/api/v1/trends/tags?limit=10`, { headers }),
+            fetch(`${mastoClient.getInstanceUrl()}/api/v1/trends/links?limit=10`, { headers }),
+          ]);
+          if (tagsResp.ok) for (const tag of await tagsResp.json()) {
+            const totalUses = (tag.history ?? []).reduce((sum: number, d: any) => sum + parseInt(d.uses ?? 0), 0);
+            posts.push({
+              uri: `trending:masto:tag:${tag.name}`,
+              text: `#${tag.name} — ${totalUses} uses`,
+              author: { handle: 'trending', displayName: 'Trending on Mastodon' },
+              createdAt: new Date().toISOString(),
+              platform: 'mastodon',
+              isRepost: false,
+              raw: tag,
+            });
+          }
+          if (linksResp.ok) for (const link of await linksResp.json()) {
+            posts.push({
+              uri: `trending:masto:link:${link.url}`,
+              text: `${link.title ?? link.url}`,
+              author: { handle: link.provider_name ?? new URL(link.url).hostname, displayName: 'Trending Link', avatar: link.image },
+              createdAt: link.published_at ?? new Date().toISOString(),
+              platform: 'mastodon',
+              isRepost: false,
+              raw: link,
+            });
+          }
+        } catch {}
+      } else if (col.type === 'activity') {
+        // Engagement on your posts: likes, reposts, quotes only
+        const engagementTypes = ['like', 'favourite', 'repost', 'reblog', 'quote'];
+        if (bskyAgent) try {
+          const r = await bskyAgent.api.app.bsky.notification.listNotifications({ limit: 50 });
+          for (const n of (r.data.notifications ?? []).filter(n => engagementTypes.includes(n.reason))) {
+            posts.push({
+              uri: `activity:bsky:${n.uri}`,
+              text: `${n.author.displayName ?? n.author.handle} ${n.reason === 'like' ? 'liked' : n.reason === 'repost' ? 'reposted' : 'quoted'} your post`,
+              author: { handle: n.author.handle, displayName: n.author.displayName, avatar: n.author.avatar },
+              createdAt: n.indexedAt,
+              platform: 'bluesky',
+              isRepost: false,
+              raw: n,
+            });
+          }
+        } catch {}
+        if (mastoClient) try {
+          const token = mastoClient.getAccessToken();
+          if (token) {
+            const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/notifications?types[]=favourite&types[]=reblog&limit=40`, { headers: { Authorization: `Bearer ${token}` } });
+            if (resp.ok) for (const n of await resp.json()) {
+              posts.push({
+                uri: `activity:masto:${n.id}`,
+                text: `${n.account?.display_name ?? n.account?.acct ?? '?'} ${n.type === 'favourite' ? 'liked' : 'boosted'} your post`,
+                author: { handle: n.account?.acct ? `@${n.account.acct}` : '?', displayName: n.account?.display_name, avatar: n.account?.avatar },
+                createdAt: n.created_at,
+                platform: 'mastodon',
+                isRepost: false,
+                raw: n,
+              });
+            }
+          }
+        } catch {}
+      } else if (col.type === 'likes') {
+        // Posts you've liked
+        if (bskyAgent) try {
+          const r = await bskyAgent.api.app.bsky.feed.getActorLikes({ actor: bskyAgent.session?.did ?? '', limit: 50 });
+          posts.push(...r.data.feed.map(p => normalizePost(p, 'bluesky')));
+        } catch {}
+        if (mastoClient) try {
+          const token = mastoClient.getAccessToken();
+          if (token) {
+            const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/favourites?limit=40`, { headers: { Authorization: `Bearer ${token}` } });
+            if (resp.ok) posts.push(...(await resp.json()).map((s: any) => normalizePost(s, 'mastodon')));
+          }
+        } catch {}
+      } else if (col.type === 'followers') {
+        // Recent followers
+        if (bskyAgent) try {
+          const r = await bskyAgent.api.app.bsky.notification.listNotifications({ limit: 50 });
+          for (const n of (r.data.notifications ?? []).filter(n => n.reason === 'follow')) {
+            posts.push({
+              uri: `follower:bsky:${n.uri}`,
+              text: `${n.author.displayName ?? n.author.handle} followed you`,
+              author: { handle: n.author.handle, displayName: n.author.displayName, avatar: n.author.avatar },
+              createdAt: n.indexedAt,
+              platform: 'bluesky',
+              isRepost: false,
+              raw: n,
+            });
+          }
+        } catch {}
+        if (mastoClient) try {
+          const token = mastoClient.getAccessToken();
+          if (token) {
+            const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/notifications?types[]=follow&limit=40`, { headers: { Authorization: `Bearer ${token}` } });
+            if (resp.ok) for (const n of await resp.json()) {
+              posts.push({
+                uri: `follower:masto:${n.id}`,
+                text: `${n.account?.display_name ?? n.account?.acct ?? '?'} followed you`,
+                author: { handle: n.account?.acct ? `@${n.account.acct}` : '?', displayName: n.account?.display_name, avatar: n.account?.avatar },
+                createdAt: n.created_at,
+                platform: 'mastodon',
+                isRepost: false,
+                raw: n,
+              });
+            }
+          }
+        } catch {}
       }
     } catch (e) {
       console.error(`Failed to load column ${col.id}:`, e);
@@ -525,6 +844,8 @@
           const existing = columnPosts[col.id] ?? [];
           if (existing.some(p => p.uri === normalized.uri)) return;
           columnPosts[col.id] = [normalized, ...existing].slice(0, 200);
+          // Fire per-column notification if enabled
+          notifyColumn(col.notify, col.title, normalized.text);
         } catch {}
       };
 
@@ -549,6 +870,60 @@
           platform: 'bluesky',
           firehose: true,
         }, handleStreamEvent));
+      }
+
+      if (cleanups.length > 0) {
+        streamCleanups.set(col.id, () => cleanups.forEach(fn => fn()));
+      }
+    }
+
+    // Enable streaming for other column types (timeline, mentions, notifications, local, federated, hashtag, list)
+    const streamableTypes = ['timeline', 'mentions', 'notifications', 'local', 'federated', 'hashtag', 'list', 'user'];
+    if (streamableTypes.includes(col.type) && !streamCleanups.has(col.id)) {
+      const prevCleanup = streamCleanups.get(col.id);
+      if (prevCleanup) prevCleanup();
+
+      const handleGenericStream = (event: StreamEvent) => {
+        if (event.type !== 'new-post') return;
+        try {
+          const normalized = normalizePost(event.payload, event.platform);
+          const existing = columnPosts[col.id] ?? [];
+          if (existing.some(p => p.uri === normalized.uri)) return;
+          columnPosts[col.id] = [normalized, ...existing].slice(0, 200);
+          notifyColumn(col.notify, col.title, normalized.text);
+        } catch {}
+      };
+
+      const cleanups: (() => void)[] = [];
+
+      if (mastoClient) {
+        const token = mastoClient.getAccessToken();
+        if (token) {
+          let streamType = 'user'; // default for timeline, mentions, notifications
+          let streamParam: string | undefined;
+          if (col.type === 'local') streamType = 'public:local';
+          else if (col.type === 'federated') streamType = 'public';
+          else if (col.type === 'hashtag' && col.query) { streamType = 'hashtag'; streamParam = col.query; }
+          else if (col.type === 'list' && col.query) { streamType = 'list'; streamParam = col.query; }
+
+          cleanups.push(streamManager.enableColumn({
+            columnId: `${col.id}-masto`,
+            platform: 'mastodon',
+            instanceUrl: mastoClient.getInstanceUrl(),
+            accessToken: token,
+            streamType,
+            streamParam,
+          }, handleGenericStream));
+        }
+      }
+
+      // Bluesky: use Jetstream for timeline/user columns (DID-filtered)
+      if (bskyClient && (col.type === 'timeline' || col.type === 'user' || col.type === 'mentions')) {
+        cleanups.push(streamManager.enableColumn({
+          columnId: `${col.id}-bsky`,
+          platform: 'bluesky',
+          firehose: true, // Use firehose; client-side filtering happens in the listener
+        }, handleGenericStream));
       }
 
       if (cleanups.length > 0) {
@@ -663,6 +1038,36 @@
     saveColumns();
   }
 
+  function handleNotifyChange(colId: string, mode: ColumnNotifyMode) {
+    columns = columns.map(c => c.id === colId ? { ...c, notify: mode } : c);
+    saveColumns();
+  }
+
+  function handleScrollLockChange(colId: string, locked: boolean) {
+    columns = columns.map(c => c.id === colId ? { ...c, scrollLock: locked } : c);
+    saveColumns();
+  }
+
+  function handleColorChange(colId: string, color: string) {
+    columns = columns.map(c => c.id === colId ? { ...c, color } : c);
+    saveColumns();
+  }
+
+  function handleCollapsedChange(colId: string, collapsed: boolean) {
+    columns = columns.map(c => c.id === colId ? { ...c, collapsed } : c);
+    saveColumns();
+  }
+
+  function handlePinnedChange(colId: string, pinned: boolean) {
+    columns = columns.map(c => c.id === colId ? { ...c, pinned } : c);
+    saveColumns();
+  }
+
+  function handleClear(colId: string) {
+    columnPosts[colId] = [];
+    columnNotifGroups[colId] = [];
+  }
+
   function handleDragStart(colId: string, e: DragEvent) {
     draggedColumnId = colId;
     if (e.dataTransfer) {
@@ -726,7 +1131,8 @@
   }
 </script>
 
-<svelte:head><title>CrispDeck — Deck</title><meta name="description" content="Multi-column TweetDeck-style view" /></svelte:head>
+<svelte:window onkeydown={handleKeydown} />
+<svelte:head><title>CrispDeck — Deck</title><meta name="description" content="Multi-column deck view" /></svelte:head>
 
 <div class="h-full flex flex-col">
   <!-- Deck header -->
@@ -813,10 +1219,10 @@
       ontouchend={handleTouchEnd}
       ontouchcancel={handleTouchEnd}
     >
-      {#each columns as col (col.id)}
+      {#each columns as col, colIdx (col.id)}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
-          class="transition-all duration-200 {draggedColumnId === col.id || touchDragColumnId === col.id ? 'opacity-40 scale-[0.95]' : ''} {touchDropTargetId === col.id ? 'ring-2 ring-[var(--color-primary)] rounded-lg' : draggedColumnId && draggedColumnId !== col.id ? 'hover:ring-2 hover:ring-[var(--color-primary)]/30 hover:rounded-lg' : ''}"
+          class="transition-all duration-200 {draggedColumnId === col.id || touchDragColumnId === col.id ? 'opacity-40 scale-[0.95]' : ''} {touchDropTargetId === col.id ? 'ring-2 ring-[var(--color-primary)] rounded-lg' : draggedColumnId && draggedColumnId !== col.id ? 'hover:ring-2 hover:ring-[var(--color-primary)]/30 hover:rounded-lg' : ''} {focusedColumnIdx === colIdx ? 'ring-2 ring-[var(--color-primary)]/50 rounded-lg' : ''}"
           ontouchstart={(e) => handleTouchStart(col.id, e)}
         >
           <DeckColumn
@@ -828,11 +1234,25 @@
             loading={columnLoading[col.id] ?? false}
             streaming={streamCleanups.has(col.id)}
             width={col.width ?? 380}
+            focusedPostIdx={focusedColumnIdx === colIdx ? focusedPostIdx : -1}
             onrefresh={() => loadColumn(col)}
             onremove={() => removeColumn(col.id)}
             onlike={handleLike}
             onboost={handleBoost}
+            onreply={handleReply}
+            onquote={handleQuote}
             onwidthchange={(w) => handleColumnWidthChange(col.id, w)}
+            notify={col.notify ?? 'off'}
+            onnotifychange={(mode) => handleNotifyChange(col.id, mode)}
+            scrollLock={col.scrollLock ?? true}
+            onscrolllockchange={(locked) => handleScrollLockChange(col.id, locked)}
+            color={col.color ?? ''}
+            oncolorchange={(c) => handleColorChange(col.id, c)}
+            collapsed={col.collapsed ?? false}
+            oncollapsedchange={(c) => handleCollapsedChange(col.id, c)}
+            pinned={col.pinned ?? false}
+            onpinnedchange={(p) => handlePinnedChange(col.id, p)}
+            onclear={() => handleClear(col.id)}
             ondragstart={(e) => handleDragStart(col.id, e)}
             ondragover={(e) => handleDragOver(col.id, e)}
             ondrop={(e) => handleDrop(col.id, e)}
@@ -855,4 +1275,12 @@
       </div>
     {/if}
   {/if}
+
+  <!-- Floating compose panel -->
+  <FloatingCompose
+    bind:open={composeOpen}
+    replyToPost={composeReplyTo}
+    quotePost={composeQuotePost}
+    onposted={() => columns.forEach(col => loadColumn(col))}
+  />
 </div>

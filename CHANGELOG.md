@@ -2,6 +2,44 @@
 
 ## Unreleased
 
+## v1.2.0 — 2026-07-04
+
+Full deck parity release — 27 new features bringing the multi-column deck experience to feature-complete status.
+
+### Deck Features (20 column types, up from 15)
+
+- **5 new column types**: Messages/DMs (Bluesky chat + Mastodon conversations), Trending (topics + tags + links), Activity (engagement on your posts), Liked Posts, New Followers
+- **Floating compose panel**: slide-out compose overlay stays on top of deck columns — reply/quote from any column without navigating away; `n` keyboard shortcut to open
+- **Column-aware keyboard navigation**: `h`/`l` or arrow keys between columns, `j`/`k` within focused column, `1`-`9` jump to column by position, `o` to open post, `r` to reply, `a` to add column, visual focus indicators
+- **Per-column notifications**: configure sound, desktop alerts, or both per column — cycles via bell icon in column header
+- **Column color coding**: 8 preset colors + clear, rendered as colored accent bar at column top
+- **Column collapse/minimize**: shrink to 40px icon strip, click to expand
+- **Column pin/lock**: prevent accidental removal or drag-reorder
+- **Column clear**: wipe rendered content and start fresh on next refresh
+- **Column width presets**: one-click Narrow (280px) / Medium (350px) / Wide (450px) alongside drag resize
+- **Auto-scroll / scroll-lock**: toggle per column — when unlocked, new streaming posts auto-scroll into view
+- **Column-level mute filters**: per-column keyword + regex filters stacking on top of global mutes
+- **Streaming for all column types**: timeline, mentions, notifications, local, federated, hashtag, list, and user columns now stream via Mastodon WS + Bluesky Jetstream (was keyword-monitor only)
+- **Live engagement counters on deck**: Jetstream enabled on deck page for real-time like/repost count updates
+
+### Compose & Search
+
+- **Quick-schedule from compose**: Schedule button with inline date/time picker, saves as scheduled draft
+- **Advanced search operators UI**: per-platform syntax help popover (Bluesky `from:`, `since:`, `until:`, `lang:`, `has:media`; Mastodon `from:@user@instance`, `#hashtag`), quick filter buttons
+- **Saved searches**: save queries for one-click re-access, dropdown with delete
+
+### Display & Settings
+
+- **Display density modes**: Compact / Comfortable / Spacious selector in Appearance settings — sets 7 CSS custom properties controlling avatar size, padding, gap, card padding, font scale, and line clamp across the entire UI
+
+### Collections
+
+- **Shareable curated collections**: export reading lists as JSON text or data URL, import from JSON — round-trip preserves all post data
+
+### Tests
+
+- 1,443 frontend unit tests across 99 files (up from 1,213 across 86 files in v1.1.1), 29 Playwright E2E tests, 15 Rust tests
+
 ## v1.1.1 — 2026-07-04
 
 ### Features

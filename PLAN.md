@@ -3,7 +3,7 @@
 ## What is CrispDeck
 
 A unified Mastodon + Bluesky + Threads social media client with:
-- Multi-column TweetDeck-style deck view
+- Multi-column deck view
 - Crossposting with intelligent thread splitting
 - Identity matching across platforms (Jaro-Winkler)
 - Local analytics, archive, translation (CrispASR/BYOK/MyMemory)
@@ -11,9 +11,9 @@ A unified Mastodon + Bluesky + Threads social media client with:
 
 **Tech stack**: SvelteKit 2, Svelte 5 (runes), Tailwind CSS 4, Vite 6, Tauri 2, TypeScript + Rust, Vitest
 
-## Current State (2026-07-03)
+## Current State (2026-07-04)
 
-v1.1.0 — 1,177 unit tests + 29 Playwright E2E tests, 29 pages, CI fully green, live at https://crispdeck.vercel.app. Self-healing Bluesky OAuth sessions (restore by DID + silent re-auth) shipped July 2026; see CHANGELOG.md.
+v1.2.0 — 1,443 unit tests across 99 files + 29 Playwright E2E tests, 29 pages, 20 deck column types, CI fully green, live at https://crispdeck.vercel.app. Full deck parity release with floating compose, column keyboard navigation, per-column notifications, density modes, streaming for all columns, 5 new column types, and shareable collections. See CHANGELOG.md.
 
 **License**: AGPL-3.0-only
 
@@ -718,7 +718,7 @@ CrispDeck is the only client combining multi-column deck view + multi-network (B
 | Free to post | Yes | No ($5/mo) | 2 accts free | Yes | No ($2/mo) |
 | Open source | Yes (AGPL) | No | No | No | No |
 
-Key competitive advantages: deck+multi-network+Threads (unique combo), cross-platform analytics (no competitor), catch-up mode, AI compose (3 providers incl. local), "For You" local algorithm, thread un-rolling, real-time Jetstream counters, Threads hybrid reading via ActivityPub, saved deck workspaces, universal cross-network search, streaming timelines, hashtag bank, AI alt-text generation (BYOK + CrispASR/llama.cpp + mistral.rs), keyword monitoring columns with live streaming (TweetDeck refugee #1 ask).
+Key competitive advantages: deck+multi-network+Threads (unique combo), cross-platform analytics (no competitor), catch-up mode, AI compose (3 providers incl. local), "For You" local algorithm, thread un-rolling, real-time Jetstream counters, Threads hybrid reading via ActivityPub, saved deck workspaces, universal cross-network search, streaming timelines, hashtag bank, AI alt-text generation (BYOK + CrispASR/llama.cpp + mistral.rs), keyword monitoring columns with live streaming.
 
 ---
 
@@ -1167,3 +1167,361 @@ CrispDeck has three competitive weaknesses vs dedicated native single-network cl
 - **Effort**: Medium
 - **Description**: Popover/drawer for switching between accounts without navigating to full Identities page
 - Show account avatars in sidebar footer, click to switch active account
+
+---
+
+## Deck Feature Parity Audit (2026-07-04)
+
+Where CrispDeck still falls behind the classic multi-column deck experience. Organized by theme, prioritized by user impact, scoped to be individually shippable.
+
+### TD-A. Missing Deck Column Types
+
+The classic deck principle: **everything is a column**. CrispDeck has 15 column types but is missing several staples.
+
+#### TD-A1. DM / Messages column
+- **Status**: Done
+- **Effort**: Medium
+- **Gap**: Direct messages exist only as a standalone page (`/messages`). A proper deck client pins a DM column alongside the timeline so conversations stay visible without navigation.
+- [ ] Add `messages` column type to `COLUMN_TYPES` in deck page
+- [ ] Render Bluesky chat convos + Mastodon conversations inline
+- [ ] Show unread badge per-column
+- [ ] Click a conversation to open thread in a slide-over or modal (not full page nav)
+- **Key files**: `src/routes/deck/+page.svelte`, `src/routes/messages/+page.svelte`
+
+#### TD-A2. Trending / Explore column
+- **Status**: Done
+- **Effort**: Small–Medium
+- **Gap**: Trending is a page only. A trending column lets you watch what's happening without leaving the deck.
+- [ ] Add `trending` column type
+- [ ] Merge Bluesky trending topics + Mastodon trending tags/links into the column
+- [ ] Auto-refresh on the same interval as the trending page (SWR, 10-min TTL)
+- [ ] Click a trend to open search results inline or spawn a new search column
+- **Key files**: `src/routes/deck/+page.svelte`, `src/routes/trending/+page.svelte`
+
+#### TD-A3. Activity / Engagement column
+- **Status**: Done
+- **Effort**: Medium
+- **Gap**: Classic deck clients had an "Activity" column showing real-time engagement on your posts (who liked, reposted, replied). CrispDeck's notifications page groups these, but there's no deck column filtered to engagement-on-your-content.
+- [ ] Add `activity` column type (filtered notifications: likes, reposts, quotes on your posts only)
+- [ ] Group by post ("Post X got 5 new likes" not 5 separate cards)
+- [ ] Wire to streaming (Jetstream + Mastodon WS notification events)
+- **Key files**: `src/routes/deck/+page.svelte`, `src/lib/notification-grouping.ts`
+
+#### TD-A4. Likes column
+- **Status**: Done
+- **Effort**: Small
+- **Gap**: Multi-column clients typically offer a "likes" column. CrispDeck has bookmarks but no "my likes" view.
+- [ ] Add `likes` column type showing liked posts in reverse-chron
+- [ ] Paginate via `app.bsky.feed.getActorLikes` + Mastodon `GET /api/v1/favourites`
+- **Key files**: `src/routes/deck/+page.svelte`, `src/lib/api/bluesky.ts`, `src/lib/api/mastodon.ts`
+
+#### TD-A5. Followers column
+- **Status**: Done
+- **Effort**: Small
+- **Gap**: No "Followers" column showing new follows in real-time. Useful for community accounts.
+- [ ] Add `followers` column type showing recent followers
+- [ ] Pull from notification stream filtered to `follow` type
+- [ ] Show follow-back / "follows you" status inline
+- **Key files**: `src/routes/deck/+page.svelte`
+
+---
+
+### TD-B. Column UX & Management
+
+Column chrome in mature deck clients was polished over years. Several ergonomic features are missing.
+
+#### TD-B1. Per-column notifications (sound + desktop alert)
+- **Status**: Done
+- **Effort**: Medium
+- **Gap**: Classic deck clients let you enable sound/desktop notifications per column (e.g., sound on mentions, silent on timeline). CrispDeck's notification alerts are global only.
+- [ ] Add per-column notification toggle in column header menu (off / sound / desktop / both)
+- [ ] Play configurable sound when a column receives new posts (if enabled)
+- [ ] Fire desktop notification with post preview for high-signal columns
+- [ ] Persist settings in column config within deck layout
+- **Key files**: `src/lib/components/deck/DeckColumn.svelte`, `src/routes/deck/+page.svelte`
+
+#### TD-B2. Column color coding / visual identity
+- **Status**: Done
+- **Effort**: Small
+- **Gap**: Columns lack colored top borders for visual distinction. All CrispDeck columns look identical.
+- [ ] Add color picker in column settings (8–10 preset colors + custom hex)
+- [ ] Render colored top border or accent stripe on each column
+- [ ] Persist color in layout config
+- **Key files**: `src/lib/components/deck/DeckColumn.svelte`
+
+#### TD-B3. Column collapse / minimize
+- **Status**: Done
+- **Effort**: Small
+- **Gap**: No way to collapse a column to a narrow icon strip to save space without removing it.
+- [ ] Add collapse toggle (double-click header or chevron button)
+- [ ] Collapsed state: column icon + title vertically, ~40px wide
+- [ ] Click to expand; persist collapsed state in layout
+- **Key files**: `src/lib/components/deck/DeckColumn.svelte`
+
+#### TD-B4. Column pin / lock
+- **Status**: Done
+- **Effort**: Small
+- **Gap**: No way to pin columns to prevent accidental removal or reorder.
+- [ ] Add "Pin column" option in column header menu
+- [ ] Pinned columns skip drag-reorder and hide the remove button
+- [ ] Show pin icon indicator
+- **Key files**: `src/lib/components/deck/DeckColumn.svelte`, `src/routes/deck/+page.svelte`
+
+#### TD-B5. Column clear / mark-as-read
+- **Status**: Done
+- **Effort**: Small
+- **Gap**: No "Clear" button to wipe a column's rendered content and start fresh.
+- [ ] Add "Clear column" action in column header menu
+- [ ] Clears rendered posts but doesn't affect underlying data
+- [ ] Next refresh loads fresh posts from the cleared point forward
+- **Key files**: `src/lib/components/deck/DeckColumn.svelte`
+
+#### TD-B6. Auto-scroll / scroll-lock toggle
+- **Status**: Done
+- **Effort**: Small–Medium
+- **Gap**: Streaming columns in classic deck clients auto-scrolled new posts into view, with a toggle to lock scroll. CrispDeck shows a "New posts" pill but never auto-scrolls.
+- [ ] Add scroll-lock toggle icon in column header
+- [ ] Unlocked + streaming: new posts push into view automatically
+- [ ] Locked: show "N new posts" pill (current behavior)
+- [ ] Default to locked; let power users unlock
+- **Key files**: `src/lib/components/deck/DeckColumn.svelte`
+
+#### TD-B7. Column width presets (narrow / medium / wide)
+- **Status**: Done
+- **Effort**: Small
+- **Gap**: No quick width presets. CrispDeck has pixel-drag resize but no one-click presets.
+- [ ] Add width presets in column header menu: Narrow (280px) / Medium (350px) / Wide (450px) / Custom
+- [ ] Keep existing drag-resize for custom widths
+- [ ] "Apply to all columns" shortcut
+- **Key files**: `src/lib/components/deck/DeckColumn.svelte`
+
+---
+
+### TD-C. Compose & Posting
+
+#### TD-C1. Pop-out / floating compose panel
+- **Status**: Done
+- **Effort**: Medium
+- **Gap**: Compose is full-page navigation away from the deck. A deck-native compose should float as a side panel or pop-out so you can draft while reading columns.
+- [ ] Add floating compose panel option (slide-out from right, or bottom sheet on mobile)
+- [ ] Keep deck visible while composing
+- [ ] Open compose from any column's reply/quote action without leaving deck view
+- [ ] Keyboard shortcut `n` to open compose overlay from deck
+- **Key files**: `src/routes/deck/+page.svelte`, `src/routes/compose/+page.svelte` (extract compose form to shared component)
+
+#### TD-C2. Quick-schedule from compose
+- **Status**: Done
+- **Effort**: Small
+- **Gap**: No schedule picker in the compose box. CrispDeck scheduling lives in the drafts page, adding friction.
+- [ ] Add "Schedule" button next to "Post" in compose UI
+- [ ] Show date/time picker inline
+- [ ] Scheduled posts go to drafts with scheduled state (reuse existing draft scheduler)
+- **Key files**: `src/routes/compose/+page.svelte`, `src/lib/drafts.ts`
+
+#### TD-C3. Prominent account selector in compose
+- **Status**: Done
+- **Effort**: Small
+- **Gap**: Account avatars aren't shown directly in compose for per-post account switching. CrispDeck has multi-account compose but the UX is less discoverable.
+- [ ] Show account avatar chips in compose header (one per connected account)
+- [ ] Toggle accounts on/off per post with a single click
+- [ ] Greyed-out = not posting; colored = active
+- **Key files**: `src/routes/compose/+page.svelte`
+
+---
+
+### TD-D. Display & Density
+
+#### TD-D1. Display density modes (compact / comfortable / spacious)
+- **Status**: Done
+- **Effort**: Small–Medium
+- **Gap**: No holistic density setting. CrispDeck has compact-post mode + font-size + line-spacing, but no single density toggle that adjusts avatars, padding, and card height together across the entire UI (not just post cards).
+- [ ] Unify into a single density selector in Appearance settings: Compact / Comfortable / Spacious
+- [ ] Compact: smaller avatars (28px), tighter padding (8px), single-line usernames, reduced margins — extend current compact mode beyond Post.svelte to all page cards, sidebar, deck headers
+- [ ] Spacious: larger avatars (48px), more breathing room, full display names + handles
+- [ ] Apply via CSS custom properties on `:root` for easy global toggling
+- **Key files**: `src/routes/settings/+page.svelte`, `src/app.css`, `src/lib/components/Post.svelte`
+
+---
+
+### TD-E. Bulk & Power-User Actions
+
+#### TD-E1. Multi-select posts for bulk actions
+- **Status**: Done
+- **Effort**: Medium
+- **Gap**: No multi-select for batch operations on posts. CrispDeck operates one post at a time.
+- [ ] Add multi-select mode toggle (checkbox appears on each post card)
+- [ ] Bulk action toolbar: Like All / Bookmark All / Add to Reading List
+- [ ] Select all visible / deselect all
+- [ ] Shift+click for range select
+- **Key files**: `src/lib/components/Post.svelte`, `src/routes/feed/+page.svelte`, `src/routes/deck/+page.svelte`
+
+#### TD-E2. Quick add-to-list from post menu
+- **Status**: Done
+- **Effort**: Small
+- **Gap**: Can't add a user to a list from the post's action menu. List management requires navigating to settings or profile.
+- [ ] Add "Add to list..." option in post overflow menu (three-dot)
+- [ ] Show list picker popup (Mastodon lists + reading lists)
+- [ ] Create new list inline from the picker
+- **Key files**: `src/lib/components/Post.svelte`, `src/lib/list-management.ts`
+
+#### TD-E3. Column-level mute / filter overrides
+- **Status**: Done
+- **Effort**: Small
+- **Gap**: No per-column keyword filters. CrispDeck's muted-word filters are global only.
+- [ ] Add "Column filters" section in each column's settings menu
+- [ ] Allow keyword + regex filters scoped to that column only
+- [ ] Column filters stack on top of global mute rules
+- **Key files**: `src/lib/components/deck/DeckColumn.svelte`, `src/lib/muted-words.ts`
+
+---
+
+### TD-F. Keyboard & Navigation
+
+#### TD-F1. Column-aware keyboard navigation in deck
+- **Status**: Done
+- **Effort**: Medium
+- **Gap**: No column-aware keyboard navigation in deck — arrow keys between columns, up/down within. CrispDeck's j/k/o/l shortcuts work on the feed page but aren't column-aware in deck mode.
+- [ ] Left/Right arrows (or h/l) to move focus between deck columns
+- [ ] j/k to navigate posts within the focused column
+- [ ] Column focus indicator (subtle highlight on focused column header)
+- [ ] Number keys (1–9) to jump to column by position
+- [ ] `n` to open compose overlay from deck
+- **Key files**: `src/routes/deck/+page.svelte`, `src/routes/+layout.svelte`
+
+#### TD-F2. Keyboard shortcut for "add column"
+- **Status**: Done
+- **Effort**: Small
+- **Gap**: No keyboard shortcut to add a new column. Requires mouse interaction with the + button.
+- [ ] `a` or `+` key opens the column type picker when deck is focused
+- [ ] Arrow keys + Enter to select column type
+- **Key files**: `src/routes/deck/+page.svelte`
+
+---
+
+### TD-G. Real-Time & Streaming
+
+#### TD-G1. Live-updating engagement counters
+- **Status**: Done
+- **Effort**: Small
+- **Gap**: Like/repost counts don't update in real-time across all deck columns. CrispDeck has Jetstream counters but they may not cover all visible posts in deck columns.
+- [ ] Ensure Jetstream counter updates work in all deck column types (not just feed page)
+- [ ] Animate count changes (subtle flash or count-up)
+- [ ] For Mastodon: poll engagement counts for visible posts every 60s (no streaming API for counts)
+- **Key files**: `src/lib/jetstream.ts`, `src/lib/components/Post.svelte`
+
+#### TD-G2. Streaming for all column types
+- **Status**: Done
+- **Effort**: Medium
+- **Gap**: Not all column types stream. CrispDeck streams timeline + keyword-monitor but mentions, notifications, list, and user columns rely on manual/interval refresh.
+- [ ] Wire mentions column to streaming (filter notification stream for mention type)
+- [ ] Wire notifications column to streaming
+- [ ] Wire list/feed columns to Mastodon WS list streaming endpoint
+- [ ] Wire user column to filtered Jetstream events for that DID
+- **Key files**: `src/routes/deck/+page.svelte`, `src/lib/streaming.ts`
+
+---
+
+### TD-H. Search & Filtering
+
+#### TD-H1. Advanced search operators UI
+- **Status**: Done
+- **Effort**: Small
+- **Gap**: No search operator guidance. CrispDeck has a plain text search box with no help for platform-specific operators (from:user, since:date, filter:media).
+- [ ] Add search syntax help tooltip/popover showing available operators per platform
+- [ ] Bluesky: `from:handle`, `since:date`, `until:date`, `lang:xx`
+- [ ] Mastodon: document server-supported operators
+- [ ] Quick filter buttons: "Has media", "From me", "Date range"
+- **Key files**: `src/routes/search/+page.svelte`
+
+#### TD-H2. Saved searches
+- **Status**: Done
+- **Effort**: Small
+- **Gap**: No saved searches. CrispDeck has search columns but no "saved searches" concept with quick re-access.
+- [ ] Add "Save this search" button on search results
+- [ ] Saved searches appear in dropdown on search page + column picker
+- [ ] One-click to open a saved search as a new deck column
+- [ ] Persist in localStorage
+- **Key files**: `src/routes/search/+page.svelte`, `src/routes/deck/+page.svelte`
+
+---
+
+### TD-I. Collections & Curation
+
+#### TD-I1. Shareable curated collections
+- **Status**: Done
+- **Effort**: Medium
+- **Gap**: Reading lists are local-only, not shareable. Classic deck clients had curated post collections shareable via URL.
+- [ ] Add export-to-URL for reading lists (generate shareable link with post URIs)
+- [ ] Support importing a collection by URL
+- [ ] Consider publishing as a Bluesky custom feed for discoverability
+- **Key files**: `src/lib/reading-lists.ts`
+
+---
+
+### TD-J. Multi-Account & Teams
+
+#### TD-J1. Account indicator on deck columns
+- **Status**: Done
+- **Effort**: Small
+- **Gap**: When multiple accounts are connected, it's unclear which account a column belongs to. Column headers should show the source account avatar.
+- [ ] Show source account avatar in column header (small, next to title)
+- [ ] For merged columns (multi-account timeline), show stacked avatars
+- [ ] Click avatar to open account-specific settings for that column
+- **Key files**: `src/lib/components/deck/DeckColumn.svelte`
+
+#### TD-J2. Team / shared deck collaboration
+- **Status**: Not started
+- **Effort**: Very Large (design doc first)
+- **Gap**: CrispDeck is single-user only. No team accounts or role-based permissions.
+- [ ] Phase 1: Shared deck layouts via cloud sync (export/import as starting point)
+- [ ] Phase 2: Read-only shared column links for team monitoring
+- [ ] Phase 3: Full team auth with roles (admin/contributor/viewer)
+- This is aspirational — scope to a design doc before any implementation
+
+---
+
+### Deck Parity — Priority Tiers
+
+#### P0 — High impact, ship first (core deck differentiators)
+| ID | Item | Effort |
+|----|------|--------|
+| TD-C1 | Pop-out / floating compose panel | Medium |
+| TD-B1 | Per-column notifications | Medium |
+| TD-F1 | Column-aware keyboard navigation | Medium |
+| TD-D1 | Display density modes | Small–Medium |
+| TD-G2 | Streaming for all column types | Medium |
+
+#### P1 — High impact, larger scope
+| ID | Item | Effort |
+|----|------|--------|
+| TD-A1 | DM column type | Medium |
+| TD-A2 | Trending column type | Small–Medium |
+| TD-A3 | Activity / engagement column | Medium |
+| TD-B6 | Auto-scroll / scroll-lock | Small–Medium |
+| TD-C2 | Quick-schedule from compose | Small |
+| TD-H1 | Advanced search operators UI | Small |
+
+#### P2 — Polish & power-user features
+| ID | Item | Effort |
+|----|------|--------|
+| TD-A4 | Likes column | Small |
+| TD-A5 | Followers column | Small |
+| TD-B2 | Column color coding | Small |
+| TD-B3 | Column collapse / minimize | Small |
+| TD-B4 | Column pin / lock | Small |
+| TD-B5 | Column clear | Small |
+| TD-B7 | Column width presets | Small |
+| TD-C3 | Account selector in compose | Small |
+| TD-E1 | Multi-select bulk actions | Medium |
+| TD-E2 | Quick add-to-list | Small |
+| TD-E3 | Column-level mute filters | Small |
+| TD-F2 | Keyboard shortcut for add-column | Small |
+| TD-G1 | Live engagement counters | Small |
+| TD-H2 | Saved searches | Small |
+| TD-J1 | Account indicator on columns | Small |
+
+#### P3 — Ambitious / long-term
+| ID | Item | Effort |
+|----|------|--------|
+| TD-I1 | Shareable collections | Medium |
+| TD-J2 | Team / shared deck collaboration | Very Large |

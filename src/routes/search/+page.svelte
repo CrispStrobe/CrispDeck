@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { Search, Loader2, Inbox } from '@lucide/svelte';
+  import { Search, Loader2, Inbox, HelpCircle, Image, User, Calendar, Bookmark, BookmarkCheck, X } from '@lucide/svelte';
+  import { listSavedSearches, saveSearch, deleteSavedSearch, isSaved, type SavedSearch } from '$lib/saved-searches';
   import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
@@ -19,7 +20,35 @@
   let results: UnifiedPost[] = $state([]);
   let hasSearched = $state(false);
 
+  let showSearchHelp = $state(false);
+  let savedSearches: SavedSearch[] = $state([]);
+  let showSavedMenu = $state(false);
   let clientEntries: Map<number, ClientEntry> = new Map();
+
+  function refreshSavedSearches() {
+    savedSearches = listSavedSearches();
+  }
+
+  function handleSaveSearch() {
+    if (!query.trim()) return;
+    saveSearch(query.trim());
+    refreshSavedSearches();
+  }
+
+  function handleLoadSavedSearch(q: string) {
+    query = q;
+    showSavedMenu = false;
+    handleSearch();
+  }
+
+  function handleDeleteSavedSearch(id: string) {
+    deleteSavedSearch(id);
+    refreshSavedSearches();
+  }
+
+  function appendOperator(op: string) {
+    query = (query.trim() + ' ' + op).trim();
+  }
 
   onMount(async () => {
     try {
@@ -37,6 +66,7 @@
       error = String(e);
     } finally {
       loading = false;
+      refreshSavedSearches();
     }
   });
 
@@ -138,6 +168,86 @@
       <p class="text-xs text-[var(--color-text-muted)] mt-2">
         Searching across {accounts.length} connected account{accounts.length > 1 ? 's' : ''} ({accounts.map(a => i18n.t.common[a.platform] ?? a.platform).join(', ')})
       </p>
+    {/if}
+
+    <!-- Quick filters + search help -->
+    <div class="flex items-center gap-2 mt-2 flex-wrap">
+      <button onclick={() => appendOperator('has:media')} class="flex items-center gap-1 px-2 py-1 text-[10px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
+        <Image size={10} /> Has media
+      </button>
+      <button onclick={() => { const me = accounts[0]?.handle; if (me) appendOperator(`from:${me}`); }} class="flex items-center gap-1 px-2 py-1 text-[10px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
+        <User size={10} /> From me
+      </button>
+      <button onclick={() => { const d = new Date(); d.setDate(d.getDate() - 7); appendOperator(`since:${d.toISOString().split('T')[0]}`); }} class="flex items-center gap-1 px-2 py-1 text-[10px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
+        <Calendar size={10} /> Past week
+      </button>
+      <button onclick={() => showSearchHelp = !showSearchHelp} class="flex items-center gap-1 px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
+        <HelpCircle size={10} /> Search syntax
+      </button>
+      <!-- Save search button -->
+      {#if query.trim()}
+        <button
+          onclick={handleSaveSearch}
+          class="flex items-center gap-1 px-2 py-1 text-[10px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md transition-colors {isSaved(query.trim()) ? 'text-[var(--color-primary)] border-[var(--color-primary)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]'}"
+        >
+          {#if isSaved(query.trim())}<BookmarkCheck size={10} /> Saved{:else}<Bookmark size={10} /> Save search{/if}
+        </button>
+      {/if}
+      <!-- Saved searches dropdown -->
+      {#if savedSearches.length > 0}
+        <div class="relative ml-auto">
+          <button
+            onclick={() => showSavedMenu = !showSavedMenu}
+            class="flex items-center gap-1 px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
+          >
+            <Bookmark size={10} /> Saved ({savedSearches.length})
+          </button>
+          {#if showSavedMenu}
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="fixed inset-0 z-40" onclick={() => showSavedMenu = false} onkeydown={() => {}}></div>
+            <div class="absolute right-0 top-full mt-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl z-50 py-1 min-w-[200px] max-h-48 overflow-y-auto">
+              {#each savedSearches as s}
+                <div class="flex items-center justify-between px-3 py-1.5 hover:bg-[var(--color-surface-hover)]">
+                  <button onclick={() => handleLoadSavedSearch(s.query)} class="flex-1 text-left text-xs truncate">{s.query}</button>
+                  <button onclick={() => handleDeleteSavedSearch(s.id)} class="ml-2 text-[var(--color-text-muted)] hover:text-[var(--color-danger)]">
+                    <X size={10} />
+                  </button>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+
+    {#if showSearchHelp}
+      <div class="mt-2 p-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-xs space-y-2">
+        <div>
+          <span class="font-medium text-[var(--color-bluesky)]">Bluesky</span>
+          <div class="text-[var(--color-text-muted)] mt-1 space-y-0.5">
+            <p><code class="bg-[var(--color-bg)] px-1 rounded">from:handle.bsky.social</code> — posts by a user</p>
+            <p><code class="bg-[var(--color-bg)] px-1 rounded">since:2026-01-01</code> — posts after date</p>
+            <p><code class="bg-[var(--color-bg)] px-1 rounded">until:2026-12-31</code> — posts before date</p>
+            <p><code class="bg-[var(--color-bg)] px-1 rounded">lang:en</code> — filter by language</p>
+            <p><code class="bg-[var(--color-bg)] px-1 rounded">has:media</code> — posts with images/video</p>
+          </div>
+        </div>
+        <div>
+          <span class="font-medium text-[var(--color-mastodon)]">Mastodon</span>
+          <div class="text-[var(--color-text-muted)] mt-1 space-y-0.5">
+            <p><code class="bg-[var(--color-bg)] px-1 rounded">from:@user@instance</code> — posts by a user</p>
+            <p><code class="bg-[var(--color-bg)] px-1 rounded">#hashtag</code> — posts with hashtag</p>
+            <p>Full-text search depends on server indexing</p>
+          </div>
+        </div>
+        <div>
+          <span class="font-medium" style="color: var(--color-threads, #666)">Threads</span>
+          <div class="text-[var(--color-text-muted)] mt-1 space-y-0.5">
+            <p>Plain keyword search only (no operators)</p>
+            <p>Requires <code class="bg-[var(--color-bg)] px-1 rounded">threads_keyword_search</code> permission</p>
+          </div>
+        </div>
+      </div>
     {/if}
   </form>
 
