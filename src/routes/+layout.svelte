@@ -7,6 +7,7 @@
   import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
   import ToastContainer from '$lib/components/ToastContainer.svelte';
   import ScrollToTop from '$lib/components/ScrollToTop.svelte';
+  import AccountSwitcher from '$lib/components/AccountSwitcher.svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { installLogInterceptors } from '$lib/debug-log';
   import { preloadSanitizer } from '$lib/sanitize';
@@ -23,8 +24,11 @@
   import { onNavigate } from '$app/navigation';
   import { getBookmarkCount } from '$lib/bookmarks';
 
+  import type { Account } from '$lib/types';
+
   let collapsed = $state(false);
   let mobileMenuOpen = $state(false);
+  let sidebarAccounts: Account[] = $state([]);
   let mobileMenuClosing = $state(false);
   function closeMobileMenu() {
     mobileMenuClosing = true;
@@ -147,6 +151,7 @@
   async function checkUnreadMessages() {
     try {
       const { accounts: accts, clients } = await getCachedClients();
+      sidebarAccounts = accts;
       const results = await Promise.allSettled(Array.from(clients).map(async ([id, entry]) => {
         const acct = accts.find(a => a.id === id);
         if (!acct) return 0;
@@ -323,6 +328,10 @@
         </li>
       {/each}
     </ul>
+    <!-- Account switcher -->
+    <div class="px-2 py-1.5 border-t border-[var(--color-border)]">
+      <AccountSwitcher accounts={sidebarAccounts} {collapsed} />
+    </div>
     {#if !collapsed}
       <div class="px-3 py-2 border-t border-[var(--color-border)] flex items-center justify-between">
         <span class="text-[10px] text-[var(--color-text-muted)]">v{__VERSION__}</span>

@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { Heart, Repeat, MessageCircle, Quote, Bookmark, Share, Flag, Languages, Camera, Loader2, Volume2, VolumeOff, BarChart3, UserPlus, UserCheck, Pin } from '@lucide/svelte';
+  import { Heart, Repeat, MessageCircle, Quote, Bookmark, Share, Flag, Languages, Camera, Loader2, Volume2, VolumeOff, BarChart3, UserPlus, UserCheck, Pin, ListPlus, X as XIcon } from '@lucide/svelte';
   import { goto } from '$app/navigation';
   import { isPinned, pinPost, unpinPost } from '$lib/pinned-posts';
   import { addBookmark, removeBookmark, isBookmarked } from '$lib/bookmarks';
+  import { listReadingLists, addPostToList, type ReadingList } from '$lib/reading-lists';
   import { createBlueskyBookmark, deleteBlueskyBookmark } from '$lib/api/bluesky-bookmarks';
   import { initAllClients, getBskyAgent } from '$lib/api/client-factory';
   import { translateText, type TranslationResult } from '$lib/translate';
@@ -49,6 +50,18 @@
   let showStats = $state(false);
   let following = $state(false);
   let pinned = $state(false);
+  let showListPicker = $state(false);
+  let readingLists: ReadingList[] = $state([]);
+
+  function openListPicker() {
+    readingLists = listReadingLists();
+    showListPicker = true;
+  }
+
+  function addToList(listId: string) {
+    addPostToList(listId, post);
+    showListPicker = false;
+  }
 
   // Media lightbox
   let lightboxItems: LightboxItem[] = $state([]);
@@ -1179,6 +1192,43 @@
       >
         <Pin size={12} class={pinned ? 'fill-current' : ''} />
       </button>
+
+      <!-- Add to reading list -->
+      <div class="relative">
+        <button
+          onclick={openListPicker}
+          class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors opacity-0 group-hover:opacity-100"
+          title="Add to reading list"
+          aria-label="Add post to reading list"
+        >
+          <ListPlus size={12} />
+        </button>
+        {#if showListPicker}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div class="fixed inset-0 z-40" onclick={() => showListPicker = false} onkeydown={() => {}}></div>
+          <div class="absolute bottom-full right-0 mb-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl z-50 py-1 min-w-[160px] max-h-40 overflow-y-auto">
+            {#if readingLists.length > 0}
+              {#each readingLists as rl}
+                <button
+                  onclick={() => addToList(rl.id)}
+                  class="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)] truncate"
+                >
+                  {rl.name}
+                </button>
+              {/each}
+            {:else}
+              <p class="px-3 py-1.5 text-[10px] text-[var(--color-text-muted)]">No reading lists yet</p>
+            {/if}
+            <a
+              href="/bookmarks?tab=reading-lists"
+              onclick={() => showListPicker = false}
+              class="block px-3 py-1.5 text-xs text-[var(--color-primary)] hover:bg-[var(--color-surface-hover)] border-t border-[var(--color-border)]"
+            >
+              Manage lists
+            </a>
+          </div>
+        {/if}
+      </div>
 
       <button
         onclick={handleShare}

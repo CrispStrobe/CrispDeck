@@ -1163,10 +1163,11 @@ CrispDeck has three competitive weaknesses vs dedicated native single-network cl
 - **Key files**: `src/lib/components/DelayedSpinner.svelte`
 
 ### Quick account switcher
-- **Status**: Not started
+- **Status**: Done
 - **Effort**: Medium
 - **Description**: Popover/drawer for switching between accounts without navigating to full Identities page
-- Show account avatars in sidebar footer, click to switch active account
+- AccountSwitcher component in sidebar footer shows stacked avatars, popover lists all accounts with platform indicator, links to Settings > Account
+- **Key files**: `src/lib/components/AccountSwitcher.svelte`, `src/routes/+layout.svelte`
 
 ---
 
