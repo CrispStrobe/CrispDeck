@@ -321,4 +321,47 @@ export class BlueskyClient {
       record: { ...record, $type: 'app.bsky.actor.profile' },
     });
   }
+
+  // ── Lists API ─────────────────────────────────────────────────────────────
+
+  /** Get all lists created by an actor. */
+  async getLists(actor?: string, cursor?: string) {
+    await this.login();
+    const agent = this.authAgent ?? this.publicAgent;
+    const did = actor ?? agent.session?.did ?? this.handle;
+    const resp = await agent.api.app.bsky.graph.getLists({ actor: did, cursor, limit: 50 });
+    return { lists: resp.data.lists, cursor: resp.data.cursor };
+  }
+
+  /** Get a single list by URI. */
+  async getList(listUri: string, cursor?: string) {
+    await this.login();
+    const agent = this.authAgent ?? this.publicAgent;
+    const resp = await agent.api.app.bsky.graph.getList({ list: listUri, cursor, limit: 50 });
+    return { list: resp.data.list, items: resp.data.items, cursor: resp.data.cursor };
+  }
+
+  /** Get the feed for a list (posts by members). */
+  async getListFeed(listUri: string, cursor?: string) {
+    await this.login();
+    const agent = this.authAgent ?? this.publicAgent;
+    const resp = await agent.api.app.bsky.feed.getListFeed({ list: listUri, cursor, limit: 50 });
+    return { feed: resp.data.feed, cursor: resp.data.cursor };
+  }
+
+  /** Get all lists the logged-in user is muting. */
+  async getListMutes(cursor?: string) {
+    await this.login();
+    if (!this.authAgent) throw new Error('Auth required');
+    const resp = await this.authAgent.api.app.bsky.graph.getListMutes({ cursor, limit: 50 });
+    return { lists: resp.data.lists, cursor: resp.data.cursor };
+  }
+
+  /** Get all lists the logged-in user is blocking. */
+  async getListBlocks(cursor?: string) {
+    await this.login();
+    if (!this.authAgent) throw new Error('Auth required');
+    const resp = await this.authAgent.api.app.bsky.graph.getListBlocks({ cursor, limit: 50 });
+    return { lists: resp.data.lists, cursor: resp.data.cursor };
+  }
 }
