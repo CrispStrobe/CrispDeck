@@ -13,6 +13,7 @@
   import { sanitizeHtml } from '$lib/sanitize';
   import MediaLightbox from '$lib/components/MediaLightbox.svelte';
   import { haptic } from '$lib/haptics';
+  import { toast } from '$lib/toast.svelte';
   import type { LightboxItem } from '$lib/components/MediaLightbox.svelte';
 
   // Session-scoped post preferences singleton — reads localStorage once, never re-reads
@@ -196,6 +197,7 @@
         if (engine === 'crispasr') {
           speaking = false;
           console.error('CrispASR TTS failed:', e);
+          toast.error('Text-to-speech failed');
           return;
         }
         console.error('CrispASR TTS failed, falling back to browser:', e);
@@ -246,6 +248,7 @@
       translation = await translateText(sourceText);
     } catch (e) {
       translateError = String(e);
+      toast.error('Translation failed');
     } finally {
       translating = false;
     }
@@ -308,26 +311,41 @@
     }
   }
 
+  let voteError = $state('');
   async function votePoll(pollId: string, choiceIndex: number) {
+    voteError = '';
     try {
-      // Find the Mastodon instance from the post URI
-      const url = new URL(post.uri);
-      // We need a token — this requires the onlike callback pattern
-      // For now, use a direct fetch (the token will come from the parent page)
-      const raw = post.raw as any;
-      const instanceUrl = `${url.protocol}//${url.hostname}`;
+      // Get Mastodon client for auth token
+      const { accounts: accts, clients } = await initAllClients();
+      const mastoAcct = accts.find(a => a.platform === 'mastodon');
+      const mastoEntry = mastoAcct ? clients.get(mastoAcct.id) : undefined;
+      const mastoClient = mastoEntry?.client as any;
+      const token = mastoClient?.getAccessToken?.();
+      const instanceUrl = mastoClient?.getInstanceUrl?.();
+
+      if (!token || !instanceUrl) {
+        voteError = 'No Mastodon account connected';
+        toast.error('Connect a Mastodon account to vote on polls');
+        return;
+      }
+
       const resp = await fetch(`${instanceUrl}/api/v1/polls/${pollId}/votes`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ choices: [choiceIndex] }),
       });
       if (resp.ok) {
-        // Update the poll in-place to show results
         const updated = await resp.json();
         (post.raw as any).poll = updated;
+        toast.success('Vote recorded');
+      } else {
+        const errText = await resp.text().catch(() => resp.statusText);
+        voteError = `Vote failed: ${errText}`;
+        toast.error(`Vote failed: ${resp.status}`);
       }
     } catch (e) {
-      console.error('Vote failed:', e);
+      voteError = String(e);
+      toast.error('Vote failed — check your connection');
     }
   }
 
@@ -362,6 +380,7 @@
       bookmarked = !bookmarked;
     } catch (e) {
       console.error('Bookmark failed:', e);
+      toast.error('Bookmark failed');
       return;
     }
     // Best-effort write-through to Bluesky's official server-side bookmarks
@@ -379,6 +398,7 @@
         }
       } catch (e) {
         console.warn('Bluesky server bookmark sync failed:', e);
+        toast.warning('Saved locally but server sync failed');
       }
     }
   }
@@ -860,13 +880,11 @@
       </div>
       <a href={getThreadUrl(post)} class="block min-w-0 hover:bg-[var(--color-surface-hover)]/30 rounded -mx-1 px-1 transition-colors">
         {#if post.platform === 'mastodon' && mastodonHtml}
-          <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-          <div class="text-sm text-[var(--color-text)] break-words whitespace-pre-wrap prose-invert [&_a]:text-blue-400 [&_a]:hover:underline" onclick={handlePostLinkClick}>
+          <div class="text-sm text-[var(--color-text)] break-words whitespace-pre-wrap prose-invert [&_a]:text-blue-400 [&_a]:hover:underline" onclick={handlePostLinkClick} onkeydown={(e) => { if (e.key === 'Enter') handlePostLinkClick(e); }} role="article">
             {@html mastodonHtml}
           </div>
         {:else if post.platform === 'bluesky' && bskyHtml}
-          <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-          <div class="text-sm text-[var(--color-text)] break-words whitespace-pre-wrap [&_a]:text-blue-400 [&_a]:hover:underline" onclick={handlePostLinkClick}>
+          <div class="text-sm text-[var(--color-text)] break-words whitespace-pre-wrap [&_a]:text-blue-400 [&_a]:hover:underline" onclick={handlePostLinkClick} onkeydown={(e) => { if (e.key === 'Enter') handlePostLinkClick(e); }} role="article">
             {@html bskyHtml}
           </div>
         {:else}
@@ -973,8 +991,7 @@
           {#if bskyQuote.embeds?.[0]}
             {@const qEmbed = bskyQuote.embeds[0]}
             {#if qEmbed.$type === 'app.bsky.embed.images#view' && qEmbed.images?.[0]}
-              <!-- svelte-ignore a11y_click_events_have_key_events -->
-              <div onclick={(e: MouseEvent) => { e.stopPropagation(); openLightbox(qEmbed.images.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0); }} class="cursor-pointer" role="button" tabindex="-1">
+              <div onclick={(e: MouseEvent) => { e.stopPropagation(); openLightbox(qEmbed.images.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0); }} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openLightbox(qEmbed.images.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0); } }} class="cursor-pointer" role="button" tabindex="0" aria-label="View quoted post images">
                 <img src={qEmbed.images[0].thumb} alt={qEmbed.images[0].alt || ''} class="mt-2 rounded w-full max-h-48 object-cover" />
                 {#if qEmbed.images.length > 1}
                   <p class="mt-1 text-[10px] text-[var(--color-text-muted)]">+{qEmbed.images.length - 1} more</p>
@@ -1208,7 +1225,7 @@
         </button>
         {#if showListPicker}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <div class="fixed inset-0 z-40" onclick={() => showListPicker = false} onkeydown={() => {}}></div>
+          <div class="fixed inset-0 z-40" onclick={() => showListPicker = false} onkeydown={(e) => { if (e.key === 'Escape') showListPicker = false; }}></div>
           <div class="absolute bottom-full right-0 mb-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl z-50 py-1 min-w-[160px] max-h-40 overflow-y-auto">
             {#if readingLists.length > 0}
               {#each readingLists as rl}
