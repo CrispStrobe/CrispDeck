@@ -3,6 +3,8 @@
   import { goto } from '$app/navigation';
   import { isPinned, pinPost, unpinPost } from '$lib/pinned-posts';
   import { addBookmark, removeBookmark, isBookmarked } from '$lib/bookmarks';
+  import { createBlueskyBookmark, deleteBlueskyBookmark } from '$lib/api/bluesky-bookmarks';
+  import { initAllClients, getBskyAgent } from '$lib/api/client-factory';
   import { translateText, type TranslationResult } from '$lib/translate';
   import { onMount, onDestroy } from 'svelte';
   import { jetstream } from '$lib/jetstream';
@@ -344,6 +346,24 @@
       bookmarked = !bookmarked;
     } catch (e) {
       console.error('Bookmark failed:', e);
+      return;
+    }
+    // Best-effort write-through to Bluesky's official server-side bookmarks
+    // (app.bsky.bookmark.*) — local bookmark stands even if this fails.
+    if (post.platform === 'bluesky' && post.uri.startsWith('at://')) {
+      try {
+        const { clients } = await initAllClients();
+        const agent = getBskyAgent(clients);
+        if (!agent) return;
+        if (bookmarked) {
+          const cid = (post.raw as any)?.post?.cid;
+          if (cid) await createBlueskyBookmark(agent, post.uri, cid);
+        } else {
+          await deleteBlueskyBookmark(agent, post.uri);
+        }
+      } catch (e) {
+        console.warn('Bluesky server bookmark sync failed:', e);
+      }
     }
   }
   let localLikeCount = $state(post.likeCount ?? 0);
@@ -663,6 +683,52 @@
     if (!bskyExternal) return '';
     try { return new URL(bskyExternal.uri).hostname; } catch { return bskyExternal.uri; }
   });
+  // Klipy GIF embeds carry mp4=/webm= tokens that name sibling files in the
+  // same directory ({dir}/{token}.mp4) — NOT a /v/{token}.mp4 path
+  const gifVideo = $derived.by(() => {
+    if (!bskyExternal || !/\.gif(\?|$)/i.test(bskyExternal.uri)) return null;
+    try {
+      const u = new URL(bskyExternal.uri);
+      if (!u.hostname.endsWith('klipy.com')) return null;
+      const variant = (token: string | null, ext: string) => {
+        if (!token) return null;
+        const v = new URL(u.href);
+        const parts = v.pathname.split('/');
+        parts[parts.length - 1] = `${token}.${ext}`;
+        v.pathname = parts.join('/');
+        v.search = '';
+        return v.href;
+      };
+      const mp4 = variant(u.searchParams.get('mp4'), 'mp4');
+      const webm = variant(u.searchParams.get('webm'), 'webm');
+      return mp4 || webm ? { mp4, webm } : null;
+    } catch {
+      return null;
+    }
+  });
+  let gifVideoFailed = $state(false);
+
+  /**
+   * Media sizing, following the official Bluesky app's model: media fills
+   * the column width at its native aspect ratio, clamped so the box is
+   * never taller than square (tall images center-crop like bsky.app web),
+   * plus a viewport cap (80svh / 32rem) so it stays reasonable on any
+   * screen size or orientation. Returns '' when dimensions are unknown —
+   * callers then fall back to a fixed-height contain box.
+   */
+  function mediaBoxStyle(w?: number, h?: number): string {
+    if (!w || !h || w <= 0 || h <= 0) return '';
+    const ratio = Math.max(w / h, 1);
+    return `aspect-ratio: ${ratio.toFixed(4)}; max-height: min(32rem, 80svh);`;
+  }
+  // Klipy GIF URLs carry their dimensions as ww=/hh= query params
+  const gifBoxStyle = $derived.by(() => {
+    if (!bskyExternal) return '';
+    try {
+      const u = new URL(bskyExternal.uri);
+      return mediaBoxStyle(Number(u.searchParams.get('ww')), Number(u.searchParams.get('hh')));
+    } catch { return ''; }
+  });
   const mastodonCardHost = $derived.by(() => {
     if (!mastodonCard) return '';
     try { return new URL(mastodonCard.url).hostname; } catch { return mastodonCard.url; }
@@ -813,12 +879,13 @@
       {#if bskyImages.length > 0}
         <div class="{bskyImages.length === 1 ? '' : 'grid grid-cols-2 gap-2'} pt-2">
           {#each bskyImages as image, i}
+            {@const boxStyle = bskyImages.length === 1 ? mediaBoxStyle(image.aspectRatio?.width, image.aspectRatio?.height) : ''}
             <button
               type="button"
               onclick={() => openLightbox(bskyImages.map(img => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), i)}
               class="cursor-pointer text-left w-full relative"
             >
-              <img src={image.thumb} alt={image.alt || ''} class="rounded-md w-full {bskyImages.length === 1 ? 'max-h-64 object-contain bg-black/10' : 'aspect-square object-cover'}" />
+              <img src={image.thumb} alt={image.alt || ''} style={boxStyle} class="rounded-md w-full {bskyImages.length === 1 ? (boxStyle ? 'object-cover bg-black/10' : 'max-h-64 object-contain bg-black/10') : 'aspect-square object-cover'}" />
               {#if image.alt}
                 <span
                   class="absolute bottom-1 left-1 px-1 py-0.5 text-[9px] font-bold bg-black/70 text-white rounded cursor-pointer"
@@ -841,19 +908,19 @@
       <!-- Bluesky external link -->
       {#if bskyExternal}
         {@const isGif = /\.gif(\?|$)/i.test(bskyExternal.uri)}
-        {@const gifMp4Match = bskyExternal.uri.match(/[?&]mp4=([^&]+)/)}
-        {#if isGif && gifMp4Match}
-          <!-- Animated GIF with MP4 variant — render as auto-playing muted video -->
+        {#if gifVideo && !gifVideoFailed}
+          <!-- Animated GIF with MP4/WebM variants — render as auto-playing muted video.
+               If every source fails, fall back to the plain GIF image below. -->
           <div class="mt-2 rounded-lg overflow-hidden border border-[var(--color-border)]">
-            <video autoplay loop muted playsinline class="w-full max-h-64 object-contain bg-black/10">
-              <source src="https://static.klipy.com/v/{gifMp4Match[1]}.mp4" type="video/mp4" />
-              <img src={bskyExternal.thumb || bskyExternal.uri} alt={bskyExternal.title || 'GIF'} class="w-full max-h-64 object-contain" />
+            <video autoplay loop muted playsinline poster={bskyExternal.thumb} style={gifBoxStyle} class="w-full {gifBoxStyle ? 'object-cover' : 'max-h-64 object-contain'} bg-black/10" onerror={() => gifVideoFailed = true}>
+              {#if gifVideo.mp4}<source src={gifVideo.mp4} type="video/mp4" onerror={() => { if (!gifVideo.webm) gifVideoFailed = true; }} />{/if}
+              {#if gifVideo.webm}<source src={gifVideo.webm} type="video/webm" onerror={() => gifVideoFailed = true} />{/if}
             </video>
           </div>
         {:else if isGif}
           <!-- Animated GIF — render inline -->
           <div class="mt-2 rounded-lg overflow-hidden border border-[var(--color-border)]">
-            <img src={bskyExternal.uri} alt={bskyExternal.title || 'GIF'} class="w-full max-h-64 object-contain bg-black/10" />
+            <img src={bskyExternal.uri} alt={bskyExternal.title || 'GIF'} style={gifBoxStyle} class="w-full {gifBoxStyle ? 'object-cover' : 'max-h-64 object-contain'} bg-black/10" />
           </div>
         {:else}
           <!-- Standard link card -->
@@ -937,10 +1004,11 @@
 
       <!-- Bluesky video -->
       {#if bskyVideo}
+        {@const videoBoxStyle = mediaBoxStyle(bskyVideo.aspectRatio?.width, bskyVideo.aspectRatio?.height)}
         <div class="mt-2 rounded-lg overflow-hidden border border-[var(--color-border)]">
           {#if bskyVideo.thumbnail}
             <div class="relative">
-              <img src={bskyVideo.thumbnail} alt={bskyVideo.alt || 'Video'} class="w-full aspect-video object-cover" />
+              <img src={bskyVideo.thumbnail} alt={bskyVideo.alt || 'Video'} style={videoBoxStyle} class="w-full {videoBoxStyle ? '' : 'aspect-video'} object-cover" />
               <div class="absolute inset-0 flex items-center justify-center">
                 <div class="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center">
                   <svg class="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
@@ -961,12 +1029,13 @@
             {@const imageUrl = attachment.previewUrl || attachment.url || attachment.remoteUrl}
             {@const mastoAltIndex = bskyImages.length + i}
             {#if imageUrl}
+              {@const mastoBoxStyle = mastodonMedia.length === 1 ? mediaBoxStyle(attachment.meta?.original?.width, attachment.meta?.original?.height) : ''}
               <button
                 type="button"
                 onclick={() => openLightbox(mastodonMedia.map(a => ({ url: a.url || a.previewUrl || a.remoteUrl || '', thumb: a.previewUrl || a.url || '', alt: a.description })), i)}
                 class="cursor-pointer text-left w-full relative"
               >
-                <img src={imageUrl} alt={attachment.description || `Image ${i + 1}`} class="rounded-md w-full {mastodonMedia.length === 1 ? 'max-h-64 object-contain bg-black/10' : 'aspect-square object-cover'} bg-[var(--color-surface-hover)]" />
+                <img src={imageUrl} alt={attachment.description || `Image ${i + 1}`} style={mastoBoxStyle} class="rounded-md w-full {mastodonMedia.length === 1 ? (mastoBoxStyle ? 'object-cover bg-black/10' : 'max-h-64 object-contain bg-black/10') : 'aspect-square object-cover'} bg-[var(--color-surface-hover)]" />
                 {#if attachment.description}
                   <span
                     class="absolute bottom-1 left-1 px-1 py-0.5 text-[9px] font-bold bg-black/70 text-white rounded cursor-pointer"

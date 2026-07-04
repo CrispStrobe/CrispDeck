@@ -3,6 +3,7 @@
   import { Bookmark, Loader2, Inbox, RefreshCw } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { listBookmarks, importPlatformBookmarks } from '$lib/bookmarks';
+  import { getAllBlueskyBookmarks } from '$lib/api/bluesky-bookmarks';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
@@ -38,7 +39,15 @@
 
       try {
         if (acct.platform === 'bluesky') {
-          // Bluesky doesn't have a public bookmarks API yet — skip
+          // Official Bluesky bookmarks (app.bsky.bookmark.*, since Bluesky 1.108)
+          const agent = entry.oauthAgent ?? (() => { try { const a = (entry.client as BlueskyClient).getAgent(); return a?.session ? a : null; } catch { return null; } })();
+          if (agent) {
+            const bookmarks = await getAllBlueskyBookmarks(agent);
+            const normalized = bookmarks
+              .filter(b => b.item?.$type === 'app.bsky.feed.defs#postView')
+              .map(b => normalizePost({ post: b.item } as any, 'bluesky'));
+            totalImported += await importPlatformBookmarks(normalized);
+          }
         } else if (acct.platform === 'mastodon') {
           const client = entry.client as MastodonClient;
           const token = client.getAccessToken();
@@ -83,7 +92,7 @@
         <span class="text-sm text-[var(--color-text-muted)]">({posts.length})</span>
       {/if}
     </div>
-    {#if accounts.some(a => a.platform === 'mastodon')}
+    {#if accounts.some(a => a.platform === 'mastodon' || a.platform === 'bluesky')}
       <button
         onclick={syncBookmarks}
         disabled={syncing}

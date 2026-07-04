@@ -93,33 +93,39 @@
         console.error('searchStarterPacks failed:', e);
       }
 
-      // Fallback: search posts mentioning starter packs
+      // Fallback: search posts mentioning starter packs. Must go through the
+      // authenticated agent — Bluesky's public appview now returns 403 for
+      // unauthenticated search endpoints.
       if (!apiWorked || allPacks.length === 0) {
         try {
-          // Search for posts containing the query
-          const searchResp = await fetch(
-            `https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=${encodeURIComponent(searchQuery + ' starter pack')}&limit=50`
-          );
-          if (searchResp.ok) {
-            const searchData = await searchResp.json();
-            const handles = new Set<string>();
-            for (const post of searchData.posts ?? []) {
-              handles.add(post.author.handle);
-              const text = post.record?.text ?? '';
-              for (const m of text.matchAll(/bsky\.app\/starter-pack\/([\w.-]+)\//g)) handles.add(m[1]);
-            }
-            const handleArray = [...handles].slice(0, 20);
-            await Promise.all(handleArray.map(async (handle) => {
-              try {
-                const resp = await agent.api.app.bsky.graph.getActorStarterPacks({ actor: handle });
-                for (const sp of resp.data.starterPacks ?? []) {
-                  const pack = sp as unknown as StarterPack;
-                  if (!seen.has(pack.uri)) { seen.add(pack.uri); allPacks.push(pack); }
-                }
-              } catch {}
-            }));
+          const searchResp = await agent.api.app.bsky.feed.searchPosts({
+            q: `${searchQuery} starter pack`,
+            limit: 50,
+          });
+          const handles = new Set<string>();
+          for (const post of searchResp.data.posts ?? []) {
+            handles.add(post.author.handle);
+            const text = (post.record as any)?.text ?? '';
+            for (const m of text.matchAll(/bsky\.app\/starter-pack\/([\w.-]+)\//g)) handles.add(m[1]);
           }
-        } catch {}
+          const handleArray = [...handles].slice(0, 20);
+          await Promise.all(handleArray.map(async (handle) => {
+            try {
+              const resp = await agent.api.app.bsky.graph.getActorStarterPacks({ actor: handle });
+              for (const sp of resp.data.starterPacks ?? []) {
+                const pack = sp as unknown as StarterPack;
+                if (!seen.has(pack.uri)) { seen.add(pack.uri); allPacks.push(pack); }
+              }
+            } catch {}
+          }));
+        } catch (e) {
+          console.error('Starter pack fallback search failed:', e);
+          // Both strategies failed with errors — this is an auth problem,
+          // not an empty result
+          if (!apiWorked) {
+            error = 'Starter pack search requires a signed-in Bluesky account. Your session may still be reconnecting — try again in a moment.';
+          }
+        }
       }
 
       // Sort by member count (API results are already relevance-sorted, but tie-break on size)
@@ -136,7 +142,7 @@
       });
 
       packs = allPacks;
-      if (allPacks.length === 0) {
+      if (allPacks.length === 0 && !error) {
         error = `No starter packs found for "${searchQuery}". Try a different topic or creator handle.`;
       }
     } catch (e) {
