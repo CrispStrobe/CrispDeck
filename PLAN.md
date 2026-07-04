@@ -13,7 +13,7 @@ A unified Mastodon + Bluesky + Threads social media client with:
 
 ## Current State (2026-07-04)
 
-v1.2.0 — 1,443 unit tests across 99 files + 29 Playwright E2E tests, 29 pages, 20 deck column types, CI fully green, live at https://crispdeck.vercel.app. Full deck parity release with floating compose, column keyboard navigation, per-column notifications, density modes, streaming for all columns, 5 new column types, and shareable collections. See CHANGELOG.md.
+v1.2.0+ — 1,498 unit tests across 104 files + 29 Playwright E2E tests, 29 pages, 20 deck column types, CI fully green, live at https://crispdeck.vercel.app. Post-v1.2.0: account switcher, multi-select, quick add-to-list, 6 perf optimizations (parallel crossposting/uploads/column-loads, normalize caches, session-scoped prefs). See CHANGELOG.md.
 
 **License**: AGPL-3.0-only
 

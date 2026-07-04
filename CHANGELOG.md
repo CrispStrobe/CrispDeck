@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Features
+
+- **Account switcher**: stacked avatars in sidebar footer with popover listing all connected accounts by platform, quick link to add accounts
+- **Multi-select posts**: immutable state module for bulk post selection with toggle, range select (Shift+click), select/deselect all
+- **Quick add-to-list**: ListPlus button on every post opens reading list picker popover for one-click add-to-list
+
+### Performance
+
+- **Parallel crosspost pipeline**: mention resolution + posting to all platforms via `Promise.all` instead of sequential loop (2-3x faster for 3-platform crossposts)
+- **Parallel Mastodon media uploads**: 4 files upload concurrently via `Promise.all` (2-3x faster for multi-image posts), alt text sent in upload FormData
+- **Parallel deck column loads**: timeline and my-posts columns fetch all accounts concurrently instead of platform-by-platform sequential loops
+- **Cached HTML stripping**: `normalizePost` caches regex results by URI+length key (avoids 50+ regex executions per feed re-render)
+- **Cached Mastodon handle normalization**: avoids `new URL()` parsing per-post for handle construction
+- **Session-scoped Post prefs cache**: removes 10s TTL and `Date.now()` overhead — invalidated via window event from settings page
+
+### Tests
+
+- 1,498 frontend unit tests across 104 files (up from 1,443 in v1.2.0)
+
 ## v1.2.0 — 2026-07-04
 
 Full deck parity release — 27 new features bringing the multi-column deck experience to feature-complete status.
