@@ -212,26 +212,29 @@ export async function postToMastodon(
       ? { Authorization: `Bearer ${token}` }
       : {};
 
-    // Upload media first if present
+    // Upload media in parallel (most Mastodon servers handle 4 concurrent uploads)
     const mediaIds: string[] = [];
     if (options.mediaFiles && options.mediaFiles.length > 0) {
-      for (const file of options.mediaFiles.slice(0, 4)) {
-        const formData = new FormData();
-        formData.append('file', file);
+      const uploadResults = await Promise.all(
+        options.mediaFiles.slice(0, 4).map(async (file, idx) => {
+          const formData = new FormData();
+          formData.append('file', file);
+          if (options.altTexts?.[idx]) formData.append('description', options.altTexts[idx]);
 
-        const mediaResp = await fetch(`${instanceUrl}/api/v2/media`, {
-          method: 'POST',
-          headers: authHeaders,
-          body: formData,
-        });
+          const mediaResp = await fetch(`${instanceUrl}/api/v2/media`, {
+            method: 'POST',
+            headers: authHeaders,
+            body: formData,
+          });
 
-        if (!mediaResp.ok) {
-          throw new Error(`Media upload failed: ${mediaResp.statusText}`);
-        }
+          if (!mediaResp.ok) {
+            throw new Error(`Media upload failed: ${mediaResp.statusText}`);
+          }
 
-        const mediaData = await mediaResp.json();
-        mediaIds.push(mediaData.id);
-      }
+          return (await mediaResp.json()).id as string;
+        })
+      );
+      mediaIds.push(...uploadResults);
     }
 
     // Create the status
@@ -541,33 +544,43 @@ export async function crosspostThread(
   }>,
   options: Omit<ComposeOptions, 'text'>,
 ): Promise<PostResult[]> {
-  const results: PostResult[] = [];
+  // Resolve mentions for all platforms in parallel
+  const resolved = await Promise.all(targets.map(async (target) => ({
+    ...target,
+    resolvedParts: await Promise.all(
+      target.parts.map(part => resolveMentionsForPlatform(part, target.platform))
+    ),
+  })));
 
-  for (const target of targets) {
-    // Resolve @mentions to platform-specific handles
-    const resolvedParts: string[] = [];
-    for (const part of target.parts) {
-      resolvedParts.push(await resolveMentionsForPlatform(part, target.platform));
-    }
-
-    if (resolvedParts.length === 1) {
-      // Single post, no thread needed
+  // Post to all platforms in parallel
+  const platformResults = await Promise.allSettled(resolved.map(async (target) => {
+    if (target.resolvedParts.length === 1) {
       if (target.platform === 'bluesky') {
-        results.push(await postToBluesky(target.client as BlueskyClient, { ...options, text: resolvedParts[0] }));
+        return [await postToBluesky(target.client as BlueskyClient, { ...options, text: target.resolvedParts[0] })];
       } else if (target.platform === 'threads') {
-        results.push(await postToThreads(target.client as ThreadsClient, { ...options, text: resolvedParts[0] }));
+        return [await postToThreads(target.client as ThreadsClient, { ...options, text: target.resolvedParts[0] })];
       } else {
-        results.push(await postToMastodon(target.client as MastodonClient, { ...options, text: resolvedParts[0] }));
+        return [await postToMastodon(target.client as MastodonClient, { ...options, text: target.resolvedParts[0] })];
       }
     } else {
-      // Thread
       if (target.platform === 'bluesky') {
-        results.push(...await postThreadToBluesky(target.client as BlueskyClient, resolvedParts, options));
+        return await postThreadToBluesky(target.client as BlueskyClient, target.resolvedParts, options);
       } else if (target.platform === 'threads') {
-        results.push(...await postThreadToThreads(target.client as ThreadsClient, resolvedParts));
+        return await postThreadToThreads(target.client as ThreadsClient, target.resolvedParts);
       } else {
-        results.push(...await postThreadToMastodon(target.client as MastodonClient, resolvedParts, options));
+        return await postThreadToMastodon(target.client as MastodonClient, target.resolvedParts, options);
       }
+    }
+  }));
+
+  // Flatten results, converting rejected promises to error results
+  const results: PostResult[] = [];
+  for (let i = 0; i < platformResults.length; i++) {
+    const r = platformResults[i];
+    if (r.status === 'fulfilled') {
+      results.push(...r.value);
+    } else {
+      results.push({ platform: resolved[i].platform, success: false, error: String(r.reason) });
     }
   }
 

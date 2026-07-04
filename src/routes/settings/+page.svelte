@@ -368,6 +368,7 @@
 
   function handleHideEngagementChange() {
     localStorage.setItem('crispdeck-hide-engagement', String(hideEngagement));
+    window.dispatchEvent(new Event('crispdeck:prefs-changed'));
   }
 
   let accounts: Account[] = $state([]);
@@ -1156,7 +1157,7 @@
           id="compact-posts"
           type="checkbox"
           bind:checked={compactPosts}
-          onchange={() => localStorage.setItem('crispdeck-compact-posts', String(compactPosts))}
+          onchange={() => { localStorage.setItem('crispdeck-compact-posts', String(compactPosts)); window.dispatchEvent(new Event('crispdeck:prefs-changed')); }}
           class="w-4 h-4 accent-[var(--color-primary)]"
         />
       </div>
@@ -1170,7 +1171,7 @@
         <select
           id="media-preview"
           bind:value={mediaPreview}
-          onchange={() => localStorage.setItem('crispdeck-media-preview', mediaPreview)}
+          onchange={() => { localStorage.setItem('crispdeck-media-preview', mediaPreview); window.dispatchEvent(new Event('crispdeck:prefs-changed')); }}
           class="px-2 py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)]"
         >
           <option value="lightbox">{i18n.t.settings.mediaPreviewLightbox}</option>

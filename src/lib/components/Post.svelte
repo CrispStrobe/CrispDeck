@@ -15,19 +15,22 @@
   import { haptic } from '$lib/haptics';
   import type { LightboxItem } from '$lib/components/MediaLightbox.svelte';
 
-  // Shared post preferences — read once from localStorage, cached across all Post instances
-  // Avoids 50+ localStorage reads per feed render
-  let _postPrefsCache: { hideEngagement: boolean; mediaPreview: 'lightbox' | 'browser'; compact: boolean; ts: number } | null = null;
+  // Session-scoped post preferences singleton — reads localStorage once, never re-reads
+  // until invalidated by settings page via window event. Eliminates 50+ localStorage
+  // reads per feed render and Date.now() checks on every Post instance.
+  let _postPrefsCache: { hideEngagement: boolean; mediaPreview: 'lightbox' | 'browser'; compact: boolean } | null = null;
   function getPostPrefs() {
-    const now = Date.now();
-    if (_postPrefsCache && now - _postPrefsCache.ts < 10000) return _postPrefsCache;
+    if (_postPrefsCache) return _postPrefsCache;
     _postPrefsCache = {
       hideEngagement: localStorage.getItem('crispdeck-hide-engagement') === 'true',
       mediaPreview: (localStorage.getItem('crispdeck-media-preview') as 'lightbox' | 'browser') || 'lightbox',
       compact: localStorage.getItem('crispdeck-compact-posts') === 'true',
-      ts: now,
     };
     return _postPrefsCache;
+  }
+  // Invalidate cache when settings change (fired from settings page)
+  if (typeof window !== 'undefined') {
+    window.addEventListener('crispdeck:prefs-changed', () => { _postPrefsCache = null; });
   }
   const _postPrefs = getPostPrefs();
 

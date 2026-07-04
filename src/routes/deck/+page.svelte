@@ -400,53 +400,61 @@
     const mastoAcct = accounts.find(a => a.platform === 'mastodon');
 
     try {
-      // Multi-account merge: loop ALL accounts for timeline and my-posts
+      // Multi-account merge: fetch ALL accounts in parallel for timeline and my-posts
       if (col.type === 'timeline') {
-        for (const [id, entry] of allBsky) {
-          const acct = accounts.find(a => a.id === id);
-          try {
-            if (entry.oauthAgent) {
-              const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 50 });
-              posts.push(...r.data.feed.map(p => ({ ...normalizePost(p, 'bluesky'), sourceAccount: acct?.handle })));
-            } else {
-              const r = await (entry.client as BlueskyClient).getTimeline();
-              posts.push(...r.feed.map(p => ({ ...normalizePost(p, 'bluesky'), sourceAccount: acct?.handle })));
-            }
-          } catch {}
-        }
-        for (const [id, entry] of allMasto) {
-          const acct = accounts.find(a => a.id === id);
-          try {
-            const timeline = await (entry.client as MastodonClient).getHomeTimeline();
-            posts.push(...timeline.map(s => ({ ...normalizePost(s, 'mastodon'), sourceAccount: acct?.handle })));
-          } catch {}
-        }
+        const fetchers: Promise<UnifiedPost[]>[] = [
+          ...allBsky.map(([id, entry]) => (async () => {
+            const acct = accounts.find(a => a.id === id);
+            try {
+              if (entry.oauthAgent) {
+                const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 50 });
+                return r.data.feed.map(p => ({ ...normalizePost(p, 'bluesky'), sourceAccount: acct?.handle }));
+              } else {
+                const r = await (entry.client as BlueskyClient).getTimeline();
+                return r.feed.map(p => ({ ...normalizePost(p, 'bluesky'), sourceAccount: acct?.handle }));
+              }
+            } catch { return []; }
+          })()),
+          ...allMasto.map(([id, entry]) => (async () => {
+            const acct = accounts.find(a => a.id === id);
+            try {
+              const timeline = await (entry.client as MastodonClient).getHomeTimeline();
+              return timeline.map(s => ({ ...normalizePost(s, 'mastodon'), sourceAccount: acct?.handle }));
+            } catch { return []; }
+          })()),
+        ];
+        const results = await Promise.all(fetchers);
+        posts.push(...results.flat());
       } else if (col.type === 'my-posts') {
-        for (const [id, entry] of allBsky) {
-          const acct = accounts.find(a => a.id === id);
-          if (!acct) continue;
-          try {
-            const r = await (entry.client as BlueskyClient).getAuthorFeed(acct.handle);
-            posts.push(...r.feed.map(p => ({ ...normalizePost(p, 'bluesky'), sourceAccount: acct.handle })));
-          } catch {}
-        }
-        for (const [id, entry] of allMasto) {
-          const acct = accounts.find(a => a.id === id);
-          if (!acct) continue;
-          try {
-            const a = await (entry.client as MastodonClient).getAccountByHandle(acct.handle);
-            const statuses = await (entry.client as MastodonClient).getAccountStatuses(a.id);
-            posts.push(...statuses.map(s => ({ ...normalizePost(s, 'mastodon'), sourceAccount: acct.handle })));
-          } catch {}
-        }
-        for (const [id, entry] of allThreads) {
-          const acct = accounts.find(a => a.id === id);
-          try {
-            const client = entry.client as ThreadsClient;
-            const threadsPosts = await client.getOwnPosts(25);
-            posts.push(...threadsPosts.map(p => ({ ...client.normalizePost(p), sourceAccount: acct?.handle })));
-          } catch {}
-        }
+        const fetchers: Promise<UnifiedPost[]>[] = [
+          ...allBsky.map(([id, entry]) => (async () => {
+            const acct = accounts.find(a => a.id === id);
+            if (!acct) return [];
+            try {
+              const r = await (entry.client as BlueskyClient).getAuthorFeed(acct.handle);
+              return r.feed.map(p => ({ ...normalizePost(p, 'bluesky'), sourceAccount: acct.handle }));
+            } catch { return []; }
+          })()),
+          ...allMasto.map(([id, entry]) => (async () => {
+            const acct = accounts.find(a => a.id === id);
+            if (!acct) return [];
+            try {
+              const a = await (entry.client as MastodonClient).getAccountByHandle(acct.handle);
+              const statuses = await (entry.client as MastodonClient).getAccountStatuses(a.id);
+              return statuses.map(s => ({ ...normalizePost(s, 'mastodon'), sourceAccount: acct.handle }));
+            } catch { return []; }
+          })()),
+          ...allThreads.map(([id, entry]) => (async () => {
+            const acct = accounts.find(a => a.id === id);
+            try {
+              const client = entry.client as ThreadsClient;
+              const threadsPosts = await client.getOwnPosts(25);
+              return threadsPosts.map(p => ({ ...client.normalizePost(p), sourceAccount: acct?.handle }));
+            } catch { return []; }
+          })()),
+        ];
+        const results = await Promise.all(fetchers);
+        posts.push(...results.flat());
       } else if (col.type === 'mentions') {
         if (bskyAgent) try {
           const r = await bskyAgent.api.app.bsky.notification.listNotifications({ limit: 50 });

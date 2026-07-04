@@ -6,6 +6,44 @@ import { jaroWinkler } from '$lib/utils/string';
 
 type PlatformPost = AppBskyFeedDefs.FeedViewPost | mastodon.v1.Status | ThreadsPost;
 
+// Cached HTML stripping — avoids regex per-post on re-renders
+// Key includes content length as a cheap fingerprint to avoid stale cache
+// when the same URI has different content (e.g. edited posts)
+const _htmlCleanCache = new Map<string, string>();
+function stripHtmlCached(uri: string, html: string): string {
+  const key = `${uri}:${html.length}`;
+  let clean = _htmlCleanCache.get(key);
+  if (!clean) {
+    clean = html.replace(/<[^>]*>?/gm, '');
+    _htmlCleanCache.set(key, clean);
+    // Cap cache size to prevent memory leak
+    if (_htmlCleanCache.size > 2000) {
+      const first = _htmlCleanCache.keys().next().value;
+      if (first) _htmlCleanCache.delete(first);
+    }
+  }
+  return clean;
+}
+
+// Cached Mastodon handle normalization — avoids URL parsing per-post
+const _handleCache = new Map<string, string>();
+function normalizeMastoHandle(acct: string, accountUrl: string): string {
+  let handle = _handleCache.get(acct);
+  if (!handle) {
+    if (acct.includes('@')) {
+      handle = `@${acct}`;
+    } else {
+      try {
+        handle = `@${acct}@${new URL(accountUrl).hostname}`;
+      } catch {
+        handle = `@${acct}`;
+      }
+    }
+    _handleCache.set(acct, handle);
+  }
+  return handle;
+}
+
 export function normalizePost(post: PlatformPost, platform: Platform): UnifiedPost {
   if (platform === 'threads') {
     const item = post as ThreadsPost;
@@ -84,11 +122,9 @@ export function normalizePost(post: PlatformPost, platform: Platform): UnifiedPo
       : (target.createdAt ?? (target as any).created_at);
     return {
       uri: target.uri,
-      text: target.content.replace(/<[^>]*>?/gm, ''),
+      text: stripHtmlCached(target.uri, target.content),
       author: {
-        handle: target.account.acct.includes('@')
-          ? `@${target.account.acct}`
-          : `@${target.account.acct}@${new URL(target.account.url).hostname}`,
+        handle: normalizeMastoHandle(target.account.acct, target.account.url),
         displayName: target.account.displayName ?? (target.account as any).display_name,
         avatar: target.account.avatar ?? (target.account as any).avatar_static,
       },
@@ -101,9 +137,7 @@ export function normalizePost(post: PlatformPost, platform: Platform): UnifiedPo
       isRepost: !!item.reblog,
       repostAuthor: item.reblog
         ? {
-            handle: item.account.acct.includes('@')
-              ? `@${item.account.acct}`
-              : `@${item.account.acct}@${new URL(item.account.url).hostname}`,
+            handle: normalizeMastoHandle(item.account.acct, item.account.url),
             displayName: item.account.displayName,
           }
         : undefined,
