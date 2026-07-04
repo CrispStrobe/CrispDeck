@@ -7,6 +7,13 @@
 - **Account switcher**: stacked avatars in sidebar footer with popover listing all connected accounts by platform, quick link to add accounts
 - **Multi-select posts**: immutable state module for bulk post selection with toggle, range select (Shift+click), select/deselect all
 - **Quick add-to-list**: ListPlus button on every post opens reading list picker popover for one-click add-to-list
+- **Bluesky lists API**: `getLists`, `getList`, `getListFeed`, `getListMutes`, `getListBlocks` methods in BlueskyClient
+
+### Fixes
+
+- **Mastodon poll voting**: now sends Authorization header (was silently failing); shows toast on success/failure
+- **Error feedback**: bookmark failure, bookmark server sync, TTS, translation errors now show user-facing toasts instead of silent `console.error`
+- **Accessibility**: post text divs have `role="article"` + keyboard Enter handler; quoted post images have `role="button"` with Enter/Space; list picker closes on Escape
 
 ### Performance
 
@@ -19,7 +26,7 @@
 
 ### Tests
 
-- 1,498 frontend unit tests across 104 files (up from 1,443 in v1.2.0)
+- 1,520 frontend unit tests across 107 files (up from 1,443 in v1.2.0), 44 Playwright E2E tests (up from 29)
 
 ## v1.2.0 — 2026-07-04
 
