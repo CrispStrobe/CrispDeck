@@ -8,6 +8,10 @@ test.describe('Compose — Quick Schedule', () => {
 
   test('clicking Schedule shows date/time picker', async ({ page }) => {
     await page.goto('/compose');
+    // Wait for page to load, then fill text to enable Schedule button
+    const textarea = page.locator('textarea');
+    await expect(textarea).toBeVisible({ timeout: 15000 });
+    await textarea.fill('Test post');
     await page.locator('button:has-text("Schedule")').click();
     await expect(page.locator('input[type="date"]')).toBeVisible();
     await expect(page.locator('input[type="time"]')).toBeVisible();
@@ -16,8 +20,9 @@ test.describe('Compose — Quick Schedule', () => {
 
   test('Schedule Post button is disabled without date/time', async ({ page }) => {
     await page.goto('/compose');
-    // Type some text first
-    await page.locator('textarea').fill('Test post for scheduling');
+    const textarea = page.locator('textarea');
+    await expect(textarea).toBeVisible({ timeout: 15000 });
+    await textarea.fill('Test post for scheduling');
     await page.locator('button:has-text("Schedule")').click();
     const scheduleBtn = page.locator('button:has-text("Schedule Post")');
     await expect(scheduleBtn).toBeDisabled();

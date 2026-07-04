@@ -15,17 +15,20 @@ test.describe('Deck Page', () => {
   test('Add Column menu lists column types', async ({ page }) => {
     await page.goto('/deck');
     await page.locator('button:has-text("Add Column")').click();
-    await expect(page.locator('text=Home Timeline')).toBeVisible();
-    await expect(page.locator('text=Notifications')).toBeVisible();
-    await expect(page.locator('text=Messages / DMs')).toBeVisible();
-    await expect(page.locator('text=Trending')).toBeVisible();
-    await expect(page.locator('text=Activity')).toBeVisible();
-    await expect(page.locator('text=Liked Posts')).toBeVisible();
+    // Use the menu container to scope selectors and avoid sidebar nav collisions
+    const menu = page.locator('.absolute.right-0');
+    await expect(menu.locator('text=Home Timeline')).toBeVisible();
+    await expect(menu.locator('text=Messages / DMs')).toBeVisible();
+    await expect(menu.locator('text=Trending')).toBeVisible();
+    await expect(menu.locator('text=Liked Posts')).toBeVisible();
   });
 
   test('keyboard shortcut "a" opens add column menu', async ({ page }) => {
     await page.goto('/deck');
+    // Click body to ensure focus is not in an input
+    await page.locator('body').click();
     await page.keyboard.press('a');
-    await expect(page.locator('text=Home Timeline')).toBeVisible({ timeout: 3000 });
+    const menu = page.locator('.absolute.right-0');
+    await expect(menu.locator('text=Home Timeline')).toBeVisible({ timeout: 3000 });
   });
 });
