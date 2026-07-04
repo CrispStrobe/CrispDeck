@@ -22,7 +22,7 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **Like, boost, reply, quote, bookmark, share, report** interactions (Bluesky + Mastodon + Threads)
 - **Thread view**: click any post to see full parent chain + replies, thread un-rolling ("Read as article") — Bluesky + Mastodon; Threads posts open on threads.com
 - **Profile pages**: any user — avatar/banner/bio/stats, follow/unfollow, block/mute, posts/replies/media gallery/followers/following tabs
-- **Cross-platform bookmarks**: stored locally in IndexedDB, Mastodon import
+- **Cross-platform bookmarks**: stored locally in IndexedDB, synced with official Bluesky server bookmarks (`app.bsky.bookmark.*`) + Mastodon import
 - **Mastodon custom emoji**: inline rendering of instance-specific custom emoji in posts
 - **Mastodon follow requests**: Accept/Reject buttons on notification cards for locked accounts
 - **Bluesky muted words sync**: server-side muted words synced from Bluesky preferences

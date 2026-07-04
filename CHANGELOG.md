@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Official Bluesky bookmarks** (`app.bsky.bookmark.*`, Bluesky 1.108+): bookmarking a Bluesky post writes through to the server; the bookmarks page sync imports server bookmarks alongside Mastodon
+- **GIF playback fixed**: klipy GIF embeds played a guessed MP4 URL that 404'd, leaving a blank box — now uses klipy's real sibling-file URL scheme (mp4 + webm) with a plain-GIF fallback on error
+- **Starter pack search fixed**: Bluesky's public appview now 403s unauthenticated search, silently killing the fallback — search now goes through the authenticated agent and reports auth problems instead of "no packs found"
+- **Media sizing rebuilt on the official app's model**: images/videos/GIFs fill the column width at their native aspect ratio (from the embed's `aspectRatio`, klipy `ww`/`hh` params, or Mastodon `meta.original`), clamped to never exceed square with center-crop like bsky.app, plus a `min(32rem, 80svh)` viewport cap — responsive from small phones (portrait/landscape) to wide desktop and narrow deck columns
+- **Release CI**: macOS Intel build cross-compiles on `macos-14` (GitHub retired the `macos-13` Intel runners; jobs targeting them queued forever)
+
 ## v1.1.0 — 2026-07-03
 
 Six feature sprints, a deep performance pass, and major reliability fixes since v1.0.0.

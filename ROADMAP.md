@@ -26,7 +26,7 @@
 - [x] Trending (Mastodon tags/links/posts with Latin script filter)
 - [x] Bluesky Labelers (subscribe, configure hide/warn/show per label, display on posts)
 - [x] Moderation (block/mute management, both platforms)
-- [x] Cross-platform bookmarks (IndexedDB)
+- [x] Cross-platform bookmarks (IndexedDB; official Bluesky server bookmarks + Mastodon import)
 - [x] Thread view (click post → full parent chain + replies)
 - [x] Share/copy link to post + Report button
 - [x] Mastodon polls (create + vote on existing)
@@ -111,6 +111,13 @@
 - [x] Performance phases 17–21 — parallelized APIs, SWR caching, IDB singletons, leak fixes, vendor chunk splitting, SW cache auto-versioning
 - [x] Reliability — self-healing Bluesky OAuth sessions (restore by DID, transient-error retries, silent re-auth), deck fixes for OAuth accounts, starter pack search on official API
 - [x] CI fully green — 1,177 frontend + 29 E2E + 15 Rust tests
+
+## Shipped since v1.1.0
+
+- [x] Official Bluesky bookmarks (app.bsky.bookmark.* write-through + sync import)
+- [x] GIF playback (correct klipy mp4/webm URLs + fallback), starter pack search via authenticated agent
+- [x] Aspect-ratio media sizing (official-app model: native ratio, square clamp, 80svh viewport cap)
+- [x] Release CI: macOS Intel cross-compiled on macos-14 (macos-13 runners retired)
 
 ## Next (candidates)
 

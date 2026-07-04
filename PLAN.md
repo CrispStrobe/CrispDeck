@@ -137,7 +137,7 @@ Analytics with full pagination, local post archive (IndexedDB), deck columns (11
 - Support regex patterns for advanced users
 
 ### 50. Platform bookmarks sync
-- **Status**: Done (Mastodon import; Bluesky lacks public bookmarks API)
+- **Status**: Done (Mastodon import + official Bluesky app.bsky.bookmark.* since Bluesky 1.108 — write-through on bookmark, paginated import on sync)
 - **Effort**: Medium
 - **Description**: Sync local bookmarks with platform-native bookmarks
 - Import from Bluesky bookmarks API and Mastodon bookmarks API
