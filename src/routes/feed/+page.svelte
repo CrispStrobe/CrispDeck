@@ -23,6 +23,7 @@
   import { buildFilterMatcher, getCachedFilters, setCachedFilters, type MastodonFilter } from '$lib/mastodon-filters';
   import { saveReadPosition, getReadPosition } from '$lib/read-position';
   import { getCached, setCache } from '$lib/view-cache';
+  import { cacheFeed, loadCachedFeed, formatCachedTime, isOffline } from '$lib/offline-cache';
 
   type FeedMode = 'timeline' | 'my-posts' | 'for-you';
 
@@ -42,6 +43,7 @@
   let cursors: Record<number, string | undefined> = $state({});
   let loadingMore = $state(false);
   let mastodonFilters: MastodonFilter[] = $state([]);
+  let offlineBanner = $state(''); // "Offline — cached from 5 min ago"
 
   let filters: Filters = $state({
     searchTerm: '',
@@ -318,6 +320,16 @@
       progress = posts.length;
       const cacheSize = parseInt(localStorage.getItem('crispdeck-feed-cache-size') ?? '200');
       setCache('feed-' + feedMode, posts.slice(0, cacheSize));
+      // Persist to IndexedDB for offline PWA access
+      cacheFeed('feed', posts);
+      offlineBanner = '';
+    } else if (posts.length === 0) {
+      // Network failed and no SWR cache — try offline IndexedDB cache
+      const cached = await loadCachedFeed('feed');
+      if (cached && cached.posts.length > 0) {
+        posts = cached.posts;
+        offlineBanner = `Offline — showing cached feed from ${formatCachedTime(cached.cachedAt)}`;
+      }
     }
     loading = false;
   }
@@ -596,6 +608,13 @@
     <div class="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">
       {error}
       <button onclick={() => error = ''} class="ml-2 underline">dismiss</button>
+    </div>
+  {/if}
+
+  {#if offlineBanner}
+    <div class="mb-4 p-3 bg-yellow-900/50 border border-yellow-700 rounded-lg text-yellow-200 text-sm flex items-center justify-between">
+      <span>{offlineBanner}</span>
+      <button onclick={() => { offlineBanner = ''; loadFeed(); }} class="underline ml-2">Retry</button>
     </div>
   {/if}
 

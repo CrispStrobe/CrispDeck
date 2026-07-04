@@ -1589,9 +1589,31 @@ The app is feature-rich (20 column types, 1,520+ tests, streaming, keyboard nav,
 - [ ] Prototype: relay connection + event parsing in isolation before wiring into UI
 - [ ] The AT Protocol and ActivityPub abstractions are solid — adding a third protocol backend is architecturally clean but the auth paradigm is fundamentally different
 
+### 176. Wire offline-cache into feed page
+- **Status**: Done
+- **Effort**: Small (module exists, ~20 lines of wiring)
+- **Priority**: Must-have
+- **Description**: The `offline-cache.ts` module is built but not connected to the feed page. Wire it so:
+- [ ] On every successful `loadFeed()`, call `cacheFeed('feed', posts)` to persist the latest feed
+- [ ] On page mount, if `isOffline()` or if the live fetch fails, call `loadCachedFeed('feed')` and show an "Offline — cached from [time]" banner
+- [ ] Dismiss the banner when the connection restores and fresh data loads
+- [ ] Also wire for notifications page: `cacheFeed('notifications', ...)` on load, serve from cache when offline
+- **Key files**: `src/routes/feed/+page.svelte`, `src/routes/notifications/+page.svelte`, `src/lib/offline-cache.ts`
+
+### 177. Release v1.2.1 patch
+- **Status**: Done
+- **Effort**: Small
+- **Priority**: Must-have
+- **Description**: Meaningful post-v1.2.0 work is sitting on `main` untagged. Users on v1.2.0 don't have the poll voting auth fix (was broken for all Mastodon poll users). Warrants a patch release.
+- [ ] Version bump to 1.2.1 in package.json, Cargo.toml, tauri.conf.json
+- [ ] Update CHANGELOG Unreleased → v1.2.1 with date
+- [ ] `git tag v1.2.1 && git push --tags` to trigger release builds
+- [ ] Verify CI, release binaries, Vercel deploy
+- Contents: account switcher, poll voting fix, 6 perf optimizations, a11y fixes, Bluesky lists API, error toasts, offline cache module, page-error helpers, 15 new E2E tests
+
 ### What to skip (and why)
 
 - **Team collaboration (TD-J2)**: enterprise feature for a product without enterprise users. Build it when someone asks.
 - **More column types**: 20 is already more than most users will discover. Better discoverability of existing types matters more than adding column type #21.
 - **More perf optimizations**: hot paths are parallel, caches are in place. Further gains require profiling real usage data, not code-level guessing.
-- **More unit tests for their own sake**: 1,520 tests is already extensive. Add tests when fixing bugs or adding features, not as a standalone goal.
+- **More unit tests for their own sake**: 1,539 tests is already extensive. Add tests when fixing bugs or adding features, not as a standalone goal.

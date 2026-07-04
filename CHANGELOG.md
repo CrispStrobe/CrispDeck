@@ -2,18 +2,23 @@
 
 ## Unreleased
 
+## v1.2.1 — 2026-07-04
+
 ### Features
 
 - **Account switcher**: stacked avatars in sidebar footer with popover listing all connected accounts by platform, quick link to add accounts
 - **Multi-select posts**: immutable state module for bulk post selection with toggle, range select (Shift+click), select/deselect all
 - **Quick add-to-list**: ListPlus button on every post opens reading list picker popover for one-click add-to-list
 - **Bluesky lists API**: `getLists`, `getList`, `getListFeed`, `getListMutes`, `getListBlocks` methods in BlueskyClient
+- **Offline feed cache**: PWA users see cached feed with "Offline — cached from [time]" banner when network is unavailable; retry button to reload
+- **Page-error helpers**: `tryLoad`/`tryAction`/`tryWrite` utilities with automatic toast feedback for consistent error handling
 
 ### Fixes
 
 - **Mastodon poll voting**: now sends Authorization header (was silently failing); shows toast on success/failure
 - **Error feedback**: bookmark failure, bookmark server sync, TTS, translation errors now show user-facing toasts instead of silent `console.error`
 - **Accessibility**: post text divs have `role="article"` + keyboard Enter handler; quoted post images have `role="button"` with Enter/Space; list picker closes on Escape
+- **Silent error audit**: lists page and moderation page silent catches now log errors and show toasts
 
 ### Performance
 
@@ -26,7 +31,7 @@
 
 ### Tests
 
-- 1,520 frontend unit tests across 107 files (up from 1,443 in v1.2.0), 44 Playwright E2E tests (up from 29)
+- 1,546 frontend unit tests across 110 files (up from 1,443 in v1.2.0), 44 Playwright E2E tests (up from 29)
 
 ## v1.2.0 — 2026-07-04
 
