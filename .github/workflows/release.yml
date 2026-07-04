@@ -95,17 +95,13 @@ jobs:
           tagName: ${{ inputs.tag || 'v__VERSION__' }}
           releaseName: 'CrispDeck ${{ inputs.tag || ''v__VERSION__'' }}'
           releaseBody: |
-            ## What's New in 1.1.0
+            ## What's New in 1.1.1
 
-            - **Bluesky video upload** — full pipeline wired into compose
-            - **Web push notifications** — VAPID + service worker + daily cron
-            - **Self-healing Bluesky OAuth sessions** — no more surprise "session expired"; silent re-auth via prompt=none
-            - **Mastodon depth** — server-side filters, list management, follow requests, announcements, edit history, server translation, custom emoji
-            - **Bluesky depth** — post gates, self-labels, profile pins, synced muted words, rebuilt starter pack search
-            - **Threads engagement** — like, repost, quote
-            - **Native feel** — network-first onboarding, tabbed settings, configurable sidebar, touch deck reorder, pull-to-refresh, haptics, animations
-            - **Performance** — parallelized API calls, SWR caching, eager media loading, faster startup
-            - **1,177 unit + 29 E2E + 15 Rust tests**, CI green on all platforms
+            - **Official Bluesky bookmarks** — server-synced bookmarks via `app.bsky.bookmark.*` (Bluesky 1.108+)
+            - **GIF playback fixed** — klipy embeds now use the correct sibling-file URL scheme with fallback
+            - **Starter pack search fixed** — uses authenticated agent after Bluesky's public appview started 403ing
+            - **Media sizing rebuilt** — aspect-ratio-aware layout matching the official bsky.app model, responsive across all viewports
+            - **Release CI fixed** — macOS Intel cross-compiles on macos-14 (GitHub retired Intel runners)
 
             Full details in the [CHANGELOG](https://github.com/CrispStrobe/CrispDeck/blob/main/CHANGELOG.md).
           releaseDraft: false
