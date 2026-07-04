@@ -7,6 +7,7 @@
   import { normalizePost, sortPosts } from '$lib/api/unified';
   import { getMastodonLists, createMastodonList } from '$lib/list-management';
   import Post from '$lib/components/Post.svelte';
+  import { tryLoad, tryAction } from '$lib/page-error';
   import type { Account, UnifiedPost } from '$lib/types';
   import { getCached, setCache } from '$lib/view-cache';
 
@@ -102,7 +103,7 @@
           const { snakeToCamel } = await import('$lib/api/mastodon');
           listPosts = sortPosts(raw.map((s: any) => normalizePost(s, 'mastodon')), 'newest');
         }
-      } catch {}
+      } catch (e) { console.error('Failed to load Mastodon list:', e); }
       break;
     }
     loadingPosts = false;
@@ -119,7 +120,7 @@
         const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
         const resp = await agent.api.app.bsky.feed.getFeed({ feed: feed.uri, limit: 50 });
         listPosts = sortPosts(resp.data.feed.map(p => normalizePost(p, 'bluesky')), 'newest');
-      } catch {}
+      } catch (e) { console.error('Failed to load Bluesky feed:', e); }
       break;
     }
     loadingPosts = false;
@@ -136,7 +137,7 @@
         const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
         const resp = await agent.api.app.bsky.feed.getListFeed({ list: list.uri, limit: 50 });
         listPosts = sortPosts(resp.data.feed.map(p => normalizePost(p, 'bluesky')), 'newest');
-      } catch {}
+      } catch (e) { console.error('Failed to load Bluesky list feed:', e); }
       break;
     }
     loadingPosts = false;
@@ -153,7 +154,7 @@
         const data = await resp.json();
         feedSearchResults = (data.feeds ?? []) as unknown as BskyFeed[];
       }
-    } catch {}
+    } catch (e) { console.error('Feed search failed:', e); }
     searchingFeeds = false;
   }
 

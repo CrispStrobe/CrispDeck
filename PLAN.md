@@ -1526,3 +1526,72 @@ Column chrome in mature deck clients was polished over years. Several ergonomic 
 |----|------|--------|
 | TD-I1 | Shareable collections | Medium |
 | TD-J2 | Team / shared deck collaboration | Very Large |
+
+---
+
+## Phase 18: Hardening & Polish (2026-07-04)
+
+The app is feature-rich (20 column types, 1,520+ tests, streaming, keyboard nav, density modes, shareable collections, Bluesky lists API). Diminishing returns on new features. Focus shifts to reliability, real-world usage, and honest PWA support.
+
+### 171. Systematic silent-error audit
+- **Status**: Not started
+- **Effort**: Medium
+- **Priority**: Must-have
+- **Description**: ~40 empty `catch {}` blocks outside Post.svelte (in API clients, feed page, deck page, settings) silently swallow errors. Users hit failures with no feedback.
+- [ ] Audit every `catch {}` and `catch (e) { console.error(...) }` in the codebase
+- [ ] Replace with `toast.error()` or `toast.warning()` for user-visible operations (API calls, saves, syncs)
+- [ ] Keep silent catches only for truly ignorable operations (feature detection, optional preloads)
+- [ ] Add error boundary fallbacks where appropriate
+- **Key files**: `src/lib/api/mastodon.ts`, `src/lib/api/bluesky.ts`, `src/lib/api/bluesky-oauth.ts`, `src/lib/api/client-factory.ts`, `src/routes/feed/+page.svelte`, `src/routes/deck/+page.svelte`
+
+### 172. Offline-first PWA with cached feed
+- **Status**: Not started
+- **Effort**: Medium
+- **Priority**: Must-have
+- **Description**: The service worker caches the app shell but not feed data. PWA users who lose connection see a blank feed. The "offline support" claim is not honest.
+- [ ] Cache last-known feed state in IndexedDB (posts, notifications, trending) on each successful load
+- [ ] On offline load: serve cached feed with "Offline — showing cached from [time]" banner
+- [ ] Stale-while-revalidate for API responses in service worker (60s cache + network refresh)
+- [ ] Clear offline indicator when connection restores, auto-refresh
+- **Key files**: `static/sw.js`, `src/routes/feed/+page.svelte`, `src/routes/+layout.svelte`
+
+### 173. Bundle analysis + Lighthouse audit
+- **Status**: Not started
+- **Effort**: Small
+- **Priority**: Should-have
+- **Description**: Run `npx vite-bundle-visualizer` and Lighthouse on production. Let the numbers tell us where to spend time instead of guessing.
+- [ ] Run bundle analysis, document total JS size, largest chunks, tree-shaking gaps
+- [ ] Run Lighthouse (mobile + desktop), document FCP, LCP, TBT, CLS scores
+- [ ] Identify concrete opportunities (e.g., lazy-load html2canvas, split lucide icons)
+- [ ] Set Lighthouse score targets for CI gating
+
+### 174. Live user testing pass
+- **Status**: Not started
+- **Effort**: Small (but high value)
+- **Priority**: Must-have
+- **Description**: Connect real accounts, use the deck for a full day, document friction.
+- [ ] Test all 20 column types with real data
+- [ ] Test floating compose with real reply/quote workflows
+- [ ] Test keyboard navigation end-to-end on deck
+- [ ] Test mobile PWA (install, offline, notifications)
+- [ ] Test multi-account scenarios (2 Bluesky + 1 Mastodon)
+- [ ] Document: what's confusing, what's broken, what's unused
+- This is the highest-value activity — code is ahead of the product
+
+### 175. Nostr support (design doc)
+- **Status**: Not started
+- **Effort**: Very Large (multi-week)
+- **Priority**: Nice-to-have (new network = new users)
+- **Description**: The only remaining item that expands the market. NIP-01 relay protocol, crypto-based auth (nsec/npub), event normalization into UnifiedPost.
+- [ ] Write design doc: relay connection model, key management, NIP support matrix
+- [ ] Define: which NIPs to support (NIP-01, NIP-02 contacts, NIP-04 DMs, NIP-07 browser extension signing)
+- [ ] Design: how nsec/npub key auth maps to existing Account model (no server, no OAuth)
+- [ ] Prototype: relay connection + event parsing in isolation before wiring into UI
+- [ ] The AT Protocol and ActivityPub abstractions are solid — adding a third protocol backend is architecturally clean but the auth paradigm is fundamentally different
+
+### What to skip (and why)
+
+- **Team collaboration (TD-J2)**: enterprise feature for a product without enterprise users. Build it when someone asks.
+- **More column types**: 20 is already more than most users will discover. Better discoverability of existing types matters more than adding column type #21.
+- **More perf optimizations**: hot paths are parallel, caches are in place. Further gains require profiling real usage data, not code-level guessing.
+- **More unit tests for their own sake**: 1,520 tests is already extensive. Add tests when fixing bugs or adding features, not as a standalone goal.

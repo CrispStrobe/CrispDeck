@@ -3,6 +3,7 @@
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Shield, Loader2, Ban, VolumeX, UserX } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
+  import { toast } from '$lib/toast.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import type { Account, Platform } from '$lib/types';
@@ -72,7 +73,7 @@
           for (const m of mutes.data.mutes) {
             allMuted.push({ platform: 'bluesky', handle: m.handle, displayName: m.displayName, avatar: m.avatar, did: m.did, type: 'mute' });
           }
-        } catch {}
+        } catch (e) { console.error('Moderation data load failed:', e); toast.error('Failed to load moderation data'); }
       } else if (acct.platform === 'mastodon') {
         const masto = entry.client as MastodonClient;
         const token = masto.getAccessToken();
@@ -92,7 +93,7 @@
               allMuted.push({ platform: 'mastodon', handle: `@${a.acct}`, displayName: a.display_name, avatar: a.avatar, id: a.id, type: 'mute' });
             }
           }
-        } catch {}
+        } catch (e) { console.error('Moderation data load failed:', e); toast.error('Failed to load moderation data'); }
       }
     }
 
@@ -120,7 +121,7 @@
             listItemCount: l.listItemCount,
             subscribed: !!l.viewer?.muted || !!l.viewer?.blocked,
           }));
-      } catch {}
+      } catch (e) { console.error('Moderation data load failed:', e); toast.error('Failed to load moderation data'); }
       break;
     }
   }
