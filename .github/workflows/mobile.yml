@@ -37,8 +37,34 @@ jobs:
 
       - name: Build iOS
         run: |
-          # Use tauri ios build which handles Rust cross-compilation + xcodebuild
-          npx tauri ios build --export-method debugging 2>&1 | tail -50 || true
+          # Patch xcodeproj to disable code signing for CI
+          cd src-tauri/gen/apple
+          XCPROJ=$(ls -d *.xcodeproj 2>/dev/null | head -1)
+          if [ -n "$XCPROJ" ]; then
+            # Disable code signing in pbxproj
+            sed -i '' 's/CODE_SIGN_IDENTITY = .*/CODE_SIGN_IDENTITY = "";/g' "$XCPROJ/project.pbxproj" 2>/dev/null || true
+            sed -i '' 's/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = "";/g' "$XCPROJ/project.pbxproj" 2>/dev/null || true
+            # Add CODE_SIGNING_ALLOWED = NO if not present
+            sed -i '' 's/CODE_SIGN_IDENTITY = "";/CODE_SIGN_IDENTITY = "";\n\t\t\t\tCODE_SIGNING_REQUIRED = NO;\n\t\t\t\tCODE_SIGNING_ALLOWED = NO;/g' "$XCPROJ/project.pbxproj" 2>/dev/null || true
+          fi
+          cd "$GITHUB_WORKSPACE"
+          # Build with tauri — handles Rust cross-compile + xcodebuild
+          npx tauri ios build 2>&1 | tail -50 || true
+          # Fallback: direct xcodebuild if tauri build fails
+          if ! find src-tauri/gen/apple -name "*.app" -type d 2>/dev/null | grep -q .; then
+            echo "Tauri build didn't produce .app, trying xcodebuild directly..."
+            cd src-tauri/gen/apple
+            xcodebuild -project "$XCPROJ" \
+              -scheme "crispdeck_iOS" \
+              -configuration Release \
+              -sdk iphoneos \
+              -derivedDataPath build \
+              CODE_SIGN_IDENTITY="" \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGNING_ALLOWED=NO \
+              ONLY_ACTIVE_ARCH=NO \
+              2>&1 | tail -30 || true
+          fi
 
       - name: Package .ipa
         run: |
