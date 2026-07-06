@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## v1.2.4 — 2026-07-06
+
+### Downloads
+
+All platforms available on the release page:
+- **macOS**: ARM (.dmg) + Intel (.dmg)
+- **Linux**: .deb
+- **Windows**: .exe + .msi
+- **Android**: signed debug APK (sideloadable)
+- **iOS**: unsigned .ipa (requires re-signing for device install)
+
+### Infrastructure
+
+- **iOS .ipa builds**: patch generated xcodeproj to disable code signing in CI; `tauri ios build` produces a real .app from xcarchive, packaged as .ipa
+- **Android installable APK**: debug build is auto-signed and sideloadable; release APK signed with CI-generated keystore via zipalign + apksigner
+
 ## v1.2.3 — 2026-07-06
 
 ### Infrastructure
