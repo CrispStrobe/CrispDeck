@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## v1.2.2 — 2026-07-06
+
+### Infrastructure
+
+- **Android builds produce APK**: switched `reqwest` from OpenSSL to `rustls-tls` for Android cross-compilation; APK artifact (33 MB) now downloadable from GitHub Actions
+- **iOS builds on Xcode 16**: upgraded CI runner to `macos-15` (Xcode 16) to support Tauri 2 project format 77; dynamic xcodeproj/scheme discovery
+- **Artifact uploads**: both mobile builds now upload artifacts via `actions/upload-artifact@v4`
+
 ## v1.2.1 — 2026-07-04
 
 ### Features
