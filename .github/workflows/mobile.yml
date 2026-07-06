@@ -35,62 +35,39 @@ jobs:
       - name: Initialize iOS project
         run: npx tauri ios init || true
 
-      - name: Build iOS (no-codesign)
+      - name: Build iOS
         run: |
-          cd src-tauri/gen/apple
-          XCPROJ=$(ls -d *.xcodeproj 2>/dev/null | head -1)
-          if [ -z "$XCPROJ" ]; then echo "No xcodeproj found"; ls -la; exit 1; fi
-          echo "Found: $XCPROJ"
-          xcodebuild -project "$XCPROJ" -list 2>/dev/null || true
+          # Use tauri ios build which handles Rust cross-compilation + xcodebuild
+          npx tauri ios build --export-method debugging 2>&1 | tail -50 || true
 
-          # Build for real device (arm64, unsigned)
-          SCHEME=$(xcodebuild -project "$XCPROJ" -list 2>/dev/null | grep -i ios | grep -v -i sim | head -1 | xargs)
-          if [ -z "$SCHEME" ]; then
-            SCHEME=$(xcodebuild -project "$XCPROJ" -list 2>/dev/null | grep -i "scheme" -A20 | grep -v "scheme" | head -1 | xargs)
-          fi
-          echo "Using scheme: $SCHEME"
-
-          xcodebuild archive \
-            -project "$XCPROJ" \
-            -scheme "$SCHEME" \
-            -configuration Release \
-            -sdk iphoneos \
-            -archivePath "$GITHUB_WORKSPACE/CrispDeck.xcarchive" \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            AD_HOC_CODE_SIGNING_ALLOWED=YES \
-            ONLY_ACTIVE_ARCH=NO \
-            SKIP_INSTALL=NO \
-            2>&1 | tail -40 || true
-
-      - name: Package .ipa from archive
+      - name: Package .ipa
         run: |
           VERSION=$(node -p "require('./package.json').version")
+          # Find any .app or .ipa that tauri produced
+          echo "=== Looking for build products ==="
+          find src-tauri/gen/apple -name "*.app" -type d 2>/dev/null | head -5
+          find src-tauri/gen/apple -name "*.ipa" -type f 2>/dev/null | head -5
+          find src-tauri/target -name "*.app" -type d 2>/dev/null | head -5
 
-          if [ -d "CrispDeck.xcarchive/Products/Applications" ]; then
-            # Create Payload structure for .ipa
+          # Try to find .app and package as .ipa
+          APP=$(find src-tauri/gen/apple -name "*.app" -type d 2>/dev/null | head -1)
+          if [ -n "$APP" ]; then
             mkdir -p Payload
-            cp -R CrispDeck.xcarchive/Products/Applications/*.app Payload/
+            cp -R "$APP" Payload/
             zip -ryq "CrispDeck_${VERSION}_ios-unsigned.ipa" Payload
             echo "Created: CrispDeck_${VERSION}_ios-unsigned.ipa"
             ls -la "CrispDeck_${VERSION}_ios-unsigned.ipa"
-          elif [ -d "CrispDeck.xcarchive" ]; then
-            echo "Archive exists but no .app in Products/Applications"
-            find CrispDeck.xcarchive -name "*.app" -type d 2>/dev/null | head -5
-            # Try to find .app anywhere in archive
-            APP=$(find CrispDeck.xcarchive -name "*.app" -type d 2>/dev/null | head -1)
-            if [ -n "$APP" ]; then
-              mkdir -p Payload
-              cp -R "$APP" Payload/
-              zip -ryq "CrispDeck_${VERSION}_ios-unsigned.ipa" Payload
-              echo "Created from fallback path: CrispDeck_${VERSION}_ios-unsigned.ipa"
-            else
-              echo "No .app found in archive"
-              find CrispDeck.xcarchive -maxdepth 4 -type d | head -20
-            fi
           else
-            echo "No .xcarchive produced"
+            # Check if tauri produced an .ipa directly
+            IPA=$(find src-tauri -name "*.ipa" -type f 2>/dev/null | head -1)
+            if [ -n "$IPA" ]; then
+              cp "$IPA" "CrispDeck_${VERSION}_ios-unsigned.ipa"
+              echo "Found tauri-produced IPA: CrispDeck_${VERSION}_ios-unsigned.ipa"
+            else
+              echo "No .app or .ipa found"
+              echo "=== Build directory listing ==="
+              find src-tauri/gen/apple -maxdepth 5 -type f -name "*.app" -o -name "*.ipa" -o -name "*.xcarchive" 2>/dev/null | head -20
+            fi
           fi
 
       - name: Upload .ipa to release
