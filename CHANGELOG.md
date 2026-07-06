@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v1.2.3 — 2026-07-06
+
+### Infrastructure
+
+- **Mobile binaries on release page**: Android APKs and iOS simulator builds now upload directly to GitHub Releases via `gh release upload` (were only in Actions artifacts before)
+
 ## v1.2.2 — 2026-07-06
 
 ### Infrastructure

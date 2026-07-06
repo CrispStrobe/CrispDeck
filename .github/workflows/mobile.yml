@@ -6,6 +6,9 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   ios:
     name: iOS Build
@@ -28,22 +31,16 @@ jobs:
 
       - run: npm ci
 
-      - name: Install Xcode command line tools
-        run: xcode-select --print-path || sudo xcode-select --install
-
       - name: Initialize iOS project
         run: npx tauri ios init || true
 
-      - name: Build iOS (unsigned debug)
+      - name: Build iOS (unsigned debug for simulator)
         run: |
           cd src-tauri/gen/apple
-          # Find the generated xcodeproj and scheme
           XCPROJ=$(ls -d *.xcodeproj 2>/dev/null | head -1)
           if [ -z "$XCPROJ" ]; then echo "No xcodeproj found"; ls -la; exit 1; fi
           echo "Found project: $XCPROJ"
-          # List available schemes
           xcodebuild -project "$XCPROJ" -list 2>/dev/null | head -20 || true
-          # Build with first iOS scheme found, or fall back to project name
           SCHEME=$(xcodebuild -project "$XCPROJ" -list 2>/dev/null | grep -i ios | head -1 | xargs || echo "${XCPROJ%.xcodeproj}_iOS")
           echo "Using scheme: $SCHEME"
           xcodebuild -project "$XCPROJ" \
@@ -57,20 +54,32 @@ jobs:
             ONLY_ACTIVE_ARCH=NO \
             2>&1 | tail -30 || echo "iOS build completed with warnings"
 
-      - name: Collect iOS build artifacts
+      - name: Package iOS simulator app
         run: |
-          mkdir -p ios-artifacts
-          find src-tauri/gen/apple -name "*.app" -type d 2>/dev/null | head -1 | while read app; do
-            cp -R "$app" ios-artifacts/ 2>/dev/null || true
-          done
-          ls -la ios-artifacts/ || echo "No .app found — listing gen/apple:"
-          find src-tauri/gen/apple -maxdepth 5 -name "*.app" -o -name "*.xcodeproj" 2>/dev/null | head -10
+          APP=$(find src-tauri/gen/apple -name "*.app" -type d 2>/dev/null | head -1)
+          if [ -n "$APP" ]; then
+            cd "$(dirname "$APP")"
+            tar czf "$GITHUB_WORKSPACE/CrispDeck_ios-simulator.tar.gz" "$(basename "$APP")"
+            echo "Packaged: CrispDeck_ios-simulator.tar.gz"
+          else
+            echo "No .app found — iOS build may have failed"
+            find src-tauri/gen/apple -maxdepth 5 -name "*.app" -o -name "*.xcodeproj" 2>/dev/null | head -10
+          fi
 
-      - name: Upload iOS artifacts
+      - name: Upload iOS to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f CrispDeck_ios-simulator.tar.gz ]; then
+            gh release upload "${{ github.ref_name }}" CrispDeck_ios-simulator.tar.gz --clobber || true
+          fi
+
+      - name: Upload iOS artifact (fallback)
         uses: actions/upload-artifact@v4
         with:
-          name: ios-build
-          path: ios-artifacts/
+          name: ios-simulator
+          path: CrispDeck_ios-simulator.tar.gz
           if-no-files-found: warn
 
   android:
@@ -118,17 +127,30 @@ jobs:
       - name: Build Android APK
         run: npx tauri android build --apk 2>&1 | tail -50
 
-      - name: Collect Android build artifacts
-        if: always()
+      - name: Collect and rename APKs
         run: |
           mkdir -p android-artifacts
+          # Find all APKs and copy with version-stamped names
+          VERSION=$(node -p "require('./package.json').version")
           find src-tauri/gen/android -name "*.apk" -type f | while read apk; do
-            cp "$apk" android-artifacts/ 2>/dev/null || true
+            BASENAME=$(basename "$apk" .apk)
+            cp "$apk" "android-artifacts/CrispDeck_${VERSION}_${BASENAME}.apk"
           done
-          ls -la android-artifacts/ 2>/dev/null || echo "No APKs found"
-          find src-tauri/gen/android/app/build/outputs -type f 2>/dev/null | head -20 || echo "No build outputs"
+          ls -la android-artifacts/
 
-      - name: Upload Android artifacts
+      - name: Upload APKs to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for apk in android-artifacts/*.apk; do
+            if [ -f "$apk" ]; then
+              echo "Uploading $apk to release ${{ github.ref_name }}"
+              gh release upload "${{ github.ref_name }}" "$apk" --clobber || true
+            fi
+          done
+
+      - name: Upload Android artifact (fallback)
         uses: actions/upload-artifact@v4
         with:
           name: android-build
