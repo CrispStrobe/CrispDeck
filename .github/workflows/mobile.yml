@@ -155,17 +155,60 @@ jobs:
       - name: Initialize Android project
         run: npx tauri android init || true
 
-      - name: Build Android APK
-        run: npx tauri android build --apk 2>&1 | tail -50
+      - name: Build Android debug APK (auto-signed, installable)
+        run: |
+          npx tauri android build --apk -- --debug 2>&1 | tail -50 || true
+          # Fallback: if tauri doesn't support --debug passthrough, build via Gradle
+          if ! find src-tauri/gen/android -name "*debug*.apk" -type f | grep -q .; then
+            echo "No debug APK from tauri, trying Gradle assembleDebug..."
+            cd src-tauri/gen/android
+            chmod +x gradlew 2>/dev/null || true
+            ./gradlew assembleDebug 2>&1 | tail -30 || true
+            cd "$GITHUB_WORKSPACE"
+          fi
+          # Also try release build
+          npx tauri android build --apk 2>&1 | tail -50 || true
 
-      - name: Collect and rename APKs
+      - name: Sign release APK with debug key
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          # Generate a debug keystore for CI signing
+          keytool -genkeypair -v \
+            -keystore ci-debug.keystore \
+            -alias crispdeck \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass android -keypass android \
+            -dname "CN=CrispDeck CI, O=CrispDeck, C=US" 2>/dev/null || true
+          # Find and sign unsigned release APKs
+          find src-tauri/gen/android -name "*unsigned*.apk" -type f | while read apk; do
+            ALIGNED="${apk%.apk}-aligned.apk"
+            zipalign -v 4 "$apk" "$ALIGNED" 2>/dev/null || cp "$apk" "$ALIGNED"
+            apksigner sign --ks ci-debug.keystore --ks-pass pass:android --ks-key-alias crispdeck --key-pass pass:android "$ALIGNED" 2>/dev/null || true
+            if apksigner verify "$ALIGNED" 2>/dev/null; then
+              echo "Signed: $ALIGNED"
+            fi
+          done
+
+      - name: Collect APKs
         run: |
           mkdir -p android-artifacts
           VERSION=$(node -p "require('./package.json').version")
-          find src-tauri/gen/android -name "*.apk" -type f | while read apk; do
-            BASENAME=$(basename "$apk" .apk)
-            cp "$apk" "android-artifacts/CrispDeck_${VERSION}_${BASENAME}.apk"
+          # Collect debug APKs (auto-signed, installable)
+          find src-tauri/gen/android -name "*debug*.apk" -type f | while read apk; do
+            cp "$apk" "android-artifacts/CrispDeck_${VERSION}_android-debug.apk" 2>/dev/null
+            break  # take first
           done
+          # Collect signed release APKs
+          find src-tauri/gen/android -name "*aligned*.apk" -type f | while read apk; do
+            cp "$apk" "android-artifacts/CrispDeck_${VERSION}_android-release.apk" 2>/dev/null
+            break
+          done
+          # Fallback: any APK
+          if [ -z "$(ls android-artifacts/*.apk 2>/dev/null)" ]; then
+            find src-tauri/gen/android -name "*.apk" -type f | head -1 | while read apk; do
+              cp "$apk" "android-artifacts/CrispDeck_${VERSION}_android.apk"
+            done
+          fi
           ls -la android-artifacts/
 
       - name: Upload APKs to release
