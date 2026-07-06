@@ -9,7 +9,7 @@ on:
 jobs:
   ios:
     name: iOS Build
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v5
 
@@ -37,8 +37,17 @@ jobs:
       - name: Build iOS (unsigned debug)
         run: |
           cd src-tauri/gen/apple
-          xcodebuild -project CrispDeck.xcodeproj \
-            -scheme CrispDeck_iOS \
+          # Find the generated xcodeproj and scheme
+          XCPROJ=$(ls -d *.xcodeproj 2>/dev/null | head -1)
+          if [ -z "$XCPROJ" ]; then echo "No xcodeproj found"; ls -la; exit 1; fi
+          echo "Found project: $XCPROJ"
+          # List available schemes
+          xcodebuild -project "$XCPROJ" -list 2>/dev/null | head -20 || true
+          # Build with first iOS scheme found, or fall back to project name
+          SCHEME=$(xcodebuild -project "$XCPROJ" -list 2>/dev/null | grep -i ios | head -1 | xargs || echo "${XCPROJ%.xcodeproj}_iOS")
+          echo "Using scheme: $SCHEME"
+          xcodebuild -project "$XCPROJ" \
+            -scheme "$SCHEME" \
             -configuration Debug \
             -sdk iphonesimulator \
             -derivedDataPath build \
@@ -46,16 +55,16 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             ONLY_ACTIVE_ARCH=NO \
-            2>&1 | tail -20 || echo "iOS xcodebuild completed with warnings"
+            2>&1 | tail -30 || echo "iOS build completed with warnings"
 
       - name: Collect iOS build artifacts
         run: |
           mkdir -p ios-artifacts
-          find src-tauri/gen/apple/build -name "*.app" -type d | head -1 | while read app; do
+          find src-tauri/gen/apple -name "*.app" -type d 2>/dev/null | head -1 | while read app; do
             cp -R "$app" ios-artifacts/ 2>/dev/null || true
           done
-          ls -la ios-artifacts/ || echo "No .app found — listing build dir:"
-          find src-tauri/gen/apple/build -maxdepth 4 -type d | head -20
+          ls -la ios-artifacts/ || echo "No .app found — listing gen/apple:"
+          find src-tauri/gen/apple -maxdepth 5 -name "*.app" -o -name "*.xcodeproj" 2>/dev/null | head -10
 
       - name: Upload iOS artifacts
         uses: actions/upload-artifact@v4
@@ -107,23 +116,17 @@ jobs:
         run: npx tauri android init || true
 
       - name: Build Android APK
-        run: |
-          npx tauri android build --apk 2>&1 | tail -30 || true
-          # Fallback: try direct Gradle build if tauri android build fails
-          if [ ! -f src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk ]; then
-            echo "Tauri APK not found, trying Gradle directly..."
-            cd src-tauri/gen/android
-            ./gradlew assembleRelease 2>&1 | tail -20 || ./gradlew assembleDebug 2>&1 | tail -20 || true
-          fi
+        run: npx tauri android build --apk 2>&1 | tail -50
 
       - name: Collect Android build artifacts
+        if: always()
         run: |
           mkdir -p android-artifacts
           find src-tauri/gen/android -name "*.apk" -type f | while read apk; do
             cp "$apk" android-artifacts/ 2>/dev/null || true
           done
-          ls -la android-artifacts/ || echo "No APKs found — listing build outputs:"
-          find src-tauri/gen/android/app/build/outputs -type f 2>/dev/null | head -20 || echo "No build outputs dir"
+          ls -la android-artifacts/ 2>/dev/null || echo "No APKs found"
+          find src-tauri/gen/android/app/build/outputs -type f 2>/dev/null | head -20 || echo "No build outputs"
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4

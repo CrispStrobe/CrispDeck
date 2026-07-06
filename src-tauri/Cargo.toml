@@ -32,8 +32,8 @@ anyhow = "1"
 # Database
 rusqlite = { version = "0.32", features = ["bundled"] }
 
-# HTTP client for OAuth
-reqwest = { version = "0.12", features = ["json"] }
+# HTTP client for OAuth (rustls for Android/iOS cross-compilation — no OpenSSL dependency)
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 # Credential encryption
 aes-gcm = "0.10"
