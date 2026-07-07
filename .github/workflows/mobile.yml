@@ -158,61 +158,43 @@ jobs:
       - name: Initialize Android project
         run: npx tauri android init || true
 
-      - name: Build Android debug APK (auto-signed, installable)
-        run: |
-          npx tauri android build --apk -- --debug 2>&1 | tail -50 || true
-          # Fallback: if tauri doesn't support --debug passthrough, build via Gradle
-          if ! find src-tauri/gen/android -name "*debug*.apk" -type f | grep -q .; then
-            echo "No debug APK from tauri, trying Gradle assembleDebug..."
-            cd src-tauri/gen/android
-            chmod +x gradlew 2>/dev/null || true
-            ./gradlew assembleDebug 2>&1 | tail -30 || true
-            cd "$GITHUB_WORKSPACE"
-          fi
-          # Also try release build
-          npx tauri android build --apk 2>&1 | tail -50 || true
+      - name: Build Android APK
+        run: npx tauri android build --apk 2>&1 | tail -50
 
-      - name: Sign release APK with debug key
+      - name: Sign APK for sideloading
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          # Generate a debug keystore for CI signing
-          keytool -genkeypair -v \
-            -keystore ci-debug.keystore \
+
+          # Generate a signing keystore
+          keytool -genkeypair \
+            -keystore crispdeck-ci.keystore \
             -alias crispdeck \
             -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass android -keypass android \
-            -dname "CN=CrispDeck CI, O=CrispDeck, C=US" 2>/dev/null || true
-          # Find and sign unsigned release APKs
-          find src-tauri/gen/android -name "*unsigned*.apk" -type f | while read apk; do
-            ALIGNED="${apk%.apk}-aligned.apk"
-            zipalign -v 4 "$apk" "$ALIGNED" 2>/dev/null || cp "$apk" "$ALIGNED"
-            apksigner sign --ks ci-debug.keystore --ks-pass pass:android --ks-key-alias crispdeck --key-pass pass:android "$ALIGNED" 2>/dev/null || true
-            if apksigner verify "$ALIGNED" 2>/dev/null; then
-              echo "Signed: $ALIGNED"
-            fi
-          done
+            -storepass crispdeck123 -keypass crispdeck123 \
+            -dname "CN=CrispDeck, O=CrispDeck, C=US"
 
-      - name: Collect APKs
-        run: |
+          # Find the unsigned APK
+          UNSIGNED=$(find src-tauri/gen/android -name "*.apk" -type f | head -1)
+          echo "Found APK: $UNSIGNED"
+          ls -la "$UNSIGNED"
+
+          # Sign with jarsigner (works reliably unlike apksigner path issues)
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
+            -keystore crispdeck-ci.keystore \
+            -storepass crispdeck123 -keypass crispdeck123 \
+            "$UNSIGNED" crispdeck
+
+          # Verify signature
+          jarsigner -verify "$UNSIGNED"
+          echo "Signature verified OK"
+
+          # Zipalign (required after jarsigner)
+          SDKTOOLS="$ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools/ | tail -1)"
+          ALIGNED="android-artifacts/CrispDeck_${VERSION}_android.apk"
           mkdir -p android-artifacts
-          VERSION=$(node -p "require('./package.json').version")
-          # Collect debug APKs (auto-signed, installable)
-          find src-tauri/gen/android -name "*debug*.apk" -type f | while read apk; do
-            cp "$apk" "android-artifacts/CrispDeck_${VERSION}_android-debug.apk" 2>/dev/null
-            break  # take first
-          done
-          # Collect signed release APKs
-          find src-tauri/gen/android -name "*aligned*.apk" -type f | while read apk; do
-            cp "$apk" "android-artifacts/CrispDeck_${VERSION}_android-release.apk" 2>/dev/null
-            break
-          done
-          # Fallback: any APK
-          if [ -z "$(ls android-artifacts/*.apk 2>/dev/null)" ]; then
-            find src-tauri/gen/android -name "*.apk" -type f | head -1 | while read apk; do
-              cp "$apk" "android-artifacts/CrispDeck_${VERSION}_android.apk"
-            done
-          fi
-          ls -la android-artifacts/
+          "$SDKTOOLS/zipalign" -v 4 "$UNSIGNED" "$ALIGNED"
+          ls -la "$ALIGNED"
+          echo "Final APK: $ALIGNED"
 
       - name: Upload APKs to release
         if: startsWith(github.ref, 'refs/tags/v')
