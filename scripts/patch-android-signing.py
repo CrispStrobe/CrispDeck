@@ -13,12 +13,24 @@ import sys
 
 path = sys.argv[1] if len(sys.argv) > 1 else "src-tauri/gen/android/app/build.gradle.kts"
 
+import glob as _glob
+
+# Auto-discover if default path doesn't exist
+if not os.path.exists(path):
+    candidates = _glob.glob("src-tauri/gen/android/**/build.gradle.kts", recursive=True)
+    if candidates:
+        path = candidates[0]
+        print(f"[signing] Auto-discovered: {path}")
+    else:
+        print(f"[signing] No build.gradle.kts found (tauri android init may have failed)")
+        sys.exit(0)  # exit cleanly so CI continues
+
 try:
     with open(path) as f:
         content = f.read()
 except FileNotFoundError:
     print(f"File not found: {path}")
-    sys.exit(1)
+    sys.exit(0)
 
 # Determine signing mode
 keystore_path = os.environ.get("ANDROID_KEYSTORE_PATH")

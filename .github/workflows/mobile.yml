@@ -114,77 +114,69 @@ jobs:
           echo "KEY_PATH=$HOME/.appstoreconnect/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8" \
             >> "$GITHUB_ENV"
 
-      # ── Archive + export (production, when API key is available) ─────────
-      - name: Archive iOS app
-        if: env.SIGNING_CONFIGURED == 'true'
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          cd src-tauri/gen/apple
-          XCPROJ=$(ls -d *.xcodeproj 2>/dev/null | head -1)
-          SCHEME=$(echo "$XCPROJ" | sed 's/.xcodeproj//')
-
-          # Prepend /usr/bin to PATH so xcodebuild's rsync sub-process finds
-          # the system rsync (with -E / --extended-attributes) before any
-          # Homebrew rsync that lacks that flag (see appstore.md Step 5 gotcha)
-          # Pass DEVELOPMENT_TEAM and CODE_SIGN_STYLE as xcodebuild overrides —
-          # the Tauri-generated pbxproj may not contain these keys at all, so
-          # sed-patching is unreliable; command-line build settings always win.
-          PATH="/usr/bin:$PATH" xcodebuild \
-            -project "$XCPROJ" \
-            -scheme "${SCHEME}_iOS" \
-            -configuration Release \
-            -sdk iphoneos \
-            -archivePath "$RUNNER_TEMP/CrispDeck.xcarchive" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$KEY_PATH" \
-            -authenticationKeyID "$APPLE_API_KEY_ID" \
-            -authenticationKeyIssuerID "$APPLE_API_ISSUER_ID" \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CODE_SIGN_STYLE=Automatic \
-            archive \
-            2>&1 | tail -60
-
-      - name: Export App Store IPA
+      # ── Build signed IPA via tauri ios build ─────────────────────────────
+      # IMPORTANT: Must use `tauri ios build`, not raw `xcodebuild archive`.
+      # Tauri's "Build Rust Code" xcode script phase requires the Tauri build
+      # server to be running (it reads a server-addr temp file); calling
+      # xcodebuild directly panics with "failed to read missing addr file".
+      - name: Build signed iOS app
         if: env.SIGNING_CONFIGURED == 'true'
         run: |
           VERSION=$(node -p "require('./package.json').version")
 
+          # Inject DEVELOPMENT_TEAM into every build configuration in pbxproj.
+          # sed replacement doesn't work when the key doesn't exist — use python
+          # to insert it alongside existing build settings.
           python3 -c "
-          t = '$APPLE_TEAM_ID'
-          open('/tmp/ExportOptions.plist','w').write(f'''<?xml version=\"1.0\" encoding=\"UTF-8\"?>
-          <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
-          <plist version=\"1.0\">
-          <dict>
-            <key>method</key><string>app-store-connect</string>
-            <key>teamID</key><string>{t}</string>
-            <key>signingStyle</key><string>automatic</string>
-            <key>destination</key><string>export</string>
-          </dict>
-          </plist>''')"
+          import re
+          pbxproj = 'src-tauri/gen/apple/crispdeck.xcodeproj/project.pbxproj'
+          with open(pbxproj) as f: content = f.read()
+          # Add DEVELOPMENT_TEAM and CODE_SIGN_STYLE to every buildSettings block
+          # that doesn't already have them
+          if 'DEVELOPMENT_TEAM' not in content:
+              content = content.replace(
+                  'buildSettings = {',
+                  'buildSettings = {\n\t\t\t\tDEVELOPMENT_TEAM = $APPLE_TEAM_ID;\n\t\t\t\tCODE_SIGN_STYLE = Automatic;'
+              )
+          else:
+              content = re.sub(r'DEVELOPMENT_TEAM = [^;]*;', 'DEVELOPMENT_TEAM = $APPLE_TEAM_ID;', content)
+          with open(pbxproj, 'w') as f: f.write(content)
+          print('Patched DEVELOPMENT_TEAM into pbxproj')
+          "
 
-          PATH="/usr/bin:$PATH" xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/CrispDeck.xcarchive" \
-            -exportPath "$RUNNER_TEMP/export" \
-            -exportOptionsPlist /tmp/ExportOptions.plist \
+          # Prepend /usr/bin to avoid Homebrew rsync shadowing (appstore.md Step 5)
+          export PATH="/usr/bin:$PATH"
+
+          # tauri ios build handles: frontend build → Rust cross-compile →
+          # xcodebuild archive → export. Pass xcodebuild flags via --.
+          npx tauri ios build \
+            --export-method app-store-connect \
+            -- \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$KEY_PATH" \
             -authenticationKeyID "$APPLE_API_KEY_ID" \
             -authenticationKeyIssuerID "$APPLE_API_ISSUER_ID" \
-            2>&1 | tail -30
+            2>&1 | tail -80
 
-          # Verify signature before upload (see appstore.md Step 6 gotcha)
-          IPA=$(find "$RUNNER_TEMP/export" -name "*.ipa" | head -1)
+      - name: Collect signed IPA
+        if: env.SIGNING_CONFIGURED == 'true'
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "=== Searching for IPA ==="
+          find src-tauri -name "*.ipa" -type f 2>/dev/null | head -10
+
+          IPA=$(find src-tauri -name "*.ipa" -type f 2>/dev/null | head -1)
           if [ -n "$IPA" ]; then
-            cp "$IPA" "$GITHUB_WORKSPACE/CrispDeck_${VERSION}_ios-appstore.ipa"
-            cd /tmp && mkdir ipa_check && cd ipa_check
+            cp "$IPA" "CrispDeck_${VERSION}_ios-appstore.ipa"
+            echo "Found IPA: $(ls -lh CrispDeck_${VERSION}_ios-appstore.ipa)"
+            # Verify signature
+            cd /tmp && mkdir -p ipa_check && cd ipa_check
             unzip -q "$GITHUB_WORKSPACE/CrispDeck_${VERSION}_ios-appstore.ipa"
             codesign --verify --deep --strict --verbose=2 Payload/*.app 2>&1 | tail -5
           else
-            echo "ERROR: no IPA found after export"
-            ls -la "$RUNNER_TEMP/export/" || true
-            # Dump the distribution log for diagnosis (see appstore.md Step 6 gotcha)
-            DISTLOG=$(ls -td /var/folders/*/*/T/*xcdistributionlogs* 2>/dev/null | head -1)
-            [ -n "$DISTLOG" ] && grep -n "Step failed\|error" "$DISTLOG/IDEDistribution.verbose.log" 2>/dev/null | tail -20 || true
+            echo "No IPA found — checking for .app"
+            find src-tauri -name "*.app" -type d 2>/dev/null | head -5
+            find src-tauri -name "*.xcarchive" -type d 2>/dev/null | head -5
             exit 1
           fi
 
