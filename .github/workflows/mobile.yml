@@ -174,28 +174,55 @@ jobs:
           export PATH="/usr/bin:$PATH"
           npx tauri ios build --export-method app-store-connect 2>&1 | tail -80
 
-      - name: Collect IPA
+      # tauri ios build produces an .xcarchive (signed .app inside) but
+      # NOT an .ipa. Run xcodebuild -exportArchive to create the IPA.
+      - name: Export IPA from archive
         if: env.SIGNING_CONFIGURED == 'true'
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          echo "=== Searching for IPA ==="
-          find src-tauri -name "*.ipa" -type f 2>/dev/null | head -10
-          find . -maxdepth 1 -name "*.ipa" -type f 2>/dev/null | head -5
+          ARCHIVE=$(find src-tauri -name "*.xcarchive" -type d 2>/dev/null | head -1)
+          echo "Archive: $ARCHIVE"
 
-          IPA=$(find src-tauri . -maxdepth 3 -name "*.ipa" -type f 2>/dev/null | head -1)
+          # Write ExportOptions.plist
+          python3 -c "
+          import os
+          t = os.environ['APPLE_TEAM_ID']
+          open('/tmp/ExportOptions.plist','w').write(f'''<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+          <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
+          <plist version=\"1.0\">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>teamID</key><string>{t}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>destination</key><string>export</string>
+          </dict>
+          </plist>''')
+          "
+
+          PATH="/usr/bin:$PATH" xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist /tmp/ExportOptions.plist \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$APPLE_API_KEY_ID" \
+            -authenticationKeyIssuerID "$APPLE_API_ISSUER_ID" \
+            2>&1 | tail -20
+
+          IPA=$(find "$RUNNER_TEMP/export" -name "*.ipa" | head -1)
           if [ -n "$IPA" ]; then
             cp "$IPA" "CrispDeck_${VERSION}_ios-appstore.ipa"
-            echo "Found IPA: $(ls -lh CrispDeck_${VERSION}_ios-appstore.ipa)"
+            echo "Exported IPA: $(ls -lh CrispDeck_${VERSION}_ios-appstore.ipa)"
             # Verify signature
-            cd /tmp && mkdir -p ipa_check && cd ipa_check
+            mkdir -p /tmp/ipa_check && cd /tmp/ipa_check
             unzip -q "$GITHUB_WORKSPACE/CrispDeck_${VERSION}_ios-appstore.ipa"
             codesign --verify --deep --strict --verbose=2 Payload/*.app 2>&1 | tail -5
           else
-            echo "No IPA found — checking for .app and .xcarchive"
-            find src-tauri -name "*.app" -type d 2>/dev/null | head -5
-            find src-tauri -name "*.xcarchive" -type d 2>/dev/null | head -5
-            find ~/Library/Developer/Xcode/DerivedData -name "*.app" -type d 2>/dev/null | head -5
-            echo "Build succeeded but no IPA produced — may need manual export"
+            echo "ERROR: exportArchive produced no IPA"
+            ls -la "$RUNNER_TEMP/export/" 2>/dev/null || true
+            DISTLOG=$(ls -td /var/folders/*/*/T/*xcdistributionlogs* 2>/dev/null | head -1)
+            [ -n "$DISTLOG" ] && grep -n "Step failed\|error" "$DISTLOG/IDEDistribution.verbose.log" 2>/dev/null | tail -20 || true
+            exit 1
           fi
 
       # ── Unsigned fallback (no API key secrets) ───────────────────────────
