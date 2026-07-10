@@ -1,0 +1,99 @@
+CRISPDECK COMMERCIAL LICENSE
+App Store Distribution Exception
+Version 1.0, July 2026
+
+Copyright (C) 2024–2026 Christian Ströbele <postmaster@crispstro.be>
+All rights reserved.
+
+─────────────────────────────────────────────────────────────────────────────
+
+PREAMBLE
+
+CrispDeck's source code is published under the GNU Affero General Public
+License v3.0 (AGPL-3.0-only), available in the file LICENSE in the same
+repository. The AGPL is intentionally incompatible with Apple App Store
+and Google Play Store distribution terms, which impose restrictions that
+the AGPL does not permit.
+
+As the sole copyright holder, Christian Ströbele grants the additional
+rights described below ("Commercial License") to resolve this incompatibility
+and to allow distribution of CrispDeck as a compiled binary application
+through the Apple App Store and the Google Play Store.
+
+─────────────────────────────────────────────────────────────────────────────
+
+1. GRANT OF RIGHTS
+
+Subject to the terms and conditions of this license, the copyright holder
+hereby grants you a non-exclusive, worldwide, royalty-free license to:
+
+  (a) download, install, and use the compiled binary form of CrispDeck
+      ("the Application") obtained from the Apple App Store or the Google
+      Play Store solely for personal, non-commercial use on devices you
+      own or control;
+
+  (b) accept updates to the Application delivered through those stores.
+
+This license covers only the binary distribution channel named above. It
+does not grant any right to access, copy, modify, redistribute, sublicense,
+or use the source code, except as already permitted by the AGPL-3.0 (see
+file LICENSE).
+
+2. DISTRIBUTION RIGHTS RESERVED BY COPYRIGHT HOLDER
+
+The right to publish, distribute, and sell the Application on the Apple
+App Store and the Google Play Store is reserved exclusively to Christian
+Ströbele. No other party may republish or redistribute the Application
+through those stores without prior written permission.
+
+3. END USER OBLIGATIONS
+
+You may not:
+
+  (a) reverse-engineer, decompile, or disassemble the Application except
+      as permitted by applicable law or by the AGPL-3.0;
+
+  (b) remove, alter, or obscure any copyright, trademark, or legal notice
+      included in the Application;
+
+  (c) use the Application for any unlawful purpose.
+
+4. SOURCE CODE
+
+The complete, corresponding source code for the Application is made
+publicly available under the AGPL-3.0 at:
+
+    https://github.com/CrispStrobe/CrispDeck
+
+You may inspect, modify, and redistribute the source code under the terms
+of the AGPL-3.0 as stated in the file LICENSE.
+
+5. TRADEMARKS
+
+This license does not grant permission to use the name "CrispDeck", the
+CrispDeck logo, or any other trademarks of Christian Ströbele for any
+purpose without prior written permission.
+
+6. DISCLAIMER OF WARRANTIES
+
+THE APPLICATION IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL
+THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF,
+OR IN CONNECTION WITH THE APPLICATION OR THE USE OR OTHER DEALINGS IN THE
+APPLICATION.
+
+7. TERMINATION
+
+This license terminates automatically if you breach any of its terms. Upon
+termination you must delete all copies of the Application in your possession.
+
+─────────────────────────────────────────────────────────────────────────────
+
+SUMMARY (informational, not legally binding)
+
+  Source code (GitHub)   →  AGPL-3.0-only (see LICENSE)
+  App Store / Play Store →  This Commercial License (see LICENSE-COMMERCIAL)
+
+─────────────────────────────────────────────────────────────────────────────

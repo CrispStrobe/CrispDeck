@@ -9,11 +9,37 @@ on:
 permissions:
   contents: write
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Required GitHub Secrets (see /mnt/volume1/appstore.md for full playbook):
+#
+# iOS (App Store Connect API key — same key used for CrispChess / CrispSudoku):
+#   APPLE_API_KEY_P8    – content of the AuthKey_<KEYID>.p8 file
+#   APPLE_API_KEY_ID    – Key ID (shown in App Store Connect)
+#   APPLE_API_ISSUER_ID – Issuer ID (shown in App Store Connect)
+#   APPLE_TEAM_ID       – 10-character Developer Team ID (seedId from bundle-id endpoint)
+#
+# Android (Google Play):
+#   ANDROID_KEYSTORE_BASE64    – base64-encoded release keystore (.jks / .keystore)
+#   ANDROID_KEYSTORE_PASSWORD  – keystore password
+#   ANDROID_KEY_ALIAS          – key alias within the keystore
+#   ANDROID_KEY_PASSWORD       – key password
+#
+# When iOS signing secrets are absent the workflow produces an unsigned .ipa
+# for sideloading / QA only.  Android falls back to a debug-keystore APK.
+# ─────────────────────────────────────────────────────────────────────────────
+
 jobs:
+  # ───────────────────────────── iOS ────────────────────────────────────────
   ios:
     name: iOS Build
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 60
+    env:
+      APPLE_API_KEY_P8:    ${{ secrets.APPLE_API_KEY_P8 }}
+      APPLE_API_KEY_ID:    ${{ secrets.APPLE_API_KEY_ID }}
+      APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+      APPLE_TEAM_ID:       ${{ secrets.APPLE_TEAM_ID }}
+
     steps:
       - uses: actions/checkout@v5
 
@@ -32,93 +58,188 @@ jobs:
 
       - run: npm ci
 
+      # Generate all platform icons (desktop + iOS AppIcon.appiconset) from 1024px source
+      - name: Generate app icons
+        run: npx tauri icon static/icon-1024.png
+
+      # Generates the Xcode project in src-tauri/gen/apple/
+      # Our seed files (Info.plist, PrivacyInfo.xcprivacy) are committed and
+      # will be left in place — tauri ios init does not overwrite existing files.
       - name: Initialize iOS project
         run: npx tauri ios init || true
 
-      - name: Build iOS
+      # Inject PrivacyInfo.xcprivacy into the Xcode project target
+      - name: Inject PrivacyInfo.xcprivacy
+        run: python3 scripts/patch-ios-privacy.py
+
+      # ── Production signing via App Store Connect API key ─────────────────
+      - name: Setup App Store Connect API key
+        id: api_key
+        if: >
+          env.APPLE_API_KEY_P8 != '' &&
+          env.APPLE_API_KEY_ID != '' &&
+          env.APPLE_API_ISSUER_ID != '' &&
+          env.APPLE_TEAM_ID != ''
         run: |
-          # Patch xcodeproj to disable code signing for CI
+          # Install key where both xcodebuild and altool find it by default
+          mkdir -p ~/.appstoreconnect/private_keys
+          printf '%s' "$APPLE_API_KEY_P8" > \
+            ~/.appstoreconnect/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8
+          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8
+
+          # Set Automatic signing in the Xcode project with our Team ID
           cd src-tauri/gen/apple
           XCPROJ=$(ls -d *.xcodeproj 2>/dev/null | head -1)
           if [ -n "$XCPROJ" ]; then
-            # Disable code signing in pbxproj
-            sed -i '' 's/CODE_SIGN_IDENTITY = .*/CODE_SIGN_IDENTITY = "";/g' "$XCPROJ/project.pbxproj" 2>/dev/null || true
-            sed -i '' 's/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = "";/g' "$XCPROJ/project.pbxproj" 2>/dev/null || true
-            # Add CODE_SIGNING_ALLOWED = NO if not present
-            sed -i '' 's/CODE_SIGN_IDENTITY = "";/CODE_SIGN_IDENTITY = "";\n\t\t\t\tCODE_SIGNING_REQUIRED = NO;\n\t\t\t\tCODE_SIGNING_ALLOWED = NO;/g' "$XCPROJ/project.pbxproj" 2>/dev/null || true
-          fi
-          cd "$GITHUB_WORKSPACE"
-          # Build with tauri — handles Rust cross-compile + xcodebuild
-          npx tauri ios build 2>&1 | tail -50 || true
-          # Fallback: direct xcodebuild if tauri build fails
-          if ! find src-tauri/gen/apple -name "*.app" -type d 2>/dev/null | grep -q .; then
-            echo "Tauri build didn't produce .app, trying xcodebuild directly..."
-            cd src-tauri/gen/apple
-            xcodebuild -project "$XCPROJ" \
-              -scheme "crispdeck_iOS" \
-              -configuration Release \
-              -sdk iphoneos \
-              -derivedDataPath build \
-              CODE_SIGN_IDENTITY="" \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGNING_ALLOWED=NO \
-              ONLY_ACTIVE_ARCH=NO \
-              2>&1 | tail -30 || true
+            # Target-level: Automatic signing + team
+            sed -i '' \
+              "s/CODE_SIGN_STYLE = .*/CODE_SIGN_STYLE = Automatic;/g" \
+              "$XCPROJ/project.pbxproj" 2>/dev/null || true
+            sed -i '' \
+              "s/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = $APPLE_TEAM_ID;/g" \
+              "$XCPROJ/project.pbxproj" 2>/dev/null || true
+            # Remove any previous disable-signing patches
+            sed -i '' \
+              '/CODE_SIGNING_REQUIRED = NO/d;/CODE_SIGNING_ALLOWED = NO/d' \
+              "$XCPROJ/project.pbxproj" 2>/dev/null || true
+            # Remove project-level CODE_SIGN_IDENTITY override (classic Flutter gotcha —
+            # also produced by some Tauri pbxproj templates; causes export to re-sign
+            # embedded frameworks with the wrong identity)
+            sed -i '' \
+              '/CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]/d' \
+              "$XCPROJ/project.pbxproj" 2>/dev/null || true
           fi
 
-      - name: Package .ipa
+          echo "SIGNING_CONFIGURED=true" >> "$GITHUB_ENV"
+          echo "KEY_PATH=$HOME/.appstoreconnect/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8" \
+            >> "$GITHUB_ENV"
+
+      # ── Archive + export (production, when API key is available) ─────────
+      - name: Archive iOS app
+        if: env.SIGNING_CONFIGURED == 'true'
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          # Find any .app or .ipa that tauri produced
-          echo "=== Looking for build products ==="
-          find src-tauri/gen/apple -name "*.app" -type d 2>/dev/null | head -5
-          find src-tauri/gen/apple -name "*.ipa" -type f 2>/dev/null | head -5
-          find src-tauri/target -name "*.app" -type d 2>/dev/null | head -5
+          cd src-tauri/gen/apple
+          XCPROJ=$(ls -d *.xcodeproj 2>/dev/null | head -1)
+          SCHEME=$(echo "$XCPROJ" | sed 's/.xcodeproj//')
 
-          # Try to find .app and package as .ipa
-          APP=$(find src-tauri/gen/apple -name "*.app" -type d 2>/dev/null | head -1)
-          if [ -n "$APP" ]; then
-            mkdir -p Payload
-            cp -R "$APP" Payload/
-            zip -ryq "CrispDeck_${VERSION}_ios-unsigned.ipa" Payload
-            echo "Created: CrispDeck_${VERSION}_ios-unsigned.ipa"
-            ls -la "CrispDeck_${VERSION}_ios-unsigned.ipa"
+          # Prepend /usr/bin to PATH so xcodebuild's rsync sub-process finds
+          # the system rsync (with -E / --extended-attributes) before any
+          # Homebrew rsync that lacks that flag (see appstore.md Step 5 gotcha)
+          PATH="/usr/bin:$PATH" xcodebuild \
+            -project "$XCPROJ" \
+            -scheme "${SCHEME}_iOS" \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath "$RUNNER_TEMP/CrispDeck.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$APPLE_API_KEY_ID" \
+            -authenticationKeyIssuerID "$APPLE_API_ISSUER_ID" \
+            archive \
+            2>&1 | tail -60
+
+      - name: Export App Store IPA
+        if: env.SIGNING_CONFIGURED == 'true'
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+
+          cat > /tmp/ExportOptions.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key><string>app-store-connect</string>
+              <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+              <key>signingStyle</key><string>automatic</string>
+              <key>destination</key><string>export</string>
+          </dict>
+          </plist>
+          EOF
+
+          PATH="/usr/bin:$PATH" xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/CrispDeck.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist /tmp/ExportOptions.plist \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$APPLE_API_KEY_ID" \
+            -authenticationKeyIssuerID "$APPLE_API_ISSUER_ID" \
+            2>&1 | tail -30
+
+          # Verify signature before upload (see appstore.md Step 6 gotcha)
+          IPA=$(find "$RUNNER_TEMP/export" -name "*.ipa" | head -1)
+          if [ -n "$IPA" ]; then
+            cp "$IPA" "$GITHUB_WORKSPACE/CrispDeck_${VERSION}_ios-appstore.ipa"
+            cd /tmp && mkdir ipa_check && cd ipa_check
+            unzip -q "$GITHUB_WORKSPACE/CrispDeck_${VERSION}_ios-appstore.ipa"
+            codesign --verify --deep --strict --verbose=2 Payload/*.app 2>&1 | tail -5
           else
-            # Check if tauri produced an .ipa directly
-            IPA=$(find src-tauri -name "*.ipa" -type f 2>/dev/null | head -1)
-            if [ -n "$IPA" ]; then
-              cp "$IPA" "CrispDeck_${VERSION}_ios-unsigned.ipa"
-              echo "Found tauri-produced IPA: CrispDeck_${VERSION}_ios-unsigned.ipa"
-            else
-              echo "No .app or .ipa found"
-              echo "=== Build directory listing ==="
-              find src-tauri/gen/apple -maxdepth 5 -type f -name "*.app" -o -name "*.ipa" -o -name "*.xcarchive" 2>/dev/null | head -20
-            fi
+            echo "ERROR: no IPA found after export"
+            ls -la "$RUNNER_TEMP/export/" || true
+            # Dump the distribution log for diagnosis (see appstore.md Step 6 gotcha)
+            DISTLOG=$(ls -td /var/folders/*/*/T/*xcdistributionlogs* 2>/dev/null | head -1)
+            [ -n "$DISTLOG" ] && grep -n "Step failed\|error" "$DISTLOG/IDEDistribution.verbose.log" 2>/dev/null | tail -20 || true
+            exit 1
           fi
 
-      - name: Upload .ipa to release
+      # ── Unsigned fallback (no API key secrets) ───────────────────────────
+      - name: Build unsigned iOS (no signing secrets)
+        if: env.SIGNING_CONFIGURED != 'true'
+        run: |
+          cd src-tauri/gen/apple
+          XCPROJ=$(ls -d *.xcodeproj 2>/dev/null | head -1)
+          if [ -n "$XCPROJ" ]; then
+            sed -i '' 's/CODE_SIGN_IDENTITY = .*/CODE_SIGN_IDENTITY = "";/g' \
+              "$XCPROJ/project.pbxproj" 2>/dev/null || true
+            sed -i '' 's/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = "";/g' \
+              "$XCPROJ/project.pbxproj" 2>/dev/null || true
+          fi
+          cd "$GITHUB_WORKSPACE"
+          npx tauri ios build 2>&1 | tail -50 || true
+
+      - name: Package unsigned IPA
+        if: env.SIGNING_CONFIGURED != 'true'
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          APP=$(find src-tauri/gen/apple -name "*.app" -type d 2>/dev/null | head -1)
+          IPA=$(find src-tauri -name "*.ipa" -type f 2>/dev/null | head -1)
+          if [ -n "$APP" ]; then
+            mkdir -p Payload && cp -R "$APP" Payload/
+            zip -ryq "CrispDeck_${VERSION}_ios-unsigned.ipa" Payload
+          elif [ -n "$IPA" ]; then
+            cp "$IPA" "CrispDeck_${VERSION}_ios-unsigned.ipa"
+          else
+            echo "No .app or .ipa found"
+          fi
+
+      - name: Upload IPA to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          for ipa in CrispDeck_*_ios-unsigned.ipa; do
-            if [ -f "$ipa" ]; then
-              echo "Uploading $ipa"
-              gh release upload "${{ github.ref_name }}" "$ipa" --clobber || true
-            fi
+          for ipa in CrispDeck_*_ios-*.ipa; do
+            [ -f "$ipa" ] && gh release upload "${{ github.ref_name }}" "$ipa" --clobber || true
           done
 
-      - name: Upload iOS artifact (fallback)
+      - name: Upload iOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios-build
-          path: CrispDeck_*_ios-unsigned.ipa
+          path: CrispDeck_*_ios-*.ipa
           if-no-files-found: warn
 
+  # ─────────────────────────── Android ─────────────────────────────────────
   android:
     name: Android Build
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
+    env:
+      ANDROID_KEYSTORE_BASE64:    ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD:  ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS:          ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD:       ${{ secrets.ANDROID_KEY_PASSWORD }}
+
     steps:
       - uses: actions/checkout@v5
 
@@ -158,44 +279,68 @@ jobs:
       - name: Initialize Android project
         run: npx tauri android init || true
 
-      - name: Patch Gradle to sign release APK with debug key
+      # ── Production keystore (Play Store) ─────────────────────────────────
+      - name: Setup production keystore
+        if: >
+          env.ANDROID_KEYSTORE_BASE64 != '' &&
+          env.ANDROID_KEYSTORE_PASSWORD != '' &&
+          env.ANDROID_KEY_ALIAS != '' &&
+          env.ANDROID_KEY_PASSWORD != ''
+        run: |
+          KEYSTORE_PATH="$RUNNER_TEMP/release.keystore"
+          echo -n "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          echo "ANDROID_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+          echo "SIGNING_CONFIGURED=true" >> "$GITHUB_ENV"
+
+      # ── Debug-keystore fallback ──────────────────────────────────────────
+      - name: Setup debug keystore fallback
+        if: env.SIGNING_CONFIGURED != 'true'
         run: |
           mkdir -p ~/.android
-          if [ ! -f ~/.android/debug.keystore ]; then
-            keytool -genkeypair -v -keystore ~/.android/debug.keystore -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US"
-          fi
-          python3 scripts/patch-android-signing.py
+          keytool -genkeypair -v \
+            -keystore ~/.android/debug.keystore \
+            -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US" \
+            2>/dev/null || true
+
+      - name: Patch Gradle signing config
+        run: python3 scripts/patch-android-signing.py
+        env:
+          ANDROID_KEYSTORE_PATH:     ${{ env.ANDROID_KEYSTORE_PATH }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ env.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS:         ${{ env.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD:      ${{ env.ANDROID_KEY_PASSWORD }}
 
       - name: Build Android APK
-        run: npx tauri android build --apk 2>&1 | tail -50
+        run: npx tauri android build --apk 2>&1 | tail -60
 
-      - name: Collect APK
+      - name: Build Android AAB (Play Store)
+        if: env.SIGNING_CONFIGURED == 'true'
+        run: npx tauri android build --aab 2>&1 | tail -60
+
+      - name: Collect artifacts
         run: |
           VERSION=$(node -p "require('./package.json').version")
           mkdir -p android-artifacts
-          # Find APK — now signed via Gradle
+          SUFFIX=$( [ "$SIGNING_CONFIGURED" = "true" ] && echo "release" || echo "debug-signed" )
           APK=$(find src-tauri/gen/android -name "*.apk" -type f | head -1)
-          if [ -n "$APK" ]; then
-            cp "$APK" "android-artifacts/CrispDeck_${VERSION}_android.apk"
-          fi
-          echo "=== APK ==="
-          ls -la android-artifacts/
-          # Verify it's signed
-          jarsigner -verify "android-artifacts/CrispDeck_${VERSION}_android.apk" || echo "WARNING: APK may not be signed"
+          [ -n "$APK" ] && cp "$APK" "android-artifacts/CrispDeck_${VERSION}_android_${SUFFIX}.apk" || true
+          AAB=$(find src-tauri/gen/android -name "*.aab" -type f | head -1)
+          [ -n "$AAB" ] && cp "$AAB" "android-artifacts/CrispDeck_${VERSION}_android_${SUFFIX}.aab" || true
+          ls -lh android-artifacts/ || echo "No artifacts"
 
-      - name: Upload APKs to release
+      - name: Upload Android artifacts to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          for apk in android-artifacts/*.apk; do
-            if [ -f "$apk" ]; then
-              echo "Uploading $apk"
-              gh release upload "${{ github.ref_name }}" "$apk" --clobber || true
-            fi
+          for f in android-artifacts/*; do
+            [ -f "$f" ] && gh release upload "${{ github.ref_name }}" "$f" --clobber || true
           done
 
-      - name: Upload Android artifact (fallback)
+      - name: Upload Android artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-build

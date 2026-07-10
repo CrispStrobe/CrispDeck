@@ -15,7 +15,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },
-  "license": "AGPL-3.0-only",
+  "license": "(AGPL-3.0-only OR LicenseRef-LICENSE-COMMERCIAL)",
   "dependencies": {
     "@atproto/api": "^0.15.23",
     "@atproto/oauth-client-browser": "^0.4.1",

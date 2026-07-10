@@ -95,15 +95,7 @@ jobs:
           tagName: ${{ inputs.tag || 'v__VERSION__' }}
           releaseName: 'CrispDeck ${{ inputs.tag || ''v__VERSION__'' }}'
           releaseBody: |
-            ## What's New in 1.1.1
-
-            - **Official Bluesky bookmarks** — server-synced bookmarks via `app.bsky.bookmark.*` (Bluesky 1.108+)
-            - **GIF playback fixed** — klipy embeds now use the correct sibling-file URL scheme with fallback
-            - **Starter pack search fixed** — uses authenticated agent after Bluesky's public appview started 403ing
-            - **Media sizing rebuilt** — aspect-ratio-aware layout matching the official bsky.app model, responsive across all viewports
-            - **Release CI fixed** — macOS Intel cross-compiles on macos-14 (GitHub retired Intel runners)
-
-            Full details in the [CHANGELOG](https://github.com/CrispStrobe/CrispDeck/blob/main/CHANGELOG.md).
+            See the [CHANGELOG](https://github.com/CrispStrobe/CrispDeck/blob/main/CHANGELOG.md) for what's new in this release.
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.tauri_args }}
