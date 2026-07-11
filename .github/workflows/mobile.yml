@@ -225,6 +225,33 @@ jobs:
             exit 1
           fi
 
+      # Upload to App Store Connect (validate then upload)
+      - name: Upload IPA to App Store Connect
+        if: env.SIGNING_CONFIGURED == 'true'
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          IPA="CrispDeck_${VERSION}_ios-appstore.ipa"
+          [ ! -f "$IPA" ] && echo "No IPA to upload" && exit 0
+
+          echo "=== Validating IPA ==="
+          xcrun altool --validate-app \
+            -f "$IPA" \
+            --type ios \
+            --api-key "$APPLE_API_KEY_ID" \
+            --api-issuer "$APPLE_API_ISSUER_ID"
+
+          echo "=== Uploading to App Store Connect ==="
+          xcrun altool --upload-package "$IPA" \
+            --type ios \
+            --apple-id 6789569440 \
+            --bundle-id com.christianstrobele.crispdeck \
+            --bundle-version 1 \
+            --bundle-short-version-string "$VERSION" \
+            --api-key "$APPLE_API_KEY_ID" \
+            --api-issuer "$APPLE_API_ISSUER_ID"
+
+          echo "Upload complete — build will process in 15-60 min"
+
       # ── Unsigned fallback (no API key secrets) ───────────────────────────
       - name: Build unsigned iOS (no signing secrets)
         if: env.SIGNING_CONFIGURED != 'true'
