@@ -237,8 +237,8 @@ jobs:
           xcrun altool --validate-app \
             -f "$IPA" \
             --type ios \
-            --api-key "$APPLE_API_KEY_ID" \
-            --api-issuer "$APPLE_API_ISSUER_ID"
+            --apiKey "$APPLE_API_KEY_ID" \
+            --apiIssuer "$APPLE_API_ISSUER_ID"
 
           echo "=== Uploading to App Store Connect ==="
           xcrun altool --upload-package "$IPA" \
@@ -247,8 +247,8 @@ jobs:
             --bundle-id com.christianstrobele.crispdeck \
             --bundle-version 1 \
             --bundle-short-version-string "$VERSION" \
-            --api-key "$APPLE_API_KEY_ID" \
-            --api-issuer "$APPLE_API_ISSUER_ID"
+            --apiKey "$APPLE_API_KEY_ID" \
+            --apiIssuer "$APPLE_API_ISSUER_ID"
 
           echo "Upload complete — build will process in 15-60 min"
 
