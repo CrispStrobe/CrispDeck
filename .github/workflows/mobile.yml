@@ -277,7 +277,7 @@ jobs:
             --type ios \
             --apple-id 6789569440 \
             --bundle-id com.christianstrobele.crispdeck \
-            --bundle-version 1 \
+            --bundle-version "$VERSION" \
             --bundle-short-version-string "$VERSION" \
             --apiKey "$APPLE_API_KEY_ID" \
             --apiIssuer "$APPLE_API_ISSUER_ID"
