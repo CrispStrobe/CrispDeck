@@ -143,12 +143,16 @@ jobs:
           print(f'Patched DEVELOPMENT_TEAM = {team}')
           "
 
-          # Call xcodebuild to trigger provisioning resolution.
+          # Call xcodebuild to trigger provisioning AND certificate resolution.
+          # Use the "archive" action (not just "build") because archiving is
+          # what triggers Xcode to create/download the DISTRIBUTION certificate.
+          # A plain "build" only resolves Development identity.
           # This WILL fail at the Rust build script phase (no Tauri server) —
-          # that's expected. We only care about provisioning profile download.
+          # that's expected. Certificate + profile resolution happens BEFORE
+          # build phases, so both get downloaded and cached.
           cd src-tauri/gen/apple
           XCPROJ=$(ls -d *.xcodeproj 2>/dev/null | head -1)
-          echo "Pre-resolving provisioning for $XCPROJ ..."
+          echo "Pre-resolving provisioning + Distribution cert for $XCPROJ ..."
           xcodebuild \
             -project "$XCPROJ" \
             -scheme crispdeck_iOS \
@@ -160,19 +164,30 @@ jobs:
             -authenticationKeyIssuerID "$APPLE_API_ISSUER_ID" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             CODE_SIGN_STYLE=Automatic \
-            build \
-            2>&1 | tail -20 || echo "Expected failure (no Tauri build server) — provisioning should be cached"
+            archive \
+            -archivePath /tmp/pre-resolve.xcarchive \
+            2>&1 | tail -20 || echo "Expected failure (no Tauri build server) — cert + provisioning should be cached"
+
+          # Also verify the Distribution certificate is now in the keychain
+          echo "=== Distribution certificates in keychain ==="
+          security find-identity -v -p codesigning | grep -i "distribution\|apple dist" || echo "WARNING: No Distribution cert found"
 
           # Verify profiles were downloaded
           echo "=== Provisioning profiles ==="
           ls ~/Library/MobileDevice/Provisioning\ Profiles/ 2>/dev/null || echo "No profiles dir yet"
 
       # ── Build via tauri ios build (Rust + frontend + xcodebuild) ─────────
-      - name: Build iOS app
+      # Do NOT pass --export-method here. That flag causes Tauri to internally
+      # run xcodebuild -exportArchive WITHOUT API key auth flags, which means
+      # Xcode cannot download/create a Distribution certificate and falls back
+      # to the Development identity. We only want Tauri to produce the
+      # .xcarchive; the separate "Export IPA from archive" step below handles
+      # Distribution re-signing with explicit auth flags.
+      - name: Build iOS app (archive only)
         if: env.SIGNING_CONFIGURED == 'true'
         run: |
           export PATH="/usr/bin:$PATH"
-          npx tauri ios build --export-method app-store-connect 2>&1 | tail -80
+          npx tauri ios build 2>&1 | tail -80
 
       # tauri ios build produces an .xcarchive (signed .app inside) but
       # NOT an .ipa. Run xcodebuild -exportArchive to create the IPA.
