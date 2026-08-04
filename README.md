@@ -376,13 +376,22 @@ git push origin v1.1.0
 
 ### Mobile builds (Tauri 2)
 
-Mobile support uses Tauri 2's iOS/Android targets. Desktop-only plugins (shell, process) are feature-gated and excluded from mobile builds:
+Mobile support uses Tauri 2's iOS/Android targets. The desktop-only plugins
+(shell, process) sit behind the `desktop` feature, which is on by default.
 
 ```bash
-# Build for mobile (requires tauri android init / tauri ios init first)
-cargo tauri android build --no-default-features
-cargo tauri ios build --no-default-features
+# Generate the native project first (writes src-tauri/gen/, which is gitignored)
+npx tauri ios init
+npx tauri ios build
 ```
+
+Note: `tauri ios build` / `tauri android build` take **no** `--no-default-features`
+flag (checked against tauri-cli 2.11) — they accept only `-f/--features`. The
+mobile build therefore still compiles the `desktop` feature. That builds and runs
+fine, since tauri-plugin-shell and tauri-plugin-process both support mobile; to
+genuinely drop them from a mobile binary, move those two crates into a
+`[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]`
+table rather than relying on a CLI flag.
 
 OAuth on mobile uses the `crispdeck://` URL scheme (registered in AndroidManifest.xml and Info.plist) instead of the desktop localhost TCP listener.
 
