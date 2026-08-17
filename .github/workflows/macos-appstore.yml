@@ -150,9 +150,19 @@ jobs:
         if: ${{ github.event_name == 'push' || inputs.dry_run == false }}
         run: |
           set -euo pipefail
+          # This repo's APPLE_API_KEY_P8 holds the RAW .p8 contents, not base64
+          # (see mobile.yml, which writes it with printf). Feeding it through
+          # `base64 --decode` yields garbage and altool fails with the very
+          # unhelpful "The file couldn't be opened because it isn't in the
+          # correct format. (259)" -- which names no file, so it reads like a
+          # problem with the .pkg rather than the key.
           mkdir -p ~/.appstoreconnect/private_keys
-          echo "${{ secrets.APPLE_API_KEY_P8 }}" | base64 --decode \
+          printf '%s' "${{ secrets.APPLE_API_KEY_P8 }}" \
             > ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
+          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
+          head -1 ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8 \
+            | grep -q "BEGIN PRIVATE KEY" \
+            || { echo "::error::APPLE_API_KEY_P8 is not a PEM private key"; exit 1; }
 
           VERSION=$(node -p "require('./package.json').version")
           echo "Uploading macOS $VERSION"
