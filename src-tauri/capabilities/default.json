@@ -7,14 +7,8 @@
     "core:default",
     "opener:default",
     "http:default",
-    "dialog:default",
     "store:default",
-    "fs:default",
-    "shell:default",
-    "process:default",
     "notification:default",
-    "fs:read-all",
-    "fs:write-all",
     {
       "identifier": "http:allow-fetch",
       "allow": [
@@ -23,10 +17,6 @@
         { "url": "http://localhost:*" },
         { "url": "http://127.0.0.1:*" }
       ]
-    },
-    {
-      "identifier": "fs:scope",
-      "allow": [{ "path": "$HOME/**" }, { "path": "/" }, { "path": "/**" }]
     }
   ]
 }

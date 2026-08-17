@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Required for the Mac App Store. Everything below is the minimum this app
+       actually needs; audited against the source rather than copied from a
+       template, because unused entitlements invite review questions. -->
+  <key>com.apple.security.app-sandbox</key>
+  <true/>
+
+  <!-- Outbound: Bluesky/Mastodon APIs (tauri-plugin-http), avatar and media
+       fetches, and the CrispASR model download in src-tauri/src/asr.rs. -->
+  <key>com.apple.security.network.client</key>
+  <true/>
+
+  <!-- Inbound, and genuinely required: Mastodon OAuth binds a loopback
+       listener for the redirect URI (src-tauri/src/auth/mastodon_oauth.rs
+       does TcpListener::bind("127.0.0.1:0")). Without this the sandbox
+       refuses the bind and Mastodon sign-in fails. -->
+  <key>com.apple.security.network.server</key>
+  <true/>
+
+  <!-- Deliberately NOT requested:
+       * files.user-selected / bookmarks.app-scope — the app never opens a file
+         the user picked. Its SQLite database and model cache live in
+         app_data_dir, which is inside the container and needs no entitlement.
+       * temporary-exception.* — restricted entitlements that need review
+         justification, and nothing here needs one. -->
+</dict>
+</plist>
