@@ -38,6 +38,7 @@
     "macOS": {
       "entitlements": "entitlements.plist",
       "minimumSystemVersion": "11.0"
-    }
+    },
+    "category": "SocialNetworking"
   }
 }

@@ -41,6 +41,11 @@ jobs:
           node-version: lts/*
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          # Universal binary: Apple rejects an arm64-only bundle (90869) unless
+          # the deployment target is 12.0+, and raising it would drop every
+          # Intel Mac. Building both arches keeps them.
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -91,7 +96,7 @@ jobs:
           APPLE_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
           APPLE_TEAM_ID: ${{ secrets.MACOS_TEAM_ID }}
         with:
-          args: --bundles app
+          args: --bundles app --target universal-apple-darwin
 
       # TestFlight and App Store submission need the profile physically embedded
       # in the bundle as Contents/embedded.provisionprofile, not merely installed
@@ -104,7 +109,7 @@ jobs:
       - name: Embed provisioning profile + re-sign
         run: |
           set -euo pipefail
-          APP=$(find src-tauri/target/release/bundle/macos -name "*.app" | head -1)
+          APP=$(find src-tauri/target -path "*/release/bundle/macos/*.app" -maxdepth 6 | head -1)
           [ -n "$APP" ] || { echo "::error::no .app produced"; exit 1; }
           cp /tmp/crispdeck.provisionprofile "$APP/Contents/embedded.provisionprofile"
 
@@ -122,6 +127,10 @@ jobs:
           # App Store; fail loudly rather than upload a build that will be rejected.
           codesign -d --entitlements - "$APP" 2>/dev/null | tr -d '\0' | grep -q "app-sandbox" \
             || { echo "::error::app-sandbox entitlement missing after re-sign"; exit 1; }
+          for arch in arm64 x86_64; do
+            lipo -archs "$APP/Contents/MacOS/${{ env.PRODUCT_NAME }}" | grep -qw "$arch" \
+              || { echo "::error::$arch slice missing — Apple rejects arm64-only with 90869"; exit 1; }
+          done
           echo "APP_PATH=$APP" >> "$GITHUB_ENV"
 
       # Mac App Store submission needs a .pkg wrapper signed with the SEPARATE
@@ -130,7 +139,7 @@ jobs:
       - name: Build signed .pkg
         run: |
           set -euo pipefail
-          PKG=src-tauri/target/release/bundle/macos/${{ env.PRODUCT_NAME }}.pkg
+          PKG=$(dirname "$APP_PATH")/${{ env.PRODUCT_NAME }}.pkg
           productbuild --component "$APP_PATH" /Applications \
             --sign "3rd Party Mac Developer Installer: Christian Ströbele (${{ secrets.MACOS_TEAM_ID }})" \
             "$PKG"
