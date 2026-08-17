@@ -1,0 +1,177 @@
+name: macOS Release (App Store)
+
+# Builds, signs and uploads the macOS app to App Store Connect.
+#
+# Lands on the SAME app record as iOS (6789569440): the bundle id
+# com.christianstrobele.crispdeck is registered UNIVERSAL, and App Store Connect
+# serves multiple platforms from one record when the bundle id matches. That also
+# avoids app-record creation, which is browser-only.
+#
+# Triggers:
+#   * push a tag matching macos-v*  -> full build + upload
+#   * manual "Run workflow"         -> dry_run=true (default) builds and signs
+#                                      but does NOT upload
+#
+# Modelled on brickwright-lite's release.yml, which is the same stack (Tauri 2)
+# and is known to produce an accepted Mac App Store build.
+
+on:
+  push:
+    tags: ['macos-v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build & sign only, do NOT upload'
+        type: boolean
+        default: true
+
+env:
+  BUNDLE_ID: com.christianstrobele.crispdeck
+  PRODUCT_NAME: CrispDeck
+
+jobs:
+  build-upload:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The Mac App Store provisioning profile is not part of tauri-action's own
+      # keychain setup, so install it where Xcode looks before building.
+      - name: Install macOS provisioning profile
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          echo "${{ secrets.MACOS_PROVISIONING_PROFILE }}" | base64 --decode > /tmp/crispdeck.provisionprofile
+          UUID=$(security cms -D -i /tmp/crispdeck.provisionprofile | plutil -extract UUID raw -)
+          cp /tmp/crispdeck.provisionprofile "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.provisionprofile"
+          echo "installed profile $UUID"
+
+      # Both identities are needed for the whole job -- Apple Distribution signs
+      # the .app, "3rd Party Mac Developer Installer" signs the .pkg -- so this
+      # uses a persistent keychain rather than any ephemeral per-step import.
+      - name: Import Apple certificates
+        run: |
+          set -euo pipefail
+          KEYCHAIN=$RUNNER_TEMP/crispdeck-ci.keychain-db
+          KEYCHAIN_PASS=$(openssl rand -base64 24)
+          security create-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | sed 's/"//g')
+          echo "${{ secrets.MACOS_CERT_P12 }}" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "${{ secrets.MACOS_CERT_P12_PASSWORD }}" \
+            -T /usr/bin/codesign -T /usr/bin/productbuild -T /usr/bin/productsign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign:,productsign: -s -k "$KEYCHAIN_PASS" "$KEYCHAIN"
+          rm -f "$RUNNER_TEMP/cert.p12"
+          security find-identity -v -p codesigning "$KEYCHAIN"
+
+      - name: Build the Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Deliberately NOT setting APPLE_CERTIFICATE: tauri's bundler would
+          # import it into a second temp keychain, colliding by name with the
+          # persistent one above ("ambiguous identity"). The identity is already
+          # on the search list, which is all the bundler needs. No notarization
+          # vars either -- App Store builds go through App Review, not notarization.
+          APPLE_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.MACOS_TEAM_ID }}
+        with:
+          args: --bundles app
+
+      # TestFlight and App Store submission need the profile physically embedded
+      # in the bundle as Contents/embedded.provisionprofile, not merely installed
+      # where codesign can find it. Tauri's bundler does not embed it, so copy it
+      # in and re-seal. Embedding after signing invalidates the signature, hence
+      # the full re-sign. Xcode would normally merge the profile's own
+      # entitlements (application-identifier, team-identifier) into what gets
+      # signed; a plain --entitlements does not, so extract and merge them rather
+      # than hardcoding the team id again.
+      - name: Embed provisioning profile + re-sign
+        run: |
+          set -euo pipefail
+          APP=$(find src-tauri/target/release/bundle/macos -name "*.app" | head -1)
+          [ -n "$APP" ] || { echo "::error::no .app produced"; exit 1; }
+          cp /tmp/crispdeck.provisionprofile "$APP/Contents/embedded.provisionprofile"
+
+          security cms -D -i /tmp/crispdeck.provisionprofile \
+            | plutil -extract Entitlements xml1 -o /tmp/profile-entitlements.plist -
+          cp src-tauri/entitlements.plist /tmp/merged-entitlements.plist
+          /usr/libexec/PlistBuddy -c "Merge /tmp/profile-entitlements.plist" /tmp/merged-entitlements.plist
+
+          codesign --force --deep --strict --timestamp --options runtime \
+            --entitlements /tmp/merged-entitlements.plist \
+            --sign "${{ secrets.MACOS_SIGNING_IDENTITY }}" "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+
+          # The sandbox entitlement is the whole reason this build can go to the
+          # App Store; fail loudly rather than upload a build that will be rejected.
+          codesign -d --entitlements - "$APP" 2>/dev/null | tr -d '\0' | grep -q "app-sandbox" \
+            || { echo "::error::app-sandbox entitlement missing after re-sign"; exit 1; }
+          echo "APP_PATH=$APP" >> "$GITHUB_ENV"
+
+      # Mac App Store submission needs a .pkg wrapper signed with the SEPARATE
+      # "3rd Party Mac Developer Installer" identity; Apple Distribution covers
+      # only the .app itself.
+      - name: Build signed .pkg
+        run: |
+          set -euo pipefail
+          PKG=src-tauri/target/release/bundle/macos/${{ env.PRODUCT_NAME }}.pkg
+          productbuild --component "$APP_PATH" /Applications \
+            --sign "3rd Party Mac Developer Installer: Christian Ströbele (${{ secrets.MACOS_TEAM_ID }})" \
+            "$PKG"
+          echo "PKG_PATH=$PKG" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        # Never let the artifact sink the release: a hit storage quota has already
+        # failed a run whose binary was perfectly good.
+        continue-on-error: true
+        with:
+          name: crispdeck-macos-appstore-pkg
+          path: ${{ env.PKG_PATH }}
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Validate + upload to App Store Connect
+        if: ${{ github.event_name == 'push' || inputs.dry_run == false }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "${{ secrets.APPLE_API_KEY_P8 }}" | base64 --decode \
+            > ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
+
+          VERSION=$(node -p "require('./package.json').version")
+          echo "Uploading macOS $VERSION"
+
+          # --apple-id is required: altool otherwise resolves the app from bundle
+          # id + platform, and that lookup has nothing to find until this record
+          # has a macOS appStoreVersion.
+          xcrun altool --validate-app -f "$PKG_PATH" \
+            --type macos \
+            --apple-id ${{ vars.APPSTORE_APP_ID }} \
+            --bundle-id ${{ env.BUNDLE_ID }} \
+            --api-key ${{ secrets.APPLE_API_KEY_ID }} \
+            --api-issuer ${{ secrets.APPLE_API_ISSUER_ID }}
+
+          xcrun altool --upload-package "$PKG_PATH" \
+            --type macos \
+            --apple-id ${{ vars.APPSTORE_APP_ID }} \
+            --bundle-id ${{ env.BUNDLE_ID }} \
+            --bundle-version "$VERSION" \
+            --bundle-short-version-string "$VERSION" \
+            --api-key ${{ secrets.APPLE_API_KEY_ID }} \
+            --api-issuer ${{ secrets.APPLE_API_ISSUER_ID }}
