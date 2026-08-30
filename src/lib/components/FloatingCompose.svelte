@@ -223,22 +223,23 @@
 </script>
 
 {#if open}
-  <!-- Backdrop -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
+  <!-- Backdrop. A button rather than a div with a no-op onkeydown: it is a real
+       focusable, Enter/Space-operable way out of the panel. -->
+  <button
+    type="button"
     class="fixed inset-0 z-[90] bg-black/40 floating-compose-backdrop"
+    aria-label="Close compose"
     onclick={handleClose}
-    onkeydown={() => {}}
-  ></div>
+  ></button>
 
   <!-- Slide-in panel from right -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     bind:this={panelEl}
     class="fixed top-0 right-0 z-[91] h-full w-full max-w-md bg-[var(--color-bg)] border-l border-[var(--color-border)] shadow-2xl flex flex-col floating-compose-panel"
     role="dialog"
     aria-modal="true"
     aria-label="Compose post"
+    tabindex="-1"
     onkeydown={handleKeydown}
   >
     <!-- Header -->

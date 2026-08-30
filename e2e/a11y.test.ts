@@ -8,9 +8,12 @@ test.describe('Accessibility', () => {
     await expect(skipLink).toHaveText('Skip to content');
   });
 
-  test('main content has role="main"', async ({ page }) => {
+  test('main content exposes the main role', async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('main[role="main"]')).toHaveCount(1);
+    // Assert the role, not a literal role="main" attribute: <main> carries that
+    // role implicitly, so spelling it out is redundant markup rather than an
+    // accessibility property worth pinning.
+    await expect(page.getByRole('main')).toHaveCount(1);
   });
 
   test('navigation has aria-label', async ({ page }) => {

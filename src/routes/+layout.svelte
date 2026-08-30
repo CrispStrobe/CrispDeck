@@ -50,9 +50,10 @@
 
   // Configurable sidebar — simple mode hides advanced items
   const SIMPLE_MODE_HIDDEN = ['/deck', '/identities', '/archive', '/analytics', '/moderation', '/labelers', '/about'];
-  let simpleMode = $state(localStorage.getItem('crispdeck-simple-mode') === 'true');
+  const savedSimpleMode = localStorage.getItem('crispdeck-simple-mode') === 'true';
+  let simpleMode = $state(savedSimpleMode);
   let navHidden = $state<Set<string>>(new Set(
-    simpleMode ? SIMPLE_MODE_HIDDEN : JSON.parse(localStorage.getItem('crispdeck-nav-hidden') ?? '[]')
+    savedSimpleMode ? SIMPLE_MODE_HIDDEN : JSON.parse(localStorage.getItem('crispdeck-nav-hidden') ?? '[]')
   ));
   let showNavCustomize = $state(false);
 
@@ -388,8 +389,8 @@
 
   <!-- Mobile slide-out menu -->
   {#if mobileMenuOpen}
-    <div class="md:hidden fixed inset-0 z-40 flex {mobileMenuClosing ? 'mobile-menu-backdrop-out' : 'mobile-menu-backdrop'}" onclick={closeMobileMenu}>
-      <div class="w-64 bg-[var(--color-surface)] border-r border-[var(--color-border)] pt-14 overflow-y-auto {mobileMenuClosing ? 'mobile-menu-slide-out' : 'mobile-menu-slide'}" onclick={(e) => e.stopPropagation()}>
+    <div class="md:hidden fixed inset-0 z-40 flex {mobileMenuClosing ? 'mobile-menu-backdrop-out' : 'mobile-menu-backdrop'}">
+      <div class="w-64 bg-[var(--color-surface)] border-r border-[var(--color-border)] pt-14 overflow-y-auto {mobileMenuClosing ? 'mobile-menu-slide-out' : 'mobile-menu-slide'}">
         <ul class="py-2">
           {#each visibleNavItems as item}
             <li>
@@ -408,12 +409,12 @@
           {/each}
         </ul>
       </div>
-      <div class="flex-1 mobile-menu-overlay"></div>
+      <button type="button" class="flex-1 mobile-menu-overlay" aria-label="Close menu" onclick={closeMobileMenu}></button>
     </div>
   {/if}
 
   <!-- Main content -->
-  <main id="main-content" class="flex-1 overflow-y-auto md:pt-0 pt-10 pb-14 md:pb-0" role="main">
+  <main id="main-content" class="flex-1 overflow-y-auto md:pt-0 pt-10 pb-14 md:pb-0">
     {#if offline}
       <div class="bg-yellow-900/50 border-b border-yellow-700 px-4 py-2 text-center text-xs text-yellow-200 flex items-center justify-center gap-2">
         <span>You're offline — some features may be unavailable</span>

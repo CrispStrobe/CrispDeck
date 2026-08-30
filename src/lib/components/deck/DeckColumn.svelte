@@ -200,6 +200,10 @@
   let startX = 0;
   let startWidth = 0;
 
+  const MIN_COLUMN_WIDTH = 280;
+  const MAX_COLUMN_WIDTH = 600;
+  const KEYBOARD_RESIZE_STEP = 20;
+
   function onResizeStart(e: MouseEvent) {
     e.preventDefault();
     resizing = true;
@@ -212,8 +216,28 @@
   function onResizeMove(e: MouseEvent) {
     if (!resizing) return;
     const delta = e.clientX - startX;
-    const newWidth = Math.max(280, Math.min(600, startWidth + delta));
-    width = newWidth;
+    width = clampWidth(startWidth + delta);
+  }
+
+  function clampWidth(value: number): number {
+    return Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, value));
+  }
+
+  /**
+   * Keyboard half of the window-splitter pattern — role="separator" with a
+   * tabindex promises this, and until now the handle was mouse-only.
+   */
+  function onResizeKeydown(e: KeyboardEvent) {
+    const step = e.shiftKey ? KEYBOARD_RESIZE_STEP * 5 : KEYBOARD_RESIZE_STEP;
+    let next = width;
+    if (e.key === 'ArrowLeft') next = clampWidth(width - step);
+    else if (e.key === 'ArrowRight') next = clampWidth(width + step);
+    else if (e.key === 'Home') next = MIN_COLUMN_WIDTH;
+    else if (e.key === 'End') next = MAX_COLUMN_WIDTH;
+    else return;
+    e.preventDefault();
+    width = next;
+    onwidthchange?.(next);
   }
 
   function onResizeEnd() {
@@ -248,6 +272,8 @@
 <div
   class="flex flex-col h-full bg-[var(--color-bg)] border-r border-[var(--color-border)] relative flex-shrink-0"
   style="width: {width}px"
+  role="region"
+  aria-label={title}
   draggable={!pinned}
   ondragstart={pinned ? undefined : onDragStart}
   ondragover={onDragOver}
@@ -420,7 +446,7 @@
               <NIcon size={12} />
             </div>
             <div class="flex-1 min-w-0">
-              <p class="text-[11px]">
+              <div class="text-[11px]">
                 {#if isGrouped}
                   <div class="flex -space-x-1.5 mb-1">
                     {#each group.actors.slice(0, 3) as actor}
@@ -446,7 +472,7 @@
                   <span class="font-semibold">{group.actors[0]?.displayName || group.actors[0]?.handle}</span>
                   <span class="text-[var(--color-text-muted)]"> {getNotifActionText(group.type, 1)}</span>
                 {/if}
-              </p>
+              </div>
               {#if group.text}
                 <p class="text-[10px] text-[var(--color-text-muted)] mt-0.5 line-clamp-1">{group.text}</p>
               {/if}
@@ -490,13 +516,24 @@
     {/if}
   </div>
 
-  <!-- Resize handle (right edge) -->
+  <!-- Resize handle (right edge). ARIA's window-splitter pattern says a
+       focusable separator IS a widget; Svelte's rule classifies every separator
+       as non-interactive and so cannot express that. The handle below is a
+       proper splitter: labelled, with valuenow/min/max, and operable by
+       arrow keys, Home and End. -->
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <div
     class="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[var(--color-primary)]/40 transition-colors {resizing ? 'bg-[var(--color-primary)]/60' : ''}"
     onmousedown={onResizeStart}
+    onkeydown={onResizeKeydown}
     role="separator"
     aria-orientation="vertical"
-    tabindex="-1"
+    aria-label="Resize {title} column"
+    aria-valuenow={width}
+    aria-valuemin={MIN_COLUMN_WIDTH}
+    aria-valuemax={MAX_COLUMN_WIDTH}
+    tabindex="0"
   ></div>
 </div>
 {/if}

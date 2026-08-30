@@ -194,7 +194,3 @@
   </section>
   <LogViewer bind:show={showLogs} />
 </div>
-
-<script context="module">
-  declare const __VERSION__: string;
-</script>

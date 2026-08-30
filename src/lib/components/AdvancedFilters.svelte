@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { ImageIcon, MessageSquareOff, Heart, Repeat, SlidersHorizontal, ChevronDown } from '@lucide/svelte';
   import type { Filters } from '$lib/types';
 
@@ -8,7 +9,9 @@
     startOpen?: boolean;
   } = $props();
 
-  let open = $state(startOpen);
+  // startOpen is a one-shot default: after the first render the panel's state
+  // belongs to the user, so the prop is deliberately read untracked.
+  let open = $state(untrack(() => startOpen));
 
   const hasActiveFilters = $derived(
     filters.searchTerm || filters.hasMedia || filters.hideReplies || filters.hideReposts ||

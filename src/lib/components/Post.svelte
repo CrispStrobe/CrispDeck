@@ -49,6 +49,9 @@
   let liked = $state(false);
   let likeAnimating = $state(false);
   let boosted = $state(false);
+  // Optimistic/live offsets applied on top of the server counts below.
+  let likeDelta = $state(0);
+  let boostDelta = $state(0);
   let bookmarked = $state(false);
   let hideEngagement = $state(false);
   let showStats = $state(false);
@@ -92,8 +95,8 @@
   }
   // Per-URI Jetstream listener — only fires for this post's URI (no broadcast filtering)
   const jetstreamListener = (update: import('$lib/jetstream').CountUpdate) => {
-    if (update.type === 'like') localLikeCount += update.delta;
-    if (update.type === 'repost') localBoostCount += update.delta;
+    if (update.type === 'like') likeDelta += update.delta;
+    if (update.type === 'repost') boostDelta += update.delta;
   };
 
   onMount(async () => {
@@ -402,13 +405,16 @@
       }
     }
   }
-  let localLikeCount = $state(post.likeCount ?? 0);
-  let localBoostCount = $state(post.repostCount ?? 0);
+  // Server count + our offset, not a $state seeded from `post`: the feed keys
+  // rows by URI, so a refresh reuses this component instance and a seeded copy
+  // would stay frozen at whatever the count was when the row first rendered.
+  const localLikeCount = $derived(Math.max(0, (post.likeCount ?? 0) + likeDelta));
+  const localBoostCount = $derived(Math.max(0, (post.repostCount ?? 0) + boostDelta));
 
   async function handleLike() {
     if (!onlike) return;
     liked = !liked;
-    localLikeCount += liked ? 1 : -1;
+    likeDelta += liked ? 1 : -1;
     haptic('light');
     if (liked) { likeAnimating = true; setTimeout(() => likeAnimating = false, 600); }
     onlike(post);
@@ -417,7 +423,7 @@
   async function handleBoost() {
     if (!onboost) return;
     boosted = !boosted;
-    localBoostCount += boosted ? 1 : -1;
+    boostDelta += boosted ? 1 : -1;
     haptic('medium');
     onboost(post);
   }
@@ -882,11 +888,27 @@
       </div>
       <a href={getThreadUrl(post)} class="block min-w-0 hover:bg-[var(--color-surface-hover)]/30 rounded -mx-1 px-1 transition-colors">
         {#if post.platform === 'mastodon' && mastodonHtml}
-          <div class="text-sm text-[var(--color-text)] break-words whitespace-pre-wrap prose-invert [&_a]:text-blue-400 [&_a]:hover:underline" onclick={handlePostLinkClick} onkeydown={(e) => { if (e.key === 'Enter') handlePostLinkClick(e); }} role="article">
+        <!-- Delegation surface for the links inside {@html}: the interactive
+             elements are the real <a> tags this contains, which are already
+             focusable and Enter-activatable, and the click they emit bubbles
+             here. The onkeydown that used to sit alongside was a duplicate of
+             that same bubbled click. (svelte-ignore must be the comment
+             immediately before the element, so it goes last.) -->
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div class="text-sm text-[var(--color-text)] break-words whitespace-pre-wrap prose-invert [&_a]:text-blue-400 [&_a]:hover:underline" onclick={handlePostLinkClick}>
             {@html mastodonHtml}
           </div>
         {:else if post.platform === 'bluesky' && bskyHtml}
-          <div class="text-sm text-[var(--color-text)] break-words whitespace-pre-wrap [&_a]:text-blue-400 [&_a]:hover:underline" onclick={handlePostLinkClick} onkeydown={(e) => { if (e.key === 'Enter') handlePostLinkClick(e); }} role="article">
+        <!-- Delegation surface for the links inside {@html}: the interactive
+             elements are the real <a> tags this contains, which are already
+             focusable and Enter-activatable, and the click they emit bubbles
+             here. The onkeydown that used to sit alongside was a duplicate of
+             that same bubbled click. (svelte-ignore must be the comment
+             immediately before the element, so it goes last.) -->
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div class="text-sm text-[var(--color-text)] break-words whitespace-pre-wrap [&_a]:text-blue-400 [&_a]:hover:underline" onclick={handlePostLinkClick}>
             {@html bskyHtml}
           </div>
         {:else}
@@ -916,27 +938,33 @@
         <div class="{bskyImages.length === 1 ? '' : 'grid grid-cols-2 gap-2'} pt-2">
           {#each bskyImages as image, i}
             {@const boxStyle = bskyImages.length === 1 ? mediaBoxStyle(image.aspectRatio?.width, image.aspectRatio?.height) : ''}
-            <button
-              type="button"
-              onclick={() => openLightbox(bskyImages.map(img => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), i)}
-              class="cursor-pointer text-left w-full relative"
-            >
-              <img src={image.thumb} alt={image.alt || ''} style={boxStyle} class="rounded-md w-full {bskyImages.length === 1 ? (boxStyle ? 'object-cover bg-black/10' : 'max-h-64 object-contain bg-black/10') : 'aspect-square object-cover'}" />
+            <!-- The ALT badge is a sibling of the image button, not a child
+                 of it: nesting one control inside another is invalid HTML,
+                 and the tabindex="-1" it needed to survive there left the
+                 alt text reachable by mouse only. -->
+            <div class="relative">
+              <button
+                type="button"
+                onclick={() => openLightbox(bskyImages.map(img => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), i)}
+                class="cursor-pointer text-left w-full block"
+              >
+                <img src={image.thumb} alt={image.alt || ''} style={boxStyle} class="rounded-md w-full {bskyImages.length === 1 ? (boxStyle ? 'object-cover bg-black/10' : 'max-h-64 object-contain bg-black/10') : 'aspect-square object-cover'}" />
+              </button>
               {#if image.alt}
-                <span
-                  class="absolute bottom-1 left-1 px-1 py-0.5 text-[9px] font-bold bg-black/70 text-white rounded cursor-pointer"
+                <button
+                  type="button"
+                  class="absolute bottom-1 left-1 px-1 py-0.5 text-[9px] font-bold bg-black/70 text-white rounded"
                   onclick={(e) => toggleAltPopover(i, e)}
-                  role="button"
-                  tabindex="-1"
+                  aria-expanded={altPopoverIndex === i}
                   aria-label="Show alt text"
-                >ALT</span>
+                >ALT</button>
                 {#if altPopoverIndex === i}
                   <div class="absolute bottom-full left-0 mb-1 p-2 bg-black/90 text-white text-xs rounded-lg max-w-[250px] z-10">
                     {image.alt}
                   </div>
                 {/if}
               {/if}
-            </button>
+            </div>
           {/each}
         </div>
       {/if}
@@ -1065,27 +1093,31 @@
             {@const mastoAltIndex = bskyImages.length + i}
             {#if imageUrl}
               {@const mastoBoxStyle = mastodonMedia.length === 1 ? mediaBoxStyle(attachment.meta?.original?.width, attachment.meta?.original?.height) : ''}
-              <button
-                type="button"
-                onclick={() => openLightbox(mastodonMedia.map(a => ({ url: a.url || a.previewUrl || a.remoteUrl || '', thumb: a.previewUrl || a.url || '', alt: a.description })), i)}
-                class="cursor-pointer text-left w-full relative"
-              >
-                <img src={imageUrl} alt={attachment.description || `Image ${i + 1}`} style={mastoBoxStyle} class="rounded-md w-full {mastodonMedia.length === 1 ? (mastoBoxStyle ? 'object-cover bg-black/10' : 'max-h-64 object-contain bg-black/10') : 'aspect-square object-cover'} bg-[var(--color-surface-hover)]" />
+              <!-- ALT badge as a sibling button, not nested in the image
+                   button: see the Bluesky block above. -->
+              <div class="relative">
+                <button
+                  type="button"
+                  onclick={() => openLightbox(mastodonMedia.map(a => ({ url: a.url || a.previewUrl || a.remoteUrl || '', thumb: a.previewUrl || a.url || '', alt: a.description })), i)}
+                  class="cursor-pointer text-left w-full block"
+                >
+                  <img src={imageUrl} alt={attachment.description || `Image ${i + 1}`} style={mastoBoxStyle} class="rounded-md w-full {mastodonMedia.length === 1 ? (mastoBoxStyle ? 'object-cover bg-black/10' : 'max-h-64 object-contain bg-black/10') : 'aspect-square object-cover'} bg-[var(--color-surface-hover)]" />
+                </button>
                 {#if attachment.description}
-                  <span
-                    class="absolute bottom-1 left-1 px-1 py-0.5 text-[9px] font-bold bg-black/70 text-white rounded cursor-pointer"
+                  <button
+                    type="button"
+                    class="absolute bottom-1 left-1 px-1 py-0.5 text-[9px] font-bold bg-black/70 text-white rounded"
                     onclick={(e) => toggleAltPopover(mastoAltIndex, e)}
-                    role="button"
-                    tabindex="-1"
+                    aria-expanded={altPopoverIndex === mastoAltIndex}
                     aria-label="Show alt text"
-                  >ALT</span>
+                  >ALT</button>
                   {#if altPopoverIndex === mastoAltIndex}
-                    <div class="absolute bottom-full left-0 mb-1 p-2 bg-black/90 text-white text-xs rounded-lg max-w-[250px] z-10">
+                      <div class="absolute bottom-full left-0 mb-1 p-2 bg-black/90 text-white text-xs rounded-lg max-w-[250px] z-10">
                       {attachment.description}
                     </div>
                   {/if}
                 {/if}
-              </button>
+              </div>
             {/if}
           {/each}
         </div>

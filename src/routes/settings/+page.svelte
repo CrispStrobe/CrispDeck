@@ -1598,8 +1598,8 @@
     <div class="space-y-4 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
       <!-- Provider -->
       <div>
-        <label class="block text-sm text-[var(--color-text-muted)] mb-2">{i18n.t.settings.translationProvider}</label>
-        <div class="flex flex-wrap items-center gap-0.5 bg-[var(--color-bg)] rounded-lg border border-[var(--color-border)] p-0.5">
+        <span id="translate-provider-label" class="block text-sm text-[var(--color-text-muted)] mb-2">{i18n.t.settings.translationProvider}</span>
+        <div role="group" aria-labelledby="translate-provider-label" class="flex flex-wrap items-center gap-0.5 bg-[var(--color-bg)] rounded-lg border border-[var(--color-border)] p-0.5">
           <button
             onclick={() => { translateProvider = 'lingva'; saveTranslateConfig(); }}
             class="flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors {translateProvider === 'lingva' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)]'}"
@@ -1804,8 +1804,8 @@
 
       <!-- Provider type -->
       <div>
-        <label class="block text-xs text-[var(--color-text-muted)] mb-2">{i18n.t.compose.aiProvider}</label>
-        <div class="flex items-center bg-[var(--color-bg)] rounded-lg border border-[var(--color-border)] p-0.5">
+        <span id="ai-provider-label" class="block text-xs text-[var(--color-text-muted)] mb-2">{i18n.t.compose.aiProvider}</span>
+        <div role="group" aria-labelledby="ai-provider-label" class="flex items-center bg-[var(--color-bg)] rounded-lg border border-[var(--color-border)] p-0.5">
           <button
             onclick={() => { aiProvider = 'openai'; saveAIConfig(); }}
             class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {aiProvider === 'openai' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)]'}"

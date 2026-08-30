@@ -226,7 +226,7 @@
 
 <svelte:head><title>CrispDeck — Notifications</title><meta name="description" content="Unified notifications from all your accounts" /></svelte:head>
 
-<div class="p-6 max-w-3xl mx-auto" ontouchstart={ptr.onTouchStart} ontouchmove={ptr.onTouchMove} ontouchend={ptr.onTouchEnd}>
+<div class="p-6 max-w-3xl mx-auto" role="feed" aria-label="Notifications" ontouchstart={ptr.onTouchStart} ontouchmove={ptr.onTouchMove} ontouchend={ptr.onTouchEnd}>
   {#if ptr.state.pullDistance > 0}
     <div class="flex items-center justify-center mb-2 transition-all" style="height: {ptr.state.pullDistance}px">
       <RefreshCw size={20} class="text-[var(--color-primary)] {ptr.state.pullRefreshing ? 'animate-spin' : ''}" style="opacity: {ptr.state.pullDistance / 60}; transform: rotate({ptr.state.pullDistance * 3}deg)" />

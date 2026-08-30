@@ -71,15 +71,14 @@
     aria-modal="true"
     aria-label="Log Viewer"
     tabindex="-1"
-    onclick={() => show = false}
     onkeydown={(e) => { if (e.key === 'Escape') show = false; }}
   >
-    <div class="absolute inset-0 bg-black/60"></div>
-    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
+    <!-- The scrim is the click-outside target; a real button makes it focusable
+         and Enter/Space-operable instead of relying on click bubbling. -->
+    <button type="button" class="absolute inset-0 bg-black/60" aria-label="Close log viewer" onclick={() => show = false}></button>
     <div
       class="relative bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] shadow-2xl flex flex-col mx-4 w-full max-w-4xl"
       style="height: 80vh"
-      onclick={(e) => e.stopPropagation()}
     >
       <!-- Header -->
       <div class="flex items-center justify-between px-5 py-3 border-b border-[var(--color-border)]">

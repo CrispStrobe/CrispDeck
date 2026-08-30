@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { X, ChevronLeft, ChevronRight, ExternalLink } from '@lucide/svelte';
   import { haptic } from '$lib/haptics';
 
@@ -19,7 +20,9 @@
     onclose?: () => void;
   } = $props();
 
-  let currentIndex = $state(index);
+  // Untracked seed; the effect below is what keeps it in step with the prop,
+  // while prev()/next() move it locally in between.
+  let currentIndex = $state(untrack(() => index));
 
   $effect(() => { currentIndex = index; });
 
@@ -120,9 +123,15 @@
     {/if}
 
     <!-- Media -->
+    <!-- Swipe surface. The onclick={stopPropagation} that used to sit here was
+         dead: handleBackdropClick only closes when the click target itself
+         carries data-backdrop, which only the root element does. Swiping has
+         keyboard equivalents already — arrow keys on the dialog, and the
+         prev/next buttons. -->
     <div
+      role="group"
+      aria-label="Media viewer"
       class="max-w-[90vw] max-h-[85vh] flex flex-col items-center"
-      onclick={(e) => e.stopPropagation()}
       ontouchstart={onTouchStart}
       ontouchmove={onTouchMove}
       ontouchend={onTouchEnd}
@@ -136,7 +145,7 @@
           autoplay
           loop={current.type === 'gifv'}
           class="max-w-full max-h-[80vh] rounded-lg"
-        />
+        ></video>
       {:else}
         <img
           src={current.url}

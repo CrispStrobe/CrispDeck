@@ -160,6 +160,19 @@
   // Clients
   let clientEntries: Map<number, ClientEntry> = new Map();
 
+  // Focus the composer in script rather than with the autofocus attribute.
+  // It has to wait for the binding: the textarea is behind `{#if loading}`,
+  // which only flips once initAllClients() resolves, so onMount runs while the
+  // element still does not exist. Guarded so a later re-render cannot yank
+  // focus back out from under the user.
+  let composerFocused = false;
+  $effect(() => {
+    if (textareaEl && !composerFocused) {
+      composerFocused = true;
+      textareaEl.focus();
+    }
+  });
+
   onMount(async () => {
     try {
       const result = await initAllClients();
@@ -678,7 +691,6 @@
             bind:value={text}
             placeholder={i18n.t.compose.placeholder}
             rows="8"
-            autofocus
             oninput={() => { mentionAutocomplete?.handleInput(); scheduleAutoSave(); }}
             onkeydown={(e) => {
               mentionAutocomplete?.handleKeydown(e);
@@ -967,12 +979,12 @@
               {#if showSchedule}
                 <div class="absolute bottom-full right-0 mb-1 p-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl z-50 w-56">
                   <div class="space-y-2">
-                    <label class="text-xs text-[var(--color-text-muted)]">Date</label>
-                    <input type="date" bind:value={scheduleDate}
+                    <label for="schedule-date" class="text-xs text-[var(--color-text-muted)]">Date</label>
+                    <input id="schedule-date" type="date" bind:value={scheduleDate}
                       min={new Date().toISOString().split('T')[0]}
                       class="w-full px-2 py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-xs text-[var(--color-text)] focus:outline-none" />
-                    <label class="text-xs text-[var(--color-text-muted)]">Time</label>
-                    <input type="time" bind:value={scheduleTime}
+                    <label for="schedule-time" class="text-xs text-[var(--color-text-muted)]">Time</label>
+                    <input id="schedule-time" type="time" bind:value={scheduleTime}
                       class="w-full px-2 py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-xs text-[var(--color-text)] focus:outline-none" />
                     <button
                       onclick={handleSchedule}
