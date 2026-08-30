@@ -2,58 +2,58 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleDevelopmentRegion</key>
-    <string>en</string>
-    <key>CFBundleDisplayName</key>
-    <string>CrispDeck</string>
-    <key>CFBundleExecutable</key>
-    <string>CrispDeck</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.christianstrobele.crispdeck</string>
-    <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
-    <key>CFBundleName</key>
-    <string>CrispDeck</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.2.6</string>
-    <key>CFBundleVersion</key>
-    <string>1</string>
-    <key>LSRequiresIPhoneOS</key>
-    <true/>
-    <key>UILaunchStoryboardName</key>
-    <string>LaunchScreen</string>
-    <key>UIRequiredDeviceCapabilities</key>
-    <array>
-        <string>arm64</string>
-    </array>
-    <key>UISupportedInterfaceOrientations</key>
-    <array>
-        <string>UIInterfaceOrientationPortrait</string>
-        <string>UIInterfaceOrientationLandscapeLeft</string>
-        <string>UIInterfaceOrientationLandscapeRight</string>
-    </array>
-    <key>CFBundleURLTypes</key>
-    <array>
-        <dict>
-            <key>CFBundleURLName</key>
-            <string>com.christianstrobele.crispdeck</string>
-            <key>CFBundleURLSchemes</key>
-            <array>
-                <string>crispdeck</string>
-            </array>
-        </dict>
-    </array>
-    <key>NSCameraUsageDescription</key>
-    <string>CrispDeck needs camera access to take photos for posts.</string>
-    <key>NSPhotoLibraryUsageDescription</key>
-    <string>CrispDeck needs photo library access to attach images to posts.</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>CrispDeck needs microphone access for voice dictation.</string>
-    <key>NSFaceIDUsageDescription</key>
-    <string>CrispDeck uses Face ID to protect your stored credentials.</string>
-    <key>ITSAppUsesNonExemptEncryption</key>
-    <false/>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>CrispDeck</string>
+	<key>CFBundleExecutable</key>
+	<string>CrispDeck</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.christianstrobele.crispdeck</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>CrispDeck</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.2.7</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.christianstrobele.crispdeck</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>crispdeck</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>CrispDeck needs camera access to take photos for posts.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>CrispDeck uses Face ID to protect your stored credentials.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>CrispDeck needs microphone access for voice dictation.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>CrispDeck needs photo library access to attach images to posts.</string>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
 </dict>
 </plist>

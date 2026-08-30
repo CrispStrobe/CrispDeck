@@ -70,6 +70,24 @@ jobs:
       - name: Initialize iOS project
         run: npx tauri ios init || true
 
+      # The committed Info.plist is the seed `tauri ios init` preserves, so its
+      # version drifts silently whenever package.json is bumped and nobody
+      # remembers to edit it too. Apple compares CFBundleShortVersionString
+      # against the version declared in App Store Connect, so a stale value is
+      # an upload rejection (or, worse, a build landing under the old version).
+      # It went out of step between 1.2.6 and 1.2.7; sync it here so it cannot
+      # happen again.
+      - name: Sync iOS bundle version with package.json
+        run: |
+          PLIST=src-tauri/gen/apple/CrispDeck_iOS/Info.plist
+          VERSION=$(node -p "require('./package.json').version")
+          CURRENT=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "$PLIST")
+          if [ "$CURRENT" != "$VERSION" ]; then
+            echo "Info.plist said $CURRENT, package.json says $VERSION — syncing"
+            /usr/libexec/PlistBuddy -c "Set CFBundleShortVersionString $VERSION" "$PLIST"
+          fi
+          /usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "$PLIST"
+
       # Inject PrivacyInfo.xcprivacy into the Xcode project target
       - name: Inject PrivacyInfo.xcprivacy
         run: python3 scripts/patch-ios-privacy.py

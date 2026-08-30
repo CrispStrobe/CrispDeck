@@ -2,6 +2,62 @@
 
 ## Unreleased
 
+## v1.2.7 — 2026-08-30
+
+### Fixed
+
+- **Feed: "Timeline unavailable — showing your posts only" no longer sticks.**
+  A single transient Bluesky OAuth restore failure put the banner up and
+  nothing ever took it down, so it stayed on screen while fresh timeline posts
+  loaded underneath. The banner is now rebuilt from scratch on every load, and
+  a degraded session is retried before fetching instead of stranding the page
+  read-only until you navigate away.
+- **Feed auto-refresh actually works.** The 60-second poll only understood
+  OAuth accounts, so app-password and degraded accounts never showed the
+  "N new posts" banner; it also compared timestamps across mixed strings and
+  `Date`s, and polled the home timeline even in "my posts" mode. Returning to
+  the tab now checks immediately rather than waiting out the interval.
+- **Leaked timers and sockets.** `onMount` is async on the feed, deck and root
+  layout, and Svelte ignores an async callback's return value — so their
+  cleanups never ran. Every visit to the feed stacked another poll interval,
+  and the deck left its refresh timer, its visibility listener and the
+  Jetstream socket running for the rest of the session.
+- **Live counters and deck streaming on the web build.** The deployed
+  Content-Security-Policy allowed no WebSocket scheme, so both silently never
+  connected.
+- **Post engagement counts went stale.** Like and boost counts were captured
+  when a post first rendered and never updated, because the feed reuses a row's
+  component across refreshes.
+- **Mastodon server-side translation showed an empty box** reading "Translated
+  from undefined" — it built the result with the wrong keys.
+- **Bluesky list and starter-pack writes were sending no repository.** They
+  read a `session` property the OAuth agent class does not have.
+- Muted words pushed to Bluesky were missing a required field; the calendar
+  read a field that does not exist on archived posts; pinning to profile could
+  throw from inside the SDK instead of reporting a clear error.
+
+### Accessibility
+
+- Image ALT badges are reachable by keyboard (they were nested inside the image
+  button with `tabindex="-1"`, so mouse-only).
+- Deck columns can be resized from the keyboard — arrow keys, Home and End.
+- The mobile menu, keyboard-shortcuts dialog, log viewer and floating composer
+  all close via a real focusable button rather than a click handler on a
+  container.
+- Schedule inputs are associated with their labels; the settings segmented
+  controls are labelled groups.
+- Fixed a `<div>` inside a `<p>` in deck notifications that browsers reshuffle
+  during hydration.
+
+### Internal
+
+- `npm run check` is clean: 0 errors and 0 warnings, from 70 and 30.
+- Test suite green: 83 pre-existing failures fixed (jsdom environment, four
+  timezone-dependent tests, one flaky performance budget, one test suite that
+  was quietly making live network calls).
+- iOS `CFBundleShortVersionString` is now synced from `package.json` in CI
+  rather than hand-edited, after it drifted a version behind.
+
 ## v1.2.4 — 2026-07-06
 
 ### Downloads
