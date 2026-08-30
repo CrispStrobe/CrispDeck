@@ -41,6 +41,7 @@
     ondragstart: onDragStart,
     ondragover: onDragOver,
     ondrop: onDrop,
+    ondragend: onDragEnd,
   }: {
     id: string;
     title: string;
@@ -72,6 +73,9 @@
     ondragstart?: (e: DragEvent) => void;
     ondragover?: (e: DragEvent) => void;
     ondrop?: (e: DragEvent) => void;
+    /** Fires even when the drag is abandoned outside a drop target, so the
+     *  parent can clear its "currently dragging" styling. */
+    ondragend?: (e: DragEvent) => void;
   } = $props();
 
   let showNotifyMenu = $state(false);
@@ -248,6 +252,7 @@
   ondragstart={pinned ? undefined : onDragStart}
   ondragover={onDragOver}
   ondrop={onDrop}
+  ondragend={onDragEnd}
 >
   <!-- Color accent bar -->
   {#if color}

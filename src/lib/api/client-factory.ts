@@ -18,6 +18,13 @@ export interface ClientEntry {
   client: BlueskyClient | MastodonClient | ThreadsClient;
   /** For OAuth Bluesky accounts — the Agent with full access including DMs */
   oauthAgent?: Agent;
+  /**
+   * True when this is a Bluesky OAuth account whose session could not be
+   * restored during this init, so `client` is a read-only public client.
+   * Anything needing auth (home timeline, likes, DMs) is unavailable until a
+   * later re-init succeeds — see `retryDegradedClients`.
+   */
+  degraded?: boolean;
 }
 
 // Module-level cache: avoids re-initializing clients when navigating between pages
@@ -112,6 +119,7 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
           platform: 'bluesky',
           handle: acct.handle,
           client: BlueskyClient.readOnly(acct.handle),
+          degraded: creds.auth_method === 'oauth',
         };
       } else if (acct.platform === 'threads') {
         return {
@@ -153,6 +161,39 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
 export function invalidateClientCache(): void {
   _cachedResult = null;
   _cacheTime = 0;
+}
+
+/** True when any entry fell back to a read-only client despite being an OAuth account. */
+export function hasDegradedClients(clients: Map<number, ClientEntry>): boolean {
+  for (const entry of clients.values()) {
+    if (entry.degraded) return true;
+  }
+  return false;
+}
+
+let _lastDegradedRetry = 0;
+const DEGRADED_RETRY_MIN_INTERVAL_MS = 15000;
+
+/**
+ * Re-initialize clients when a previous init left an OAuth account degraded.
+ *
+ * A transient restore failure (network flake, DPoP nonce hiccup) drops the
+ * account to a public read-only client for the rest of the page's life, which
+ * silently downgrades the home timeline to "your posts only". Calling this
+ * before a feed load gives the session a chance to come back without a reload.
+ *
+ * Rate-limited to one attempt per 15s. Returns the fresh result when a retry
+ * ran, or null when there was nothing to retry / the rate limit applied.
+ */
+export async function retryDegradedClients(
+  clients: Map<number, ClientEntry>,
+): Promise<{ accounts: Account[]; clients: Map<number, ClientEntry> } | null> {
+  if (!hasDegradedClients(clients)) return null;
+  const now = Date.now();
+  if (now - _lastDegradedRetry < DEGRADED_RETRY_MIN_INTERVAL_MS) return null;
+  _lastDegradedRetry = now;
+  invalidateClientCache();
+  return await initAllClients();
 }
 
 /**

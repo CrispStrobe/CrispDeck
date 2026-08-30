@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { initAllClients, invalidateClientCache, type ClientEntry } from '$lib/api/client-factory';
   import { Columns3, Plus, Loader2 } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
@@ -317,6 +317,8 @@
     }
   }
 
+  let refreshInterval: ReturnType<typeof setInterval> | undefined;
+
   onMount(async () => {
     try {
       let result = await initAllClients();
@@ -351,23 +353,32 @@
       loading = false;
     }
 
-    // Auto-refresh every 5 minutes, skip when tab is hidden
-    const interval = setInterval(() => {
+    // Auto-refresh every 5 minutes, skip when tab is hidden.
+    // NB: Svelte ignores the return value of an *async* onMount callback, so
+    // the teardown lives in onDestroy — returning a cleanup here would leave
+    // this interval, the listener and the Jetstream socket running for the
+    // rest of the session, and stack another set on the next visit.
+    refreshInterval = setInterval(() => {
       if (document.hidden) return;
       columns.forEach(col => loadColumn(col));
     }, 300000);
-    // Refresh on tab re-focus — stagger to avoid thundering herd
-    const handleVisibility = () => {
-      if (!document.hidden) columns.forEach((col, i) => setTimeout(() => loadColumn(col), i * 150));
-    };
     document.addEventListener('visibilitychange', handleVisibility);
-    return () => {
-      clearInterval(interval);
+  });
+
+  /** Refresh on tab re-focus — stagger to avoid a thundering herd. */
+  function handleVisibility() {
+    if (!document.hidden) columns.forEach((col, i) => setTimeout(() => loadColumn(col), i * 150));
+  }
+
+  onDestroy(() => {
+    if (refreshInterval) clearInterval(refreshInterval);
+    refreshInterval = undefined;
+    if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', handleVisibility);
-      streamManager.disconnectAll();
-      streamCleanups.clear();
-      jetstream.setEnabled(false);
-    };
+    }
+    streamManager.disconnectAll();
+    streamCleanups.clear();
+    jetstream.setEnabled(false);
   });
 
   function saveColumns() {
@@ -659,7 +670,7 @@
         if (bskyAgent) try {
           const r = await bskyAgent.api.chat.bsky.convo.listConvos({ limit: 30 });
           for (const convo of r.data.convos ?? []) {
-            const other = convo.members?.find((m: any) => m.did !== bskyAgent.session?.did);
+            const other = convo.members?.find((m: any) => m.did !== bskyAgent.did);
             if (other) {
               posts.push({
                 uri: `chat:bsky:${convo.id}`,
@@ -780,7 +791,7 @@
       } else if (col.type === 'likes') {
         // Posts you've liked
         if (bskyAgent) try {
-          const r = await bskyAgent.api.app.bsky.feed.getActorLikes({ actor: bskyAgent.session?.did ?? '', limit: 50 });
+          const r = await bskyAgent.api.app.bsky.feed.getActorLikes({ actor: bskyAgent.did ?? '', limit: 50 });
           posts.push(...r.data.feed.map(p => normalizePost(p, 'bluesky')));
         } catch {}
         if (mastoClient) try {

@@ -16,11 +16,10 @@
   preloadSanitizer(); // Start loading DOMPurify before any posts render
   initDensity(); // Apply saved display density CSS custom properties
 
-  declare const __VERSION__: string;
 
   let { children } = $props();
 
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { onNavigate } from '$app/navigation';
   import { getBookmarkCount } from '$lib/bookmarks';
 
@@ -94,6 +93,8 @@
     });
   });
 
+  let countsInterval: ReturnType<typeof setInterval> | undefined;
+
   onMount(async () => {
     // Register service worker for PWA
     if ('serviceWorker' in navigator) {
@@ -118,34 +119,42 @@
 
     // Offline detection
     offline = !navigator.onLine;
-    const handleOnline = () => offline = false;
-    const handleOffline = () => offline = true;
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
     bookmarkCount = await getBookmarkCount();
     // Check unread messages on load
     checkUnreadMessages();
-    // Refresh counts periodically — skip when tab is hidden to save API calls
-    const interval = setInterval(async () => {
+    // Refresh counts periodically — skip when tab is hidden to save API calls.
+    // NB: Svelte ignores the return value of an *async* onMount callback, so
+    // the teardown lives in onDestroy — returning a cleanup here would never
+    // run it.
+    countsInterval = setInterval(async () => {
       if (document.hidden) return;
       bookmarkCount = await getBookmarkCount();
       checkUnreadMessages();
     }, 60000);
-    // Resume immediately when tab becomes visible after being hidden
-    const handleVisibility = () => {
-      if (!document.hidden) {
-        getBookmarkCount().then(c => bookmarkCount = c);
-        checkUnreadMessages();
-      }
-    };
     document.addEventListener('visibilitychange', handleVisibility);
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', handleVisibility);
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
+  });
+
+  const handleOnline = () => offline = false;
+  const handleOffline = () => offline = true;
+
+  /** Resume immediately when the tab becomes visible after being hidden. */
+  function handleVisibility() {
+    if (!document.hidden) {
+      getBookmarkCount().then(c => bookmarkCount = c);
+      checkUnreadMessages();
+    }
+  }
+
+  onDestroy(() => {
+    if (countsInterval) clearInterval(countsInterval);
+    countsInterval = undefined;
+    if (typeof document === 'undefined') return;
+    document.removeEventListener('visibilitychange', handleVisibility);
+    window.removeEventListener('online', handleOnline);
+    window.removeEventListener('offline', handleOffline);
   });
 
   async function checkUnreadMessages() {

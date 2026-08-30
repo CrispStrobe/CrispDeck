@@ -1,6 +1,6 @@
 import { AppBskyFeedDefs } from '@atproto/api';
 import type { mastodon } from 'masto';
-import type { UnifiedPost, FeedItem, CrosspostGroup, Platform } from '$lib/types';
+import type { UnifiedPost, FeedItem, CrosspostGroup, Filters, Platform } from '$lib/types';
 import type { ThreadsPost } from '$lib/api/threads';
 import { jaroWinkler } from '$lib/utils/string';
 
@@ -311,16 +311,15 @@ export function sortPosts(
   });
 }
 
-/** Apply filters to a post array */
+/** Narrow a FeedItem to a crosspost group. */
+export function isCrosspostGroup(item: FeedItem): item is CrosspostGroup {
+  return 'type' in item && item.type === 'crosspost';
+}
+
+/** Apply filters to a post array. Ordering is sortPosts' job, hence no `sortBy`. */
 export function filterPosts(
   posts: UnifiedPost[],
-  filters: {
-    searchTerm: string;
-    hasMedia: boolean;
-    hideReplies: boolean;
-    hideReposts: boolean;
-    minLikes: number;
-  }
+  filters: Omit<Filters, 'sortBy'>,
 ): UnifiedPost[] {
   return posts.filter((post) => {
     if (filters.hideReposts && post.isRepost) return false;

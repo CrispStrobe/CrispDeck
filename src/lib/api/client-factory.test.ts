@@ -4,7 +4,7 @@
  * These are pure functions that operate on a Map, no network needed.
  */
 import { describe, it, expect } from 'vitest';
-import { getBskyAgent, getBskyClient, getMastoClient, invalidateClientCache, type ClientEntry } from './client-factory';
+import { getBskyAgent, getBskyClient, getMastoClient, hasDegradedClients, invalidateClientCache, retryDegradedClients, type ClientEntry } from './client-factory';
 import { BlueskyClient } from './bluesky';
 import { MastodonClient } from './mastodon';
 
@@ -133,5 +133,49 @@ describe('invalidateClientCache', () => {
     const mod = await import('./client-factory');
     expect(typeof mod.initAllClients).toBe('function');
     expect(typeof mod.invalidateClientCache).toBe('function');
+  });
+});
+
+describe('hasDegradedClients', () => {
+  it('is false when no entry is degraded', () => {
+    expect(hasDegradedClients(makeClients())).toBe(false);
+  });
+
+  it('is false for an empty map', () => {
+    expect(hasDegradedClients(new Map())).toBe(false);
+  });
+
+  it('is true when an OAuth account fell back to a read-only client', () => {
+    const map = makeClients();
+    map.set(3, {
+      accountId: 3,
+      platform: 'bluesky',
+      handle: 'carol.bsky.social',
+      client: BlueskyClient.readOnly('carol.bsky.social'),
+      degraded: true,
+    });
+    expect(hasDegradedClients(map)).toBe(true);
+  });
+
+  it('is false when an entry has a live OAuth agent', () => {
+    const map = new Map<number, ClientEntry>();
+    map.set(1, {
+      accountId: 1,
+      platform: 'bluesky',
+      handle: 'alice.bsky.social',
+      client: BlueskyClient.readOnly('alice.bsky.social'),
+      oauthAgent: { did: 'did:plc:test' } as any,
+    });
+    expect(hasDegradedClients(map)).toBe(false);
+  });
+});
+
+describe('retryDegradedClients', () => {
+  it('returns null (does no work) when nothing is degraded', async () => {
+    await expect(retryDegradedClients(makeClients())).resolves.toBeNull();
+  });
+
+  it('returns null for an empty map', async () => {
+    await expect(retryDegradedClients(new Map())).resolves.toBeNull();
   });
 });

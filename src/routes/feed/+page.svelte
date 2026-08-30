@@ -11,10 +11,10 @@
   import { MastodonClient } from '$lib/api/mastodon';
   import { ThreadsClient } from '$lib/api/threads';
   import { notifyNewPosts, getPermission } from '$lib/push-notifications';
-  import { initAllClients, invalidateClientCache, type ClientEntry } from '$lib/api/client-factory';
-  import { normalizePost, filterPosts, sortPosts, detectCrossposts, buildIdentityPairs } from '$lib/api/unified';
+  import { initAllClients, invalidateClientCache, retryDegradedClients, type ClientEntry } from '$lib/api/client-factory';
+  import { normalizePost, filterPosts, sortPosts, detectCrossposts, buildIdentityPairs, isCrosspostGroup } from '$lib/api/unified';
   import { listIdentities } from '$lib/db';
-  import type { UnifiedPost, FeedItem, Filters, Account, Platform, CrosspostGroup as CrosspostGroupType } from '$lib/types';
+  import type { UnifiedPost, Filters, Account, Platform } from '$lib/types';
   import { buildAffinityMap, rankForYou } from '$lib/for-you';
   import { syncMutedWordsFromServer } from '$lib/bluesky-prefs';
   import { searchArchive } from '$lib/archive';
@@ -23,6 +23,7 @@
   import { buildFilterMatcher, getCachedFilters, setCachedFilters, type MastodonFilter } from '$lib/mastodon-filters';
   import { saveReadPosition, getReadPosition } from '$lib/read-position';
   import { getCached, setCache } from '$lib/view-cache';
+  import { toTime, isNewerThan } from '$lib/post-time';
   import { cacheFeed, loadCachedFeed, formatCachedTime, isOffline } from '$lib/offline-cache';
 
   type FeedMode = 'timeline' | 'my-posts' | 'for-you';
@@ -61,6 +62,7 @@
   // Infinite scroll
   let scrollSentinel: HTMLDivElement | undefined = $state();
   let observer: IntersectionObserver | undefined;
+  let pollInterval: ReturnType<typeof setInterval> | undefined;
 
   // Pull-to-refresh
   let pullStartY = 0;
@@ -137,14 +139,23 @@
       initialLoading = false;
     }
 
-    // Poll for new posts every 60 seconds, skip when tab is hidden
-    const pollInterval = setInterval(() => {
+    // Poll for new posts every 60 seconds, skip when tab is hidden.
+    // NB: Svelte ignores the return value of an *async* onMount callback, so
+    // the teardown lives in onDestroy — returning a cleanup here would leak a
+    // fresh interval on every visit to this page.
+    pollInterval = setInterval(() => {
       if (!document.hidden) checkForNewPosts();
     }, 60000);
-    return () => { observer?.disconnect(); clearInterval(pollInterval); };
+    document.addEventListener('visibilitychange', onVisibilityChange);
   });
 
   onDestroy(() => {
+    observer?.disconnect();
+    if (pollInterval) clearInterval(pollInterval);
+    pollInterval = undefined;
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    }
     const main = document.getElementById('main-content');
     const topPost = posts[0]?.uri;
     if (topPost) {
@@ -152,41 +163,99 @@
     }
   });
 
+  /** Check immediately when the tab comes back, rather than waiting out the poll. */
+  function onVisibilityChange() {
+    if (!document.hidden) checkForNewPosts();
+  }
+
   let newPostsAvailable = $state(0);
+
+  /**
+   * Fetch one page of an account's feed for the current mode.
+   *
+   * Bluesky's home timeline needs auth, which can come from either an OAuth
+   * agent or an app-password client — try whichever this entry has, and fall
+   * back to the public author feed only when neither can reach it. `degraded`
+   * reports that fallback so the caller can say so exactly once.
+   */
+  async function fetchAccountPage(
+    acct: Account,
+    entry: ClientEntry,
+    opts: { limit: number; cursor?: string; resolveReposts?: boolean },
+  ): Promise<{ posts: UnifiedPost[]; cursor?: string; degraded: boolean }> {
+    const { limit, cursor } = opts;
+    const tag = (p: UnifiedPost) => { p.sourceAccount = acct.handle; return p; };
+    const wantsTimeline = feedMode === 'timeline' || feedMode === 'for-you';
+
+    if (acct.platform === 'bluesky') {
+      const bsky = entry.client as BlueskyClient;
+      if (wantsTimeline) {
+        try {
+          const r = entry.oauthAgent
+            ? await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit, cursor })
+                .then(res => ({ feed: res.data.feed, cursor: res.data.cursor }))
+            : await bsky.getTimeline(cursor, limit);
+          return { posts: r.feed.map(p => tag(normalizePost(p, 'bluesky'))), cursor: r.cursor, degraded: false };
+        } catch (e) {
+          console.error(`Timeline failed for ${acct.handle}, trying author feed:`, e);
+        }
+      }
+      const r = await bsky.getAuthorFeed(acct.handle, cursor);
+      return { posts: r.feed.map(p => tag(normalizePost(p, 'bluesky'))), cursor: r.cursor, degraded: wantsTimeline };
+    }
+
+    if (acct.platform === 'threads') {
+      const threads = entry.client as ThreadsClient;
+      let tp = await threads.getOwnPosts(limit);
+      if (opts.resolveReposts) tp = await threads.resolveReposts(tp);
+      // Threads has no usable cursor here, so it never paginates.
+      return { posts: tp.map(p => tag(normalizePost(p, 'threads'))), cursor: undefined, degraded: false };
+    }
+
+    const masto = entry.client as MastodonClient;
+    const statuses = wantsTimeline
+      ? await masto.getHomeTimeline(cursor)
+      : await masto.getAccountStatuses((await masto.getAccountByHandle(acct.handle)).id, cursor);
+    return {
+      posts: statuses.map((st: any) => tag(normalizePost(st, 'mastodon'))),
+      cursor: statuses.length > 0 ? statuses[statuses.length - 1].id : undefined,
+      degraded: false,
+    };
+  }
+
+  /** Fetch the newest slice of every account's feed and keep what postdates `sinceMs`. */
+  async function fetchNewerPosts(sinceMs: number, limit: number): Promise<UnifiedPost[]> {
+    const results = await Promise.allSettled(accounts.map(async (acct) => {
+      const entry = clientEntries.get(acct.id);
+      if (!entry) return [] as UnifiedPost[];
+      const page = await fetchAccountPage(acct, entry, { limit });
+      return page.posts.filter(p => isNewerThan(p.createdAt, sinceMs));
+    }));
+    const fresh = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
+    // Deduplicate across accounts — two connected accounts can surface the
+    // same post, and counting it twice inflates the "N new posts" banner.
+    const existing = new Set(posts.map(p => p.uri));
+    const seen = new Set<string>();
+    return fresh.filter(p => {
+      if (existing.has(p.uri) || seen.has(p.uri)) return false;
+      seen.add(p.uri);
+      return true;
+    });
+  }
 
   async function checkForNewPosts() {
     if (posts.length === 0 || loading) return;
-    const newestDate = posts[0]?.createdAt;
-    if (!newestDate) return;
+    const newestMs = toTime(posts[0]?.createdAt);
+    if (!newestMs) return;
 
-    const results = await Promise.allSettled(accounts.map(async (acct) => {
-      const entry = clientEntries.get(acct.id);
-      if (!entry) return 0;
-      if (acct.platform === 'bluesky' && entry.oauthAgent) {
-        const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 10 });
-        return r.data.feed.filter(p => {
-          const record = p.post.record as any;
-          return record?.createdAt > newestDate;
-        }).length;
-      } else if (acct.platform === 'mastodon') {
-        const masto = entry.client as MastodonClient;
-        const statuses = await masto.getHomeTimeline();
-        return statuses.filter((s: any) => s.createdAt > newestDate || s.created_at > newestDate).length;
-      } else if (acct.platform === 'threads') {
-        const threads = entry.client as ThreadsClient;
-        const posts = await threads.getOwnPosts(10);
-        return posts.filter(p => p.timestamp > newestDate).length;
-      }
-      return 0;
-    }));
-    const count = results.reduce((sum, r) => sum + (r.status === 'fulfilled' ? r.value : 0), 0);
-    newPostsAvailable = count; // Replace, don't accumulate
+    const fresh = await fetchNewerPosts(newestMs, 20);
+    newPostsAvailable = fresh.length; // Replace, don't accumulate
 
     // Send push notification if page is not visible and we have new posts
-    if (count > 0 && document.hidden) {
+    if (fresh.length > 0 && document.hidden) {
       const perm = await getPermission();
       if (perm === 'granted') {
-        notifyNewPosts(count);
+        notifyNewPosts(fresh.length);
       }
     }
   }
@@ -194,34 +263,10 @@
   async function loadNewPosts() {
     // Prepend new posts instead of reloading everything
     newPostsAvailable = 0;
-    const newestDate = posts[0]?.createdAt;
-    const results = await Promise.allSettled(accounts.map(async (acct) => {
-      const entry = clientEntries.get(acct.id);
-      if (!entry) return [];
-      if (acct.platform === 'bluesky' && entry.oauthAgent) {
-        const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 50 });
-        return r.data.feed
-          .map(p => normalizePost(p, 'bluesky'))
-          .filter(p => !newestDate || p.createdAt > newestDate);
-      } else if (acct.platform === 'mastodon') {
-        const masto = entry.client as MastodonClient;
-        const statuses = await masto.getHomeTimeline();
-        return statuses
-          .map((s: any) => normalizePost(s, 'mastodon'))
-          .filter(p => !newestDate || p.createdAt > newestDate);
-      } else if (acct.platform === 'threads') {
-        const threads = entry.client as ThreadsClient;
-        const threadsPosts = await threads.getOwnPosts(25);
-        return threadsPosts.map(p => normalizePost(p, 'threads')).filter(p => !newestDate || p.createdAt > newestDate);
-      }
-      return [];
-    }));
-    const newPosts = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
-
-    if (newPosts.length > 0) {
-      // Prepend new posts, deduplicating by URI
-      const existingUris = new Set(posts.map(p => p.uri));
-      const unique = newPosts.filter(p => !existingUris.has(p.uri));
+    const newestMs = toTime(posts[0]?.createdAt);
+    if (!newestMs) return;
+    const unique = await fetchNewerPosts(newestMs, 50);
+    if (unique.length > 0) {
       posts = sortPosts([...unique, ...posts], 'newest');
       progress = posts.length;
     }
@@ -241,77 +286,50 @@
 
   async function loadFeed() {
     loading = true;
+    // Clear stale banners — this load decides what, if anything, is wrong now.
+    // Leaving them set meant one flaky refresh pinned "Timeline unavailable"
+    // to the page forever, even while fresh timeline posts streamed in.
+    error = '';
+    // A transient OAuth restore failure leaves Bluesky accounts read-only for
+    // the rest of the page's life, which silently downgrades the timeline to
+    // "your posts only". Give the session a chance to come back first.
+    const recovered = await retryDegradedClients(clientEntries);
+    if (recovered) {
+      accounts = recovered.accounts;
+      clientEntries = recovered.clients;
+    }
     // Don't clear posts — keep cached content visible while fresh data loads
     cursors = {};
     const allPosts: UnifiedPost[] = [];
+    const degradedHandles: string[] = [];
 
     const feedResults = await Promise.allSettled(accounts.map(async (acct) => {
       const entry = clientEntries.get(acct.id);
-      if (!entry) return { posts: [] as UnifiedPost[], acct, cursor: undefined as string | undefined };
-
-      const tag = (p: UnifiedPost) => { p.sourceAccount = acct.handle; return p; };
-      const acctPosts: UnifiedPost[] = [];
-      let cursor: string | undefined;
-
-      if (acct.platform === 'bluesky') {
-        if (feedMode === 'timeline' || feedMode === 'for-you') {
-          if (entry.oauthAgent) {
-            const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 50 });
-            acctPosts.push(...r.data.feed.map(p => tag(normalizePost(p, 'bluesky'))));
-            cursor = r.data.cursor;
-          } else {
-            const bsky = entry.client as BlueskyClient;
-            try {
-              const result = await bsky.getTimeline();
-              acctPosts.push(...result.feed.map(p => tag(normalizePost(p, 'bluesky'))));
-              cursor = result.cursor;
-            } catch (e) {
-              console.error(`Timeline failed for ${acct.handle}, trying author feed:`, e);
-              try {
-                const result = await bsky.getAuthorFeed(acct.handle);
-                acctPosts.push(...result.feed.map(p => tag(normalizePost(p, 'bluesky'))));
-                cursor = result.cursor;
-                error = `Timeline unavailable for @${acct.handle} — showing your posts only. Your session may have expired; try reconnecting in Settings.`;
-              } catch (e2) {
-                error = `Failed to load feed for @${acct.handle}: ${e2}`;
-              }
-            }
-          }
-        } else {
-          const bsky = entry.client as BlueskyClient;
-          const result = await bsky.getAuthorFeed(acct.handle);
-          acctPosts.push(...result.feed.map(p => tag(normalizePost(p, 'bluesky'))));
-          cursor = result.cursor;
-        }
-      } else if (acct.platform === 'threads') {
-        const threads = entry.client as ThreadsClient;
-        let posts = await threads.getOwnPosts(50);
-        posts = await threads.resolveReposts(posts);
-        acctPosts.push(...posts.map(p => tag(normalizePost(p, 'threads'))));
-      } else {
-        const masto = entry.client as MastodonClient;
-        if (feedMode === 'timeline' || feedMode === 'for-you') {
-          const statuses = await masto.getHomeTimeline();
-          acctPosts.push(...statuses.map(p => tag(normalizePost(p, 'mastodon'))));
-          cursor = statuses.length > 0 ? statuses[statuses.length - 1].id : undefined;
-        } else {
-          const account = await masto.getAccountByHandle(acct.handle);
-          const statuses = await masto.getAccountStatuses(account.id);
-          acctPosts.push(...statuses.map(p => tag(normalizePost(p, 'mastodon'))));
-          cursor = statuses.length > 0 ? statuses[statuses.length - 1].id : undefined;
-        }
+      if (!entry) return { posts: [] as UnifiedPost[], acct, cursor: undefined as string | undefined, degraded: false };
+      try {
+        return { acct, ...(await fetchAccountPage(acct, entry, { limit: 50, resolveReposts: true })) };
+      } catch (e) {
+        // Name the account — "Failed to load feed" alone is useless with several connected.
+        throw new Error(`Failed to load feed for @${acct.handle}: ${e}`);
       }
-      return { posts: acctPosts, acct, cursor };
     }));
 
     for (const result of feedResults) {
       if (result.status === 'fulfilled') {
         allPosts.push(...result.value.posts);
         if (result.value.cursor) cursors[result.value.acct.id] = result.value.cursor;
+        if (result.value.degraded) degradedHandles.push(result.value.acct.handle);
       } else {
         console.error('Failed to load feed for account:', result.reason);
         error = (error ? error + '\n' : '') + String(result.reason);
       }
+    }
+
+    if (degradedHandles.length > 0) {
+      const who = degradedHandles.map(h => '@' + h).join(', ');
+      error = (error ? error + '\n' : '')
+        + `Timeline unavailable for ${who} — showing your posts only. `
+        + 'Your session may have expired; try reconnecting in Settings.';
     }
 
     // Only replace if we got fresh data; keep cached posts on network failure
@@ -331,6 +349,7 @@
         offlineBanner = `Offline — showing cached feed from ${formatCachedTime(cached.cachedAt)}`;
       }
     }
+    newPostsAvailable = 0;
     loading = false;
   }
 
@@ -340,46 +359,19 @@
 
     const moreResults = await Promise.allSettled(accounts.map(async (acct) => {
       const cursor = cursors[acct.id];
-      if (!cursor) return { posts: [] as UnifiedPost[], acct, cursor: undefined as string | undefined };
-
       const entry = clientEntries.get(acct.id);
-      if (!entry) return { posts: [] as UnifiedPost[], acct, cursor: undefined as string | undefined };
-
-      const acctPosts: UnifiedPost[] = [];
-      let newCursor: string | undefined;
-
-      if (acct.platform === 'bluesky') {
-        if (feedMode === 'timeline' && entry.oauthAgent) {
-          const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 50, cursor });
-          acctPosts.push(...r.data.feed.map(p => normalizePost(p, 'bluesky')));
-          newCursor = r.data.cursor;
-        } else {
-          const bsky = entry.client as BlueskyClient;
-          const result = await bsky.getAuthorFeed(acct.handle, cursor);
-          acctPosts.push(...result.feed.map(p => normalizePost(p, 'bluesky')));
-          newCursor = result.cursor;
-        }
-      } else if (acct.platform !== 'threads') {
-        const masto = entry.client as MastodonClient;
-        if (feedMode === 'timeline') {
-          const statuses = await masto.getHomeTimeline(cursor);
-          acctPosts.push(...statuses.map(p => normalizePost(p, 'mastodon')));
-          newCursor = statuses.length > 0 ? statuses[statuses.length - 1].id : undefined;
-        } else {
-          const account = await masto.getAccountByHandle(acct.handle);
-          const statuses = await masto.getAccountStatuses(account.id, cursor);
-          acctPosts.push(...statuses.map(p => normalizePost(p, 'mastodon')));
-          newCursor = statuses.length > 0 ? statuses[statuses.length - 1].id : undefined;
-        }
-      }
-      return { posts: acctPosts, acct, cursor: newCursor };
+      if (!cursor || !entry) return { posts: [] as UnifiedPost[], acct, cursor: undefined as string | undefined };
+      const page = await fetchAccountPage(acct, entry, { limit: 50, cursor, resolveReposts: true });
+      return { posts: page.posts, acct, cursor: page.cursor };
     }));
 
     const newPosts: UnifiedPost[] = [];
     for (const result of moreResults) {
       if (result.status === 'fulfilled') {
         newPosts.push(...result.value.posts);
-        if (result.value.cursor) cursors[result.value.acct.id] = result.value.cursor;
+        // Drop the cursor when a page comes back empty-ended, so the infinite
+        // scroll sentinel stops re-firing against an exhausted feed.
+        cursors[result.value.acct.id] = result.value.cursor;
       }
     }
 
@@ -464,10 +456,6 @@
     filters = { ...filters, ...newFilters };
   }
 
-  function isCrosspostGroup(item: FeedItem): item is CrosspostGroupType {
-    return 'type' in item && item.type === 'crosspost';
-  }
-
   const platformFiltered = $derived(
     platformFilter === 'all' ? posts : posts.filter(p => p.platform === platformFilter)
   );
@@ -487,7 +475,10 @@
     }
     return result;
   });
-  const sorted = $derived(
+  // $derived.by, not $derived: the plain form is inlined into the component
+  // body, where TS still has feedMode narrowed to its initializer ('timeline')
+  // and calls the 'for-you' branch unreachable. A closure resets that.
+  const sorted = $derived.by(() =>
     feedMode === 'for-you'
       ? rankForYou(filtered, affinityMap)
       : sortPosts(filtered, filters.sortBy)

@@ -107,6 +107,20 @@ export class BlueskyClient {
     return this.loggedIn;
   }
 
+  /**
+   * The authenticated agent plus the signed-in DID, logging in on demand.
+   *
+   * Repo writes need both, and `session` is only populated once login has run —
+   * reaching for `authAgent.session!.did` on a client that was never logged in
+   * throws deep inside the SDK instead of here.
+   */
+  private async requireAuth(): Promise<{ agent: BskyAgent; did: string }> {
+    await this.login();
+    const agent = this.authAgent;
+    if (!agent?.session) throw new Error('Auth required — read-only client');
+    return { agent, did: agent.session.did };
+  }
+
   // ── Read operations (public API, no auth needed) ───────────────────────
 
   async getProfile(actor?: string) {
@@ -140,11 +154,11 @@ export class BlueskyClient {
   }
 
   /** Get the home timeline (posts from people you follow). Requires auth. */
-  async getTimeline(cursor?: string) {
+  async getTimeline(cursor?: string, limit: number = 50) {
     await this.login();
     if (!this.authAgent) throw new Error('Auth required for timeline');
     const resp = await this.authAgent.api.app.bsky.feed.getTimeline({
-      limit: 50, cursor,
+      limit, cursor,
     });
     return { feed: resp.data.feed, cursor: resp.data.cursor };
   }
@@ -225,8 +239,7 @@ export class BlueskyClient {
 
   /** Pin a post to your Bluesky profile (visible to all users) */
   async pinToProfile(postUri: string): Promise<void> {
-    const agent = this.authAgent;
-    const did = agent.session!.did;
+    const { agent, did } = await this.requireAuth();
     // Fetch current profile record to preserve other fields
     const { data } = await agent.api.com.atproto.repo.getRecord({
       repo: did, collection: 'app.bsky.actor.profile', rkey: 'self',
@@ -309,8 +322,7 @@ export class BlueskyClient {
 
   /** Unpin profile post */
   async unpinFromProfile(): Promise<void> {
-    const agent = this.authAgent;
-    const did = agent.session!.did;
+    const { agent, did } = await this.requireAuth();
     const { data } = await agent.api.com.atproto.repo.getRecord({
       repo: did, collection: 'app.bsky.actor.profile', rkey: 'self',
     });
