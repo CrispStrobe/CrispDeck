@@ -6,7 +6,8 @@ import { publishStarterPack, deleteStarterPack, type StarterPackDraft } from './
 
 function mockAgent() {
   return {
-    session: { did: 'did:plc:creator' },
+    did: 'did:plc:creator',
+    assertDid: 'did:plc:creator',
     api: {
       com: {
         atproto: {

@@ -2,25 +2,44 @@ import { describe, it, expect, vi } from 'vitest';
 
 describe('quick-schedule from compose', () => {
   describe('schedule date/time construction', () => {
+    /**
+     * A `<input type="date">` + `<input type="time">` pair yields a bare
+     * "YYYY-MM-DDTHH:mm", which JS parses as *local* wall-clock time — exactly
+     * what the user meant when they picked it. So the stored ISO string can sit
+     * on a different UTC calendar day than the one picked; asserting on its
+     * text only holds near UTC. Round-trip through the local getters instead.
+     */
+    function expectLocalWallClock(iso: string, date: string, time: string) {
+      const [y, mo, d] = date.split('-').map(Number);
+      const [h, mi] = time.split(':').map(Number);
+      const back = new Date(iso);
+      expect(back.getFullYear()).toBe(y);
+      expect(back.getMonth()).toBe(mo - 1);
+      expect(back.getDate()).toBe(d);
+      expect(back.getHours()).toBe(h);
+      expect(back.getMinutes()).toBe(mi);
+    }
+
     it('builds ISO string from date and time inputs', () => {
       const date = '2026-07-10';
       const time = '14:30';
       const scheduledAt = new Date(`${date}T${time}`).toISOString();
-      expect(scheduledAt).toMatch(/2026-07-10T\d{2}:30:00/);
+      expect(scheduledAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00\.000Z$/);
+      expectLocalWallClock(scheduledAt, date, time);
     });
 
     it('handles midnight correctly', () => {
       const date = '2026-07-10';
       const time = '00:00';
       const scheduledAt = new Date(`${date}T${time}`).toISOString();
-      expect(scheduledAt).toContain('2026-07-1');
+      expectLocalWallClock(scheduledAt, date, time);
     });
 
     it('handles end of day correctly', () => {
       const date = '2026-07-10';
       const time = '23:59';
       const scheduledAt = new Date(`${date}T${time}`).toISOString();
-      expect(scheduledAt).toContain('2026-07-1');
+      expectLocalWallClock(scheduledAt, date, time);
     });
   });
 

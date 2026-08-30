@@ -282,28 +282,51 @@ describe('sortPosts (Schwartzian optimization)', () => {
   });
 });
 
-describe('performance: detectCrossposts at scale', () => {
-  it('handles 200 posts in under 100ms', () => {
-    const posts: UnifiedPost[] = [];
-    for (let i = 0; i < 100; i++) {
-      posts.push(makePost({
-        uri: `at://bsky/${i}`,
-        text: `Post number ${i} about topic ${i % 10}`,
-        platform: 'bluesky',
-        createdAt: new Date(Date.now() - i * 60000).toISOString(),
-      }));
-      posts.push(makePost({
-        uri: `https://masto/${i}`,
-        text: `Different content ${i} on mastodon`,
-        platform: 'mastodon',
-        createdAt: new Date(Date.now() - i * 60000).toISOString(),
-      }));
-    }
+/**
+ * Fastest of `runs` timed calls, after one warm-up.
+ *
+ * A single cold measurement inside a contended worker pool reports the JIT and
+ * the OS scheduler as much as the code under test — that is what made the
+ * 200-post budget below flake at 750ms on a machine that runs it in ~50ms. The
+ * budgets here exist to catch a pathological (e.g. quadratic) regression, and
+ * the best run shows that just as clearly while being immune to a hiccup.
+ * `build` must return a fresh input each call so detectCrossposts' result cache
+ * doesn't turn later runs into no-ops.
+ */
+function fastestRun<T>(build: (run: number) => T, call: (input: T) => unknown, runs = 5): number {
+  call(build(-1)); // warm-up, not measured
+  let best = Infinity;
+  for (let run = 0; run < runs; run++) {
+    const input = build(run);
     const start = performance.now();
-    const result = detectCrossposts(posts);
-    const elapsed = performance.now() - start;
-    expect(result.length).toBeGreaterThan(0);
-    expect(elapsed).toBeLessThan(500); // CI machines may be slower
+    call(input);
+    best = Math.min(best, performance.now() - start);
+  }
+  return best;
+}
+
+describe('performance: detectCrossposts at scale', () => {
+  it('handles 200 posts well under a quarter second', () => {
+    const build = (salt: number) => {
+      const posts: UnifiedPost[] = [];
+      for (let i = 0; i < 100; i++) {
+        posts.push(makePost({
+          uri: `at://bsky/${salt}/${i}`,
+          text: `Post number ${i} about topic ${i % 10}`,
+          platform: 'bluesky',
+          createdAt: new Date(Date.now() - i * 60000).toISOString(),
+        }));
+        posts.push(makePost({
+          uri: `https://masto/${salt}/${i}`,
+          text: `Different content ${i} on mastodon`,
+          platform: 'mastodon',
+          createdAt: new Date(Date.now() - i * 60000).toISOString(),
+        }));
+      }
+      return posts;
+    };
+    expect(detectCrossposts(build(0)).length).toBeGreaterThan(0);
+    expect(fastestRun(build, detectCrossposts)).toBeLessThan(250);
   });
 
   it('cache hit is near-instant for repeated calls', () => {
@@ -311,28 +334,23 @@ describe('performance: detectCrossposts at scale', () => {
       makePost({ uri: 'at://perf/1', text: 'Same content', platform: 'bluesky', createdAt: '2024-01-01T10:00:00Z' }),
       makePost({ uri: 'https://perf/2', text: 'Different', platform: 'mastodon', createdAt: '2024-01-01T10:00:00Z' }),
     ];
-    // First call populates cache
-    detectCrossposts(posts);
-    // Second call should be cached
-    const start = performance.now();
-    for (let i = 0; i < 100; i++) {
-      detectCrossposts(posts);
-    }
-    const elapsed = performance.now() - start;
-    expect(elapsed).toBeLessThan(5); // 100 cached calls < 5ms
+    // Same array every run, so every call after the first is a cache hit.
+    const best = fastestRun(() => posts, (p) => {
+      for (let i = 0; i < 100; i++) detectCrossposts(p);
+    });
+    expect(best).toBeLessThan(5); // 100 cached calls < 5ms
   });
 });
 
 describe('performance: sortPosts at scale', () => {
   it('sorts 500 posts by date in under 20ms', () => {
-    const posts = Array.from({ length: 500 }, (_, i) =>
+    const build = () => Array.from({ length: 500 }, () =>
       makePost({ createdAt: new Date(Date.now() - Math.random() * 86400000 * 30).toISOString() })
     );
-    const start = performance.now();
+    expect(fastestRun(build, (p) => sortPosts(p, 'newest'))).toBeLessThan(20);
+    const posts = build();
     const result = sortPosts(posts, 'newest');
-    const elapsed = performance.now() - start;
     expect(result).toHaveLength(500);
-    expect(elapsed).toBeLessThan(20);
     // Verify sort order
     for (let i = 1; i < result.length; i++) {
       expect(new Date(result[i - 1].createdAt).getTime()).toBeGreaterThanOrEqual(

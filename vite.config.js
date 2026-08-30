@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
 
@@ -24,7 +24,7 @@ function swVersionPlugin() {
   };
 }
 
-export default defineConfig(async () => ({
+export default defineConfig({
   plugins: [sveltekit(), tailwindcss(), swVersionPlugin()],
   define: {
     __VERSION__: JSON.stringify(pkg.version),
@@ -36,6 +36,7 @@ export default defineConfig(async () => ({
     cssMinify: 'lightningcss',
     rollupOptions: {
       output: {
+        /** @param {string} id */
         manualChunks(id) {
           // Split large vendor dependencies into separate cacheable chunks
           if (id.includes('node_modules/@atproto')) return 'vendor-atproto';
@@ -49,7 +50,11 @@ export default defineConfig(async () => ({
 
   test: {
     include: ['src/**/*.test.ts'],
-    environment: 'node',
+    // Most of this codebase is browser code — localStorage, document, window.
+    // A suite that genuinely needs plain Node can opt out per-file with a
+    // `// @vitest-environment node` docblock.
+    environment: 'jsdom',
+    setupFiles: ['./vitest.setup.ts'],
   },
 
   clearScreen: false,
@@ -62,4 +67,4 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
-}));
+});

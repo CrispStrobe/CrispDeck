@@ -188,25 +188,27 @@ describe('deck keyboard navigation', () => {
   });
 
   describe('visual focus indicators', () => {
+    // Functions over `number`, not inline literals: TS folds a literal-vs-literal
+    // comparison, so the inline form asserts against a constant, not the branch.
+    const columnRing = (focusedColumnIdx: number, colIdx: number) =>
+      focusedColumnIdx === colIdx ? 'ring-2 ring-[var(--color-primary)]/50 rounded-lg' : '';
+    const postRing = (focusedPostIdx: number, postIdx: number) =>
+      focusedPostIdx === postIdx ? 'ring-1 ring-[var(--color-primary)]/60 rounded-lg' : '';
+
     it('focused column gets ring class', () => {
-      const focusedColumnIdx = 1;
-      const colIdx = 1;
-      const className = focusedColumnIdx === colIdx ? 'ring-2 ring-[var(--color-primary)]/50 rounded-lg' : '';
-      expect(className).toContain('ring-2');
+      expect(columnRing(1, 1)).toContain('ring-2');
     });
 
     it('unfocused column has no ring', () => {
-      const focusedColumnIdx = 1;
-      const colIdx = 2;
-      const className = focusedColumnIdx === colIdx ? 'ring-2 ring-[var(--color-primary)]/50 rounded-lg' : '';
-      expect(className).toBe('');
+      expect(columnRing(1, 2)).toBe('');
     });
 
     it('focused post gets ring class', () => {
-      const focusedPostIdx = 3;
-      const postIdx = 3;
-      const className = focusedPostIdx === postIdx ? 'ring-1 ring-[var(--color-primary)]/60 rounded-lg' : '';
-      expect(className).toContain('ring-1');
+      expect(postRing(3, 3)).toContain('ring-1');
+    });
+
+    it('unfocused post has no ring', () => {
+      expect(postRing(3, 4)).toBe('');
     });
   });
 });

@@ -6,17 +6,36 @@
 import { describe, it, expect } from 'vitest';
 import type { Account, Identity, Draft } from './types';
 
+/**
+ * A row as the DB hands it back: every column present, the unset ones `null`.
+ * `Account` declares them `string | null` rather than optional, so a fixture
+ * that simply omits them is not the shape any caller actually receives.
+ */
+function makeAccount(overrides: Partial<Account> = {}): Account {
+  return {
+    id: 1,
+    platform: 'bluesky',
+    handle: 'alice.bsky.social',
+    display_name: null,
+    avatar_url: null,
+    did: null,
+    mastodon_id: null,
+    threads_user_id: null,
+    instance_url: null,
+    is_primary: false,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
 describe('Account data model', () => {
   it('has all required fields', () => {
-    const account: Account = {
-      id: 1,
-      platform: 'bluesky',
-      handle: 'alice.bsky.social',
+    const account = makeAccount({
       display_name: 'Alice',
       avatar_url: 'https://cdn.bsky.social/img/avatar.jpg',
       is_primary: true,
-      created_at: new Date().toISOString(),
-    };
+    });
     expect(account.platform).toBe('bluesky');
     expect(account.handle).toBeTruthy();
     expect(account.id).toBe(1);
@@ -25,17 +44,17 @@ describe('Account data model', () => {
   it('supports all 3 platforms', () => {
     const platforms = ['bluesky', 'mastodon', 'threads'] as const;
     for (const p of platforms) {
-      const acct: Account = { id: 1, platform: p, handle: `user.${p}`, created_at: '' };
+      const acct = makeAccount({ platform: p, handle: `user.${p}` });
       expect(acct.platform).toBe(p);
     }
   });
 
-  it('optional fields can be undefined', () => {
-    const account: Account = { id: 1, platform: 'mastodon', handle: '@user@masto.social', created_at: '' };
-    expect(account.display_name).toBeUndefined();
-    expect(account.avatar_url).toBeUndefined();
-    expect(account.did).toBeUndefined();
-    expect(account.instance_url).toBeUndefined();
+  it('unset columns come back as null', () => {
+    const account = makeAccount({ platform: 'mastodon', handle: '@user@masto.social' });
+    expect(account.display_name).toBeNull();
+    expect(account.avatar_url).toBeNull();
+    expect(account.did).toBeNull();
+    expect(account.instance_url).toBeNull();
   });
 });
 
@@ -59,15 +78,22 @@ describe('Identity data model', () => {
 
 describe('Draft data model', () => {
   it('stores crosspost targets and scheduled time', () => {
+    // Drafts address their targets by account id — there is no `platforms`
+    // column; which platform a target posts to comes from its Account row.
     const draft: Draft = {
       id: 1,
       text: 'Hello world!',
-      platforms: ['bluesky', 'mastodon'],
+      target_accounts: [1, 2],
+      media_paths: [],
+      visibility: 'public',
+      content_warning: null,
       scheduled_at: '2026-06-10T12:00:00Z',
+      is_sent: false,
       created_at: new Date().toISOString(),
-    } as any;
-    expect(draft.platforms).toContain('bluesky');
-    expect(draft.platforms).toContain('mastodon');
+      updated_at: new Date().toISOString(),
+    };
+    expect(draft.target_accounts).toContain(1);
+    expect(draft.target_accounts).toContain(2);
     expect(draft.scheduled_at).toBeTruthy();
   });
 });

@@ -329,7 +329,9 @@ describe('formatDate', () => {
   }
 
   it('formats valid date', () => {
-    const result = formatDate('2026-06-08T12:00:00Z');
+    // toLocaleDateString renders in the local zone, so a UTC literal lands on a
+    // different calendar day past ±12 — build local noon of the day we assert.
+    const result = formatDate(new Date(2026, 5, 8, 12, 0, 0).toISOString());
     expect(result).toContain('Jun');
     expect(result).toContain('8');
     expect(result).toContain('2026');

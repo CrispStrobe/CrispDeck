@@ -97,7 +97,8 @@ describe('Mastodon list operations', () => {
 describe('Bluesky list operations', () => {
   function mockAgent(responses: Record<string, any> = {}) {
     return {
-      session: { did: 'did:plc:test' },
+      did: 'did:plc:test',
+      assertDid: 'did:plc:test',
       api: {
         com: {
           atproto: {

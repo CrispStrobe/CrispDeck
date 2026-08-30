@@ -53,7 +53,11 @@ describe('BlueskyClient — Lists API', () => {
   let client: BlueskyClient;
 
   beforeEach(() => {
-    client = new BlueskyClient('test.bsky.social', 'password');
+    // Pass the PDS explicitly. Without it, login() resolves the handle through
+    // resolvePdsEndpoint, which makes real fetches to public.api.bsky.app and
+    // plc.directory — @atproto/api is mocked here, but `fetch` is not, so this
+    // suite was quietly hitting the network and failing when it was slow.
+    client = new BlueskyClient('test.bsky.social', 'password', 'https://bsky.social');
   });
 
   describe('getLists', () => {

@@ -195,26 +195,22 @@ describe('deck column reorder', () => {
     expect(updated.map(c => c.id)).toEqual(['a', 'e', 'b', 'c', 'd']);
   });
 
+  // Mirrors the guard in deck/+page.svelte: `if (!draggedColumnId || draggedColumnId === colId) return;`
+  // Declared as a function over `string | null` rather than inline literals —
+  // with literals, TS folds each comparison and the assertion tests a constant.
+  const shouldSkipDrop = (draggedColumnId: string | null, targetColId: string) =>
+    !draggedColumnId || draggedColumnId === targetColId;
+
   it('drop target validation skips when dragged ID matches target', () => {
-    const draggedColumnId = 'col-1';
-    const targetColId = 'col-1';
-    // Simulates the guard: if (!draggedColumnId || draggedColumnId === colId) return;
-    const shouldSkip = !draggedColumnId || draggedColumnId === targetColId;
-    expect(shouldSkip).toBe(true);
+    expect(shouldSkipDrop('col-1', 'col-1')).toBe(true);
   });
 
   it('drop target validation skips when no column is being dragged', () => {
-    const draggedColumnId: string | null = null;
-    const targetColId = 'col-2';
-    const shouldSkip = !draggedColumnId || draggedColumnId === targetColId;
-    expect(shouldSkip).toBe(true);
+    expect(shouldSkipDrop(null, 'col-2')).toBe(true);
   });
 
   it('drop target validation proceeds when IDs differ', () => {
-    const draggedColumnId = 'col-1';
-    const targetColId = 'col-2';
-    const shouldSkip = !draggedColumnId || draggedColumnId === targetColId;
-    expect(shouldSkip).toBe(false);
+    expect(shouldSkipDrop('col-1', 'col-2')).toBe(false);
   });
 });
 

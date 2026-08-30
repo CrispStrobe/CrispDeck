@@ -5,10 +5,12 @@ vi.mock('$lib/i18n.svelte', () => ({ i18n: { t: {} } }));
 import type { Account } from '$lib/types';
 
 describe('AccountSwitcher', () => {
+  const TIMESTAMPS = { created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' };
+
   const mockAccounts: Account[] = [
-    { id: 1, platform: 'bluesky', handle: 'alice.bsky.social', display_name: 'Alice', avatar_url: 'https://cdn.bsky.app/alice.jpg', did: 'did:plc:abc', mastodon_id: null, threads_user_id: null, instance_url: null, is_primary: true },
-    { id: 2, platform: 'mastodon', handle: '@bob@mastodon.social', display_name: 'Bob', avatar_url: 'https://mastodon.social/avatars/bob.jpg', did: null, mastodon_id: '123', threads_user_id: null, instance_url: 'https://mastodon.social', is_primary: false },
-    { id: 3, platform: 'threads', handle: '@carol', display_name: null, avatar_url: null, did: null, mastodon_id: null, threads_user_id: '456', instance_url: null, is_primary: false },
+    { id: 1, platform: 'bluesky', handle: 'alice.bsky.social', display_name: 'Alice', avatar_url: 'https://cdn.bsky.app/alice.jpg', did: 'did:plc:abc', mastodon_id: null, threads_user_id: null, instance_url: null, is_primary: true, ...TIMESTAMPS },
+    { id: 2, platform: 'mastodon', handle: '@bob@mastodon.social', display_name: 'Bob', avatar_url: 'https://mastodon.social/avatars/bob.jpg', did: null, mastodon_id: '123', threads_user_id: null, instance_url: 'https://mastodon.social', is_primary: false, ...TIMESTAMPS },
+    { id: 3, platform: 'threads', handle: '@carol', display_name: null, avatar_url: null, did: null, mastodon_id: null, threads_user_id: '456', instance_url: null, is_primary: false, ...TIMESTAMPS },
   ];
 
   describe('account display', () => {
@@ -112,16 +114,20 @@ describe('AccountSwitcher', () => {
   });
 
   describe('singular vs plural', () => {
+    // Taking `count: number` matters: inlining a literal lets TS fold the
+    // comparison away, so the test would assert against a constant.
+    const label = (count: number) => `${count} account${count !== 1 ? 's' : ''}`;
+
     it('says "1 account" for single account', () => {
-      const count = 1;
-      const text = `${count} account${count !== 1 ? 's' : ''}`;
-      expect(text).toBe('1 account');
+      expect(label(1)).toBe('1 account');
     });
 
     it('says "3 accounts" for multiple', () => {
-      const count = 3;
-      const text = `${count} account${count !== 1 ? 's' : ''}`;
-      expect(text).toBe('3 accounts');
+      expect(label(3)).toBe('3 accounts');
+    });
+
+    it('says "0 accounts" for none', () => {
+      expect(label(0)).toBe('0 accounts');
     });
   });
 });

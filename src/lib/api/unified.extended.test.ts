@@ -3,7 +3,7 @@
  * crosspost detection edge cases, and sort stability.
  */
 import { describe, it, expect } from 'vitest';
-import { filterPosts, sortPosts, detectCrossposts } from './unified';
+import { filterPosts, sortPosts, detectCrossposts, isCrosspostGroup } from './unified';
 import type { UnifiedPost } from '$lib/types';
 
 function makePost(overrides: Partial<UnifiedPost> = {}): UnifiedPost {
@@ -32,29 +32,29 @@ describe('filterPosts — extended', () => {
   ];
 
   it('searchTerm is case-insensitive', () => {
-    const result = filterPosts(posts, { searchTerm: 'HELLO', sortBy: 'newest', hasMedia: false, hideReplies: false, hideReposts: false, minLikes: 0 });
+    const result = filterPosts(posts, { searchTerm: 'HELLO', hasMedia: false, hideReplies: false, hideReposts: false, minLikes: 0 });
     expect(result.length).toBe(1);
     expect(result[0].text).toContain('Hello');
   });
 
   it('hideReplies and hideReposts combined', () => {
-    const result = filterPosts(posts, { searchTerm: '', sortBy: 'newest', hasMedia: false, hideReplies: true, hideReposts: true, minLikes: 0 });
+    const result = filterPosts(posts, { searchTerm: '', hasMedia: false, hideReplies: true, hideReposts: true, minLikes: 0 });
     expect(result.every(p => !p.isRepost)).toBe(true);
     expect(result.every(p => !p.replyParentUri)).toBe(true);
   });
 
   it('minLikes filters correctly', () => {
-    const result = filterPosts(posts, { searchTerm: '', sortBy: 'newest', hasMedia: false, hideReplies: false, hideReposts: false, minLikes: 5 });
+    const result = filterPosts(posts, { searchTerm: '', hasMedia: false, hideReplies: false, hideReposts: false, minLikes: 5 });
     expect(result.every(p => (p.likeCount ?? 0) >= 5)).toBe(true);
   });
 
   it('no filters returns all posts', () => {
-    const result = filterPosts(posts, { searchTerm: '', sortBy: 'newest', hasMedia: false, hideReplies: false, hideReposts: false, minLikes: 0 });
+    const result = filterPosts(posts, { searchTerm: '', hasMedia: false, hideReplies: false, hideReposts: false, minLikes: 0 });
     expect(result.length).toBe(posts.length);
   });
 
   it('search for non-existent text returns empty', () => {
-    const result = filterPosts(posts, { searchTerm: 'xyznonexistent', sortBy: 'newest', hasMedia: false, hideReplies: false, hideReposts: false, minLikes: 0 });
+    const result = filterPosts(posts, { searchTerm: 'xyznonexistent', hasMedia: false, hideReplies: false, hideReposts: false, minLikes: 0 });
     expect(result.length).toBe(0);
   });
 });
@@ -114,7 +114,7 @@ describe('detectCrossposts — extended', () => {
       makePost({ text: 'Same post!', platform: 'mastodon', createdAt: '2024-06-01T12:05:00Z', uri: 'https://mastodon.social/@user/1' }),
     ];
     const result = detectCrossposts(posts);
-    expect(result.some(r => r.type === 'crosspost')).toBe(true);
+    expect(result.some(isCrosspostGroup)).toBe(true);
   });
 
   it('does not group same-platform posts', () => {
@@ -123,7 +123,7 @@ describe('detectCrossposts — extended', () => {
       makePost({ text: 'Same post!', platform: 'bluesky', uri: 'at://did:plc:other/app.bsky.feed.post/abc' }),
     ];
     const result = detectCrossposts(posts);
-    expect(result.filter(r => r.type === 'crosspost').length).toBe(0);
+    expect(result.filter(isCrosspostGroup).length).toBe(0);
   });
 
   it('does not group posts >24h apart', () => {
@@ -132,7 +132,7 @@ describe('detectCrossposts — extended', () => {
       makePost({ text: 'Same post!', platform: 'mastodon', createdAt: '2024-06-03T12:00:00Z', uri: 'https://mastodon.social/@user/1' }),
     ];
     const result = detectCrossposts(posts);
-    expect(result.filter(r => r.type === 'crosspost').length).toBe(0);
+    expect(result.filter(isCrosspostGroup).length).toBe(0);
   });
 
   it('handles empty input', () => {
@@ -150,7 +150,7 @@ describe('detectCrossposts — extended', () => {
       makePost({ text: 'Something about quantum physics', platform: 'mastodon', uri: 'https://mastodon.social/@user/1' }),
     ];
     const result = detectCrossposts(posts);
-    expect(result.filter(r => r.type === 'crosspost').length).toBe(0);
+    expect(result.filter(isCrosspostGroup).length).toBe(0);
   });
 
   it('very similar but not identical text is grouped', () => {

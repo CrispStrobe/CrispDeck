@@ -238,28 +238,32 @@ describe('FloatingCompose', () => {
       expect(composeOpen).toBe(false);
     });
 
+    // State lives on an object rather than in `let` locals: TS narrows a
+    // `let ... = null` to `null` and never widens it back for a write made
+    // inside a callback, so reading the field afterwards is typed `never`.
+    // A call that could mutate does reset narrowing for object properties.
+    type ComposeState = { post: UnifiedPost | null; open: boolean };
+
     it('reply opens compose with replyToPost', () => {
-      let composeReplyTo: UnifiedPost | null = null;
-      let composeOpen = false;
+      const compose: ComposeState = { post: null, open: false };
       const handleReply = (post: UnifiedPost) => {
-        composeReplyTo = post;
-        composeOpen = true;
+        compose.post = post;
+        compose.open = true;
       };
       handleReply(mockPost);
-      expect(composeOpen).toBe(true);
-      expect(composeReplyTo?.author.handle).toBe('alice.bsky.social');
+      expect(compose.open).toBe(true);
+      expect(compose.post?.author.handle).toBe('alice.bsky.social');
     });
 
     it('quote opens compose with quotePost', () => {
-      let composeQuotePost: UnifiedPost | null = null;
-      let composeOpen = false;
+      const compose: ComposeState = { post: null, open: false };
       const handleQuote = (post: UnifiedPost) => {
-        composeQuotePost = post;
-        composeOpen = true;
+        compose.post = post;
+        compose.open = true;
       };
       handleQuote(mockPost);
-      expect(composeOpen).toBe(true);
-      expect(composeQuotePost?.uri).toBe(mockPost.uri);
+      expect(compose.open).toBe(true);
+      expect(compose.post?.uri).toBe(mockPost.uri);
     });
 
     it('onposted callback refreshes columns', () => {

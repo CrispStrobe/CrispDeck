@@ -77,21 +77,32 @@ describe('live engagement counters in deck', () => {
       expect(shouldWatch).toBe(false);
     });
 
+    // `as const` on the fixture's `type` made the repost branch statically dead,
+    // so it was never exercised. A function over the open union runs both.
+    function applyUpdate(
+      counts: { likes: number; boosts: number },
+      update: { type: 'like' | 'repost'; delta: 1 | -1 },
+    ) {
+      const next = { ...counts };
+      if (update.type === 'like') next.likes += update.delta;
+      if (update.type === 'repost') next.boosts += update.delta;
+      return next;
+    }
+
     it('count updates modify local like/repost state', () => {
-      let localLikeCount = 5;
-      let localBoostCount = 2;
-      const update = { uri: 'at://...', type: 'like' as const, delta: 1 as const };
-      if (update.type === 'like') localLikeCount += update.delta;
-      if (update.type === 'repost') localBoostCount += update.delta;
-      expect(localLikeCount).toBe(6);
-      expect(localBoostCount).toBe(2);
+      const next = applyUpdate({ likes: 5, boosts: 2 }, { type: 'like', delta: 1 });
+      expect(next.likes).toBe(6);
+      expect(next.boosts).toBe(2);
+    });
+
+    it('a repost update touches only the boost count', () => {
+      const next = applyUpdate({ likes: 5, boosts: 2 }, { type: 'repost', delta: 1 });
+      expect(next.likes).toBe(5);
+      expect(next.boosts).toBe(3);
     });
 
     it('handles delete (delta=-1) correctly', () => {
-      let localLikeCount = 5;
-      const update = { type: 'like' as const, delta: -1 as const };
-      if (update.type === 'like') localLikeCount += update.delta;
-      expect(localLikeCount).toBe(4);
+      expect(applyUpdate({ likes: 5, boosts: 2 }, { type: 'like', delta: -1 }).likes).toBe(4);
     });
   });
 
