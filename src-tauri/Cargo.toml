@@ -1,6 +1,6 @@
 [package]
 name = "crispdeck"
-version = "1.2.7"
+version = "1.2.8"
 description = "Cross-platform Mastodon + Bluesky client"
 authors = ["Christian Strobele"]
 license = "AGPL-3.0-only OR LicenseRef-LICENSE-COMMERCIAL"
