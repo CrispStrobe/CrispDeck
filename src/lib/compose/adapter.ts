@@ -1,4 +1,4 @@
-import { RichText, BskyAgent } from '@atproto/api';
+import { RichText, BskyAgent, type BlobRef } from '@atproto/api';
 import type { BlueskyClient } from '$lib/api/bluesky';
 import type { MastodonClient } from '$lib/api/mastodon';
 import type { ThreadsClient } from '$lib/api/threads';
@@ -88,10 +88,10 @@ export async function postToBluesky(
         }
       } else {
         // Image upload (existing logic)
-        const images: Array<{
-          alt: string;
-          image: { $type: string; ref: { $link: string }; mimeType: string; size: number };
-        }> = [];
+        // uploadBlob hands back a BlobRef instance; the hand-written shape here
+        // described its *serialized* form, which the SDK only produces when it
+        // encodes the record.
+        const images: Array<{ alt: string; image: BlobRef }> = [];
 
         for (let idx = 0; idx < Math.min(options.mediaFiles.length, 4); idx++) {
           const file = options.mediaFiles[idx];

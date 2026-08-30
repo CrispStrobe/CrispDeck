@@ -99,13 +99,15 @@ export async function linkToIdentity(params: {
   identity_id: number;
   platform: string;
   handle: string;
-  did?: string;
-  mastodon_id?: string;
-  instance_url?: string;
-  display_name?: string;
-  avatar_url?: string;
-  bio?: string;
-  account_id?: number;
+  // Nullable columns: a row read back from the DB carries `null`, not
+  // `undefined`, and callers relink straight from such a row.
+  did?: string | null;
+  mastodon_id?: string | null;
+  instance_url?: string | null;
+  display_name?: string | null;
+  avatar_url?: string | null;
+  bio?: string | null;
+  account_id?: number | null;
 }): Promise<void> {
   if (!isTauri()) return browserDb.linkToIdentity(params);
   return invoke('db_link_to_identity', params);
@@ -210,8 +212,10 @@ export async function saveDraft(params: {
   target_accounts: number[];
   media_paths?: string[];
   visibility?: string;
-  content_warning?: string;
-  scheduled_at?: string;
+  // `null` is the stored "no content warning" / "not scheduled" value, and
+  // rescheduling an existing draft passes it straight back in.
+  content_warning?: string | null;
+  scheduled_at?: string | null;
 }): Promise<number> {
   if (!isTauri()) return browserDb.saveDraft(params);
   return invoke<number>('db_save_draft', params);

@@ -71,7 +71,7 @@ export async function removeFromMastodonList(instanceUrl: string, token: string,
 
 export async function createBlueskyList(agent: Agent, name: string, description = ''): Promise<string> {
   const resp = await agent.api.com.atproto.repo.createRecord({
-    repo: agent.session!.did,
+    repo: agent.assertDid,
     collection: 'app.bsky.graph.list',
     record: {
       $type: 'app.bsky.graph.list',
@@ -87,7 +87,7 @@ export async function createBlueskyList(agent: Agent, name: string, description 
 export async function deleteBlueskyList(agent: Agent, listUri: string): Promise<void> {
   const rkey = listUri.split('/').pop()!;
   await agent.api.com.atproto.repo.deleteRecord({
-    repo: agent.session!.did,
+    repo: agent.assertDid,
     collection: 'app.bsky.graph.list',
     rkey,
   });
@@ -95,7 +95,7 @@ export async function deleteBlueskyList(agent: Agent, listUri: string): Promise<
 
 export async function addToBlueskyList(agent: Agent, listUri: string, subjectDid: string): Promise<void> {
   await agent.api.com.atproto.repo.createRecord({
-    repo: agent.session!.did,
+    repo: agent.assertDid,
     collection: 'app.bsky.graph.listitem',
     record: {
       $type: 'app.bsky.graph.listitem',

@@ -1,6 +1,4 @@
 <script lang="ts">
-  declare const __VERSION__: string;
-  declare const __GIT_HASH__: string;
   import { onMount } from 'svelte';
   import {
     listAccounts, addAccount as dbAddAccount, deleteAccount as dbDeleteAccount,

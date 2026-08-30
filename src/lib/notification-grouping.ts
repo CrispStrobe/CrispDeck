@@ -3,14 +3,14 @@
  * into a single entry with an expandable actor list.
  */
 
-import type { Platform } from '$lib/types';
+import type { Platform, PostAuthor } from '$lib/types';
 
 export interface UnifiedNotification {
   id: string;
   platform: Platform;
   type: string;
   createdAt: string;
-  author: { handle: string; displayName?: string; avatar?: string };
+  author: PostAuthor;
   text?: string;
   postUri?: string;
 }
@@ -21,7 +21,7 @@ export interface NotificationGroup {
   /** Normalized type: 'like' | 'repost' | 'follow' | 'mention' | 'reply' | 'quote' | other */
   type: string;
   /** All actors who triggered this notification */
-  actors: { handle: string; displayName?: string; avatar?: string; platform: Platform }[];
+  actors: (PostAuthor & { platform: Platform })[];
   /** The post this notification is about (undefined for follows) */
   postUri?: string;
   /** Preview text of the post or notification */

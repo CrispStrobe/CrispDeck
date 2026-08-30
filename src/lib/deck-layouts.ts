@@ -6,12 +6,15 @@
  * The active layout name is also persisted so it survives reloads.
  */
 
+import type { ColumnType } from '$lib/components/deck/DeckColumn.svelte';
+
 export type ColumnNotifyMode = 'off' | 'sound' | 'desktop' | 'both';
 
 export interface DeckColumnConfig {
   id: string;
   title: string;
-  type: string;
+  /** Must stay in step with DeckColumn's prop — a bare `string` let typos through. */
+  type: ColumnType;
   platform?: string;
   query?: string;
   width?: number;

@@ -71,7 +71,7 @@
     return null;
   }
 
-  function getClient(): BlueskyClient | MastodonClient | null {
+  function getClient(): ClientEntry['client'] | null {
     return getEntry()?.client ?? null;
   }
 

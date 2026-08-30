@@ -30,7 +30,7 @@
         posts.push({
           text: entry.text?.substring(0, 100) ?? '',
           platform: entry.platform,
-          date: entry.created_at,
+          date: entry.createdAt,
           type: 'published',
           uri: entry.uri,
         });

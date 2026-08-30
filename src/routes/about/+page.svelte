@@ -4,7 +4,6 @@
   import { i18n } from '$lib/i18n.svelte';
   import LogViewer from '$lib/components/LogViewer.svelte';
 
-  declare const __GIT_HASH__: string;
   let showLogs = $state(false);
 
   interface LicenseEntry {

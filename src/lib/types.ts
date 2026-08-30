@@ -71,6 +71,11 @@ export interface PostAuthor {
   handle: string;
   displayName?: string;
   avatar?: string;
+  /**
+   * Mastodon's numeric account id. Only set on notification actors, where the
+   * follow-request accept/reject endpoints address the account by id, not handle.
+   */
+  accountId?: string;
 }
 
 export interface UnifiedPost {

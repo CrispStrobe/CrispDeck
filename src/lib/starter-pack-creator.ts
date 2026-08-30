@@ -22,7 +22,7 @@ export interface StarterPackDraft {
  */
 async function createList(agent: Agent, name: string, description: string): Promise<string> {
   const resp = await agent.api.com.atproto.repo.createRecord({
-    repo: agent.session!.did,
+    repo: agent.assertDid,
     collection: 'app.bsky.graph.list',
     record: {
       $type: 'app.bsky.graph.list',
@@ -40,7 +40,7 @@ async function createList(agent: Agent, name: string, description: string): Prom
  */
 async function addListMember(agent: Agent, listUri: string, memberDid: string): Promise<void> {
   await agent.api.com.atproto.repo.createRecord({
-    repo: agent.session!.did,
+    repo: agent.assertDid,
     collection: 'app.bsky.graph.listitem',
     record: {
       $type: 'app.bsky.graph.listitem',
@@ -61,7 +61,7 @@ async function createStarterPackRecord(
   listUri: string,
 ): Promise<string> {
   const resp = await agent.api.com.atproto.repo.createRecord({
-    repo: agent.session!.did,
+    repo: agent.assertDid,
     collection: 'app.bsky.graph.starterpack',
     record: {
       $type: 'app.bsky.graph.starterpack',
@@ -101,7 +101,7 @@ export async function publishStarterPack(agent: Agent, draft: StarterPackDraft):
 export async function deleteStarterPack(agent: Agent, starterPackUri: string): Promise<void> {
   const rkey = starterPackUri.split('/').pop()!;
   await agent.api.com.atproto.repo.deleteRecord({
-    repo: agent.session!.did,
+    repo: agent.assertDid,
     collection: 'app.bsky.graph.starterpack',
     rkey,
   });

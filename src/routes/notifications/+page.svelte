@@ -126,7 +126,7 @@
 
   async function handleFollowRequest(group: NotificationGroup, action: 'accept' | 'reject') {
     for (const actor of group.actors) {
-      const mastoAccountId = (actor as any).accountId;
+      const mastoAccountId = actor.accountId;
       if (!mastoAccountId) continue;
       for (const [, entry] of clientEntries) {
         if (entry.platform !== 'mastodon') continue;

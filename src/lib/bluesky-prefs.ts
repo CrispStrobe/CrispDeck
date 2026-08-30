@@ -53,7 +53,7 @@ export async function pushMutedWordToServer(agent: Agent, value: string): Promis
     await agent.api.app.bsky.actor.putPreferences({
       preferences: [{
         $type: 'app.bsky.actor.defs#mutedWordsPref',
-        items: [{ value, targets: ['content', 'tag'] }],
+        items: [{ value, targets: ['content', 'tag'], actorTarget: 'all' }],
       }],
     });
   } catch (e) {

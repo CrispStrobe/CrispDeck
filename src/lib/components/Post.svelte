@@ -237,7 +237,7 @@
             if (resp.ok) {
               const data = await resp.json();
               if (data.content) {
-                translation = { text: data.content.replace(/<[^>]*>/g, ''), source: data.detected_source_language ?? '', provider: 'Instance' };
+                translation = { translated: data.content.replace(/<[^>]*>/g, ''), sourceLang: data.detected_source_language ?? '', provider: 'Instance' };
                 return;
               }
             }
@@ -547,7 +547,9 @@
   }
 
   /** Intercept clicks on links in post HTML — route hashtags, handles, and in-app links */
-  function handlePostLinkClick(e: MouseEvent) {
+  // Also reached from the keyboard path below; only target/preventDefault/
+  // stopPropagation are used, which both event types carry.
+  function handlePostLinkClick(e: MouseEvent | KeyboardEvent) {
     const target = (e.target as HTMLElement).closest('a');
     if (!target || !(target instanceof HTMLAnchorElement)) return;
     const href = target.getAttribute('href');

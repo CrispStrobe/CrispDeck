@@ -55,6 +55,9 @@
     return () => clearInterval(interval);
   }
 
+  /** One account's share of a draft, after the text has been split for its platform. */
+  type DraftTarget = { platform: Platform; client: ClientEntry['client']; parts: string[] };
+
   async function postDraft(draft: Draft) {
     posting = draft.id;
     error = '';
@@ -72,7 +75,9 @@
         const plan = splitForPlatform(draft.text.trim(), acct.platform as Platform);
         return { platform: acct.platform as Platform, client: entry.client, parts: plan.parts.map(p => p.text) };
       })
-      .filter((t): t is NonNullable<typeof t> => t !== null);
+      // `typeof t` inside t's own annotation is circular — TS gives up and
+      // silently types the parameter `any`. Name the shape instead.
+      .filter((t: DraftTarget | null): t is DraftTarget => t !== null);
 
     if (targets.length === 0) {
       error = 'No valid accounts for this draft';

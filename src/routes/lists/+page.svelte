@@ -99,8 +99,6 @@
         });
         if (resp.ok) {
           const raw = await resp.json();
-          // snakeToCamel is done in normalizePost path, but raw fetch needs it
-          const { snakeToCamel } = await import('$lib/api/mastodon');
           listPosts = sortPosts(raw.map((s: any) => normalizePost(s, 'mastodon')), 'newest');
         }
       } catch (e) { console.error('Failed to load Mastodon list:', e); }
