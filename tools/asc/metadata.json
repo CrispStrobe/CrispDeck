@@ -1,0 +1,42 @@
+{
+  "_comment": [
+    "Canonical TestFlight copy for CrispDeck. Every string App Store Connect",
+    "will hold lives here so it is reviewable in a diff instead of typed into",
+    "a web form once and forgotten. tools/asc/testflight.py reads it.",
+    "Values here mirror what is already live in ASC — the script PATCHes, so a",
+    "difference is a change, not a no-op."
+  ],
+  "bundleId": "com.christianstrobele.crispdeck",
+  "_appIdComment": "The numeric app id altool wants, NOT the bundle id. Uploading with the wrong one silently lands the build in a different app, so the script resolves it from the API by bundle id and this is only a cross-check.",
+  "appId": "6789569440",
+  "teamId": "N9XSJ4M3GT",
+  "primaryLocale": "en-US",
+  "app": {
+    "name": "CrispDeck",
+    "subtitle": "Mastodon · Bluesky · Threads",
+    "primaryCategory": "SOCIAL_NETWORKING",
+    "privacyPolicyUrl": "https://crispdeck.vercel.app/privacy",
+    "supportUrl": "https://github.com/CrispStrobe/CrispDeck",
+    "marketingUrl": "https://crispdeck.vercel.app",
+    "copyright": "2024–2026 Christian Ströbele",
+    "keywords": "mastodon,bluesky,threads,fediverse,social,client,crosspost,deck,atproto,multi-account"
+  },
+  "review": {
+    "firstName": "Christian",
+    "lastName": "Ströbele",
+    "email": "postmaster@crispstro.be",
+    "_phoneComment": "Not derivable from anything in the repo, and betaAppReviewDetails 409s on an empty value. This is the number already on the CrispDeck record.",
+    "phone": "+4917664218601",
+    "demoAccountRequired": false,
+    "notes": "Connect any Mastodon, Bluesky, or Threads account to test. No demo account needed — use your own or create a free account on mastodon.social."
+  },
+  "beta": {
+    "description": "CrispDeck is a multi-platform client for Mastodon, Bluesky, and Threads. Crosspost, translate, schedule, and browse with a multi-column deck layout.",
+    "feedbackEmail": "postmaster@crispstro.be",
+    "whatToTest": "1.2.8 is a fix release, and the feed is where most of it landed.\n\nWorth a look in particular:\n• The feed banner. \"Timeline unavailable — showing your posts only\" used to appear after one flaky moment and then never go away, even while your real timeline loaded underneath it. It should now only be on screen when it is actually true, and should clear itself on the next refresh.\n• New posts arriving. The \"N new posts\" banner previously only worked for Bluesky accounts connected by OAuth; app-password and Mastodon accounts never saw it. Switching back to the tab should also check right away instead of waiting up to a minute.\n• Like and boost counts. They used to freeze at whatever they were when a post first appeared; they should now move when the feed refreshes.\n• The deck: column drag-and-drop (a drag abandoned outside a target used to leave the column stuck looking dragged), and resizing a column — which now also works from the keyboard with arrow keys, Home and End.\n• Translating a Mastodon post through its own instance, which previously produced an empty box.\n\nAccessibility work is in here too: image ALT badges can be reached by keyboard, and every dialog closes with a real focusable button. Reports from VoiceOver users especially welcome.\n\nIf the feed banner ever shows up and stays up, the useful thing to send is what you were doing just before it appeared."
+  },
+  "groups": {
+    "internal": "Internal Testers",
+    "external": "External Testers"
+  }
+}
