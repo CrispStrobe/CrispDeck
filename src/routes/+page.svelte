@@ -37,12 +37,34 @@
   const threadsAccounts = $derived(accounts.filter(a => a.platform === 'threads'));
   let showMoreActions = $state(false);
 
+  // Connect failures used to reject into nothing: these handlers are passed
+  // straight to onclick, so an exception became an unhandled rejection in the
+  // console and the button simply appeared dead.
+  let connectError = $state('');
+
   async function handleConnectBluesky() {
-    // OAuth flow — prompts are handled by the OAuth library
-    await startBlueskyOAuth('');
+    connectError = '';
+    try {
+      // No handle: startBlueskyOAuth signs in against the entryway, so the
+      // user types their handle on Bluesky's own page.
+      await startBlueskyOAuth('');
+    } catch (e) {
+      connectError = `Could not start Bluesky sign-in: ${e instanceof Error ? e.message : e}`;
+    }
   }
 
   async function handleConnectBlueskyPassword(handle: string, password: string) {
+    connectError = '';
+    try {
+      await connectBlueskyPassword(handle, password);
+    } catch (e) {
+      // A rejected app password is the most likely failure here, and it used
+      // to leave the button looking inert.
+      connectError = `Could not sign in as ${handle}: ${e instanceof Error ? e.message : e}`;
+    }
+  }
+
+  async function connectBlueskyPassword(handle: string, password: string) {
     const cleanHandle = handle.replace(/^@/, '');
     const { BlueskyClient } = await import('$lib/api/bluesky');
     const testClient = new BlueskyClient(cleanHandle, password);
@@ -62,6 +84,15 @@
   }
 
   async function handleConnectMastodon(instanceUrl: string) {
+    connectError = '';
+    try {
+      await connectMastodon(instanceUrl);
+    } catch (e) {
+      connectError = `Could not connect to ${instanceUrl}: ${e instanceof Error ? e.message : e}`;
+    }
+  }
+
+  async function connectMastodon(instanceUrl: string) {
     const instance = instanceUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
     const url = `https://${instance}`;
     const oauthState = await dbStartOAuth(url);
@@ -93,6 +124,7 @@
       onconnectblueskypassword={handleConnectBlueskyPassword}
       onconnectmastodon={handleConnectMastodon}
       onconnectthreads={handleConnectThreads}
+      error={connectError}
     />
   {:else}
     <!-- Account summary -->

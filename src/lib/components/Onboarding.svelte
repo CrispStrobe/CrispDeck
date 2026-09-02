@@ -1,15 +1,23 @@
 <script lang="ts">
   import { ArrowLeft } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
+  import { isTauri } from '$lib/platform';
+  import { OAUTH_UNAVAILABLE_IN_APP } from '$lib/api/bluesky-oauth';
+
+  // OAuth cannot complete inside the Tauri webview, so don't lead with it there.
+  const oauthAvailable = !isTauri();
 
   interface Props {
     onconnectbluesky: () => void;
     onconnectblueskypassword: (handle: string, password: string) => void;
     onconnectmastodon: (instanceUrl: string) => void;
     onconnectthreads: () => void;
+    /** Failure from the last connect attempt. Without somewhere to show this,
+     *  a rejected sign-in is indistinguishable from a dead button. */
+    error?: string;
   }
 
-  let { onconnectbluesky, onconnectblueskypassword, onconnectmastodon, onconnectthreads }: Props = $props();
+  let { onconnectbluesky, onconnectblueskypassword, onconnectmastodon, onconnectthreads, error = '' }: Props = $props();
 
   type Network = 'bluesky' | 'mastodon' | 'threads' | null;
   let selected: Network = $state(null);
@@ -84,14 +92,24 @@
           {i18n.t.onboarding.back}
         </button>
 
+        {#if error}
+          <div role="alert" class="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm break-words">
+            {error}
+          </div>
+        {/if}
+
         {#if selected === 'bluesky'}
           <div class="space-y-4">
-            <button
-              onclick={onconnectbluesky}
-              class="w-full px-6 py-3 bg-[#0085FF] hover:bg-[#0070DD] text-white font-medium rounded-lg transition-colors"
-            >
-              {i18n.t.onboarding.blueskyOAuth}
-            </button>
+            {#if oauthAvailable}
+              <button
+                onclick={onconnectbluesky}
+                class="w-full px-6 py-3 bg-[#0085FF] hover:bg-[#0070DD] text-white font-medium rounded-lg transition-colors"
+              >
+                {i18n.t.onboarding.blueskyOAuth}
+              </button>
+            {:else}
+              <p class="text-xs text-[var(--color-text-muted)]">{OAUTH_UNAVAILABLE_IN_APP}</p>
+            {/if}
 
             <div class="relative">
               <div class="absolute inset-0 flex items-center">

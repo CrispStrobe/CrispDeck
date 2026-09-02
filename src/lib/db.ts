@@ -15,10 +15,41 @@ import type {
   FollowEntry,
 } from './types';
 
+/**
+ * snake_case -> camelCase for one key.
+ *
+ * Tauri v2 renames command arguments to camelCase on the JS side unless the
+ * command opts out with `rename_all`. None of ours do — and the rest of the
+ * app (asr.rs's callers) already passes camelCase — but this module was
+ * written against Tauri v1, where the Rust names were used verbatim, and the
+ * migration missed it. The failure is silent in the browser build, which never
+ * reaches invoke() at all, and in the desktop build it surfaces only as
+ * "missing required key <camelName>" from whichever command you happened to
+ * call.
+ */
+export function toCamelKey(key: string): string {
+  return key.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase());
+}
+
+/**
+ * Argument names only — never values, and never nested keys. Tauri renames the
+ * command's parameters; anything inside them is deserialized by serde using the
+ * Rust field names, which are snake_case here (that is why `Account` comes back
+ * with `display_name` intact).
+ */
+export function toCamelArgs(
+  args: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!args) return args;
+  return Object.fromEntries(
+    Object.entries(args).map(([k, v]) => [toCamelKey(k), v]),
+  );
+}
+
 // Lazy-load Tauri invoke to avoid import errors in browser
 async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   const { invoke: tauriInvoke } = await import('@tauri-apps/api/core');
-  return tauriInvoke<T>(cmd, args);
+  return tauriInvoke<T>(cmd, toCamelArgs(args));
 }
 
 // ── Accounts ───────────────────────────────────────────────────────────────

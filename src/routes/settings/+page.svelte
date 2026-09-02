@@ -6,7 +6,8 @@
     completeMastodonOAuth as dbCompleteOAuth, getDecryptedCredentials
   } from '$lib/db';
   import { Settings, Plus, Trash2, Star, ExternalLink, Loader2, Shield, Download, Upload, EyeOff } from '@lucide/svelte';
-  import { startBlueskyOAuth } from '$lib/api/bluesky-oauth';
+  import { startBlueskyOAuth, OAUTH_UNAVAILABLE_IN_APP } from '$lib/api/bluesky-oauth';
+  import { isTauri as isTauriRuntime } from '$lib/platform';
   import { goto } from '$app/navigation';
   import { invalidateClientCache } from '$lib/api/client-factory';
   import { i18n, type Language } from '$lib/i18n.svelte';
@@ -375,7 +376,11 @@
 
   // Add Bluesky form
   let showBskyForm = $state(false);
-  let bskyAuthMode: 'app-password' | 'oauth' = $state('oauth');
+  // OAuth cannot complete inside the Tauri webview (see bluesky-oauth.ts), so
+  // the app opens on the method that actually works there rather than making
+  // people discover the dead end themselves.
+  const oauthAvailable = !isTauriRuntime();
+  let bskyAuthMode: 'app-password' | 'oauth' = $state(oauthAvailable ? 'oauth' : 'app-password');
   let bskyHandle = $state('');
   let bskyAppPassword = $state('');
   let bsky2faToken = $state('');
@@ -696,7 +701,9 @@
           <div class="flex items-center bg-[var(--color-bg)] rounded-lg border border-[var(--color-border)] p-0.5">
             <button
               onclick={() => bskyAuthMode = 'oauth'}
-              class="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {bskyAuthMode === 'oauth' ? 'bg-[var(--color-bluesky)] text-white' : 'text-[var(--color-text-muted)]'}"
+              disabled={!oauthAvailable}
+              title={oauthAvailable ? undefined : OAUTH_UNAVAILABLE_IN_APP}
+              class="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed {bskyAuthMode === 'oauth' ? 'bg-[var(--color-bluesky)] text-white' : 'text-[var(--color-text-muted)]'}"
             >
               <Shield size={12} />
               {i18n.t.settings.oauthRecommended}
@@ -719,6 +726,10 @@
               class="w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-bluesky)]"
             />
           </div>
+
+          {#if !oauthAvailable}
+            <p class="text-xs text-[var(--color-text-muted)]">{OAUTH_UNAVAILABLE_IN_APP}</p>
+          {/if}
 
           {#if bskyAuthMode === 'oauth'}
             <p class="text-xs text-[var(--color-text-muted)]">

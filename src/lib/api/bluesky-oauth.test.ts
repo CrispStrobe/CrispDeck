@@ -2,6 +2,7 @@
  * Tests for Bluesky OAuth — client metadata, origin detection, client_id construction.
  * Does NOT test actual OAuth flow (requires browser redirect).
  */
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock the BrowserOAuthClient import
@@ -84,5 +85,46 @@ describe('OAuth scopes', () => {
   it('includes generic transition scope', () => {
     const scope = 'atproto transition:generic transition:chat.bsky';
     expect(scope).toContain('transition:generic');
+  });
+});
+
+// ── Deployed client metadata ───────────────────────────────────────────────
+//
+// getOAuthClient() imports static/client-metadata.json and asserts its type,
+// because a JSON import widens the literals the schema needs. These check the
+// fields that assertion skips past — and that the served document still says
+// what the code assumes it says.
+
+describe('static/client-metadata.json', () => {
+  const meta = JSON.parse(
+    readFileSync('static/client-metadata.json', 'utf8'),
+  ) as Record<string, unknown>;
+
+  it('is self-describing: client_id is the URL it is served from', () => {
+    expect(meta.client_id).toBe('https://crispdeck.vercel.app/client-metadata.json');
+  });
+
+  it('declares at least one redirect uri, under the client origin', () => {
+    const uris = meta.redirect_uris as string[];
+    expect(Array.isArray(uris)).toBe(true);
+    expect(uris.length).toBeGreaterThan(0);
+    for (const u of uris) expect(u.startsWith('https://crispdeck.vercel.app/')).toBe(true);
+  });
+
+  it('requests the scopes the app relies on, DMs included', () => {
+    expect(String(meta.scope).split(' ')).toEqual(
+      expect.arrayContaining(['atproto', 'transition:generic', 'transition:chat.bsky']),
+    );
+  });
+
+  it('is a public client using DPoP — no secret ships in the frontend', () => {
+    expect(meta.token_endpoint_auth_method).toBe('none');
+    expect(meta.dpop_bound_access_tokens).toBe(true);
+  });
+
+  it('can refresh, so a session survives a reload', () => {
+    expect(meta.grant_types).toEqual(
+      expect.arrayContaining(['authorization_code', 'refresh_token']),
+    );
   });
 });

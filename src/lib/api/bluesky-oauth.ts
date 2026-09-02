@@ -17,8 +17,23 @@ import {
   TokenInvalidError,
 } from '@atproto/oauth-client-browser';
 import { Agent } from '@atproto/api';
+import { isTauri } from '$lib/platform';
+// The very document served at PROD_ORIGIN/client-metadata.json — one source of
+// truth for the deployed client's identity.
+import clientMetadataJson from '../../../static/client-metadata.json';
+import type { OAuthClientMetadataInput } from '@atproto/oauth-types';
 
-let oauthClient: BrowserOAuthClient | null = null;
+/**
+ * A JSON import widens every literal — `string[]` where the schema wants a
+ * non-empty tuple, `string` where it wants a union — so the shape has to be
+ * asserted. The document is the contract regardless: it is what the
+ * authorization server fetches from client_id, and BrowserOAuthClient
+ * validates it at construction. bluesky-oauth.test.ts checks the fields this
+ * code actually depends on.
+ */
+const DEPLOYED_CLIENT_METADATA = clientMetadataJson as unknown as OAuthClientMetadataInput;
+
+let oauthClientPromise: Promise<BrowserOAuthClient> | null = null;
 
 /**
  * The production origin where client-metadata.json is publicly served.
@@ -29,41 +44,98 @@ let oauthClient: BrowserOAuthClient | null = null;
  */
 const PROD_ORIGIN = 'https://crispdeck.vercel.app';
 
-/** Get or create the OAuth client singleton */
-export function getOAuthClient(): BrowserOAuthClient {
-  if (!oauthClient) {
-    const currentOrigin = typeof window !== 'undefined' ? window.location.origin : PROD_ORIGIN;
-    const isLocalhost = currentOrigin.includes('localhost') || currentOrigin.includes('127.0.0.1');
+/** Entryway used to resolve handles, and to sign in when no handle is given. */
+const HANDLE_RESOLVER = 'https://bsky.social';
 
-    // For localhost: use AT Protocol loopback client_id (no server fetch needed)
-    // For deployed: always use production origin so the auth server can fetch client-metadata.json
-    const clientId = isLocalhost
-      ? `http://localhost?redirect_uri=${encodeURIComponent(`${currentOrigin}/oauth/bsky-callback`)}&scope=${encodeURIComponent('atproto transition:generic transition:chat.bsky')}`
-      : `${PROD_ORIGIN}/client-metadata.json`;
+/** Hosts AT Protocol accepts for the loopback (development) client. */
+function isLoopbackHost(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+}
 
-    oauthClient = new BrowserOAuthClient({
-      clientMetadata: {
-        client_id: clientId,
-        client_name: 'CrispDeck',
-        client_uri: PROD_ORIGIN,
-        redirect_uris: [`${PROD_ORIGIN}/oauth/bsky-callback`],
-        scope: 'atproto transition:generic transition:chat.bsky',
-        grant_types: ['authorization_code', 'refresh_token'],
-        response_types: ['code'],
-        application_type: 'web',
-        token_endpoint_auth_method: 'none',
-        dpop_bound_access_tokens: true,
-      },
-      handleResolver: 'https://bsky.social',
-    });
+/**
+ * Thrown, rather than returning a client that cannot work, when running inside
+ * the Tauri webview. Callers surface `.message` to the user.
+ */
+export class OAuthUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'OAuthUnavailableError';
   }
-  return oauthClient;
+}
+
+/** Message shown when OAuth cannot be offered. Exported so the UI can pre-empt it. */
+export const OAUTH_UNAVAILABLE_IN_APP =
+  'Bluesky OAuth is not available in the desktop and mobile apps yet: the ' +
+  'sign-in redirect has nowhere to land inside the app window. Use an App ' +
+  'Password below — everything works except direct messages.';
+
+async function createOAuthClient(): Promise<BrowserOAuthClient> {
+  if (isTauri()) {
+    // The webview's origin is `tauri://localhost` (or `http://tauri.localhost`
+    // on Windows/Android). Neither can serve a client-metadata document for the
+    // authorization server to fetch, and the loopback client the library would
+    // otherwise build immediately navigates to `http://127.0.0.1/` — which in a
+    // packaged app is a blank window rather than a dev server, so offering it
+    // would break the app rather than just fail.
+    //
+    // The sanctioned native flow (open the system browser, catch the callback
+    // on a loopback HTTP server) is buildable here — auth_wait_for_callback
+    // already does exactly that for Mastodon — but it is Rust work, not a
+    // frontend fix.
+    throw new OAuthUnavailableError(OAUTH_UNAVAILABLE_IN_APP);
+  }
+
+  const loopback =
+    typeof window !== 'undefined' && isLoopbackHost(window.location.hostname);
+
+  if (loopback) {
+    // Deliberately no `clientMetadata`: the library derives the loopback client
+    // id and its metadata from window.location. Handing it an object instead
+    // runs that object through the *deployed* client schema, which requires an
+    // https URL with a path component — which is why a hand-built
+    // `http://localhost?redirect_uri=…` produced exactly two errors,
+    // "URL must use the https: protocol" and "ClientID must contain a path
+    // component", and left every Bluesky sign-in button doing nothing on any
+    // localhost origin.
+    //
+    // Note the library will bounce a `localhost` page to `127.0.0.1` on init:
+    // AT Protocol's loopback client is defined in terms of the IP, not the
+    // name. Browse the dev server on 127.0.0.1 to avoid the hop.
+    return new BrowserOAuthClient({ handleResolver: HANDLE_RESOLVER });
+  }
+
+  // A discoverable client's metadata *is* the document served at its client_id,
+  // so use that file itself rather than a second hand-written copy that can
+  // drift out of sync with it. Imported at build time, not fetched:
+  // restoreBlueskyOAuthSession() goes through here, and making client creation
+  // depend on the network would stop a cached PWA from resuming its session
+  // offline.
+  return new BrowserOAuthClient({
+    clientMetadata: DEPLOYED_CLIENT_METADATA,
+    handleResolver: HANDLE_RESOLVER,
+  });
+}
+
+/** Get or create the OAuth client singleton. */
+export function getOAuthClient(): Promise<BrowserOAuthClient> {
+  // Memoize the promise, not the client, so concurrent callers share one
+  // metadata fetch — but drop it again on failure so a transient network error
+  // does not poison every later attempt.
+  oauthClientPromise ??= createOAuthClient().catch((err) => {
+    oauthClientPromise = null;
+    throw err;
+  });
+  return oauthClientPromise;
 }
 
 /** Start the OAuth sign-in flow — redirects the user */
 export async function startBlueskyOAuth(handle: string): Promise<void> {
-  const client = getOAuthClient();
-  await client.signIn(handle, {
+  const client = await getOAuthClient();
+  // signIn() resolves an identity, so an empty string is not "let the user
+  // type it on Bluesky's page" — it is an unresolvable handle, and it threw
+  // `Failed to resolve identity:` with nothing after the colon. Signing in
+  // against the entryway is what sends someone to Bluesky's own login form.
+  await client.signIn(handle.trim() || HANDLE_RESOLVER, {
     signal: new AbortController().signal,
   });
   // This redirects — execution stops here
@@ -81,7 +153,7 @@ export async function initBlueskyOAuth(): Promise<{
   agent: Agent;
 } | null> {
   try {
-    const client = getOAuthClient();
+    const client = await getOAuthClient();
     const result = await client.init();
 
     if (result?.session) {
@@ -92,7 +164,11 @@ export async function initBlueskyOAuth(): Promise<{
       };
     }
   } catch (e) {
-    console.error('Bluesky OAuth init failed:', e);
+    // Not being able to offer OAuth at all (the Tauri webview) is a fact about
+    // the platform, not a failure worth logging on every launch.
+    if (!(e instanceof OAuthUnavailableError)) {
+      console.error('Bluesky OAuth init failed:', e);
+    }
   }
   return null;
 }
@@ -140,7 +216,16 @@ export type OAuthRestoreResult =
  * access token is stale.
  */
 export async function restoreBlueskyOAuthSession(did: string): Promise<OAuthRestoreResult> {
-  const client = getOAuthClient();
+  let client: BrowserOAuthClient;
+  try {
+    client = await getOAuthClient();
+  } catch (e) {
+    // 'unavailable' rather than 'expired': the stored tokens may be perfectly
+    // good, this build just cannot use them, and 'expired' would trigger a
+    // silent re-auth redirect that cannot complete either.
+    if (e instanceof OAuthUnavailableError) return { status: 'unavailable' };
+    throw e;
+  }
   const delays = [0, 500, 1500];
   let lastErr: unknown;
   for (const delay of delays) {
@@ -202,7 +287,12 @@ export async function maybeSilentReauth(handleOrDid: string, did: string): Promi
   } catch {
     return false;
   }
-  const client = getOAuthClient();
+  let client: BrowserOAuthClient;
+  try {
+    client = await getOAuthClient();
+  } catch {
+    return false;
+  }
   try {
     await client.signIn(handleOrDid, { prompt: 'none' });
     return true; // unreachable — signIn redirects
