@@ -48,10 +48,22 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
 
   // Process a pending OAuth callback (if the URL has params) and resume the
   // "current" session. Accounts not covered by this are restored by DID below.
+  //
+  // Only when there is actually an OAuth account to resume. Constructing the
+  // client has a side effect on a loopback origin: AT Protocol defines the
+  // loopback client in terms of 127.0.0.1, so init() *navigates* a page served
+  // from `localhost` to the IP. Doing that on every load bounced the dev server
+  // between two origins for everyone, including people with no Bluesky account
+  // at all. It also spares everyone else an IndexedDB open they never needed.
   let oauthSession: { did: string; agent: Agent } | null = null;
-  try {
-    oauthSession = await initBlueskyOAuth();
-  } catch {}
+  // Any Bluesky account is reason enough to try: whether a given one is OAuth
+  // or app-password is only knowable after decrypting its credentials, which
+  // the loop below does anyway.
+  if (accounts.some((a) => a.platform === 'bluesky')) {
+    try {
+      oauthSession = await initBlueskyOAuth();
+    } catch {}
+  }
 
   // Init all accounts in parallel — each app-password login / OAuth restore
   // is a network round-trip, and doing them sequentially delays the first
