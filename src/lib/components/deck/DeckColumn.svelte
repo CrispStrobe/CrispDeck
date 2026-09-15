@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { pickAnchor, measureItems, restoreAnchor, type ScrollAnchor } from '$lib/feed-scroll';
+  import { saveReadPosition, getReadPosition, flushReadPositions } from '$lib/read-position';
   import { onMount, onDestroy } from 'svelte';
   import { X, RefreshCw, Loader2, GripVertical, Heart, Repeat, UserPlus, MessageCircle, AtSign, Bell, BellOff, BellRing, Quote, ChevronDown, ChevronUp, Radio, Lock, Unlock, Pin, PinOff, Trash2, Minimize2, Maximize2, Palette, Columns3 } from '@lucide/svelte';
   import type { ColumnNotifyMode } from '$lib/deck-layouts';
@@ -93,6 +95,55 @@
       contentEl.scrollTo({ top: 0, behavior: 'smooth' });
     }
     prevPostCount = currentCount;
+  });
+
+  /**
+   * Remember where this column was being read.
+   *
+   * Each column scrolls independently, so each keeps its own position, keyed
+   * by column id. Opening a post leaves /deck entirely and every column is
+   * rebuilt on the way back -- without this they all reset to the top, and a
+   * deck is precisely the layout where that costs the most.
+   *
+   * Only while scroll-lock is on. With it off the column deliberately jumps to
+   * the top whenever posts arrive, and restoring a position would fight the
+   * behaviour the user asked for.
+   */
+  const posKey = $derived(`deck:v2:${id}`);
+  let scrollRaf = 0;
+
+  function rememberPosition() {
+    if (!contentEl || !scrollLock) return;
+    const anchor = pickAnchor(measureItems(contentEl, 'data-post-uri'), contentEl.scrollTop);
+    if (anchor) saveReadPosition(posKey, anchor.key, anchor.offset);
+  }
+
+  function onColumnScroll() {
+    if (scrollRaf) return;
+    scrollRaf = requestAnimationFrame(() => {
+      scrollRaf = 0;
+      rememberPosition();
+    });
+  }
+
+  onMount(() => {
+    if (!contentEl) return;
+    contentEl.addEventListener('scroll', onColumnScroll, { passive: true });
+    if (scrollLock) {
+      const pos = getReadPosition(posKey);
+      const anchor: ScrollAnchor | null = pos
+        ? { key: pos.lastSeenUri, offset: pos.scrollY ?? 0 }
+        : null;
+      restoreAnchor(contentEl, anchor, { attr: 'data-post-uri' });
+    }
+  });
+
+  onDestroy(() => {
+    contentEl?.removeEventListener('scroll', onColumnScroll);
+    if (scrollRaf) cancelAnimationFrame(scrollRaf);
+    // The last scroll event may still be waiting on a frame that will not run.
+    rememberPosition();
+    flushReadPositions();
   });
 
   const notifyModes: { mode: ColumnNotifyMode; label: string }[] = [
@@ -501,7 +552,7 @@
       </div>
     {:else}
       {#each visiblePosts as post, postIdx (post.uri)}
-        <div class={focusedPostIdx === postIdx ? 'ring-1 ring-[var(--color-primary)]/60 rounded-lg' : ''} data-post-uri={post.uri}>
+        <div class="deck-post {focusedPostIdx === postIdx ? 'ring-1 ring-[var(--color-primary)]/60 rounded-lg' : ''}" data-post-uri={post.uri}>
           <Post {post} {onlike} {onboost} {onreply} {onquote} />
         </div>
       {/each}
@@ -537,3 +588,19 @@
   ></div>
 </div>
 {/if}
+
+<style>
+  /**
+   * Skip layout, style and paint for posts scrolled out of a column.
+   *
+   * A deck is several columns of posts side by side, each one as expensive to
+   * render as a timeline row -- rich text, embeds, quote cards, media -- so the
+   * cost is multiplied by however many columns are open. `contain-intrinsic-size:
+   * auto` lets the browser remember each post's real height once rendered, so
+   * scrollbars stay put and the reading position above still resolves.
+   */
+  .deck-post {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 14rem;
+  }
+</style>

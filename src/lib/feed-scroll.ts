@@ -46,13 +46,30 @@ export function pickAnchor(items: MeasuredItem[], scrollTop: number): ScrollAnch
   return { key: chosen.key, offset: Math.round(scrollTop - chosen.top) };
 }
 
+/**
+ * Attribute carrying each item's key. The feed marks its rows with
+ * `data-feed-key`; deck columns already mark theirs with `data-post-uri` for
+ * keyboard navigation, and reusing that beats stamping a second, identical
+ * attribute onto the same element.
+ */
+export type KeyAttribute = 'data-feed-key' | 'data-post-uri';
+
+const DATASET_OF: Record<KeyAttribute, string> = {
+  'data-feed-key': 'feedKey',
+  'data-post-uri': 'postUri',
+};
+
 /** Measure the feed items currently in `container`, in document order. */
-export function measureItems(container: HTMLElement): MeasuredItem[] {
+export function measureItems(
+  container: HTMLElement,
+  attr: KeyAttribute = 'data-feed-key',
+): MeasuredItem[] {
   const base = container.getBoundingClientRect().top - container.scrollTop;
+  const prop = DATASET_OF[attr];
   const out: MeasuredItem[] = [];
-  for (const el of container.querySelectorAll<HTMLElement>('[data-feed-key]')) {
+  for (const el of container.querySelectorAll<HTMLElement>(`[${attr}]`)) {
     const r = el.getBoundingClientRect();
-    out.push({ key: el.dataset.feedKey!, top: Math.round(r.top - base), height: Math.round(r.height) });
+    out.push({ key: el.dataset[prop]!, top: Math.round(r.top - base), height: Math.round(r.height) });
   }
   return out;
 }
@@ -84,17 +101,18 @@ export function anchorDelta(elementTop: number, containerTop: number, offset: nu
 export function restoreAnchor(
   container: HTMLElement,
   anchor: ScrollAnchor | null,
-  attempts = 10,
+  { attempts = 10, attr = 'data-feed-key' as KeyAttribute } = {},
 ): void {
   if (!anchor) return;
+  const prop = DATASET_OF[attr];
   let n = 0;
 
   // Scanned rather than selected: a feed key is an at:// URI full of colons
   // and slashes, and matching on the dataset value sidesteps every question
   // about escaping it into an attribute selector.
   const find = () => {
-    for (const el of container.querySelectorAll<HTMLElement>('[data-feed-key]')) {
-      if (el.dataset.feedKey === anchor.key) return el;
+    for (const el of container.querySelectorAll<HTMLElement>(`[${attr}]`)) {
+      if (el.dataset[prop] === anchor.key) return el;
     }
     return null;
   };
