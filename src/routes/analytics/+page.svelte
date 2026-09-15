@@ -477,7 +477,7 @@
       </h3>
       <div class="flex items-end justify-between gap-0.5 h-28 bg-[var(--color-surface)] p-3 rounded-lg border border-[var(--color-border)]">
         {#each postsByHour as count, hour}
-          <div class="flex-1 flex flex-col items-center justify-end group" title="{count} posts at {hour}:00">
+          <div class="flex-1 h-full flex flex-col items-center justify-end group" title="{count} posts at {hour}:00">
             <div
               class="w-full bg-[var(--color-primary)]/40 hover:bg-[var(--color-primary)] rounded-t transition-colors"
               style="height: {(count / maxHourly) * 100}%; min-height: 1px"
@@ -555,7 +555,7 @@
               {@const bskyH = bskyByHour[hour]}
               {@const mastoH = mastoByHour[hour]}
               {@const maxH = Math.max(...bskyByHour, ...mastoByHour, 1)}
-              <div class="flex-1 flex gap-px items-end" title="{hour}:00 — Bluesky: {bskyH}, Mastodon: {mastoH}">
+              <div class="flex-1 h-full flex gap-px items-end" title="{hour}:00 — Bluesky: {bskyH}, Mastodon: {mastoH}">
                 <div class="flex-1 bg-[var(--color-bluesky)]/50 rounded-t" style="height: {(bskyH / maxH) * 100}%; min-height: 1px"></div>
                 <div class="flex-1 bg-[var(--color-mastodon)]/50 rounded-t" style="height: {(mastoH / maxH) * 100}%; min-height: 1px"></div>
               </div>
