@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { base } from '$app/paths';
+  import { routePath } from '$lib/routes';
   import '../app.css';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
@@ -82,8 +84,8 @@
   onNavigate((navigation) => {
     if (!document.startViewTransition) return;
     // Determine navigation direction for slide animation
-    const fromDepth = window.location.pathname.split('/').filter(Boolean).length;
-    const toDepth = navigation.to?.url.pathname.split('/').filter(Boolean).length ?? fromDepth;
+    const fromDepth = routePath(window.location.pathname).split('/').filter(Boolean).length;
+    const toDepth = navigation.to ? routePath(navigation.to.url.pathname).split('/').filter(Boolean).length : fromDepth;
     document.documentElement.dataset.navDirection = toDepth > fromDepth ? 'forward' : 'back';
     return new Promise((resolve) => {
       document.startViewTransition(async () => {
@@ -99,7 +101,9 @@
   onMount(async () => {
     // Register service worker for PWA
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      // Scope follows the mount point: a worker registered at the origin root
+      // would be rejected on a project-page deployment served under /<repo>/.
+      navigator.serviceWorker.register(`${base}/sw.js`, { scope: `${base}/` }).catch(() => {});
     }
 
     // Restore theme
@@ -199,7 +203,7 @@
     if (pendingG) {
       pendingG = false;
       const routes: Record<string, string> = { h: '/', f: '/feed', c: '/compose', n: '/notifications', s: '/search', d: '/deck', m: '/messages', a: '/archive', t: '/trending', b: '/bookmarks', p: '/settings', i: '/identities', u: '/catchup' };
-      if (routes[e.key]) { goto(routes[e.key]); return; }
+      if (routes[e.key]) { goto(`${base}${routes[e.key]}`.replace(/\/$/, '') || '/'); return; }
     }
 
     // Vim-style post navigation (j/k/o/l) — cache DOM query, invalidate after 2s
@@ -283,8 +287,12 @@
     '/settings': ['/settings', '/instance'],
   };
 
+  // navItems keep unprefixed route ids: they are compared against here, and
+  // they are the keys persisted in `crispdeck-nav-hidden`, so they must not
+  // change shape with where the app is mounted. The mount point is added at
+  // render time instead.
   function isActive(href: string): boolean {
-    const path = page.url?.pathname ?? '/';
+    const path = routePath(page.url?.pathname ?? '/');
     if (href === '/') return path === '/';
     const routes = mergedRoutes[href];
     if (routes) return routes.some(r => path.startsWith(r));
@@ -320,7 +328,7 @@
       {#each visibleNavItems as item}
         <li>
           <a
-            href={item.href}
+            href={`${base}${item.href}`.replace(/\/$/, "") || "/"}
             title={collapsed ? item.label : undefined}
             class="flex items-center gap-2.5 px-3 py-2 text-sm transition-colors
               {isActive(item.href)
@@ -375,13 +383,13 @@
       <button onclick={() => mobileMenuOpen = !mobileMenuOpen} class="p-1 text-[var(--color-text-muted)]">
         {#if mobileMenuOpen}<X size={18} />{:else}<Menu size={18} />{/if}
       </button>
-      <a href="/" class="text-sm font-bold text-[var(--color-text)]">CrispDeck</a>
+      <a href={base || "/"} class="text-sm font-bold text-[var(--color-text)]">CrispDeck</a>
     </div>
     <div class="flex items-center gap-1">
       <button onclick={toggleTheme} class="p-1.5 text-[var(--color-text-muted)]" title="Toggle theme">
         {#if theme === 'dark'}<Smartphone size={14} />{:else if theme === 'oled'}<Sun size={14} />{:else}<Moon size={14} />{/if}
       </button>
-      <a href="/notifications" class="p-1.5 text-[var(--color-text-muted)]">
+      <a href="{base}/notifications" class="p-1.5 text-[var(--color-text-muted)]">
         <Bell size={14} />
       </a>
     </div>
@@ -395,7 +403,7 @@
           {#each visibleNavItems as item}
             <li>
               <a
-                href={item.href}
+                href={`${base}${item.href}`.replace(/\/$/, "") || "/"}
                 onclick={closeMobileMenu}
                 class="flex items-center gap-3 px-4 py-3 text-sm transition-colors
                   {isActive(item.href)
@@ -435,7 +443,7 @@
   <nav class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[var(--color-surface)] border-t border-[var(--color-border)] flex items-center justify-around px-1 safe-area-bottom">
     {#each mobileTabItems as item}
       <a
-        href={item.href}
+        href={`${base}${item.href}`.replace(/\/$/, "") || "/"}
         class="flex flex-col items-center gap-0 px-1 py-1 rounded-lg transition-colors min-w-0 flex-1
           {isActive(item.href)
             ? 'text-[var(--color-primary)]'

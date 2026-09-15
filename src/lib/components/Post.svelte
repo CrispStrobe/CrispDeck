@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { Heart, Repeat, MessageCircle, Quote, Bookmark, Share, Flag, Languages, Camera, Loader2, Volume2, VolumeOff, BarChart3, UserPlus, UserCheck, Pin, ListPlus, X as XIcon } from '@lucide/svelte';
   import { goto } from '$app/navigation';
   import { isPinned, pinPost, unpinPost } from '$lib/pinned-posts';
@@ -449,7 +450,7 @@
 
   function getProfileUrl(p: UnifiedPost): string {
     const h = encodeURIComponent(p.author.handle);
-    return `/profile?handle=${h}&platform=${p.platform}`;
+    return `${base}/profile?handle=${h}&platform=${p.platform}`;
   }
 
   function getExternalProfileUrl(p: UnifiedPost): string {
@@ -465,12 +466,12 @@
     if (p.platform === 'mastodon') {
       const raw = p.raw as any;
       const id = raw.reblog?.id ?? raw.id ?? '';
-      return `/thread?id=${id}&platform=mastodon`;
+      return `${base}/thread?id=${id}&platform=mastodon`;
     }
     if (p.platform === 'threads') {
-      return `/thread?uri=${encodeURIComponent(p.uri)}&platform=threads`;
+      return `${base}/thread?uri=${encodeURIComponent(p.uri)}&platform=threads`;
     }
-    return `/thread?uri=${encodeURIComponent(p.uri)}&platform=bluesky`;
+    return `${base}/thread?uri=${encodeURIComponent(p.uri)}&platform=bluesky`;
   }
 
   function getPostUrl(p: UnifiedPost): string {
@@ -525,9 +526,9 @@
       if (feature?.$type === 'app.bsky.richtext.facet#link') {
         result += `<a href="${escapeHtml(feature.uri)}" target="_blank" rel="noopener noreferrer">${escapeHtml(segment)}</a>`;
       } else if (feature?.$type === 'app.bsky.richtext.facet#mention') {
-        result += `<a href="/profile?handle=${encodeURIComponent(feature.did)}&platform=bluesky" data-mention="${escapeHtml(feature.did)}">${escapeHtml(segment)}</a>`;
+        result += `<a href="{base}/profile?handle=${encodeURIComponent(feature.did)}&platform=bluesky" data-mention="${escapeHtml(feature.did)}">${escapeHtml(segment)}</a>`;
       } else if (feature?.$type === 'app.bsky.richtext.facet#tag') {
-        result += `<a href="/search?q=${encodeURIComponent('#' + feature.tag)}" data-tag="${escapeHtml(feature.tag)}">${escapeHtml(segment)}</a>`;
+        result += `<a href="{base}/search?q=${encodeURIComponent('#' + feature.tag)}" data-tag="${escapeHtml(feature.tag)}">${escapeHtml(segment)}</a>`;
       } else {
         result += escapeHtml(segment);
       }
@@ -548,7 +549,7 @@
     return escapeHtml(text)
       .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')
       .replace(/@([\w.-]+\.[\w.-]+)/g, (match, handle) => {
-        return `<a href="/profile?handle=${encodeURIComponent(handle)}&platform=bluesky" data-mention="${escapeHtml(handle)}">${match}</a>`;
+        return `<a href="{base}/profile?handle=${encodeURIComponent(handle)}&platform=bluesky" data-mention="${escapeHtml(handle)}">${match}</a>`;
       });
   }
 
@@ -577,7 +578,7 @@
       if (tagMatch) {
         e.preventDefault();
         e.stopPropagation();
-        goto(`/search?q=${encodeURIComponent('#' + decodeURIComponent(tagMatch[1]))}`);
+        goto(`${base}/search?q=${encodeURIComponent('#' + decodeURIComponent(tagMatch[1]))}`);
         return;
       }
 
@@ -588,7 +589,7 @@
         e.stopPropagation();
         const handle = decodeURIComponent(handleMatch[1]);
         const fullHandle = handle.includes('@') ? handle : `${handle}@${url.hostname}`;
-        goto(`/profile?handle=${encodeURIComponent(fullHandle)}`);
+        goto(`${base}/profile?handle=${encodeURIComponent(fullHandle)}`);
         return;
       }
     } catch {
@@ -1025,7 +1026,7 @@
       {#if bskyQuote}
         <button
           type="button"
-          onclick={() => goto(`/thread?uri=${encodeURIComponent(bskyQuote.uri)}&platform=bluesky`)}
+          onclick={() => goto(`${base}/thread?uri=${encodeURIComponent(bskyQuote.uri)}&platform=bluesky`)}
           class="mt-2 w-full text-left border border-[var(--color-border)] rounded-lg p-3 bg-[var(--color-bg)] cursor-pointer hover:border-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] transition-colors"
         >
           <div class="flex items-center gap-2 mb-1">
@@ -1292,7 +1293,7 @@
               <p class="px-3 py-1.5 text-[10px] text-[var(--color-text-muted)]">No reading lists yet</p>
             {/if}
             <a
-              href="/bookmarks?tab=reading-lists"
+              href="{base}/bookmarks?tab=reading-lists"
               onclick={() => showListPicker = false}
               class="block px-3 py-1.5 text-xs text-[var(--color-primary)] hover:bg-[var(--color-surface-hover)] border-t border-[var(--color-border)]"
             >

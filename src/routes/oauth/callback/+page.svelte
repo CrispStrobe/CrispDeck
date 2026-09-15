@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { completeMastodonOAuth, addAccount, listAccounts } from '$lib/db';
@@ -66,7 +67,7 @@
 
       // Redirect: first account → feed, otherwise → settings
       const allAccounts = await listAccounts();
-      const dest = allAccounts.length === 1 ? '/feed' : '/settings';
+      const dest = allAccounts.length === 1 ? `${base}/feed` : `${base}/settings`;
       setTimeout(() => goto(dest), 1500);
     } catch (e) {
       status = 'error';
@@ -90,7 +91,7 @@
       <AlertTriangle size={48} class="text-[var(--color-danger)] mx-auto mb-4" />
       <h2 class="text-lg font-bold mb-2">Connection Failed</h2>
       <p class="text-sm text-red-400 mb-4">{errorMsg}</p>
-      <a href="/settings" class="inline-block px-4 py-2 bg-[var(--color-primary)] text-white rounded-md text-sm">Back to Settings</a>
+      <a href="{base}/settings" class="inline-block px-4 py-2 bg-[var(--color-primary)] text-white rounded-md text-sm">Back to Settings</a>
     {/if}
   </div>
 </div>

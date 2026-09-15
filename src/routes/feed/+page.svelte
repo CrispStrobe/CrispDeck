@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { onMount, onDestroy } from 'svelte';
   import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal, RefreshCw, ChevronDown, Hash, Users } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
@@ -567,7 +568,7 @@
   function handleReply(post: UnifiedPost) {
     const replyTo = encodeURIComponent(post.uri);
     const author = encodeURIComponent(post.author.handle);
-    window.location.href = `/compose?replyTo=${replyTo}&author=${author}&platform=${post.platform}`;
+    window.location.href = `${base}/compose?replyTo=${replyTo}&author=${author}&platform=${post.platform}`;
   }
 
   function handleQuote(post: UnifiedPost) {
@@ -575,7 +576,7 @@
     const quoteCid = encodeURIComponent((post.raw as any)?.post?.cid ?? '');
     const author = encodeURIComponent(post.author.handle);
     const text = encodeURIComponent(post.text.substring(0, 100));
-    window.location.href = `/compose?quoteUri=${quoteUri}&quoteCid=${quoteCid}&quoteAuthor=${author}&quoteText=${text}&platform=${post.platform}`;
+    window.location.href = `${base}/compose?quoteUri=${quoteUri}&quoteCid=${quoteCid}&quoteAuthor=${author}&quoteText=${text}&platform=${post.platform}`;
   }
 
   function handleFilterChange(newFilters: Partial<Filters>) {
@@ -715,7 +716,7 @@
                   </button>
                 {/each}
                 <a
-                  href="/lists"
+                  href="{base}/lists"
                   class="block px-3 py-2 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] border-t border-[var(--color-border)] mt-1"
                 >{i18n.t.feed.discoverFeeds}</a>
               </div>
@@ -834,7 +835,7 @@
           <p class="text-sm text-[var(--color-text-muted)] mt-2">
             {i18n.t.feed.forYouHint}
           </p>
-          <a href="/archive" class="inline-block mt-3 px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-md">{i18n.t.feed.buildArchive}</a>
+          <a href="{base}/archive" class="inline-block mt-3 px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-md">{i18n.t.feed.buildArchive}</a>
         {/if}
       </div>
     {:else}

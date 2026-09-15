@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import {
     listAccounts, addAccount as dbAddAccount, deleteAccount as dbDeleteAccount,
@@ -31,7 +32,7 @@
 
   function switchTab(tab: SettingsTab) {
     activeTab = tab;
-    goto(`/settings?tab=${tab}`, { replaceState: true, noScroll: true });
+    goto(`${base}/settings?tab=${tab}`, { replaceState: true, noScroll: true });
   }
   import { requestPermission, getPermission, isSupported as notifSupported, subscribeWebPush, unsubscribeWebPush, getPushSubscription } from '$lib/push-notifications';
   import { getTranslateConfig, setTranslateConfig, type TranslateProvider } from '$lib/translate';
@@ -479,7 +480,7 @@
       invalidateClientCache();
       const wasFirst = accounts.length === 0;
       await loadAccounts();
-      if (wasFirst && accounts.length > 0) { goto('/feed'); return; }
+      if (wasFirst && accounts.length > 0) { goto(`${base}/feed`); return; }
     } catch (e) {
       error = String(e);
     } finally {
@@ -653,8 +654,8 @@
 
   <!-- Page-level tabs (Settings / Instance Info) -->
   <div class="flex items-center gap-1 mb-4">
-    <a href="/settings" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Settings</a>
-    <a href="/instance" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Instance Info</a>
+    <a href="{base}/settings" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Settings</a>
+    <a href="{base}/instance" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Instance Info</a>
   </div>
 
   <!-- Settings section tabs -->

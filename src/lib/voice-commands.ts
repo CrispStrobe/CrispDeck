@@ -1,3 +1,4 @@
+import { base } from '$app/paths';
 /**
  * Voice command parser — maps spoken phrases to navigation/actions.
  *
@@ -24,57 +25,57 @@ export const commands: VoiceCommand[] = [
   // Navigation
   {
     phrases: ['go to feed', 'open feed', 'show feed', 'zum feed', 'feed öffnen'],
-    action: () => goto('/feed'),
+    action: () => goto(`${base}/feed`),
     description: 'Navigate to feed',
   },
   {
     phrases: ['go to compose', 'new post', 'write post', 'neuer beitrag', 'verfassen'],
-    action: () => goto('/compose'),
+    action: () => goto(`${base}/compose`),
     description: 'Open compose',
   },
   {
     phrases: ['go to notifications', 'show notifications', 'benachrichtigungen'],
-    action: () => goto('/notifications'),
+    action: () => goto(`${base}/notifications`),
     description: 'Open notifications',
   },
   {
     phrases: ['go to messages', 'open messages', 'show messages', 'nachrichten'],
-    action: () => goto('/messages'),
+    action: () => goto(`${base}/messages`),
     description: 'Open messages',
   },
   {
     phrases: ['go to search', 'open search', 'suche', 'suchen'],
-    action: () => goto('/search'),
+    action: () => goto(`${base}/search`),
     description: 'Open search',
   },
   {
     phrases: ['go to bookmarks', 'show bookmarks', 'lesezeichen'],
-    action: () => goto('/bookmarks'),
+    action: () => goto(`${base}/bookmarks`),
     description: 'Open bookmarks',
   },
   {
     phrases: ['go to settings', 'open settings', 'einstellungen'],
-    action: () => goto('/settings'),
+    action: () => goto(`${base}/settings`),
     description: 'Open settings',
   },
   {
     phrases: ['go to deck', 'open deck', 'deck öffnen'],
-    action: () => goto('/deck'),
+    action: () => goto(`${base}/deck`),
     description: 'Open deck',
   },
   {
     phrases: ['go to trending', 'show trending', 'trends', 'trending'],
-    action: () => goto('/trending'),
+    action: () => goto(`${base}/trending`),
     description: 'Open trending',
   },
   {
     phrases: ['go to analytics', 'show analytics', 'analytik'],
-    action: () => goto('/analytics'),
+    action: () => goto(`${base}/analytics`),
     description: 'Open analytics',
   },
   {
     phrases: ['go to archive', 'show archive', 'archiv'],
-    action: () => goto('/archive'),
+    action: () => goto(`${base}/archive`),
     description: 'Open archive',
   },
   {

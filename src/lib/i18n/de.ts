@@ -556,6 +556,8 @@ export default {
       connectWith: '{network} verbinden',
       back: 'Zurück',
       blueskyOAuth: 'Mit Bluesky anmelden',
+      contacting: 'Verbinde mit {network}…',
+      signingIn: 'Anmeldung läuft…',
       blueskyAppPassword: 'Oder ein App-Passwort verwenden',
       mastodonInstance: 'Instanz-URL',
       handle: 'Handle',

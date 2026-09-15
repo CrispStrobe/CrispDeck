@@ -279,6 +279,44 @@ The repo auto-deploys on push via GitHub integration. Manual deploy:
 npx vercel deploy --prod
 ```
 
+### GitHub Pages mirror
+
+`.github/workflows/pages.yml` publishes a static mirror to
+`https://<owner>.github.io/<repo>/` on every push to `main`.
+
+Vercel is the canonical deployment and the mirror is not equivalent, because
+GitHub Pages serves static files only. Everything that talks straight to
+Bluesky or Mastodon from the browser works — sign-in (including Bluesky OAuth),
+timeline, feeds, posting. Everything backed by a function in `api/` does not:
+
+| Feature | Vercel | Pages |
+| --- | --- | --- |
+| Bluesky + Mastodon sign-in, reading, posting | yes | yes |
+| Threads sign-in (`api/threads` token exchange) | yes | no |
+| Web push notifications (`api/push`) | yes | no |
+| Publishing a custom feed (`api/feed`) | yes | no |
+| Hosting a feed generator (`api/xrpc`) | yes | no |
+
+A project site is served under `/<repo>/` rather than at the origin root, so
+the Pages build sets `BASE_PATH` and every internal link goes through `base`
+from `$app/paths` (empty on Vercel, so nothing changes there). Comparisons run
+the other way, through `routePath()` in `src/lib/routes.ts`, which strips the
+mount point back off `page.url.pathname`.
+
+Three static files hardcode an origin or a root path and are rewritten in the
+CI checkout by `scripts/mount-at-base.mjs` — never committed, since the files
+in the repository are the ones Vercel needs:
+
+- `client-metadata.json` — AT Protocol requires every `redirect_uri` to sit
+  under the same origin as `client_id`. Left pointing at Vercel, a sign-in
+  started on Pages would hand the session to the Vercel deployment instead.
+- `manifest.json` — `start_url`, `scope` and `id` decide what the installed
+  PWA opens and which pages it owns.
+- `sw.js` — the shell it precaches and its offline fallback.
+
+To serve the mirror from a custom domain at the root instead, set `base` to
+`""` and drop the `mount-at-base` step's `--base` argument.
+
 ### Run tests
 
 ```bash

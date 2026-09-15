@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Server, Loader2, Users, MessageCircle, Shield, Mail, ExternalLink, Globe } from '@lucide/svelte';
@@ -129,8 +130,8 @@
 <div class="p-6 max-w-3xl mx-auto">
   <!-- Settings tabs -->
   <div class="flex items-center gap-1 mb-4">
-    <a href="/settings" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Settings</a>
-    <a href="/instance" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Instance Info</a>
+    <a href="{base}/settings" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Settings</a>
+    <a href="{base}/instance" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Instance Info</a>
   </div>
 
   <div class="flex items-center justify-between mb-6">
@@ -204,7 +205,7 @@
         <h3 class="text-sm font-semibold mb-3 flex items-center gap-2"><Mail size={14} /> Contact</h3>
         <div class="flex items-center gap-3">
           {#if instance.contact.account}
-            <a href="/profile?handle={encodeURIComponent(instance.contact.account.acct)}&platform=mastodon" class="flex items-center gap-2 hover:underline">
+            <a href="{base}/profile?handle={encodeURIComponent(instance.contact.account.acct)}&platform=mastodon" class="flex items-center gap-2 hover:underline">
               {#if instance.contact.account.avatar}
                 <img loading="lazy" src={instance.contact.account.avatar} alt="" class="w-8 h-8 rounded-full" />
               {/if}

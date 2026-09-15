@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Shield, Loader2, Ban, VolumeX, UserX } from '@lucide/svelte';
@@ -202,8 +203,8 @@
 <div class="p-6 max-w-3xl mx-auto">
   <!-- Moderation tabs -->
   <div class="flex items-center gap-1 mb-4">
-    <a href="/moderation" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Moderation</a>
-    <a href="/labelers" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Labelers</a>
+    <a href="{base}/moderation" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Moderation</a>
+    <a href="{base}/labelers" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Labelers</a>
   </div>
 
   <div class="flex items-center gap-2 mb-6">

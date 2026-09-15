@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Bell, Heart, Repeat, UserPlus, MessageCircle, AtSign, Loader2, Quote, ChevronDown, ChevronUp, RefreshCw, CheckCheck } from '@lucide/svelte';
@@ -309,7 +310,7 @@
                   <div class="flex -space-x-2">
                     {#each group.actors.slice(0, MAX_AVATARS) as actor}
                       {#if actor.avatar}
-                        <a href="/profile?handle={encodeURIComponent(actor.handle)}&platform={actor.platform}" title={actor.displayName || actor.handle}>
+                        <a href="{base}/profile?handle={encodeURIComponent(actor.handle)}&platform={actor.platform}" title={actor.displayName || actor.handle}>
                           <img loading="lazy" src={actor.avatar} alt="" class="w-7 h-7 rounded-full border-2 border-[var(--color-bg)]" />
                         </a>
                       {/if}
@@ -321,7 +322,7 @@
                     {/if}
                   </div>
                 {:else if group.actors[0]?.avatar}
-                  <a href="/profile?handle={encodeURIComponent(group.actors[0].handle)}&platform={group.actors[0].platform}">
+                  <a href="{base}/profile?handle={encodeURIComponent(group.actors[0].handle)}&platform={group.actors[0].platform}">
                     <img loading="lazy" src={group.actors[0].avatar} alt="" class="w-8 h-8 rounded-full flex-shrink-0" />
                   </a>
                 {/if}
@@ -331,7 +332,7 @@
                 <p class="text-sm">
                   {#if isGrouped}
                     <!-- Grouped: show first actor name + "and N others" -->
-                    <a href="/profile?handle={encodeURIComponent(group.actors[0].handle)}&platform={group.actors[0].platform}" class="font-semibold hover:underline">
+                    <a href="{base}/profile?handle={encodeURIComponent(group.actors[0].handle)}&platform={group.actors[0].platform}" class="font-semibold hover:underline">
                       {group.actors[0].displayName || group.actors[0].handle}
                     </a>
                     <span class="text-[var(--color-text-muted)]">
@@ -351,7 +352,7 @@
                     </button>
                   {:else}
                     <!-- Single notification -->
-                    <a href="/profile?handle={encodeURIComponent(group.actors[0].handle)}&platform={group.actors[0].platform}" class="font-semibold hover:underline">
+                    <a href="{base}/profile?handle={encodeURIComponent(group.actors[0].handle)}&platform={group.actors[0].platform}" class="font-semibold hover:underline">
                       {group.actors[0].displayName || group.actors[0].handle}
                     </a>
                     <span class="text-[var(--color-text-muted)]">
@@ -395,7 +396,7 @@
             <div class="pl-10 pr-3 pb-3 space-y-1">
               {#each group.actors as actor}
                 <a
-                  href="/profile?handle={encodeURIComponent(actor.handle)}&platform={actor.platform}"
+                  href="{base}/profile?handle={encodeURIComponent(actor.handle)}&platform={actor.platform}"
                   class="flex items-center gap-2 p-1.5 rounded hover:bg-[var(--color-bg)] transition-colors"
                 >
                   {#if actor.avatar}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { listDrafts, deleteDraft as dbDeleteDraft, saveDraft as dbSaveDraft } from '$lib/db';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
@@ -194,8 +195,8 @@
 <div class="p-6 max-w-4xl mx-auto">
   <!-- Compose tabs -->
   <div class="flex items-center gap-1 mb-4">
-    <a href="/compose" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Compose</a>
-    <a href="/drafts" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Drafts</a>
+    <a href="{base}/compose" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Compose</a>
+    <a href="{base}/drafts" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Drafts</a>
   </div>
 
   <div class="flex items-center justify-between mb-6">
@@ -215,7 +216,7 @@
           <Calendar size={14} /> {i18n.t.drafts.calendarView}
         </button>
       {/if}
-      <a href="/compose" class="flex items-center gap-1 px-3 py-1.5 text-sm bg-[var(--color-primary)] text-white rounded-md">
+      <a href="{base}/compose" class="flex items-center gap-1 px-3 py-1.5 text-sm bg-[var(--color-primary)] text-white rounded-md">
         <Edit3 size={14} /> {i18n.t.drafts.newPost}
       </a>
     </div>
@@ -275,7 +276,7 @@
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <FileText size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
       <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">{i18n.t.drafts.noDrafts}</h3>
-      <p class="text-sm text-[var(--color-text-muted)]">Saved drafts from the <a href="/compose" class="text-[var(--color-primary)] underline">Compose</a> page appear here.</p>
+      <p class="text-sm text-[var(--color-text-muted)]">Saved drafts from the <a href="{base}/compose" class="text-[var(--color-primary)] underline">Compose</a> page appear here.</p>
     </div>
   {:else}
     <!-- Scheduled drafts -->
@@ -366,7 +367,7 @@
               </div>
               <div class="flex items-center gap-1 flex-shrink-0">
                 <a
-                  href="/compose?draft={draft.id}"
+                  href="{base}/compose?draft={draft.id}"
                   class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors"
                   title="Edit"
                 >

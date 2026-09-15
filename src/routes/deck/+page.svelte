@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { onMount, onDestroy } from 'svelte';
   import { initAllClients, invalidateClientCache, type ClientEntry } from '$lib/api/client-factory';
   import { Columns3, Plus, Loader2 } from '@lucide/svelte';
@@ -237,7 +238,7 @@
       const post = getFocusedPost();
       if (post) {
         e.preventDefault();
-        window.location.href = `/thread?uri=${encodeURIComponent(post.uri)}&platform=${post.platform}`;
+        window.location.href = `${base}/thread?uri=${encodeURIComponent(post.uri)}&platform=${post.platform}`;
       }
       return;
     }
@@ -1226,7 +1227,7 @@
     <div class="flex-1 flex items-center justify-center">
       <div class="text-center">
         <Columns3 size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
-        <p class="text-[var(--color-text-muted)]">Add accounts in <a href="/settings" class="text-[var(--color-primary)] underline">Settings</a> first.</p>
+        <p class="text-[var(--color-text-muted)]">Add accounts in <a href="{base}/settings" class="text-[var(--color-primary)] underline">Settings</a> first.</p>
       </div>
     </div>
   {:else}

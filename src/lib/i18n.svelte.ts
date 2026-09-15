@@ -573,6 +573,8 @@ export const translations = {
       connectWith: 'Connect {network}',
       back: 'Back',
       blueskyOAuth: 'Sign in with Bluesky',
+      contacting: 'Contacting {network}…',
+      signingIn: 'Signing in…',
       blueskyAppPassword: 'Or use an app password',
       mastodonInstance: 'Instance URL',
       handle: 'Handle',

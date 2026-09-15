@@ -1,0 +1,103 @@
+# Publish a GitHub Pages mirror of CrispDeck.
+#
+# The canonical deployment is Vercel, at the root of its own origin. Pages
+# serves a project site under /<repo>/, so this build sets BASE_PATH and runs
+# scripts/mount-at-base.mjs to move the three static files that hardcode an
+# origin or a root path — the OAuth client document, the web manifest, and the
+# service worker. Those edits happen in the CI checkout only and are never
+# committed: the files in the repository stay correct for Vercel, whose OAuth
+# client identity is registered against that origin.
+#
+# What this mirror cannot do: anything backed by a serverless function, since
+# Pages serves static files only. That means Threads sign-in (the token
+# exchange in api/threads), web push (api/push), publishing a custom feed
+# (api/feed), and hosting a feed generator (api/xrpc). Bluesky and Mastodon —
+# sign-in, timeline, posting — work fully, because they talk to their own
+# servers directly from the browser. See README for the full list.
+
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never cancel a half-finished publish: the site would be left mid-swap.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - run: npm ci
+
+      - name: Work out where this site will live
+        id: where
+        run: |
+          # ${{ github.repository }} is owner/repo. A user or organisation site
+          # (<owner>.github.io) is served at the origin root and needs no base
+          # path; every other repository becomes a project site under /<repo>/.
+          owner=$(echo "${GITHUB_REPOSITORY%%/*}" | tr '[:upper:]' '[:lower:]')
+          repo="${GITHUB_REPOSITORY#*/}"
+          origin="https://${owner}.github.io"
+          if [ "${repo,,}" = "${owner}.github.io" ]; then base=""; else base="/${repo}"; fi
+          echo "origin=$origin" >> "$GITHUB_OUTPUT"
+          echo "base=$base"     >> "$GITHUB_OUTPUT"
+          echo "Publishing to ${origin}${base}/"
+
+      - name: Point the static files at this origin
+        run: node scripts/mount-at-base.mjs --origin "${{ steps.where.outputs.origin }}" --base "${{ steps.where.outputs.base }}"
+
+      - run: npx svelte-kit sync
+      - run: npx vite build
+        env:
+          BASE_PATH: ${{ steps.where.outputs.base }}
+
+      - name: Add the SPA fallback and stop Jekyll touching the build
+        run: |
+          # Pages has no rewrite rule, so a deep link is served by 404.html.
+          # The app boots from there and the router takes over.
+          cp build/index.html build/404.html
+          # Without this, Jekyll drops every directory whose name starts with
+          # an underscore — which is all of _app, i.e. the entire application.
+          touch build/.nojekyll
+
+      - name: Check the build is actually mounted where we think
+        run: |
+          base='${{ steps.where.outputs.base }}'
+          # A wrong base produces a page that loads nothing and reports no
+          # error, so fail here rather than publishing a blank site.
+          grep -q "\"${base}/_app/immutable/entry/start" build/index.html \
+            || { echo "::error::built assets are not under ${base}/ — BASE_PATH did not apply"; exit 1; }
+          grep -q "${{ steps.where.outputs.origin }}${base}/oauth/bsky-callback" build/client-metadata.json \
+            || { echo "::error::OAuth redirect_uri does not point at this origin"; exit 1; }
+          echo "index.html, assets and OAuth client document all agree on ${base}/"
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: build
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { Bookmark, Loader2, Inbox, RefreshCw } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
@@ -80,8 +81,8 @@
 <div class="p-6 max-w-3xl mx-auto">
   <!-- Bookmarks tabs -->
   <div class="flex items-center gap-1 mb-4">
-    <a href="/bookmarks" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Bookmarks</a>
-    <a href="/reading-lists" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Reading Lists</a>
+    <a href="{base}/bookmarks" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Bookmarks</a>
+    <a href="{base}/reading-lists" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Reading Lists</a>
   </div>
 
   <div class="flex items-center justify-between mb-6">

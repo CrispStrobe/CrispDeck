@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { BlueskyClient } from '$lib/api/bluesky';
@@ -113,8 +114,8 @@
 <div class="p-6 max-w-6xl mx-auto">
   <!-- Archive tabs -->
   <div class="flex items-center gap-1 mb-4">
-    <a href="/archive" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Archive</a>
-    <a href="/gallery" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Gallery</a>
+    <a href="{base}/archive" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Archive</a>
+    <a href="{base}/gallery" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Gallery</a>
   </div>
 
   <div class="flex items-center justify-between mb-6">

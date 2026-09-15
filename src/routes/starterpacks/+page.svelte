@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Package, Loader2, UserPlus, Users, ExternalLink, Plus, Trash2 } from '@lucide/svelte';
@@ -232,9 +233,9 @@
 <div class="p-6 max-w-4xl mx-auto">
   <!-- Lists & Feeds tabs -->
   <div class="flex items-center gap-1 mb-4">
-    <a href="/lists" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Lists</a>
-    <a href="/starterpacks" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Starter Packs</a>
-    <a href="/feed-builder" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Feed Builder</a>
+    <a href="{base}/lists" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Lists</a>
+    <a href="{base}/starterpacks" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Starter Packs</a>
+    <a href="{base}/feed-builder" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Feed Builder</a>
   </div>
 
   <div class="flex items-center gap-2 mb-6">
@@ -350,7 +351,7 @@
     {#if !loading && !bskyEntry}
       <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
         <Package size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
-        <p class="text-sm text-[var(--color-text-muted)]">Add a Bluesky account in <a href="/settings" class="text-[var(--color-primary)] underline">Settings</a> to browse starter packs.</p>
+        <p class="text-sm text-[var(--color-text-muted)]">Add a Bluesky account in <a href="{base}/settings" class="text-[var(--color-primary)] underline">Settings</a> to browse starter packs.</p>
       </div>
     {/if}
   {/if}

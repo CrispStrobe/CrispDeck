@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, getBskyClient, getMastoClient, type ClientEntry } from '$lib/api/client-factory';
   import { TrendingUp, Loader2, Hash, Link2, Rss } from '@lucide/svelte';
@@ -154,8 +155,8 @@
 
   <!-- Discover tabs: Trending / Catch Up -->
   <div class="flex items-center gap-1 mb-4">
-    <a href="/trending" class="px-4 py-2 text-sm font-medium rounded-t-md border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Trending</a>
-    <a href="/catchup" class="px-4 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Catch Up</a>
+    <a href="{base}/trending" class="px-4 py-2 text-sm font-medium rounded-t-md border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Trending</a>
+    <a href="{base}/catchup" class="px-4 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Catch Up</a>
   </div>
 
   {#if error}
@@ -198,7 +199,7 @@
   {:else if !hasBsky && !hasMasto}
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <TrendingUp size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
-      <p class="text-sm text-[var(--color-text-muted)]">Add a Bluesky or Mastodon account in <a href="/settings" class="text-[var(--color-primary)] underline">Settings</a> to see trending content.</p>
+      <p class="text-sm text-[var(--color-text-muted)]">Add a Bluesky or Mastodon account in <a href="{base}/settings" class="text-[var(--color-primary)] underline">Settings</a> to see trending content.</p>
     </div>
   {:else}
     <!-- Combined trending (unified view) -->
@@ -247,7 +248,7 @@
       <div class="space-y-2">
         {#each bskyTopics as topic, i}
           <a
-            href="/search?q={encodeURIComponent(topic.topic)}"
+            href="{base}/search?q={encodeURIComponent(topic.topic)}"
             class="flex items-center gap-4 p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] hover:border-[var(--color-bluesky)] transition-colors"
           >
             <span class="text-lg font-bold text-[var(--color-text-muted)] w-8 text-right">{i + 1}.</span>
@@ -270,7 +271,7 @@
     {#if activeTab === 'tags'}
       <div class="space-y-2">
         {#each enrichedTags as tag}
-          <a href="/search?q=%23{tag.name}" class="flex items-center justify-between p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] hover:border-[var(--color-mastodon)] transition-colors">
+          <a href="{base}/search?q=%23{tag.name}" class="flex items-center justify-between p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] hover:border-[var(--color-mastodon)] transition-colors">
             <span class="text-sm font-medium">#{tag.name}</span>
             <span class="text-xs text-[var(--color-text-muted)]">{tag.uses} uses</span>
           </a>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { ChevronUp } from '@lucide/svelte';
   import type { Account } from '$lib/types';
 
@@ -69,7 +70,7 @@
         </div>
         {#each accounts as acct}
           <a
-            href="/settings?tab=account"
+            href="{base}/settings?tab=account"
             onclick={() => showPopover = false}
             class="flex items-center gap-2 px-3 py-2 hover:bg-[var(--color-surface-hover)] transition-colors"
           >
@@ -91,7 +92,7 @@
           </a>
         {/each}
         <a
-          href="/settings?tab=account"
+          href="{base}/settings?tab=account"
           onclick={() => showPopover = false}
           class="flex items-center gap-2 px-3 py-2 text-[var(--color-primary)] hover:bg-[var(--color-surface-hover)] transition-colors text-xs"
         >

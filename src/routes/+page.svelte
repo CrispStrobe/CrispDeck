@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { listAccounts, addAccount as dbAddAccount, startMastodonOAuth as dbStartOAuth } from '$lib/db';
@@ -15,11 +16,11 @@
     // Check if user prefers direct-to-feed mode
     const homeMode = localStorage.getItem('crispdeck-home-mode') ?? 'dashboard';
     if (homeMode === 'feed') {
-      goto('/feed', { replaceState: true });
+      goto(`${base}/feed`, { replaceState: true });
       return;
     }
     if (homeMode === 'deck') {
-      goto('/deck', { replaceState: true });
+      goto(`${base}/deck`, { replaceState: true });
       return;
     }
 
@@ -80,7 +81,7 @@
       is_primary: true,
     });
     localStorage.setItem('crispdeck-first-run-complete', 'true');
-    goto('/feed');
+    goto(`${base}/feed`);
   }
 
   async function handleConnectMastodon(instanceUrl: string) {
@@ -107,7 +108,7 @@
   }
 
   function handleConnectThreads() {
-    goto('/settings');
+    goto(`${base}/settings`);
   }
 </script>
 
@@ -164,23 +165,23 @@
     <!-- Quick actions — primary -->
     <h2 class="text-lg font-semibold mb-3">{i18n.t.dashboard.quickActions}</h2>
     <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-      <a href="/feed" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
+      <a href="{base}/feed" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
         <Rss size={20} />
         <span>{i18n.t.nav.feed}</span>
       </a>
-      <a href="/compose" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
+      <a href="{base}/compose" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
         <PenSquare size={20} />
         <span>{i18n.t.nav.compose}</span>
       </a>
-      <a href="/notifications" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
+      <a href="{base}/notifications" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
         <Bell size={20} />
         <span>{i18n.t.nav.notifications}</span>
       </a>
-      <a href="/search" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
+      <a href="{base}/search" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
         <Search size={20} />
         <span>{i18n.t.nav.search}</span>
       </a>
-      <a href="/messages" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
+      <a href="{base}/messages" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
         <MessageSquare size={20} />
         <span>{i18n.t.nav.messages}</span>
       </a>
@@ -189,27 +190,27 @@
     <!-- Quick actions — secondary (expandable) -->
     {#if showMoreActions}
       <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3">
-        <a href="/deck" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
+        <a href="{base}/deck" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
           <Columns3 size={20} />
           <span>{i18n.t.nav.deck}</span>
         </a>
-        <a href="/trending" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
+        <a href="{base}/trending" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
           <TrendingUp size={20} />
           <span>{i18n.t.nav.trending}</span>
         </a>
-        <a href="/bookmarks" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
+        <a href="{base}/bookmarks" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
           <Bookmark size={20} />
           <span>{i18n.t.nav.bookmarks}</span>
         </a>
-        <a href="/identities" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
+        <a href="{base}/identities" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
           <Users size={20} />
           <span>{i18n.t.nav.identities}</span>
         </a>
-        <a href="/analytics" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
+        <a href="{base}/analytics" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
           <BarChart3 size={20} />
           <span>{i18n.t.nav.analytics}</span>
         </a>
-        <a href="/identities?scan=1" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
+        <a href="{base}/identities?scan=1" class="flex items-center gap-3 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg p-4 border border-[var(--color-border)] transition-colors">
           <ScanSearch size={20} />
           <span>{i18n.t.dashboard.scanIdentities}</span>
         </a>

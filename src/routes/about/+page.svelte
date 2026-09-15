@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { Info, ExternalLink, Search, Shield, ScrollText } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
@@ -111,7 +112,7 @@
   <section class="mb-6 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
     <h3 class="text-sm font-semibold mb-2 flex items-center gap-1.5"><Shield size={14} /> Privacy &amp; Legal</h3>
     <div class="flex flex-wrap gap-3 text-xs">
-      <a href="/privacy" class="text-[var(--color-primary)] hover:underline">Privacy Policy</a>
+      <a href="{base}/privacy" class="text-[var(--color-primary)] hover:underline">Privacy Policy</a>
       <a href="https://github.com/CrispStrobe/CrispDeck/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">AGPL-3.0 Source License</a>
       <a href="https://github.com/CrispStrobe/CrispDeck/blob/main/LICENSE-COMMERCIAL" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">App Store License</a>
     </div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Clock, Loader2, CheckCircle, Rss } from '@lucide/svelte';
@@ -124,8 +125,8 @@
     <h1 class="text-2xl font-bold">Discover</h1>
   </div>
   <div class="flex items-center gap-1 mb-4">
-    <a href="/trending" class="px-4 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Trending</a>
-    <a href="/catchup" class="px-4 py-2 text-sm font-medium rounded-t-md border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Catch Up</a>
+    <a href="{base}/trending" class="px-4 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Trending</a>
+    <a href="{base}/catchup" class="px-4 py-2 text-sm font-medium rounded-t-md border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Catch Up</a>
   </div>
 
   <!-- Header -->

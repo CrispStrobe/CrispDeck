@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { MessageCircle, Loader2, ArrowLeft, BookOpen, Share2 } from '@lucide/svelte';
@@ -51,7 +52,7 @@
         // Threads API has no thread view — open permalink directly
         if (uri.startsWith('https://')) {
           window.open(uri, '_blank');
-          goto('/feed');
+          goto(`${base}/feed`);
           return;
         }
       }
@@ -160,7 +161,7 @@
     if (!canSync) return;
     const text = extractThreadText(articlePosts);
     // Navigate to compose with the thread text pre-filled
-    goto(`/compose?text=${encodeURIComponent(text)}`);
+    goto(`${base}/compose?text=${encodeURIComponent(text)}`);
   }
 </script>
 

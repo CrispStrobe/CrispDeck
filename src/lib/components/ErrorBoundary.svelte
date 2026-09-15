@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { AlertTriangle, RefreshCw } from '@lucide/svelte';
 
   let { children }: { children: any } = $props();
@@ -35,7 +36,7 @@
             Try Again
           </button>
           <a
-            href="/"
+            href={base || "/"}
             class="px-4 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
           >
             Go Home

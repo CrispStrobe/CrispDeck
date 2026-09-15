@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { page } from '$app/state';
   import { Home, ArrowLeft, Search } from '@lucide/svelte';
 </script>
@@ -20,21 +21,21 @@
     </p>
     <div class="flex items-center justify-center gap-3">
       <a
-        href="/"
+        href={base || "/"}
         class="flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white rounded-lg text-sm font-medium transition-colors"
       >
         <Home size={16} />
         Dashboard
       </a>
       <a
-        href="/feed"
+        href="{base}/feed"
         class="flex items-center gap-2 px-4 py-2 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-lg text-sm font-medium transition-colors"
       >
         <ArrowLeft size={16} />
         Feed
       </a>
       <a
-        href="/search"
+        href="{base}/search"
         class="flex items-center gap-2 px-4 py-2 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-lg text-sm font-medium transition-colors"
       >
         <Search size={16} />

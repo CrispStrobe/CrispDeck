@@ -18,8 +18,12 @@ import {
 } from '@atproto/oauth-client-browser';
 import { Agent } from '@atproto/api';
 import { isTauri } from '$lib/platform';
-// The very document served at PROD_ORIGIN/client-metadata.json — one source of
-// truth for the deployed client's identity.
+// The very document served at this deployment's /client-metadata.json — one
+// source of truth for the deployed client's identity. The origin lives in the
+// file rather than in a constant here, so a build served from somewhere other
+// than the Vercel deployment (scripts/mount-at-base.mjs rewrites it) gets a
+// client_id and redirect_uri on its own origin. Pointing at another origin
+// would land the user back on that other deployment after signing in.
 import clientMetadataJson from '../../../static/client-metadata.json';
 import type { OAuthClientMetadataInput } from '@atproto/oauth-types';
 
@@ -34,15 +38,6 @@ import type { OAuthClientMetadataInput } from '@atproto/oauth-types';
 const DEPLOYED_CLIENT_METADATA = clientMetadataJson as unknown as OAuthClientMetadataInput;
 
 let oauthClientPromise: Promise<BrowserOAuthClient> | null = null;
-
-/**
- * The production origin where client-metadata.json is publicly served.
- * AT Protocol OAuth requires the auth server to fetch client_id as a URL.
- * On preview deployments the SPA rewrite or Vercel auth can block this,
- * so we always point client_id to the production origin.
- * Localhost uses the AT Protocol loopback client_id format instead.
- */
-const PROD_ORIGIN = 'https://crispdeck.vercel.app';
 
 /** Entryway used to resolve handles, and to sign in when no handle is given. */
 const HANDLE_RESOLVER = 'https://bsky.social';

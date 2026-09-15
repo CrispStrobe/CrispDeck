@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { logCrosspost, saveDraft as dbSaveDraft, listDrafts, deleteDraft as dbDeleteDraft } from '$lib/db';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
@@ -592,8 +593,8 @@
 <div class="p-6 max-w-4xl mx-auto">
   <!-- Compose tabs -->
   <div class="flex items-center gap-1 mb-4">
-    <a href="/compose" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Compose</a>
-    <a href="/drafts" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Drafts</a>
+    <a href="{base}/compose" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Compose</a>
+    <a href="{base}/drafts" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Drafts</a>
   </div>
 
   <div class="flex items-center gap-2 mb-6">
@@ -646,7 +647,7 @@
         {#if replyTo}
           <div class="p-3 bg-blue-950/30 border-l-4 border-blue-500 rounded-r-lg text-sm">
             <span class="text-blue-300">{i18n.t.compose.replyingTo}</span>
-            <a href="/profile?handle={encodeURIComponent(replyAuthor)}&platform={replyPlatform}" class="font-medium text-blue-400 hover:underline ml-1">@{replyAuthor}</a>
+            <a href="{base}/profile?handle={encodeURIComponent(replyAuthor)}&platform={replyPlatform}" class="font-medium text-blue-400 hover:underline ml-1">@{replyAuthor}</a>
           </div>
         {/if}
 

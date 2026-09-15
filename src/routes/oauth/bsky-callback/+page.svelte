@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { addAccount, updateAccount, listAccounts } from '$lib/db';
@@ -59,7 +60,7 @@
         goto(returnTo);
         return;
       }
-      const dest = returnTo ?? ((await listAccounts()).length === 1 ? '/feed' : '/settings');
+      const dest = returnTo ?? ((await listAccounts()).length === 1 ? `${base}/feed` : `${base}/settings`);
       setTimeout(() => goto(dest), 1500);
     } catch (e) {
       clearSilentReauthFlag();
@@ -69,7 +70,7 @@
         // reconnect hint; never strand them on an error screen they
         // didn't ask for.
         console.warn('Silent Bluesky re-auth failed:', e);
-        goto(takeReturnTo() ?? '/feed');
+        goto(takeReturnTo() ?? `${base}/feed`);
         return;
       }
       status = 'error';
@@ -93,7 +94,7 @@
       <AlertTriangle size={48} class="text-[var(--color-danger)] mx-auto mb-4" />
       <h2 class="text-lg font-bold mb-2">Connection Failed</h2>
       <p class="text-sm text-red-400 mb-4">{errorMsg}</p>
-      <a href="/settings" class="inline-block px-4 py-2 bg-[var(--color-primary)] text-white rounded-md text-sm">Back to Settings</a>
+      <a href="{base}/settings" class="inline-block px-4 py-2 bg-[var(--color-primary)] text-white rounded-md text-sm">Back to Settings</a>
     {/if}
   </div>
 </div>
