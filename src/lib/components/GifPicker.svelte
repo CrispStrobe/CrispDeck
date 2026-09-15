@@ -3,130 +3,190 @@
 
   let { onselect }: { onselect: (gif: { url: string; preview: string; width: number; height: number; title: string }) => void } = $props();
 
+  // Animated emoji from a self-hosted, permissively-licensed set.
+  //
+  // This replaced Tenor. Google discontinued the public Tenor API — new keys
+  // stopped on 2026-01-13, third-party access ended 2026-06-30 — and the old
+  // key now returns API_KEY_INVALID, so the picker had been silently broken in
+  // production. There is deliberately no API key and no account here: the
+  // assets are CC BY 4.0 / MIT / Apache-2.0 / OFL and are served from our own
+  // dataset, so nothing can be switched off by a third party again.
+  //
+  // GIF rather than the (20x smaller) Lottie because the chosen file is
+  // uploaded as post media. Lottie is JSON; Mastodon and Bluesky would reject
+  // it, and it would be mislabelled image/gif on the way out.
+  const SET_BASE = 'https://huggingface.co/datasets/cstr/open-emoji-assets/resolve/main';
+  const GIF = (slug: string) => `${SET_BASE}/noto-animated/gif/${slug}.gif`;
+  // Static SVG for the grid: a 512px animated GIF per tile would be ~600 KB
+  // each, so the picker would pull tens of megabytes just to render.
+  const THUMB = (slug: string) => `${SET_BASE}/twemoji/${slug}.svg`;
+
+  type Entry = { s: string; c: string; n: string; g: string; k: string[]; a: number };
+
   let show = $state(false);
   let query = $state('');
-  let gifs: Array<{ id: string; url: string; preview: string; width: number; height: number; title: string }> = $state([]);
+  let results: Entry[] = $state([]);
   let loading = $state(false);
   let error = $state('');
 
-  // Tenor API v2 — anonymous/free tier key (public, rate-limited)
-  const TENOR_KEY = 'AIzaSyBqRpOoQ9wJxgGmqE8hFOsf9kUkJnbKEEo';
-
+  let index: Entry[] | null = null;
+  let indexPromise: Promise<Entry[]> | null = null;
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
-  function parseResults(results: any[]): typeof gifs {
-    return results.map((r: any) => {
-      const gif = r.media_formats?.gif ?? r.media_formats?.mediumgif ?? r.media_formats?.tinygif;
-      const preview = r.media_formats?.tinygif ?? r.media_formats?.nanogif ?? gif;
-      return {
-        id: r.id,
-        url: gif?.url ?? '',
-        preview: preview?.url ?? '',
-        width: preview?.dims?.[0] ?? 200,
-        height: preview?.dims?.[1] ?? 200,
-        title: r.content_description ?? '',
-      };
-    }).filter((g: any) => g.url);
+  /** Locale-matched index, fetched once and reused. ~104 KB gzipped. */
+  function loadIndex(): Promise<Entry[]> {
+    if (indexPromise) return indexPromise;
+    const lang = (typeof navigator !== 'undefined' ? navigator.language : 'en').slice(0, 2);
+    const supported = ['en', 'de', 'fr', 'es', 'it', 'nl', 'pt', 'ja'];
+    const loc = supported.includes(lang) ? lang : 'en';
+
+    indexPromise = fetch(`${SET_BASE}/slices/index.${loc}.json`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`index ${r.status}`);
+        return r.json();
+      })
+      .then((d) => {
+        // Only animated entries can be posted; the static-only ones have no GIF.
+        index = (d.emoji as Entry[]).filter((e) => e.a === 1);
+        return index;
+      })
+      .catch((e) => {
+        indexPromise = null;   // let a later attempt retry
+        throw e;
+      });
+    return indexPromise;
   }
 
-  async function fetchTrending() {
+  function scored(list: Entry[], q: string): Entry[] {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return list.slice(0, 40);
+    const out: Array<[number, Entry]> = [];
+    for (const e of list) {
+      let best = 0;
+      if (e.n.toLowerCase() === needle) best = 4;
+      else if (e.n.toLowerCase().startsWith(needle)) best = 3;
+      else {
+        for (const k of e.k) {
+          if (k === needle) { best = Math.max(best, 3); break; }
+          if (k.startsWith(needle)) best = Math.max(best, 2);
+          else if (k.includes(needle)) best = Math.max(best, 1);
+        }
+      }
+      if (best) out.push([best, e]);
+    }
+    out.sort((a, b) => b[0] - a[0]);
+    return out.slice(0, 40).map(([, e]) => e);
+  }
+
+  async function search(q: string) {
     loading = true;
     error = '';
     try {
-      const resp = await fetch(`https://tenor.googleapis.com/v2/featured?key=${TENOR_KEY}&limit=20&media_filter=gif,tinygif,nanogif`);
-      if (!resp.ok) throw new Error('Failed to load trending GIFs');
-      const data = await resp.json();
-      gifs = parseResults(data.results ?? []);
+      const list = await loadIndex();
+      results = scored(list, q);
+      if (!results.length && q.trim()) error = 'No matches.';
     } catch (e) {
-      error = String(e);
+      error = 'Could not load the emoji set.';
+      results = [];
     } finally {
       loading = false;
     }
   }
 
-  async function searchGifs(q: string) {
-    if (!q.trim()) { fetchTrending(); return; }
-    loading = true;
-    error = '';
-    try {
-      const resp = await fetch(`https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(q)}&key=${TENOR_KEY}&limit=20&media_filter=gif,tinygif,nanogif`);
-      if (!resp.ok) throw new Error('Search failed');
-      const data = await resp.json();
-      gifs = parseResults(data.results ?? []);
-    } catch (e) {
-      error = String(e);
-    } finally {
-      loading = false;
-    }
-  }
-
-  function handleInput() {
+  function onInput() {
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => searchGifs(query), 400);
+    debounceTimer = setTimeout(() => search(query), 200);
   }
 
-  function handleOpen() {
+  function open() {
     show = true;
-    if (gifs.length === 0) fetchTrending();
+    if (!results.length) search('');
+  }
+
+  function close() {
+    show = false;
+    query = '';
+  }
+
+  /** Focus on mount. Preferred over the autofocus attribute, which applies on
+   *  page load and is an a11y problem; here the field only exists once the
+   *  user has deliberately opened the picker. */
+  function focusOnMount(node: HTMLInputElement) {
+    node.focus();
+  }
+
+  function pick(e: Entry) {
+    onselect({
+      url: GIF(e.s),
+      preview: THUMB(e.s),
+      width: 512,
+      height: 512,
+      // Becomes the alt text, so name the emoji rather than leaving it blank.
+      title: e.n
+    });
+    close();
   }
 </script>
 
-<div class="relative inline-block">
-  <button
-    onclick={() => show ? show = false : handleOpen()}
-    class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] rounded-md transition-colors text-sm font-mono"
-    title="GIF"
-  >
-    GIF
-  </button>
+<button type="button" class="gif-trigger" onclick={open} aria-label="Add an animated emoji">
+  GIF
+</button>
 
-  {#if show}
-    <div class="absolute bottom-full left-0 mb-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl shadow-2xl z-50 w-80 max-h-80 overflow-hidden flex flex-col">
-      <div class="p-2 border-b border-[var(--color-border)] flex items-center gap-2">
-        <Search size={14} class="text-[var(--color-text-muted)]" />
-        <input
-          type="text"
-          bind:value={query}
-          oninput={handleInput}
-          placeholder="Search Tenor..."
-          class="flex-1 px-2 py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-xs text-[var(--color-text)] focus:outline-none"
-        />
-        <button onclick={() => { show = false; }} class="text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
-          <X size={14} />
-        </button>
-      </div>
-
-      <div class="flex-1 overflow-y-auto p-2">
-        {#if loading}
-          <div class="flex items-center justify-center py-8">
-            <Loader2 size={20} class="animate-spin text-[var(--color-text-muted)]" />
-          </div>
-        {:else if error}
-          <p class="text-xs text-red-400 text-center py-4">{error}</p>
-        {:else if gifs.length === 0}
-          <p class="text-xs text-[var(--color-text-muted)] text-center py-4">No GIFs found</p>
-        {:else}
-          <div class="grid grid-cols-2 gap-1.5">
-            {#each gifs as gif}
-              <button
-                onclick={() => { onselect(gif); show = false; query = ''; }}
-                class="rounded-md overflow-hidden hover:ring-2 hover:ring-[var(--color-primary)] transition-all bg-[var(--color-surface-hover)]"
-              >
-                <img
-                  src={gif.preview}
-                  alt={gif.title}
-                  class="w-full aspect-video object-cover"
-                  loading="lazy"
-                />
-              </button>
-            {/each}
-          </div>
-        {/if}
-      </div>
-
-      <div class="px-2 py-1 border-t border-[var(--color-border)] text-center">
-        <span class="text-[9px] text-[var(--color-text-muted)]">Powered by Tenor</span>
-      </div>
+{#if show}
+  <div class="gif-backdrop" onclick={close} role="presentation"></div>
+  <div class="gif-panel" role="dialog" aria-label="Animated emoji picker">
+    <div class="gif-head">
+      <Search size={16} />
+      <input
+        bind:value={query}
+        oninput={onInput}
+        placeholder="Search emoji…"
+        aria-label="Search emoji"
+        use:focusOnMount
+      />
+      <button type="button" onclick={close} aria-label="Close"><X size={16} /></button>
     </div>
-  {/if}
-</div>
+
+    {#if loading}
+      <div class="gif-state"><Loader2 class="spin" size={20} /></div>
+    {:else if error}
+      <div class="gif-state">{error}</div>
+    {:else}
+      <div class="gif-grid">
+        {#each results as e (e.s)}
+          <button type="button" class="gif-cell" onclick={() => pick(e)} title={e.n}>
+            <img src={THUMB(e.s)} alt={e.n} loading="lazy" width="40" height="40" />
+          </button>
+        {/each}
+      </div>
+    {/if}
+
+    <div class="gif-credit">
+      Animated Noto Emoji — Google, CC BY 4.0
+    </div>
+  </div>
+{/if}
+
+<style>
+  .gif-trigger { font-size: 0.75rem; font-weight: 600; }
+  .gif-backdrop { position: fixed; inset: 0; z-index: 40; }
+  .gif-panel {
+    position: absolute; z-index: 41; width: 20rem; max-height: 22rem;
+    display: flex; flex-direction: column;
+    background: var(--surface, #fff); border: 1px solid var(--border, #ddd);
+    border-radius: 0.5rem; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  }
+  .gif-head { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; }
+  .gif-head input { flex: 1; border: 0; outline: none; background: transparent; font: inherit; }
+  .gif-grid {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.25rem;
+    padding: 0.5rem; overflow-y: auto;
+  }
+  .gif-cell { padding: 0.25rem; border: 0; background: transparent; cursor: pointer; border-radius: 0.25rem; }
+  .gif-cell:hover { background: var(--hover, rgba(0, 0, 0, 0.06)); }
+  .gif-cell img { display: block; width: 100%; height: auto; }
+  .gif-state { padding: 1.5rem; text-align: center; opacity: 0.7; }
+  .gif-credit { padding: 0.375rem 0.5rem; font-size: 0.625rem; opacity: 0.6; border-top: 1px solid var(--border, #eee); }
+  :global(.spin) { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
