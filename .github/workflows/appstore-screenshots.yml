@@ -1,0 +1,90 @@
+name: App Store screenshots
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: Replace the App Store screenshot sets after capture
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Build the web bundle
+        run: npm run build
+
+      - name: Serve the build
+        run: |
+          npm run preview -- --port 4173 &
+          for _ in $(seq 60); do
+            curl -sfo /dev/null http://localhost:4173/ && exit 0
+            sleep 2
+          done
+          echo "preview server never came up" >&2
+          exit 1
+
+      - name: Render the screenshots
+        run: node tools/screenshots/capture.mjs appstore-shots
+
+      # A scene whose selectors have drifted still produces a PNG — of an empty
+      # page. Check the pixels, not just the file count.
+      - name: Verify the manifest
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, struct
+          root = pathlib.Path("appstore-shots")
+          rows = json.loads((root / "manifest.json").read_text())
+          expected = {"APP_IPHONE_67": (1320, 2868),
+                      "APP_IPAD_PRO_3GEN_129": (2064, 2752)}
+          assert len(rows) == 10, len(rows)
+          for row in rows:
+              path = root / row["name"]
+              blob = path.read_bytes()
+              assert blob[:8] == b"\x89PNG\r\n\x1a\n", row["name"]
+              size = struct.unpack(">II", blob[16:24])
+              assert size == expected[row["displayType"]], (row["name"], size)
+              # A blank render compresses to almost nothing.
+              assert path.stat().st_size > 60_000, (row["name"], path.stat().st_size)
+          print(f"verified {len(rows)} screenshots")
+          PY
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: crispdeck-appstore-screenshots
+          path: appstore-shots
+          if-no-files-found: error
+          retention-days: 30
+
+      - uses: actions/setup-python@v6
+        if: inputs.upload
+        with:
+          python-version: "3.12"
+
+      - name: Apply listing copy and replace the screenshot sets
+        if: inputs.upload
+        env:
+          ASC_API_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          python3 -m pip install --quiet --disable-pip-version-check cryptography
+          python3 tools/asc/listing.py
+          python3 tools/asc/screenshots.py appstore-shots --replace --prune

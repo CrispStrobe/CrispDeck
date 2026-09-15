@@ -33,3 +33,8 @@ src-tauri/.cargo/config.toml
 handover-prompts/
 playwright-report/
 playwright-results/
+
+# App Review correspondence — drafts and submission detail, not for a public repo
+store/appeal-*.md
+# Screenshot capture output (regenerate with tools/screenshots/capture.mjs)
+appstore-shots/
