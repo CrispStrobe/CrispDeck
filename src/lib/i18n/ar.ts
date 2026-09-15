@@ -43,7 +43,7 @@ export default {
       translatedFrom: 'مترجم من {lang}', sharedVia: 'تمت المشاركة عبر CrispDeck',
     },
     feed: {
-      title: 'الخلاصة', timeline: 'الجدول الزمني', feeds: 'الخلاصات', discoverFeeds: 'اكتشف المزيد من الخلاصات ←', myPosts: 'منشوراتي', all: 'الكل',
+      title: 'الخلاصة', timeline: 'الجدول الزمني', switchFeed: 'تبديل الخلاصة', savedNotPinned: 'محفوظة', searchFeeds: 'ابحث عن خلاصات…', noFeedsFound: 'لا توجد خلاصات مطابقة.', feedSearchFailed: 'بحث الخلاصات غير متاح حاليًا.', pinFeed: 'إضافة إلى خلاصاتي', unpinFeed: 'إزالة من خلاصاتي', feeds: 'الخلاصات', discoverFeeds: 'اكتشف المزيد من الخلاصات ←', myPosts: 'منشوراتي', all: 'الكل',
       noAccounts: 'لا توجد حسابات', addAccountsFirst: 'أضف حسابات في الإعدادات أولاً.',
       loadingTimeline: 'جاري تحميل الجدول الزمني...', loadingYourPosts: 'جاري تحميل منشوراتك...',
       noPostsMatch: 'لا توجد منشورات مطابقة', noPostsFound: 'لم يتم العثور على منشورات',

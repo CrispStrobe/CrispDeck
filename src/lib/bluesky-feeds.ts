@@ -32,6 +32,16 @@ export interface FeedChoice {
   /** Feed generators only: the account that publishes it. */
   byHandle?: string;
   avatar?: string;
+  /**
+   * The saved-feed record's own id, which is what removeSavedFeeds takes.
+   * Absent for a feed found by search that the account has not saved.
+   */
+  savedId?: string;
+  /** Saved and pinned, saved but unpinned, or not saved at all. */
+  pinned?: boolean;
+  saved?: boolean;
+  description?: string;
+  likeCount?: number;
 }
 
 export const FOLLOWING: FeedChoice = { key: 'timeline', kind: 'timeline', title: 'Following' };
@@ -56,27 +66,42 @@ function nameFromUri(uri: string): string {
  * switcher, so unresolved entries fall back to a name derived from the URI.
  */
 export async function listPinnedFeeds(agent: Agent): Promise<FeedChoice[]> {
+  return (await listSavedFeeds(agent)).filter((f) => f.pinned !== false);
+}
+
+/**
+ * Every feed the account has saved, pinned or not, in saved order.
+ *
+ * bsky.app distinguishes the two: pinned feeds get a tab, saved ones sit in a
+ * list you have to go and open. Showing only the pinned ones, as this did at
+ * first, quietly dropped feeds the person had deliberately kept.
+ */
+export async function listSavedFeeds(agent: Agent): Promise<FeedChoice[]> {
   const prefs: any = await agent.getPreferences();
-  const saved: any[] = prefs?.savedFeeds ?? [];
-  const pinned = saved.filter((s) => s?.pinned !== false && s?.value);
+  const saved: any[] = (prefs?.savedFeeds ?? []).filter((s: any) => s?.value);
 
   const out: FeedChoice[] = [];
   const feedUris: string[] = [];
   const listUris: string[] = [];
 
-  for (const s of pinned) {
+  for (const s of saved) {
+    const common = { savedId: s.id, saved: true, pinned: s.pinned !== false };
     if (s.type === 'timeline') {
-      out.push(FOLLOWING);
+      out.push({ ...FOLLOWING, ...common });
     } else if (s.type === 'feed') {
       feedUris.push(s.value);
-      out.push({ key: s.value, kind: 'feed', uri: s.value, title: nameFromUri(s.value) });
+      out.push({
+        key: s.value, kind: 'feed', uri: s.value,
+        title: nameFromUri(s.value), ...common,
+      });
     } else if (s.type === 'list') {
       listUris.push(s.value);
       // A list rkey is a TID, not a slug, so there is nothing readable to
       // derive; 'List' at least says what the entry is.
-      out.push({ key: s.value, kind: 'list', uri: s.value, title: 'List' });
+      out.push({ key: s.value, kind: 'list', uri: s.value, title: 'List', ...common });
     }
   }
+  // Following is always reachable, even for an account that has unpinned it.
   if (!out.some((f) => f.kind === 'timeline')) out.unshift(FOLLOWING);
 
   const byKey = new Map(out.map((f) => [f.key, f]));
@@ -91,6 +116,8 @@ export async function listPinnedFeeds(agent: Agent): Promise<FeedChoice[]> {
         f.title = g.displayName || f.title;
         f.byHandle = g.creator?.handle;
         f.avatar = g.avatar;
+        f.description = g.description;
+        f.likeCount = g.likeCount;
       }
     } catch (e) {
       console.error('Could not resolve feed generator names:', e);
@@ -111,4 +138,58 @@ export async function listPinnedFeeds(agent: Agent): Promise<FeedChoice[]> {
   }));
 
   return out;
+}
+
+/**
+ * Search the network's public feed generators.
+ *
+ * Unauthenticated on purpose: this is the public AppView, so the picker can
+ * offer discovery before any account is connected, and a search never depends
+ * on whose session happens to be live.
+ */
+export async function searchFeedGenerators(
+  query: string,
+  limit = 15,
+): Promise<FeedChoice[]> {
+  const q = query.trim();
+  if (!q) return [];
+  const url =
+    'https://public.api.bsky.app/xrpc/app.bsky.unspecced.getPopularFeedGenerators' +
+    `?query=${encodeURIComponent(q)}&limit=${limit}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`feed search ${res.status}`);
+  const data = await res.json();
+  return (data.feeds ?? []).map((g: any) => ({
+    key: g.uri,
+    kind: 'feed' as FeedKind,
+    uri: g.uri,
+    title: g.displayName || nameFromUri(g.uri),
+    byHandle: g.creator?.handle,
+    avatar: g.avatar,
+    description: g.description,
+    likeCount: g.likeCount,
+    saved: false,
+    pinned: false,
+  }));
+}
+
+/**
+ * Pin a feed or list to the account's saved feeds.
+ *
+ * Goes through the SDK's addSavedFeeds rather than putPreferences: the
+ * preferences document is a single array covering muted words, labelers, adult
+ * content settings and more, so writing it wholesale from here would discard
+ * everything this app does not know about. addSavedFeeds reads, merges and
+ * writes back.
+ */
+export async function pinFeed(agent: Agent, choice: FeedChoice): Promise<void> {
+  if (!choice.uri) return;
+  await (agent as any).addSavedFeeds([
+    { type: choice.kind === 'list' ? 'list' : 'feed', value: choice.uri, pinned: true },
+  ]);
+}
+
+/** Remove a saved feed by its saved-feed record id. */
+export async function unpinFeed(agent: Agent, savedId: string): Promise<void> {
+  await (agent as any).removeSavedFeeds([savedId]);
 }

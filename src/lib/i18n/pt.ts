@@ -37,7 +37,7 @@ export default {
       translatedFrom: 'Traduzido de {lang}', sharedVia: 'compartilhado via CrispDeck',
     },
     feed: {
-      title: 'Feed', timeline: 'Linha do tempo', feeds: 'Feeds', discoverFeeds: 'Descobrir mais feeds →', myPosts: 'Meus posts', all: 'Todos',
+      title: 'Feed', timeline: 'Linha do tempo', switchFeed: 'Mudar de feed', savedNotPinned: 'Guardados', searchFeeds: 'Procurar feeds…', noFeedsFound: 'Nenhum feed corresponde.', feedSearchFailed: 'A pesquisa de feeds está indisponível.', pinFeed: 'Adicionar aos meus feeds', unpinFeed: 'Remover dos meus feeds', feeds: 'Feeds', discoverFeeds: 'Descobrir mais feeds →', myPosts: 'Meus posts', all: 'Todos',
       noAccounts: 'Nenhuma conta conectada', addAccountsFirst: 'Adicione contas nas Configurações.',
       loadingTimeline: 'Carregando linha do tempo...', loadingYourPosts: 'Carregando seus posts...',
       noPostsMatch: 'Nenhum post corresponde', noPostsFound: 'Nenhum post encontrado',

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { base } from '$app/paths';
   import { onMount, onDestroy } from 'svelte';
-  import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal, RefreshCw, ChevronDown, Hash, Users } from '@lucide/svelte';
+  import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal, RefreshCw, ChevronDown, Hash, Users, Search, Pin, PinOff } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import DelayedSpinner from '$lib/components/DelayedSpinner.svelte';
   import Post from '$lib/components/Post.svelte';
@@ -24,7 +24,7 @@
   import { buildFilterMatcher, getCachedFilters, setCachedFilters, type MastodonFilter } from '$lib/mastodon-filters';
   import { saveReadPosition, getReadPosition, flushReadPositions } from '$lib/read-position';
   import { getCached, setCache, isStale } from '$lib/view-cache';
-  import { listPinnedFeeds, FOLLOWING, type FeedChoice } from '$lib/bluesky-feeds';
+  import { listSavedFeeds, searchFeedGenerators, pinFeed, unpinFeed, FOLLOWING, type FeedChoice } from '$lib/bluesky-feeds';
   import { pickAnchor, measureItems, restoreAnchor, type ScrollAnchor } from '$lib/feed-scroll';
   import { toTime, isNewerThan } from '$lib/post-time';
   import { cacheFeed, loadCachedFeed, formatCachedTime, isOffline } from '$lib/offline-cache';
@@ -47,8 +47,23 @@
   const multiPlatform = $derived(connectedPlatforms.size > 1);
 
   let customFeed: FeedChoice | null = $state(null);
-  let pinnedFeeds: FeedChoice[] = $state([]);
+  /** Everything the account has saved, pinned or not, in saved order. */
+  let savedFeeds: FeedChoice[] = $state([]);
   let showFeedMenu = $state(false);
+  let feedQuery = $state('');
+  let feedResults: FeedChoice[] = $state([]);
+  let searchingFeeds = $state(false);
+  let feedSearchError = $state('');
+  let pinBusy: string | null = $state(null);
+  let searchTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const pinnedFeeds = $derived(savedFeeds.filter((f) => f.pinned !== false));
+  const unpinnedFeeds = $derived(savedFeeds.filter((f) => f.pinned === false));
+  /** Search hits the account has not already saved — the rest are duplicates. */
+  const newResults = $derived.by(() => {
+    const known = new Set(savedFeeds.map((f) => f.key));
+    return feedResults.filter((f) => !known.has(f.key));
+  });
 
   let cursors: Record<number, string | undefined> = $state({});
   let loadingMore = $state(false);
@@ -232,15 +247,61 @@
    * switcher the user may never open would be noise.
    */
   async function loadPinnedFeeds() {
+    const agent = blueskyAgent();
+    if (!agent) return;
+    try {
+      savedFeeds = await listSavedFeeds(agent);
+    } catch (e) {
+      console.error('Could not load saved feeds:', e);
+    }
+  }
+
+  /** The first connected Bluesky account's agent, or null. */
+  function blueskyAgent(): any | null {
     for (const [id, entry] of clientEntries) {
       if (accounts.find(a => a.id === id)?.platform !== 'bluesky') continue;
+      return entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
+    }
+    return null;
+  }
+
+  function onFeedQuery() {
+    clearTimeout(searchTimer);
+    feedSearchError = '';
+    const q = feedQuery;
+    if (!q.trim()) { feedResults = []; searchingFeeds = false; return; }
+    searchTimer = setTimeout(async () => {
+      searchingFeeds = true;
       try {
-        const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
-        pinnedFeeds = await listPinnedFeeds(agent as any);
+        feedResults = await searchFeedGenerators(q);
       } catch (e) {
-        console.error('Could not load pinned feeds:', e);
+        // Saying nothing here is indistinguishable from "no matches", which
+        // makes a search outage look like an empty network.
+        feedSearchError = i18n.t.feed.feedSearchFailed;
+        feedResults = [];
+      } finally {
+        searchingFeeds = false;
       }
-      return;
+    }, 300);
+  }
+
+  /**
+   * Pin or unpin, then re-read from the server rather than patching locally.
+   * The saved-feed ids come from the server, and a local guess at the new
+   * state is exactly the kind of thing that drifts.
+   */
+  async function togglePin(choice: FeedChoice) {
+    const agent = blueskyAgent();
+    if (!agent || !choice.uri || pinBusy) return;
+    pinBusy = choice.key;
+    try {
+      if (choice.savedId) await unpinFeed(agent, choice.savedId);
+      else await pinFeed(agent, choice);
+      await loadPinnedFeeds();
+    } catch (e) {
+      console.error('Could not change pinned feeds:', e);
+    } finally {
+      pinBusy = null;
     }
   }
 
@@ -677,48 +738,107 @@
 
         <!-- Pinned Bluesky feeds and lists. Hidden entirely when the account
              has none pinned, so a Mastodon-only user never sees a dead menu. -->
-        {#if pinnedFeeds.length > 1}
+        <!-- Pinned Bluesky feeds, lists, and a way to find more. Shown
+             whenever a Bluesky account is connected: gating it on having
+             feeds already pinned meant someone with none could never reach
+             the search that would get them some. -->
+        {#if savedFeeds.length > 0}
           <div class="relative">
             <button
               onclick={() => showFeedMenu = !showFeedMenu}
               aria-haspopup="menu"
               aria-expanded={showFeedMenu}
               class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors max-w-[10rem] {feedMode === 'custom' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
-              title="Switch feed"
+              title={i18n.t.feed.switchFeed}
             >
               <span class="truncate">{currentFeedLabel ?? i18n.t.feed.feeds}</span>
               <ChevronDown size={12} class="flex-shrink-0" />
             </button>
             {#if showFeedMenu}
               <div class="fixed inset-0 z-40" role="presentation" onclick={() => showFeedMenu = false}></div>
-              <div role="menu" class="absolute right-0 top-full mt-1 z-50 w-60 max-h-80 overflow-y-auto bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl py-1">
-                {#each pinnedFeeds as choice (choice.key)}
-                  <button
-                    role="menuitem"
-                    onclick={() => selectFeed(choice)}
-                    class="w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-[var(--color-surface-hover)] transition-colors {choice.kind === 'timeline' ? (feedMode === 'timeline' ? 'text-[var(--color-primary)]' : '') : (customFeed?.key === choice.key ? 'text-[var(--color-primary)]' : '')}"
-                  >
-                    {#if choice.avatar}
-                      <img src={choice.avatar} alt="" width="20" height="20" loading="lazy" decoding="async" class="w-5 h-5 rounded flex-shrink-0 bg-[var(--color-surface-hover)]" />
-                    {:else if choice.kind === 'list'}
-                      <Users size={16} class="flex-shrink-0 text-[var(--color-text-muted)]" />
-                    {:else if choice.kind === 'timeline'}
-                      <Globe size={16} class="flex-shrink-0 text-[var(--color-text-muted)]" />
-                    {:else}
-                      <Hash size={16} class="flex-shrink-0 text-[var(--color-text-muted)]" />
-                    {/if}
-                    <span class="min-w-0">
-                      <span class="block truncate font-medium">{choice.title}</span>
-                      {#if choice.byHandle}
-                        <span class="block truncate text-[10px] text-[var(--color-text-muted)]">@{choice.byHandle}</span>
+              <div role="menu" class="absolute right-0 top-full mt-1 z-50 w-72 max-h-[26rem] overflow-y-auto bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl py-1">
+
+                {#snippet feedRow(choice: FeedChoice, showPin: boolean)}
+                  <div class="flex items-stretch hover:bg-[var(--color-surface-hover)] transition-colors">
+                    <button
+                      role="menuitem"
+                      onclick={() => selectFeed(choice)}
+                      class="flex-1 min-w-0 flex items-center gap-2 px-3 py-2 text-left text-xs {choice.kind === 'timeline' ? (feedMode === 'timeline' ? 'text-[var(--color-primary)]' : '') : (customFeed?.key === choice.key ? 'text-[var(--color-primary)]' : '')}"
+                    >
+                      {#if choice.avatar}
+                        <img src={choice.avatar} alt="" width="20" height="20" loading="lazy" decoding="async" class="w-5 h-5 rounded flex-shrink-0 bg-[var(--color-surface-hover)]" />
+                      {:else if choice.kind === 'list'}
+                        <Users size={16} class="flex-shrink-0 text-[var(--color-text-muted)]" />
+                      {:else if choice.kind === 'timeline'}
+                        <Globe size={16} class="flex-shrink-0 text-[var(--color-text-muted)]" />
+                      {:else}
+                        <Hash size={16} class="flex-shrink-0 text-[var(--color-text-muted)]" />
                       {/if}
-                    </span>
-                  </button>
+                      <span class="min-w-0">
+                        <span class="block truncate font-medium">{choice.title}</span>
+                        {#if choice.byHandle}
+                          <span class="block truncate text-[10px] text-[var(--color-text-muted)]">
+                            @{choice.byHandle}{#if choice.likeCount} · {choice.likeCount.toLocaleString()} ♥{/if}
+                          </span>
+                        {/if}
+                      </span>
+                    </button>
+                    {#if showPin && choice.uri}
+                      <button
+                        onclick={() => togglePin(choice)}
+                        disabled={pinBusy !== null}
+                        aria-label={choice.savedId ? i18n.t.feed.unpinFeed : i18n.t.feed.pinFeed}
+                        title={choice.savedId ? i18n.t.feed.unpinFeed : i18n.t.feed.pinFeed}
+                        class="px-2.5 flex items-center text-[var(--color-text-muted)] hover:text-[var(--color-primary)] disabled:opacity-40"
+                      >
+                        {#if pinBusy === choice.key}
+                          <Loader2 size={13} class="animate-spin" />
+                        {:else if choice.savedId}
+                          <PinOff size={13} />
+                        {:else}
+                          <Pin size={13} />
+                        {/if}
+                      </button>
+                    {/if}
+                  </div>
+                {/snippet}
+
+                {#each pinnedFeeds as choice (choice.key)}
+                  {@render feedRow(choice, choice.kind !== 'timeline')}
                 {/each}
-                <a
-                  href="{base}/lists"
-                  class="block px-3 py-2 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] border-t border-[var(--color-border)] mt-1"
-                >{i18n.t.feed.discoverFeeds}</a>
+
+                {#if unpinnedFeeds.length > 0}
+                  <div class="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-muted)] border-t border-[var(--color-border)] mt-1">
+                    {i18n.t.feed.savedNotPinned}
+                  </div>
+                  {#each unpinnedFeeds as choice (choice.key)}
+                    {@render feedRow(choice, true)}
+                  {/each}
+                {/if}
+
+                <div class="border-t border-[var(--color-border)] mt-1 pt-1">
+                  <div class="flex items-center gap-2 px-3 py-1.5">
+                    <Search size={13} class="text-[var(--color-text-muted)] flex-shrink-0" />
+                    <input
+                      bind:value={feedQuery}
+                      oninput={onFeedQuery}
+                      placeholder={i18n.t.feed.searchFeeds}
+                      aria-label={i18n.t.feed.searchFeeds}
+                      class="flex-1 min-w-0 bg-transparent border-0 outline-none text-xs"
+                    />
+                    {#if searchingFeeds}<Loader2 size={13} class="animate-spin text-[var(--color-text-muted)]" />{/if}
+                  </div>
+
+                  {#if feedSearchError}
+                    <p class="px-3 py-2 text-[10px] text-red-400">{feedSearchError}</p>
+                  {:else if feedQuery.trim() && !searchingFeeds && newResults.length === 0}
+                    <p class="px-3 py-2 text-[10px] text-[var(--color-text-muted)]">{i18n.t.feed.noFeedsFound}</p>
+                  {/if}
+
+                  {#each newResults as choice (choice.key)}
+                    {@render feedRow(choice, true)}
+                  {/each}
+                </div>
               </div>
             {/if}
           </div>

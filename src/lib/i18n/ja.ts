@@ -38,7 +38,7 @@ export default {
       sharedVia: 'CrispDeckで共有',
     },
     feed: {
-      title: 'フィード', timeline: 'タイムライン', feeds: 'フィード', discoverFeeds: 'フィードを探す →', myPosts: '自分の投稿', all: 'すべて',
+      title: 'フィード', timeline: 'タイムライン', switchFeed: 'フィードを切り替え', savedNotPinned: '保存済み', searchFeeds: 'フィードを検索…', noFeedsFound: '該当するフィードはありません。', feedSearchFailed: 'フィード検索を利用できません。', pinFeed: 'マイフィードに追加', unpinFeed: 'マイフィードから削除', feeds: 'フィード', discoverFeeds: 'フィードを探す →', myPosts: '自分の投稿', all: 'すべて',
       noAccounts: 'アカウント未接続', addAccountsFirst: '設定でアカウントを追加してください。',
       loadingTimeline: 'タイムラインを読み込み中...', loadingYourPosts: '投稿を読み込み中...',
       noPostsMatch: 'フィルターに一致する投稿なし', noPostsFound: '投稿が見つかりません',

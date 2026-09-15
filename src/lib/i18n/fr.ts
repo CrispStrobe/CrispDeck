@@ -38,7 +38,7 @@ export default {
       sharedVia: 'partagé via CrispDeck',
     },
     feed: {
-      title: 'Fil', timeline: 'Chronologie', feeds: 'Flux', discoverFeeds: 'Découvrir plus de flux →', myPosts: 'Mes publications', all: 'Tous',
+      title: 'Fil', timeline: 'Chronologie', switchFeed: 'Changer de flux', savedNotPinned: 'Enregistrés', searchFeeds: 'Rechercher des flux…', noFeedsFound: 'Aucun flux correspondant.', feedSearchFailed: 'La recherche de flux est indisponible.', pinFeed: 'Ajouter à mes flux', unpinFeed: 'Retirer de mes flux', feeds: 'Flux', discoverFeeds: 'Découvrir plus de flux →', myPosts: 'Mes publications', all: 'Tous',
       noAccounts: 'Aucun compte connecté', addAccountsFirst: 'Ajoutez des comptes dans les Paramètres.',
       loadingTimeline: 'Chargement de la chronologie...', loadingYourPosts: 'Chargement de vos publications...',
       noPostsMatch: 'Aucune publication ne correspond', noPostsFound: 'Aucune publication trouvée',

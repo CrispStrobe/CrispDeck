@@ -37,7 +37,7 @@ export default {
       translatedFrom: '翻译自{lang}', sharedVia: '通过CrispDeck分享',
     },
     feed: {
-      title: '信息流', timeline: '时间线', feeds: '信息源', discoverFeeds: '发现更多信息源 →', myPosts: '我的帖子', all: '全部',
+      title: '信息流', timeline: '时间线', switchFeed: '切换信息源', savedNotPinned: '已保存', searchFeeds: '搜索信息源…', noFeedsFound: '没有匹配的信息源。', feedSearchFailed: '信息源搜索暂时不可用。', pinFeed: '添加到我的信息源', unpinFeed: '从我的信息源移除', feeds: '信息源', discoverFeeds: '发现更多信息源 →', myPosts: '我的帖子', all: '全部',
       noAccounts: '未连接账户', addAccountsFirst: '请先在设置中添加账户。',
       loadingTimeline: '正在加载时间线...', loadingYourPosts: '正在加载您的帖子...',
       noPostsMatch: '没有匹配的帖子', noPostsFound: '未找到帖子',
