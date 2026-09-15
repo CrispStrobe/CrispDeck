@@ -377,6 +377,8 @@ export default {
       posts: '{count} Beiträge',
       timeline: 'Zeitleiste',
       forYou: 'Für dich',
+      feeds: 'Feeds',
+      discoverFeeds: 'Mehr Feeds entdecken →',
       forYouHint: 'Erstellen Sie zuerst Ihr Archiv, um personalisiertes Ranking basierend auf Ihren Interaktionen zu aktivieren.',
       buildArchive: 'Archiv erstellen',
       myPosts: 'Meine Beiträge',

@@ -760,10 +760,28 @@
    * screen size or orientation. Returns '' when dimensions are unknown —
    * callers then fall back to a fixed-height contain box.
    */
+  /**
+   * Reserve space for media at its own shape, clamped the way Bluesky clamps it.
+   *
+   * Setting aspect-ratio up front means the post does not reflow when the image
+   * arrives. The clamp is two-sided on purpose: `Math.max(w / h, 1)` squared off
+   * every portrait image, so a 1200x1500 photo rendered 1:1 while bsky.app shows
+   * it 4:5. Bluesky displays native ratio out to roughly 2:1 either way and
+   * centre-crops past that, with the full frame a tap away — which we already
+   * have, since the image opens the lightbox.
+   *
+   * The height cap is half the viewport rather than 80svh: a tall image that
+   * fills the screen pushes the next post out of view entirely, and in a
+   * timeline the next post is the point. object-fit: cover is applied by the
+   * caller's class list, so the crop stays centred.
+   */
+  const MEDIA_MIN_RATIO = 0.5;   // 1:2, the tallest we render uncropped
+  const MEDIA_MAX_RATIO = 2;     // 2:1, the widest
+
   function mediaBoxStyle(w?: number, h?: number): string {
     if (!w || !h || w <= 0 || h <= 0) return '';
-    const ratio = Math.max(w / h, 1);
-    return `aspect-ratio: ${ratio.toFixed(4)}; max-height: min(32rem, 80svh);`;
+    const ratio = Math.min(Math.max(w / h, MEDIA_MIN_RATIO), MEDIA_MAX_RATIO);
+    return `aspect-ratio: ${ratio.toFixed(4)}; max-height: min(28rem, 60svh);`;
   }
   // Klipy GIF URLs carry their dimensions as ww=/hh= query params
   const gifBoxStyle = $derived.by(() => {
@@ -854,7 +872,7 @@
     <div class="relative group/avatar">
       <a href={getProfileUrl(post)}>
         {#if post.author.avatar}
-          <img decoding="async" src={post.author.avatar} alt="" width="40" height="40" class="{compact ? 'w-7 h-7' : 'w-10 h-10'} rounded-full bg-[var(--color-surface-hover)]" />
+          <img loading="lazy" decoding="async" src={post.author.avatar} alt="" width="40" height="40" class="{compact ? 'w-7 h-7' : 'w-10 h-10'} rounded-full bg-[var(--color-surface-hover)]" />
         {:else}
           <div class="{compact ? 'w-7 h-7 text-[9px]' : 'w-10 h-10 text-xs'} rounded-full bg-[var(--color-surface-hover)] flex items-center justify-center text-[var(--color-text-muted)]">
             {post.author.handle.charAt(0).toUpperCase()}
@@ -948,7 +966,7 @@
                 onclick={() => openLightbox(bskyImages.map(img => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), i)}
                 class="cursor-pointer text-left w-full block"
               >
-                <img src={image.thumb} alt={image.alt || ''} style={boxStyle} class="rounded-md w-full {bskyImages.length === 1 ? (boxStyle ? 'object-cover bg-black/10' : 'max-h-64 object-contain bg-black/10') : 'aspect-square object-cover'}" />
+                <img decoding="async" loading="lazy" src={image.thumb} alt={image.alt || ''} style={boxStyle} class="rounded-md w-full {bskyImages.length === 1 ? (boxStyle ? 'object-cover bg-black/10' : 'max-h-64 object-contain bg-black/10') : 'aspect-square object-cover'}" />
               </button>
               {#if image.alt}
                 <button
@@ -984,13 +1002,13 @@
         {:else if isGif}
           <!-- Animated GIF — render inline -->
           <div class="mt-2 rounded-lg overflow-hidden border border-[var(--color-border)]">
-            <img src={bskyExternal.uri} alt={bskyExternal.title || 'GIF'} style={gifBoxStyle} class="w-full {gifBoxStyle ? 'object-cover' : 'max-h-64 object-contain'} bg-black/10" />
+            <img decoding="async" loading="lazy" src={bskyExternal.uri} alt={bskyExternal.title || 'GIF'} style={gifBoxStyle} class="w-full {gifBoxStyle ? 'object-cover' : 'max-h-64 object-contain'} bg-black/10" />
           </div>
         {:else}
           <!-- Standard link card -->
           <a href={bskyExternal.uri} target="_blank" rel="noopener noreferrer" class="mt-2 block border border-[var(--color-border)] rounded-lg overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
             {#if bskyExternal.thumb}
-              <img src={bskyExternal.thumb} alt="" class="w-full h-32 object-cover" />
+              <img decoding="async" loading="lazy" src={bskyExternal.thumb} alt="" class="w-full h-32 object-cover" />
             {/if}
             <div class="p-3">
               <p class="text-xs text-[var(--color-text-muted)]">{bskyExternalHost}</p>
@@ -1012,7 +1030,7 @@
         >
           <div class="flex items-center gap-2 mb-1">
             {#if bskyQuote.author?.avatar}
-              <img src={bskyQuote.author.avatar} alt="" class="w-5 h-5 rounded-full" />
+              <img decoding="async" loading="lazy" src={bskyQuote.author.avatar} alt="" class="w-5 h-5 rounded-full" />
             {/if}
             <span class="text-xs font-medium">{bskyQuote.author?.displayName || bskyQuote.author?.handle}</span>
             <span class="text-[10px] text-[var(--color-text-muted)]">@{bskyQuote.author?.handle}</span>
@@ -1022,7 +1040,7 @@
             {@const qEmbed = bskyQuote.embeds[0]}
             {#if qEmbed.$type === 'app.bsky.embed.images#view' && qEmbed.images?.[0]}
               <div onclick={(e: MouseEvent) => { e.stopPropagation(); openLightbox(qEmbed.images.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0); }} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openLightbox(qEmbed.images.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0); } }} class="cursor-pointer" role="button" tabindex="0" aria-label="View quoted post images">
-                <img src={qEmbed.images[0].thumb} alt={qEmbed.images[0].alt || ''} class="mt-2 rounded w-full max-h-48 object-cover" />
+                <img decoding="async" loading="lazy" src={qEmbed.images[0].thumb} alt={qEmbed.images[0].alt || ''} class="mt-2 rounded w-full max-h-48 object-cover" />
                 {#if qEmbed.images.length > 1}
                   <p class="mt-1 text-[10px] text-[var(--color-text-muted)]">+{qEmbed.images.length - 1} more</p>
                 {/if}
@@ -1031,7 +1049,7 @@
             {#if qEmbed.$type === 'app.bsky.embed.external#view' && qEmbed.external}
               <div class="mt-2 flex items-center gap-2 text-[10px] text-[var(--color-text-muted)]">
                 {#if qEmbed.external.thumb}
-                  <img src={qEmbed.external.thumb} alt="" class="w-12 h-12 rounded object-cover" />
+                  <img decoding="async" loading="lazy" src={qEmbed.external.thumb} alt="" class="w-12 h-12 rounded object-cover" />
                 {/if}
                 <div class="min-w-0">
                   <p class="font-medium truncate">{qEmbed.external.title}</p>
@@ -1060,7 +1078,7 @@
             <p class="text-sm text-[var(--color-text)] line-clamp-6">{threadsQuote.text}</p>
           {/if}
           {#if threadsQuote.media_url && threadsQuote.media_type !== 'TEXT_POST'}
-            <img src={threadsQuote.thumbnail_url ?? threadsQuote.media_url} alt="" class="mt-2 rounded w-full max-h-48 object-cover" />
+            <img decoding="async" loading="lazy" src={threadsQuote.thumbnail_url ?? threadsQuote.media_url} alt="" class="mt-2 rounded w-full max-h-48 object-cover" />
           {/if}
         </button>
       {/if}
@@ -1071,7 +1089,7 @@
         <div class="mt-2 rounded-lg overflow-hidden border border-[var(--color-border)]">
           {#if bskyVideo.thumbnail}
             <div class="relative">
-              <img src={bskyVideo.thumbnail} alt={bskyVideo.alt || 'Video'} style={videoBoxStyle} class="w-full {videoBoxStyle ? '' : 'aspect-video'} object-cover" />
+              <img decoding="async" loading="lazy" src={bskyVideo.thumbnail} alt={bskyVideo.alt || 'Video'} style={videoBoxStyle} class="w-full {videoBoxStyle ? '' : 'aspect-video'} object-cover" />
               <div class="absolute inset-0 flex items-center justify-center">
                 <div class="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center">
                   <svg class="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
@@ -1101,7 +1119,7 @@
                   onclick={() => openLightbox(mastodonMedia.map(a => ({ url: a.url || a.previewUrl || a.remoteUrl || '', thumb: a.previewUrl || a.url || '', alt: a.description })), i)}
                   class="cursor-pointer text-left w-full block"
                 >
-                  <img src={imageUrl} alt={attachment.description || `Image ${i + 1}`} style={mastoBoxStyle} class="rounded-md w-full {mastodonMedia.length === 1 ? (mastoBoxStyle ? 'object-cover bg-black/10' : 'max-h-64 object-contain bg-black/10') : 'aspect-square object-cover'} bg-[var(--color-surface-hover)]" />
+                  <img decoding="async" loading="lazy" src={imageUrl} alt={attachment.description || `Image ${i + 1}`} style={mastoBoxStyle} class="rounded-md w-full {mastodonMedia.length === 1 ? (mastoBoxStyle ? 'object-cover bg-black/10' : 'max-h-64 object-contain bg-black/10') : 'aspect-square object-cover'} bg-[var(--color-surface-hover)]" />
                 </button>
                 {#if attachment.description}
                   <button
@@ -1127,7 +1145,7 @@
       {#if mastodonCard}
         <a href={mastodonCard.url} target="_blank" rel="noopener noreferrer" class="mt-2 block border border-[var(--color-border)] rounded-lg overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
           {#if mastodonCard.image}
-            <img src={mastodonCard.image} alt="" class="w-full h-32 object-cover" />
+            <img decoding="async" loading="lazy" src={mastodonCard.image} alt="" class="w-full h-32 object-cover" />
           {/if}
           <div class="p-3">
             <p class="text-xs text-[var(--color-text-muted)]">{mastodonCard.provider_name || mastodonCardHost}</p>

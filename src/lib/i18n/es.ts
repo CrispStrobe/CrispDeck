@@ -38,7 +38,7 @@ export default {
       sharedVia: 'compartido vía CrispDeck',
     },
     feed: {
-      title: 'Feed', timeline: 'Cronología', myPosts: 'Mis publicaciones', all: 'Todos',
+      title: 'Feed', timeline: 'Cronología', feeds: 'Feeds', discoverFeeds: 'Descubrir más feeds →', myPosts: 'Mis publicaciones', all: 'Todos',
       noAccounts: 'Sin cuentas conectadas', addAccountsFirst: 'Agrega cuentas en Configuración.',
       loadingTimeline: 'Cargando cronología...', loadingYourPosts: 'Cargando tus publicaciones...',
       noPostsMatch: 'Ninguna publicación coincide', noPostsFound: 'No se encontraron publicaciones',

@@ -390,6 +390,8 @@ export const translations = {
       posts: '{count} posts',
       timeline: 'Timeline',
       forYou: 'For You',
+      feeds: 'Feeds',
+      discoverFeeds: 'Discover more feeds →',
       forYouHint: 'Build your archive first to enable personalized ranking based on who you interact with most.',
       buildArchive: 'Build Archive',
       myPosts: 'My Posts',

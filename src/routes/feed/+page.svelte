@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal, RefreshCw } from '@lucide/svelte';
+  import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal, RefreshCw, ChevronDown, Hash, Users } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import DelayedSpinner from '$lib/components/DelayedSpinner.svelte';
   import Post from '$lib/components/Post.svelte';
@@ -21,12 +21,16 @@
   import { jetstream } from '$lib/jetstream';
   import { applyMuteFilter } from '$lib/muted-words';
   import { buildFilterMatcher, getCachedFilters, setCachedFilters, type MastodonFilter } from '$lib/mastodon-filters';
-  import { saveReadPosition, getReadPosition } from '$lib/read-position';
-  import { getCached, setCache } from '$lib/view-cache';
+  import { saveReadPosition, getReadPosition, flushReadPositions } from '$lib/read-position';
+  import { getCached, setCache, isStale } from '$lib/view-cache';
+  import { listPinnedFeeds, FOLLOWING, type FeedChoice } from '$lib/bluesky-feeds';
+  import { pickAnchor, measureItems, restoreAnchor, type ScrollAnchor } from '$lib/feed-scroll';
   import { toTime, isNewerThan } from '$lib/post-time';
   import { cacheFeed, loadCachedFeed, formatCachedTime, isOffline } from '$lib/offline-cache';
 
-  type FeedMode = 'timeline' | 'my-posts' | 'for-you';
+  // 'custom' delegates to a Bluesky feed generator or list; which ones are on
+  // offer comes from the account's own pinned feeds, see $lib/bluesky-feeds.
+  type FeedMode = 'timeline' | 'my-posts' | 'for-you' | 'custom';
 
   let accounts: Account[] = $state([]);
   let posts: UnifiedPost[] = $state([]);
@@ -40,6 +44,10 @@
   let showFilters = $state(false);
   const connectedPlatforms = $derived(new Set(accounts.map(a => a.platform)));
   const multiPlatform = $derived(connectedPlatforms.size > 1);
+
+  let customFeed: FeedChoice | null = $state(null);
+  let pinnedFeeds: FeedChoice[] = $state([]);
+  let showFeedMenu = $state(false);
 
   let cursors: Record<number, string | undefined> = $state({});
   let loadingMore = $state(false);
@@ -71,6 +79,50 @@
   let pullRefreshing = $state(false);
 
   const multiAccount = $derived(accounts.length > 1);
+
+  // $derived.by rather than $derived, for the same reason as `sorted` below:
+  // the plain form inlines into the component body, where TS still has
+  // feedMode narrowed to its initializer and calls the 'custom' branch dead.
+  /** Identifies the current view for caching and for its saved reading position. */
+  const viewKey = $derived.by(() =>
+    feedMode === 'custom' && customFeed ? customFeed.key : (feedMode as string)
+  );
+  const currentFeedLabel = $derived.by(() =>
+    feedMode === 'custom' && customFeed ? customFeed.title : null
+  );
+
+  // Reading position. `feed:v2:` rather than `feed:` because the stored shape
+  // changed meaning: scrollY used to be a container offset and is now an
+  // offset within the anchored post, so old entries must not be replayed.
+  const posKey = $derived('feed:v2:' + viewKey);
+  let scrollRaf = 0;
+
+  function scrollContainer(): HTMLElement | null {
+    return document.getElementById('main-content');
+  }
+
+  /** Remember which post is under the fold, coalesced to one measure per frame. */
+  function onFeedScroll() {
+    if (scrollRaf) return;
+    scrollRaf = requestAnimationFrame(() => {
+      scrollRaf = 0;
+      const el = scrollContainer();
+      if (!el) return;
+      const anchor = pickAnchor(measureItems(el), el.scrollTop);
+      if (anchor) saveReadPosition(posKey, anchor.key, anchor.offset);
+    });
+  }
+
+  function savedAnchor(): ScrollAnchor | null {
+    const pos = getReadPosition(posKey);
+    return pos ? { key: pos.lastSeenUri, offset: pos.scrollY ?? 0 } : null;
+  }
+
+  /** Put the reader back where they were, once the feed has posts to anchor to. */
+  function restorePosition() {
+    const el = scrollContainer();
+    if (el) restoreAnchor(el, savedAnchor());
+  }
 
   onMount(async () => {
     try {
@@ -116,23 +168,28 @@
       if (localStorage.getItem('crispdeck-live-counters') === 'true') {
         jetstream.setEnabled(true);
       }
-      // Show cached feed instantly while fresh data loads
-      const cached = getCached<UnifiedPost[]>('feed-' + feedMode);
+      loadPinnedFeeds();
+      // Show cached feed instantly while fresh data loads, and put the reader
+      // straight back where they were — this is the path taken when they open
+      // a post and come back, so it has to land before the network does.
+      const cached = getCached<UnifiedPost[]>('feed-' + viewKey);
       if (cached) {
         posts = cached.data;
         initialLoading = false;
+        restorePosition();
       }
       if (accounts.length > 0) {
-        await loadFeed();
-        // Restore scroll position after feed loads
-        requestAnimationFrame(() => {
-          const saved = getReadPosition('feed');
-          if (saved?.scrollY) {
-            const main = document.getElementById('main-content');
-            if (main) main.scrollTop = saved.scrollY;
-          }
-        });
+        // Returning from a thread within half a minute: the cache is the same
+        // data the network would return, so skip the round trip entirely and
+        // leave the restored position undisturbed.
+        const justLeft = cached && !isStale(cached, 30_000) && savedAnchor() !== null;
+        if (!justLeft) {
+          await loadFeed();
+          // Re-anchor: fresh posts may have arrived above the one being read.
+          restorePosition();
+        }
       }
+      scrollContainer()?.addEventListener('scroll', onFeedScroll, { passive: true });
     } catch (e) {
       error = String(e);
     } finally {
@@ -156,12 +213,35 @@
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', onVisibilityChange);
     }
-    const main = document.getElementById('main-content');
-    const topPost = posts[0]?.uri;
-    if (topPost) {
-      saveReadPosition('feed', topPost, main?.scrollTop);
+    const main = scrollContainer();
+    main?.removeEventListener('scroll', onFeedScroll);
+    if (scrollRaf) cancelAnimationFrame(scrollRaf);
+    // Final measure: the last scroll event may still be waiting on a frame
+    // that will never run now.
+    if (main) {
+      const anchor = pickAnchor(measureItems(main), main.scrollTop);
+      if (anchor) saveReadPosition(posKey, anchor.key, anchor.offset);
     }
+    flushReadPositions();
   });
+
+  /**
+   * The account's pinned feeds, resolved in the background. Failure is silent:
+   * the Following timeline works regardless, and an error banner for a feed
+   * switcher the user may never open would be noise.
+   */
+  async function loadPinnedFeeds() {
+    for (const [id, entry] of clientEntries) {
+      if (accounts.find(a => a.id === id)?.platform !== 'bluesky') continue;
+      try {
+        const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
+        pinnedFeeds = await listPinnedFeeds(agent as any);
+      } catch (e) {
+        console.error('Could not load pinned feeds:', e);
+      }
+      return;
+    }
+  }
 
   /** Check immediately when the tab comes back, rather than waiting out the poll. */
   function onVisibilityChange() {
@@ -186,6 +266,22 @@
     const { limit, cursor } = opts;
     const tag = (p: UnifiedPost) => { p.sourceAccount = acct.handle; return p; };
     const wantsTimeline = feedMode === 'timeline' || feedMode === 'for-you';
+
+    // A feed generator or list is Bluesky-only and account-independent: its
+    // ranking happens on the generator's server, so there is nothing to merge
+    // from Mastodon or Threads and no fallback worth attempting.
+    if (feedMode === 'custom' && customFeed?.uri) {
+      if (acct.platform !== 'bluesky') return { posts: [], cursor: undefined, degraded: false };
+      const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
+      const res = customFeed.kind === 'list'
+        ? await agent.api.app.bsky.feed.getListFeed({ list: customFeed.uri, limit, cursor })
+        : await agent.api.app.bsky.feed.getFeed({ feed: customFeed.uri, limit, cursor });
+      return {
+        posts: res.data.feed.map(p => tag(normalizePost(p, 'bluesky'))),
+        cursor: res.data.cursor,
+        degraded: false,
+      };
+    }
 
     if (acct.platform === 'bluesky') {
       const bsky = entry.client as BlueskyClient;
@@ -337,7 +433,7 @@
       posts = sortPosts(allPosts, 'newest');
       progress = posts.length;
       const cacheSize = parseInt(localStorage.getItem('crispdeck-feed-cache-size') ?? '200');
-      setCache('feed-' + feedMode, posts.slice(0, cacheSize));
+      setCache('feed-' + viewKey, posts.slice(0, cacheSize));
       // Persist to IndexedDB for offline PWA access
       cacheFeed('feed', posts);
       offlineBanner = '';
@@ -387,9 +483,39 @@
   }
 
   async function switchMode(mode: FeedMode) {
-    if (mode === feedMode) return;
+    if (mode === feedMode && mode !== 'custom') return;
     feedMode = mode;
+    if (mode !== 'custom') customFeed = null;
+    await enterView();
+  }
+
+  async function selectFeed(choice: FeedChoice) {
+    showFeedMenu = false;
+    if (choice.kind === 'timeline') return switchMode('timeline');
+    if (feedMode === 'custom' && customFeed?.key === choice.key) return;
+    customFeed = choice;
+    feedMode = 'custom';
+    await enterView();
+  }
+
+  /**
+   * Switch the visible view. Each view keeps its own cache and its own reading
+   * position, so flipping between Following and a feed returns to where you
+   * were in each rather than dumping you at the top of both.
+   */
+  async function enterView() {
+    posts = [];
+    newPostsAvailable = 0;
+    const cached = getCached<UnifiedPost[]>('feed-' + viewKey);
+    if (cached) {
+      posts = cached.data;
+      restorePosition();
+    } else {
+      const el = scrollContainer();
+      if (el) el.scrollTop = 0;
+    }
     await loadFeed();
+    restorePosition();
   }
 
   async function handleLike(post: UnifiedPost) {
@@ -547,6 +673,55 @@
           <User size={12} />
           {i18n.t.feed.myPosts}
         </button>
+
+        <!-- Pinned Bluesky feeds and lists. Hidden entirely when the account
+             has none pinned, so a Mastodon-only user never sees a dead menu. -->
+        {#if pinnedFeeds.length > 1}
+          <div class="relative">
+            <button
+              onclick={() => showFeedMenu = !showFeedMenu}
+              aria-haspopup="menu"
+              aria-expanded={showFeedMenu}
+              class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors max-w-[10rem] {feedMode === 'custom' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+              title="Switch feed"
+            >
+              <span class="truncate">{currentFeedLabel ?? i18n.t.feed.feeds}</span>
+              <ChevronDown size={12} class="flex-shrink-0" />
+            </button>
+            {#if showFeedMenu}
+              <div class="fixed inset-0 z-40" role="presentation" onclick={() => showFeedMenu = false}></div>
+              <div role="menu" class="absolute right-0 top-full mt-1 z-50 w-60 max-h-80 overflow-y-auto bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl py-1">
+                {#each pinnedFeeds as choice (choice.key)}
+                  <button
+                    role="menuitem"
+                    onclick={() => selectFeed(choice)}
+                    class="w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-[var(--color-surface-hover)] transition-colors {choice.kind === 'timeline' ? (feedMode === 'timeline' ? 'text-[var(--color-primary)]' : '') : (customFeed?.key === choice.key ? 'text-[var(--color-primary)]' : '')}"
+                  >
+                    {#if choice.avatar}
+                      <img src={choice.avatar} alt="" width="20" height="20" loading="lazy" decoding="async" class="w-5 h-5 rounded flex-shrink-0 bg-[var(--color-surface-hover)]" />
+                    {:else if choice.kind === 'list'}
+                      <Users size={16} class="flex-shrink-0 text-[var(--color-text-muted)]" />
+                    {:else if choice.kind === 'timeline'}
+                      <Globe size={16} class="flex-shrink-0 text-[var(--color-text-muted)]" />
+                    {:else}
+                      <Hash size={16} class="flex-shrink-0 text-[var(--color-text-muted)]" />
+                    {/if}
+                    <span class="min-w-0">
+                      <span class="block truncate font-medium">{choice.title}</span>
+                      {#if choice.byHandle}
+                        <span class="block truncate text-[10px] text-[var(--color-text-muted)]">@{choice.byHandle}</span>
+                      {/if}
+                    </span>
+                  </button>
+                {/each}
+                <a
+                  href="/lists"
+                  class="block px-3 py-2 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] border-t border-[var(--color-border)] mt-1"
+                >{i18n.t.feed.discoverFeeds}</a>
+              </div>
+            {/if}
+          </div>
+        {/if}
       </div>
 
       <!-- Platform filter (only shown when multiple platforms connected) -->
@@ -665,6 +840,9 @@
     {:else}
       <div class="space-y-3">
         {#each finalFeed as item (isCrosspostGroup(item) ? item.id : item.uri)}
+          <!-- data-feed-key is what the reading position anchors to; feed-item
+               lets the browser skip layout and paint for offscreen posts. -->
+          <div class="feed-item" data-feed-key={isCrosspostGroup(item) ? item.id : item.uri}>
           {#if isCrosspostGroup(item)}
             <CrosspostGroup group={item} {hideMedia} />
           {:else}
@@ -679,6 +857,7 @@
               <Post post={item} {hideMedia} onlike={handleLike} onboost={handleBoost} onreply={handleReply} onquote={handleQuote} />
             {/if}
           {/if}
+          </div>
         {/each}
       </div>
 
@@ -698,3 +877,24 @@
     {/if}
   {/if}
 </div>
+
+<style>
+  /**
+   * Skip layout, style and paint for posts that are scrolled out of view.
+   *
+   * A timeline holds hundreds of posts and each one is expensive — rich text,
+   * embeds, quote cards, media. Rendering all of them is what makes scrolling
+   * stutter. `content-visibility: auto` lets the browser do the work only for
+   * posts near the viewport, which is most of the benefit of windowing without
+   * a virtual list, and without breaking Ctrl-F or the reading-position anchor.
+   *
+   * `contain-intrinsic-size: auto 16rem` matters as much as the first line:
+   * `auto` tells the browser to remember each post's real height once it has
+   * been rendered, so scrolled-past posts keep their true size and the
+   * scrollbar stops jumping. 16rem is only the guess for posts never yet seen.
+   */
+  .feed-item {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 16rem;
+  }
+</style>
