@@ -46,21 +46,6 @@ export function pickAnchor(items: MeasuredItem[], scrollTop: number): ScrollAnch
   return { key: chosen.key, offset: Math.round(scrollTop - chosen.top) };
 }
 
-/**
- * Where to scroll so the anchored post sits where it sat before.
- *
- * Returns null when the anchor is gone — the post was deleted, filtered out,
- * or has not loaded yet. The caller must not fall back to a pixel guess: a
- * wrong restore is more disorienting than no restore, because the reader
- * cannot tell they have been moved.
- */
-export function resolveAnchor(items: MeasuredItem[], anchor: ScrollAnchor | null): number | null {
-  if (!anchor) return null;
-  const item = items.find((i) => i.key === anchor.key);
-  if (!item) return null;
-  return Math.max(0, item.top + anchor.offset);
-}
-
 /** Measure the feed items currently in `container`, in document order. */
 export function measureItems(container: HTMLElement): MeasuredItem[] {
   const base = container.getBoundingClientRect().top - container.scrollTop;
@@ -73,35 +58,63 @@ export function measureItems(container: HTMLElement): MeasuredItem[] {
 }
 
 /**
+ * How far to move `container` to put the anchored element back under the fold.
+ *
+ * Deliberately a *relative* correction measured from the element's own
+ * rectangle, not an absolute position summed from every item's height. Feed
+ * items use `content-visibility: auto`, so a post that has never been on
+ * screen reports its `contain-intrinsic-size` guess rather than its real
+ * height — summing those would aim at a position that does not exist. The
+ * element's live rect is exact for the layout as it stands right now, whatever
+ * the items above it currently claim to be.
+ */
+export function anchorDelta(elementTop: number, containerTop: number, offset: number): number {
+  return elementTop - containerTop + offset;
+}
+
+/**
  * Scroll `container` so the anchored post is back under the fold line.
  *
- * Retries across a few frames because the feed settles asynchronously: posts
- * stream in, avatars load, embeds resolve. Each attempt re-measures, so a
- * later reflow corrects an earlier approximation instead of compounding it.
- * Stops as soon as two consecutive attempts agree, which is the signal that
- * layout has stopped moving.
+ * Iterates, because one pass cannot be right: scrolling renders the posts it
+ * passes over, which replaces their intrinsic-size guesses with real heights
+ * and moves the anchor again. Each pass re-measures and applies the remaining
+ * correction, so the error shrinks to zero instead of compounding. Stops early
+ * once the anchor is within a pixel of where it belongs.
  */
 export function restoreAnchor(
   container: HTMLElement,
   anchor: ScrollAnchor | null,
-  attempts = 6,
+  attempts = 10,
 ): void {
   if (!anchor) return;
-  let last = -1;
-  let settled = 0;
   let n = 0;
 
+  // Scanned rather than selected: a feed key is an at:// URI full of colons
+  // and slashes, and matching on the dataset value sidesteps every question
+  // about escaping it into an attribute selector.
+  const find = () => {
+    for (const el of container.querySelectorAll<HTMLElement>('[data-feed-key]')) {
+      if (el.dataset.feedKey === anchor.key) return el;
+    }
+    return null;
+  };
+
   const step = () => {
-    const target = resolveAnchor(measureItems(container), anchor);
-    if (target === null) {
-      // Anchor not rendered yet — keep looking until we run out of attempts.
+    const el = find();
+    if (!el) {
+      // The post has not rendered yet — it may still be arriving. Keep
+      // looking, but never fall back to a pixel guess if it never shows.
       if (++n < attempts) requestAnimationFrame(step);
       return;
     }
-    container.scrollTop = target;
-    settled = target === last ? settled + 1 : 0;
-    last = target;
-    if (settled < 2 && ++n < attempts) requestAnimationFrame(step);
+    const delta = anchorDelta(
+      el.getBoundingClientRect().top,
+      container.getBoundingClientRect().top,
+      anchor.offset,
+    );
+    if (Math.abs(delta) <= 1) return;
+    container.scrollTop += delta;
+    if (++n < attempts) requestAnimationFrame(step);
   };
   requestAnimationFrame(step);
 }
