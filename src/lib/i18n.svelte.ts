@@ -830,7 +830,7 @@ export const translations = {
     },
     privacy: {
       lastUpdated: 'Last updated: July 2026',
-      translationNote: 'This German version is provided for convenience. In case of discrepancy, the English version is authoritative.',
+      translationNote: 'This translation is provided for convenience. In case of discrepancy, the English version is authoritative.',
       s1Title: '1. Data Controller',
       s2Title: '2. What Data CrispDeck Stores',
       s2Intro: 'CrispDeck is designed to keep your data on your device. The following is stored',

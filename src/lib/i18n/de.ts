@@ -813,7 +813,7 @@ export default {
     },
     privacy: {
       lastUpdated: 'Zuletzt aktualisiert: Juli 2026',
-      translationNote: 'Diese deutsche Fassung dient der besseren Verständlichkeit. Im Zweifelsfall ist die englische Fassung maßgeblich.',
+      translationNote: 'Diese Übersetzung dient der besseren Verständlichkeit. Im Zweifelsfall ist die englische Fassung maßgeblich.',
       s1Title: '1. Verantwortlicher',
       s2Title: '2. Welche Daten CrispDeck speichert',
       s2Intro: 'CrispDeck ist darauf ausgelegt, deine Daten auf deinem Gerät zu belassen. Folgendes wird',
