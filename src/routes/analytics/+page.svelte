@@ -385,17 +385,17 @@
       <button onclick={() => toggleStat('replies')} class="bg-[var(--color-surface)] p-3 rounded-lg border border-[var(--color-border)] text-center hover:border-blue-500 transition-colors {expandedStat === 'replies' ? 'border-blue-500' : ''}">
         <MessageCircle size={18} class="text-[var(--color-text-muted)] mx-auto mb-1" />
         <div class="text-lg font-bold text-blue-400">{totalReplies.toLocaleString()}</div>
-        <div class="text-[10px] text-[var(--color-text-muted)]">Replies received</div>
+        <div class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.analytics.repliesReceived}</div>
       </button>
       <button onclick={() => toggleStat('engagement')} class="bg-[var(--color-surface)] p-3 rounded-lg border border-[var(--color-border)] text-center hover:border-purple-500 transition-colors {expandedStat === 'engagement' ? 'border-purple-500' : ''}">
         <TrendingUp size={18} class="text-[var(--color-text-muted)] mx-auto mb-1" />
         <div class="text-lg font-bold text-purple-400">{(totalLikes + totalReposts).toLocaleString()}</div>
-        <div class="text-[10px] text-[var(--color-text-muted)]">Total Engagement</div>
+        <div class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.analytics.totalEngagement}</div>
       </button>
       <button onclick={() => toggleStat('rate')} class="bg-[var(--color-surface)] p-3 rounded-lg border border-[var(--color-border)] text-center hover:border-amber-500 transition-colors {expandedStat === 'rate' ? 'border-amber-500' : ''}">
         <Percent size={18} class="text-[var(--color-text-muted)] mx-auto mb-1" />
         <div class="text-lg font-bold text-amber-400">{engagementRate}</div>
-        <div class="text-[10px] text-[var(--color-text-muted)]">Eng. per post</div>
+        <div class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.analytics.engagementPerPost}</div>
       </button>
     </div>
 
@@ -574,7 +574,7 @@
     <!-- Engagement Milestones -->
     {#if recentMilestones.length > 0}
       <div class="mt-6">
-        <h3 class="text-sm font-semibold mb-3">🏆 Recent Milestones</h3>
+        <h3 class="text-sm font-semibold mb-3">{i18n.t.analytics.recentMilestones}</h3>
         <div class="flex flex-wrap gap-2">
           {#each recentMilestones as ms}
             <div class="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-xs">

@@ -115,7 +115,7 @@
   }
 
   async function loadDifferentInstance() {
-    const url = prompt('Instance URL (e.g. https://mastodon.social):');
+    const url = prompt(i18n.t.instance.instanceUrlPrompt);
     if (!url) return;
     loading = true;
     instanceUrl = url.replace(/\/$/, '');
@@ -154,7 +154,7 @@
   {:else if !instance}
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <Server size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
-      <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">No Instance Connected</h3>
+      <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">{i18n.t.instance.noInstance}</h3>
       <p class="text-sm text-[var(--color-text-muted)]">Add a Mastodon account in Settings, or click "Other instance" to view any instance.</p>
     </div>
   {:else}
@@ -184,17 +184,17 @@
         <div class="p-3 text-center border-r border-[var(--color-border)]">
           <Users size={16} class="text-[var(--color-text-muted)] mx-auto mb-1" />
           <div class="text-lg font-bold">{instance.stats.userCount.toLocaleString()}</div>
-          <div class="text-[10px] text-[var(--color-text-muted)]">Users</div>
+          <div class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.instance.users}</div>
         </div>
         <div class="p-3 text-center border-r border-[var(--color-border)]">
           <MessageCircle size={16} class="text-[var(--color-text-muted)] mx-auto mb-1" />
           <div class="text-lg font-bold">{instance.stats.statusCount.toLocaleString()}</div>
-          <div class="text-[10px] text-[var(--color-text-muted)]">Posts</div>
+          <div class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.instance.posts}</div>
         </div>
         <div class="p-3 text-center">
           <Globe size={16} class="text-[var(--color-text-muted)] mx-auto mb-1" />
           <div class="text-lg font-bold">{instance.stats.domainCount.toLocaleString()}</div>
-          <div class="text-[10px] text-[var(--color-text-muted)]">Known instances</div>
+          <div class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.instance.knownInstances}</div>
         </div>
       </div>
     </div>
@@ -242,7 +242,7 @@
     <!-- Languages -->
     {#if instance.languages.length > 0}
       <div class="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-4">
-        <h3 class="text-sm font-semibold mb-2">Languages</h3>
+        <h3 class="text-sm font-semibold mb-2">{i18n.t.instance.languages}</h3>
         <div class="flex flex-wrap gap-1">
           {#each instance.languages as lang}
             <span class="text-xs px-2 py-0.5 bg-[var(--color-surface-hover)] rounded">{lang}</span>

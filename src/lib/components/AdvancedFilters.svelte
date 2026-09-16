@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { i18n } from '$lib/i18n.svelte';
   import { untrack } from 'svelte';
   import { ImageIcon, MessageSquareOff, Heart, Repeat, SlidersHorizontal, ChevronDown } from '@lucide/svelte';
   import type { Filters } from '$lib/types';
@@ -40,7 +41,7 @@
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
         <input
           type="text"
-          placeholder="Search in posts..."
+          placeholder={i18n.t.feed.searchInPosts}
           value={filters.searchTerm}
           oninput={(e) => onchange({ searchTerm: (e.target as HTMLInputElement).value })}
           class="lg:col-span-2 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]"
@@ -53,9 +54,9 @@
         >
           <option value="newest">Sort: Newest</option>
           <option value="oldest">Sort: Oldest</option>
-          <option value="likes">Sort: Most Liked</option>
-          <option value="reposts">Sort: Most Reposted</option>
-          <option value="engagement">Sort: Top Engagement</option>
+          <option value="likes">{i18n.t.feed.sortMostLiked}</option>
+          <option value="reposts">{i18n.t.feed.sortMostReposted}</option>
+          <option value="engagement">{i18n.t.feed.sortTopEngagement}</option>
         </select>
 
         <div class="relative">
@@ -64,7 +65,7 @@
           </div>
           <input
             type="number"
-            placeholder="Min Likes"
+            placeholder={i18n.t.feed.minLikes}
             min="0"
             value={filters.minLikes || ''}
             oninput={(e) => onchange({ minLikes: parseInt((e.target as HTMLInputElement).value) || 0 })}
@@ -77,17 +78,17 @@
         <label class="flex items-center gap-2 text-sm text-[var(--color-text-muted)] cursor-pointer">
           <input type="checkbox" checked={filters.hasMedia} onchange={(e) => onchange({ hasMedia: (e.target as HTMLInputElement).checked })} class="rounded" />
           <ImageIcon size={14} />
-          <span>Has Media</span>
+          <span>{i18n.t.feed.hasMedia}</span>
         </label>
         <label class="flex items-center gap-2 text-sm text-[var(--color-text-muted)] cursor-pointer">
           <input type="checkbox" checked={filters.hideReplies} onchange={(e) => onchange({ hideReplies: (e.target as HTMLInputElement).checked })} class="rounded" />
           <MessageSquareOff size={14} />
-          <span>Hide Replies</span>
+          <span>{i18n.t.feed.hideReplies}</span>
         </label>
         <label class="flex items-center gap-2 text-sm text-[var(--color-text-muted)] cursor-pointer">
           <input type="checkbox" checked={filters.hideReposts} onchange={(e) => onchange({ hideReposts: (e.target as HTMLInputElement).checked })} class="rounded" />
           <Repeat size={14} />
-          <span>Hide Reposts</span>
+          <span>{i18n.t.feed.hideReposts}</span>
         </label>
       </div>
     </div>

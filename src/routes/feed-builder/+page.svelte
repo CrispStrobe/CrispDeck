@@ -324,10 +324,10 @@
               <span class="text-[10px] text-[var(--color-text-muted)] block truncate">{describeFeed(saved.rules)}</span>
             </div>
             <div class="flex items-center gap-1 ml-2">
-              <button onclick={() => handleDuplicate(saved)} title="Duplicate" class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+              <button onclick={() => handleDuplicate(saved)} title={i18n.t.feedBuilder.duplicate} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
                 <Copy size={12} />
               </button>
-              <button onclick={() => handleDelete(saved.id)} title="Delete" class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-danger)]">
+              <button onclick={() => handleDelete(saved.id)} title={i18n.t.feedBuilder.delete} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-danger)]">
                 <Trash2 size={12} />
               </button>
             </div>
@@ -353,7 +353,7 @@
               id="feed-name"
               type="text"
               bind:value={feed.name}
-              placeholder="My Custom Feed"
+              placeholder={i18n.t.feedBuilder.feedNamePlaceholder}
               class="w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]"
             />
           </div>
@@ -363,7 +363,7 @@
               id="feed-desc"
               type="text"
               bind:value={feed.description}
-              placeholder="What this feed shows..."
+              placeholder={i18n.t.feedBuilder.feedDescPlaceholder}
               class="w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]"
             />
           </div>
@@ -405,7 +405,7 @@
                   <button onclick={() => toggleRule(rule.id)} title="{rule.enabled ? 'Disable' : 'Enable'}" class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
                     {#if rule.enabled}<Eye size={12} />{:else}<EyeOff size={12} />{/if}
                   </button>
-                  <button onclick={() => removeRule(rule.id)} title="Remove" class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-danger)]">
+                  <button onclick={() => removeRule(rule.id)} title={i18n.t.feedBuilder.remove} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-danger)]">
                     <Trash2 size={12} />
                   </button>
                 </div>
@@ -416,7 +416,7 @@
                     bind:value={rule.value}
                     class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
                   >
-                    <option value="">Select language...</option>
+                    <option value="">{i18n.t.feedBuilder.selectLanguage}</option>
                     {#each languageOptions as lang}
                       <option value={lang.code}>{lang.label} ({lang.code})</option>
                     {/each}
@@ -426,7 +426,7 @@
                     bind:value={rule.value}
                     class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
                   >
-                    <option value="">Select media type...</option>
+                    <option value="">{i18n.t.feedBuilder.selectMediaType}</option>
                     {#each mediaOptions as opt}
                       <option value={opt}>{opt}</option>
                     {/each}
@@ -481,7 +481,7 @@
           <div class="p-3 bg-[var(--color-bg)] rounded-lg border border-[var(--color-border)]">
             <div class="flex items-center justify-between mb-1">
               <span class="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider">{i18n.t.feedBuilder.compiledQuery}</span>
-              <button onclick={copyQuery} title="Copy query" class="text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+              <button onclick={copyQuery} title={i18n.t.feedBuilder.copyQuery} class="text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
                 <Copy size={12} />
               </button>
             </div>
@@ -555,7 +555,7 @@
           <div class="p-3 bg-[var(--color-bluesky)]/10 border border-[var(--color-bluesky)]/30 rounded-lg">
             <div class="flex items-center gap-2 mb-1">
               <ExternalLink size={12} class="text-[var(--color-bluesky)]" />
-              <span class="text-xs font-medium text-[var(--color-bluesky)]">Published to Bluesky</span>
+              <span class="text-xs font-medium text-[var(--color-bluesky)]">{i18n.t.feedBuilder.publishedToBluesky}</span>
             </div>
             <code class="text-[10px] text-[var(--color-text-muted)] break-all">{feed.atUri}</code>
           </div>

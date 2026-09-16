@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { i18n } from '$lib/i18n.svelte';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, getBskyClient, getMastoClient, type ClientEntry } from '$lib/api/client-factory';
@@ -199,7 +200,7 @@
   {:else if !hasBsky && !hasMasto}
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <TrendingUp size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
-      <p class="text-sm text-[var(--color-text-muted)]">Add a Bluesky or Mastodon account in <a href="{base}/settings" class="text-[var(--color-primary)] underline">Settings</a> to see trending content.</p>
+      <p class="text-sm text-[var(--color-text-muted)]">{i18n.t.trending.addAccountToSee} <a href="{base}/settings" class="text-[var(--color-primary)] underline">{i18n.t.nav.settings}</a></p>
     </div>
   {:else}
     <!-- Combined trending (unified view) -->
@@ -235,7 +236,7 @@
         {/if}
       </div>
       {#if trendingPosts.length > 0}
-        <h3 class="text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wider mt-4 mb-2">Trending Posts</h3>
+        <h3 class="text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wider mt-4 mb-2">{i18n.t.trending.trendingPosts}</h3>
         <div class="space-y-3">
           {#each trendingPosts.slice(0, 5) as post}
             <Post {post} />
@@ -262,7 +263,7 @@
           </a>
         {/each}
         {#if bskyTopics.length === 0}
-          <p class="text-center py-8 text-sm text-[var(--color-text-muted)]">No Bluesky trending topics available.</p>
+          <p class="text-center py-8 text-sm text-[var(--color-text-muted)]">{i18n.t.trending.noBskyTopics}</p>
         {/if}
       </div>
     {/if}
@@ -305,7 +306,7 @@
         {#each trendingPosts as post (post.uri)}
           <Post {post} />
         {/each}
-        {#if trendingPosts.length === 0}<p class="text-center py-8 text-sm text-[var(--color-text-muted)]">No trending posts.</p>{/if}
+        {#if trendingPosts.length === 0}<p class="text-center py-8 text-sm text-[var(--color-text-muted)]">{i18n.t.trending.noTrendingPosts}</p>{/if}
       </div>
     {/if}
   {/if}

@@ -1007,7 +1007,7 @@
     } else if (type === 'tag-group') {
       const groups = listTagGroups();
       if (groups.length === 0) {
-        alert('No tag groups saved yet. Create one in Settings or use multiple hashtag columns.');
+        alert(i18n.t.deck.noTagGroups);
         return;
       }
       const name = prompt(`Tag groups: ${groups.map(g => g.name).join(', ')}\nEnter group name:`);
@@ -1019,7 +1019,7 @@
     } else if (type === 'rss') {
       const feeds = listFeeds();
       if (feeds.length === 0) {
-        const url = prompt('RSS feed URL:');
+        const url = prompt(i18n.t.deck.rssUrlPrompt);
         if (!url) return;
         query = url;
         title = `RSS: ${new URL(url).hostname}`;
@@ -1039,7 +1039,7 @@
         }
       }
     } else if (type === 'threads-search') {
-      const input = prompt('Threads search query (e.g. #tech, AI, photography):');
+      const input = prompt(i18n.t.deck.threadsQueryPrompt);
       if (!input) return;
       query = input;
       title = `Threads: ${input.length > 20 ? input.slice(0, 20) + '...' : input}`;
@@ -1049,7 +1049,7 @@
       if (saved.length > 0) {
         input = prompt(`Saved: ${saved.map(s => s.name).join(', ')}\nEnter set name or keywords (comma-separated):`) ?? undefined;
       } else {
-        input = prompt('Keywords to monitor (comma-separated, /regex/ supported):') ?? undefined;
+        input = prompt(i18n.t.deck.keywordsPromptText) ?? undefined;
       }
       if (!input) return;
       // Check if it matches a saved set name
@@ -1254,7 +1254,7 @@
     <div class="flex-1 flex items-center justify-center">
       <div class="text-center">
         <Columns3 size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
-        <p class="text-[var(--color-text-muted)]">Add accounts in <a href="{base}/settings" class="text-[var(--color-primary)] underline">Settings</a> first.</p>
+        <p class="text-[var(--color-text-muted)]">{i18n.t.deck.addAccountsIn} <a href="{base}/settings" class="text-[var(--color-primary)] underline">{i18n.t.nav.settings}</a> first.</p>
       </div>
     </div>
   {:else}

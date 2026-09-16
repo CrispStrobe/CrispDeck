@@ -276,7 +276,7 @@
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <FileText size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
       <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">{i18n.t.drafts.noDrafts}</h3>
-      <p class="text-sm text-[var(--color-text-muted)]">Saved drafts from the <a href="{base}/compose" class="text-[var(--color-primary)] underline">Compose</a> page appear here.</p>
+      <p class="text-sm text-[var(--color-text-muted)]">{i18n.t.drafts.savedFromCompose} <a href="{base}/compose" class="text-[var(--color-primary)] underline">{i18n.t.nav.compose}</a></p>
     </div>
   {:else}
     <!-- Scheduled drafts -->
@@ -301,7 +301,7 @@
                 <button
                   onclick={() => previewDraftId = previewDraftId === draft.id ? null : draft.id}
                   class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors {previewDraftId === draft.id ? 'text-[var(--color-primary)]' : ''}"
-                  title="Preview"
+                  title={i18n.t.drafts.preview}
                 >
                   <Eye size={14} />
                 </button>
@@ -309,11 +309,11 @@
                   onclick={() => postDraft(draft)}
                   disabled={posting === draft.id}
                   class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-success)] transition-colors"
-                  title="Post now"
+                  title={i18n.t.drafts.postNow}
                 >
                   {#if posting === draft.id}<Loader2 size={14} class="animate-spin" />{:else}<Send size={14} />{/if}
                 </button>
-                <button onclick={() => handleDelete(draft.id)} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors" title="Delete">
+                <button onclick={() => handleDelete(draft.id)} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors" title={i18n.t.drafts.delete}>
                   <Trash2 size={14} />
                 </button>
               </div>
@@ -369,14 +369,14 @@
                 <a
                   href="{base}/compose?draft={draft.id}"
                   class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors"
-                  title="Edit"
+                  title={i18n.t.drafts.edit}
                 >
                   <Edit3 size={14} />
                 </a>
                 <button
                   onclick={() => previewDraftId = previewDraftId === draft.id ? null : draft.id}
                   class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors {previewDraftId === draft.id ? 'text-[var(--color-primary)]' : ''}"
-                  title="Preview"
+                  title={i18n.t.drafts.preview}
                 >
                   <Eye size={14} />
                 </button>
@@ -384,18 +384,18 @@
                   onclick={() => postDraft(draft)}
                   disabled={posting === draft.id}
                   class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-success)] transition-colors"
-                  title="Post now"
+                  title={i18n.t.drafts.postNow}
                 >
                   {#if posting === draft.id}<Loader2 size={14} class="animate-spin" />{:else}<Send size={14} />{/if}
                 </button>
                 <button
                   onclick={() => { schedulingDraftId = schedulingDraftId === draft.id ? null : draft.id; }}
                   class="p-1.5 text-[var(--color-text-muted)] hover:text-yellow-400 transition-colors"
-                  title="Schedule"
+                  title={i18n.t.drafts.schedule}
                 >
                   <Clock size={14} />
                 </button>
-                <button onclick={() => handleDelete(draft.id)} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors" title="Delete">
+                <button onclick={() => handleDelete(draft.id)} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors" title={i18n.t.drafts.delete}>
                   <Trash2 size={14} />
                 </button>
               </div>
@@ -419,7 +419,7 @@
                   disabled={!scheduleDate || !scheduleTime}
                   class="px-3 py-1 text-xs bg-yellow-600 text-white rounded disabled:opacity-50"
                 >
-                  Schedule
+                  {i18n.t.drafts.schedule}
                 </button>
                 <button
                   onclick={() => schedulingDraftId = null}

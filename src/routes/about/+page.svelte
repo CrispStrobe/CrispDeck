@@ -113,8 +113,8 @@
     <h3 class="text-sm font-semibold mb-2 flex items-center gap-1.5"><Shield size={14} /> Privacy &amp; Legal</h3>
     <div class="flex flex-wrap gap-3 text-xs">
       <a href="{base}/privacy" class="text-[var(--color-primary)] hover:underline">Privacy Policy</a>
-      <a href="https://github.com/CrispStrobe/CrispDeck/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">AGPL-3.0 Source License</a>
-      <a href="https://github.com/CrispStrobe/CrispDeck/blob/main/LICENSE-COMMERCIAL" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">App Store License</a>
+      <a href="https://github.com/CrispStrobe/CrispDeck/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">{i18n.t.about.agplLicense}</a>
+      <a href="https://github.com/CrispStrobe/CrispDeck/blob/main/LICENSE-COMMERCIAL" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">{i18n.t.about.appStoreLicense}</a>
     </div>
   </section>
 
@@ -130,13 +130,13 @@
     <h3 class="text-sm font-semibold mb-2 flex items-center gap-1.5"><ScrollText size={14} /> License</h3>
     <div class="text-xs text-[var(--color-text-muted)] leading-relaxed space-y-1">
       <p>
-        <span class="font-medium text-[var(--color-text)]">Source code</span> —
+        <span class="font-medium text-[var(--color-text)]">{i18n.t.about.sourceCode}</span> —
         <a href="https://github.com/CrispStrobe/CrispDeck/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">AGPL-3.0</a>
         · Free to use, modify, and redistribute under copyleft terms.
       </p>
       <p>
-        <span class="font-medium text-[var(--color-text)]">App Store / Play Store binary</span> —
-        <a href="https://github.com/CrispStrobe/CrispDeck/blob/main/LICENSE-COMMERCIAL" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">Commercial License</a>
+        <span class="font-medium text-[var(--color-text)]">{i18n.t.about.storeBinary}</span> —
+        <a href="https://github.com/CrispStrobe/CrispDeck/blob/main/LICENSE-COMMERCIAL" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">{i18n.t.about.commercialLicense}</a>
         · Distributed by Christian Ströbele under an App Store distribution exception.
       </p>
     </div>
@@ -165,7 +165,7 @@
     </div>
 
     {#if loading}
-      <p class="text-xs text-[var(--color-text-muted)] text-center py-4">Loading licenses...</p>
+      <p class="text-xs text-[var(--color-text-muted)] text-center py-4">{i18n.t.about.loadingLicenses}</p>
     {:else if licenses.length === 0}
       <p class="text-xs text-[var(--color-text-muted)] text-center py-4">
         No licenses.json found. Run <code class="bg-[var(--color-bg)] px-1 rounded">node scripts/generate-licenses.js</code> to generate.
@@ -182,7 +182,7 @@
               <span>{lib.license}</span>
               <span>{lib.author}</span>
               {#if lib.link}
-                <a href={lib.link} target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">Source</a>
+                <a href={lib.link} target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">{i18n.t.about.source}</a>
               {/if}
             </div>
           </div>
