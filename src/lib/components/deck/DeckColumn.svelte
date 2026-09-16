@@ -341,7 +341,7 @@
       <GripVertical size={14} class="text-[var(--color-text-muted)] cursor-grab" />
       <span class="text-sm font-medium truncate">{title}</span>
       {#if streaming}
-        <span class="flex items-center gap-1 text-[9px] text-green-400 font-medium" title="Live streaming">
+        <span class="flex items-center gap-1 text-[9px] text-green-400 font-medium" title={i18n.t.deck.liveStreaming}>
           <span class="relative flex h-2 w-2">
             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
             <span class="relative inline-flex rounded-full h-2 w-2 bg-green-400"></span>

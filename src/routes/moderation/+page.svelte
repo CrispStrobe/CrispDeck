@@ -74,7 +74,7 @@
           for (const m of mutes.data.mutes) {
             allMuted.push({ platform: 'bluesky', handle: m.handle, displayName: m.displayName, avatar: m.avatar, did: m.did, type: 'mute' });
           }
-        } catch (e) { console.error('Moderation data load failed:', e); toast.error('Failed to load moderation data'); }
+        } catch (e) { console.error('Moderation data load failed:', e); toast.error(i18n.t.moderation.loadFailed); }
       } else if (acct.platform === 'mastodon') {
         const masto = entry.client as MastodonClient;
         const token = masto.getAccessToken();
@@ -94,7 +94,7 @@
               allMuted.push({ platform: 'mastodon', handle: `@${a.acct}`, displayName: a.display_name, avatar: a.avatar, id: a.id, type: 'mute' });
             }
           }
-        } catch (e) { console.error('Moderation data load failed:', e); toast.error('Failed to load moderation data'); }
+        } catch (e) { console.error('Moderation data load failed:', e); toast.error(i18n.t.moderation.loadFailed); }
       }
     }
 
@@ -122,7 +122,7 @@
             listItemCount: l.listItemCount,
             subscribed: !!l.viewer?.muted || !!l.viewer?.blocked,
           }));
-      } catch (e) { console.error('Moderation data load failed:', e); toast.error('Failed to load moderation data'); }
+      } catch (e) { console.error('Moderation data load failed:', e); toast.error(i18n.t.moderation.loadFailed); }
       break;
     }
   }

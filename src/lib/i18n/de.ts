@@ -28,6 +28,10 @@ export default {
       dms: 'DMs',
     },
     app: {
+      keyboardShortcuts: 'Tastenkürzel',
+      voiceCommandsHint: 'Sprich diese, während das Mikrofon beim Verfassen aktiv ist. Funktioniert auch auf Deutsch.',
+      keyboardShortcutsLabel: 'Tastenkürzel',
+      closeKeyboardShortcuts: 'Tastenkürzel schließen',
       skipToContent: 'Zum Inhalt springen',
       offlineBanner: 'Du bist offline — einige Funktionen sind möglicherweise nicht verfügbar',
       mainNavigation: 'Hauptnavigation',
@@ -41,6 +45,12 @@ export default {
       expand: 'Ausklappen',
     },
     compose: {
+      postTo: 'Veröffentlichen auf',
+      emoji: 'Emoji',
+      searchEmojiDots: 'Emoji suchen …',
+      closeCompose: 'Verfassen schließen',
+      composePost: 'Beitrag verfassen',
+      postFailed: 'Veröffentlichen fehlgeschlagen',
       addAnimatedEmoji: 'Animiertes Emoji hinzufügen',
       emojiPickerLabel: 'Auswahl animierter Emojis',
       searchEmojiPlaceholder: 'Emoji suchen …',
@@ -395,6 +405,7 @@ export default {
       activityByHour: 'Posting-Aktivität nach Stunde (beide Plattformen)',
     },
     moderation: {
+      loadFailed: 'Moderationsdaten konnten nicht geladen werden',
       searchResults: 'Suchergebnisse',
       noLabelers: 'Keine Labeler abonniert',
       noLabelersDesc: 'Suche nach Labelern, um Moderationsdienste zu abonnieren.',
@@ -574,6 +585,7 @@ export default {
       followedGroup: 'und {count} weitere folgen Ihnen',
     },
     messages: {
+      userOrHandle: '@Benutzer oder Handle …',
       title: 'Nachrichten',
       blueskyDmsNote: 'Bluesky-DMs erfordern OAuth für Chat-Zugang.',
       userPlaceholder: '@Benutzer oder Handle...',
@@ -611,6 +623,7 @@ export default {
       resultsByNetwork: '{bluesky} Bluesky · {mastodon} Mastodon · {threads} Threads',
     },
     bookmarks: {
+      importFromPlatforms: 'Lesezeichen aus verbundenen Plattformen importieren',
       title: 'Lesezeichen',
       noBookmarks: 'Keine Lesezeichen',
       hint: 'Klicken Sie auf das Lesezeichen-Symbol bei einem Beitrag.',
@@ -636,6 +649,7 @@ export default {
       calendarView: 'Kalender',
     },
     deck: {
+      liveStreaming: 'Live-Übertragung',
       refreshColumn: 'Spalte aktualisieren',
       collapseColumn: 'Spalte einklappen',
       columnColor: 'Spaltenfarbe',
@@ -677,6 +691,8 @@ export default {
       keywordsSavedPrompt: 'Set-Name oder Stichwörter (kommagetrennt):',
     },
     archive: {
+      buildArchiveDesc: 'Lege ein lokales Archiv deiner Beiträge, Likes und Reposts an, um schnell zu suchen und zu exportieren.',
+      noMediaFound: 'Keine Medien gefunden. Beiträge mit Bildern, Videos oder Links erscheinen hier.',
       deleteArchiveConfirm: 'Das gesamte Archiv löschen? Das lässt sich nicht rückgängig machen.',
       title: 'Archiv',
       building: 'Wird erstellt...',
@@ -729,6 +745,7 @@ export default {
       totalMatched: 'erkannte Identitäten',
     },
     thread: {
+      postNotFound: 'Beitrag nicht gefunden.',
       readAsArticle: 'Als Artikel lesen',
       parts: 'Teile',
     },
@@ -777,7 +794,13 @@ export default {
       connectionFailed: 'Verbindung fehlgeschlagen',
       backToSettings: 'Zurück zu den Einstellungen',
     },
-    common: { cancel: 'Abbrechen', add: 'Hinzufügen',
+    common: {
+      switchAccount: 'Konto wechseln',
+      scrollToTop: 'Nach oben scrollen',
+      openInBrowser: 'Im Browser öffnen',
+      mediaViewer: 'Medienansicht',
+      somethingWentWrong: 'Etwas ist schiefgelaufen',
+      technicalDetails: 'Technische Details', cancel: 'Abbrechen', add: 'Hinzufügen',
       dismiss: 'schließen',
       loading: 'Laden...',
       error: 'Fehler',

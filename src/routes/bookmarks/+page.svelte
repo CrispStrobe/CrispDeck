@@ -98,7 +98,7 @@
         onclick={syncBookmarks}
         disabled={syncing}
         class="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md hover:bg-[var(--color-surface-hover)] transition-colors disabled:opacity-50"
-        title="Import bookmarks from connected platforms"
+        title={i18n.t.bookmarks.importFromPlatforms}
       >
         {#if syncing}<Loader2 size={14} class="animate-spin" />{:else}<RefreshCw size={14} />{/if}
         {i18n.t.bookmarks.sync}

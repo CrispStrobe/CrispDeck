@@ -143,7 +143,7 @@
   {:else if filtered.length === 0}
     <div class="text-center py-20 text-[var(--color-text-muted)]">
       <Image size={48} class="mx-auto mb-3 opacity-50" />
-      <p class="text-sm">No media found. Posts with images, videos, or links will appear here.</p>
+      <p class="text-sm">{i18n.t.archive.noMediaFound}</p>
     </div>
   {:else}
     <div class="columns-2 md:columns-3 lg:columns-4 gap-3 space-y-3">

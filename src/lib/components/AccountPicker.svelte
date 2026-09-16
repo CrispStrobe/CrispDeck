@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { i18n } from '$lib/i18n.svelte';
   import type { Account } from '$lib/types';
 
   let { accounts, selected = $bindable([]) }: {
@@ -21,7 +22,7 @@
 
 <div class="space-y-2">
   <div class="flex items-center justify-between">
-    <span class="text-xs text-[var(--color-text-muted)] uppercase tracking-wider font-medium">Post to</span>
+    <span class="text-xs text-[var(--color-text-muted)] uppercase tracking-wider font-medium">{i18n.t.compose.postTo}</span>
     {#if accounts.length > 1}
       <button onclick={selectAll} class="text-xs text-[var(--color-primary)] hover:underline">
         Select All

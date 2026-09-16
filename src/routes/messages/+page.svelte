@@ -329,7 +329,7 @@
         <div class="p-2 border-b border-[var(--color-border)]">
           {#if showNewConvo}
             <form onsubmit={(e) => { e.preventDefault(); startNewConversation(); }} class="flex gap-1">
-              <input type="text" bind:value={newConvoHandle} placeholder="@user or handle..." class="flex-1 px-2 py-1 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-[var(--color-text)]" />
+              <input type="text" bind:value={newConvoHandle} placeholder={i18n.t.messages.userOrHandle} class="flex-1 px-2 py-1 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-[var(--color-text)]" />
               <button type="submit" class="px-2 py-1 text-xs bg-[var(--color-primary)] text-white rounded">Go</button>
             </form>
           {:else}

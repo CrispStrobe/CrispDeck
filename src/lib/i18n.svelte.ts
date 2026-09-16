@@ -34,6 +34,10 @@ export const translations = {
       dms: 'DMs',
     },
     app: {
+      keyboardShortcuts: 'Keyboard Shortcuts',
+      voiceCommandsHint: 'Speak these while the mic is active in Compose. Also works in German.',
+      keyboardShortcutsLabel: 'Keyboard shortcuts',
+      closeKeyboardShortcuts: 'Close keyboard shortcuts',
       skipToContent: 'Skip to content',
       offlineBanner: "You're offline — some features may be unavailable",
       mainNavigation: 'Main navigation',
@@ -47,6 +51,12 @@ export const translations = {
       expand: 'Expand',
     },
     compose: {
+      postTo: 'Post to',
+      emoji: 'Emoji',
+      searchEmojiDots: 'Search emoji...',
+      closeCompose: 'Close compose',
+      composePost: 'Compose post',
+      postFailed: 'Post failed',
       addAnimatedEmoji: 'Add an animated emoji',
       emojiPickerLabel: 'Animated emoji picker',
       searchEmojiPlaceholder: 'Search emoji…',
@@ -408,6 +418,7 @@ export const translations = {
       activityByHour: 'Posting activity by hour (both platforms)',
     },
     moderation: {
+      loadFailed: 'Failed to load moderation data',
       searchResults: 'Search Results',
       noLabelers: 'No Labelers Subscribed',
       noLabelersDesc: 'Search for labelers to subscribe to content moderation services.',
@@ -587,6 +598,7 @@ export const translations = {
       followedGroup: 'and {count} others followed you',
     },
     messages: {
+      userOrHandle: '@user or handle...',
       title: 'Messages',
       blueskyDmsNote: 'Bluesky DMs require OAuth for chat access.',
       userPlaceholder: '@user or handle...',
@@ -625,6 +637,7 @@ export const translations = {
       resultsByNetwork: '{bluesky} Bluesky · {mastodon} Mastodon · {threads} Threads',
     },
     bookmarks: {
+      importFromPlatforms: 'Import bookmarks from connected platforms',
       title: 'Bookmarks',
       noBookmarks: 'No Bookmarks',
       hint: 'Click the bookmark icon on any post to save it here.',
@@ -650,6 +663,7 @@ export const translations = {
       calendarView: 'Calendar',
     },
     deck: {
+      liveStreaming: 'Live streaming',
       refreshColumn: 'Refresh column',
       collapseColumn: 'Collapse column',
       columnColor: 'Column color',
@@ -694,6 +708,8 @@ export const translations = {
       keywordsSavedPrompt: 'Enter set name or keywords (comma-separated):',
     },
     archive: {
+      buildArchiveDesc: 'Build a local archive of your posts, likes, and reposts for fast searching and export.',
+      noMediaFound: 'No media found. Posts with images, videos, or links will appear here.',
       deleteArchiveConfirm: 'Delete entire archive? This cannot be undone.',
       title: 'Archive',
       building: 'Building...',
@@ -746,6 +762,7 @@ export const translations = {
       totalMatched: 'matched identities',
     },
     thread: {
+      postNotFound: 'Post not found.',
       readAsArticle: 'Read as article',
       parts: 'parts',
     },
@@ -794,7 +811,13 @@ export const translations = {
       connectionFailed: 'Connection Failed',
       backToSettings: 'Back to Settings',
     },
-    common: { cancel: 'Cancel', add: 'Add',
+    common: {
+      switchAccount: 'Switch account',
+      scrollToTop: 'Scroll to top',
+      openInBrowser: 'Open in browser',
+      mediaViewer: 'Media viewer',
+      somethingWentWrong: 'Something went wrong',
+      technicalDetails: 'Technical details', cancel: 'Cancel', add: 'Add',
       dismiss: 'dismiss',
       loading: 'Loading...',
       error: 'Error',

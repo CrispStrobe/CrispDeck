@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { i18n } from '$lib/i18n.svelte';
   import { ArrowUp } from '@lucide/svelte';
   import { onMount } from 'svelte';
 
@@ -26,8 +27,8 @@
   <button
     onclick={scrollToTop}
     class="fixed bottom-20 md:bottom-6 right-16 md:right-6 z-40 p-2.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-full shadow-lg text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-all scroll-top-enter"
-    aria-label="Scroll to top"
-    title="Scroll to top"
+    aria-label={i18n.t.common.scrollToTop}
+    title={i18n.t.common.scrollToTop}
   >
     <ArrowUp size={18} />
   </button>

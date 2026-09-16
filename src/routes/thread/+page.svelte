@@ -301,7 +301,7 @@
     {/if}
 
     {#if !mainPost && !error}
-      <p class="text-center py-12 text-[var(--color-text-muted)]">Post not found.</p>
+      <p class="text-center py-12 text-[var(--color-text-muted)]">{i18n.t.thread.postNotFound}</p>
     {/if}
   {/if}
 </div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { i18n } from '$lib/i18n.svelte';
   import { base } from '$app/paths';
   import { ChevronUp } from '@lucide/svelte';
   import type { Account } from '$lib/types';
@@ -29,7 +30,7 @@
     <button
       onclick={() => showPopover = !showPopover}
       class="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-md hover:bg-[var(--color-surface-hover)] transition-colors"
-      title="Switch account"
+      title={i18n.t.common.switchAccount}
     >
       <div class="flex -space-x-1.5">
         {#each accounts.slice(0, 4) as acct}

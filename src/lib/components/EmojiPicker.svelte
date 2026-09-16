@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { i18n } from '$lib/i18n.svelte';
   let { onselect }: { onselect: (emoji: string) => void } = $props();
 
   let search = $state('');
@@ -37,7 +38,7 @@
   <button
     onclick={() => show = !show}
     class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] rounded-md transition-colors text-base"
-    title="Emoji"
+    title={i18n.t.compose.emoji}
   >
     😊
   </button>
@@ -48,7 +49,7 @@
         <input
           type="text"
           bind:value={search}
-          placeholder="Search emoji..."
+          placeholder={i18n.t.compose.searchEmojiDots}
           class="w-full px-2 py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-xs text-[var(--color-text)] focus:outline-none"
         />
       </div>

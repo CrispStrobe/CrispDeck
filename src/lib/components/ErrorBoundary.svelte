@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { i18n } from '$lib/i18n.svelte';
   import { base } from '$app/paths';
   import { AlertTriangle, RefreshCw } from '@lucide/svelte';
 
@@ -23,7 +24,7 @@
     <div class="p-6 max-w-lg mx-auto mt-12">
       <div class="bg-[var(--color-surface)] rounded-xl border border-red-900/50 p-6 text-center">
         <AlertTriangle size={48} class="text-red-400 mx-auto mb-4" />
-        <h2 class="text-lg font-bold mb-2">Something went wrong</h2>
+        <h2 class="text-lg font-bold mb-2">{i18n.t.common.somethingWentWrong}</h2>
         <p class="text-sm text-[var(--color-text-muted)] mb-4">
           {errorMessage(error)}
         </p>
@@ -43,7 +44,7 @@
           </a>
         </div>
         <details class="mt-4 text-left">
-          <summary class="text-xs text-[var(--color-text-muted)] cursor-pointer">Technical details</summary>
+          <summary class="text-xs text-[var(--color-text-muted)] cursor-pointer">{i18n.t.common.technicalDetails}</summary>
           <pre class="mt-2 p-3 bg-[var(--color-bg)] rounded-md text-[10px] text-red-300 overflow-x-auto whitespace-pre-wrap">{errorDetails(error)}</pre>
         </details>
       </div>

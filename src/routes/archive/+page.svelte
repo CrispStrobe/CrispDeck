@@ -360,7 +360,7 @@
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <Archive size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
       <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">{i18n.t.archive.noArchive}</h3>
-      <p class="text-sm text-[var(--color-text-muted)] mb-4">Build a local archive of your posts, likes, and reposts for fast searching and export.</p>
+      <p class="text-sm text-[var(--color-text-muted)] mb-4">{i18n.t.archive.buildArchiveDesc}</p>
       <button
         onclick={buildArchive}
         disabled={building || accounts.length === 0}

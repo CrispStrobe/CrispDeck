@@ -199,7 +199,7 @@
       }
     } catch (e) {
       error = String(e);
-      toast.error('Post failed');
+      toast.error(i18n.t.compose.postFailed);
     } finally {
       posting = false;
       videoUploadStatus = '';
@@ -228,7 +228,7 @@
   <button
     type="button"
     class="fixed inset-0 z-[90] bg-black/40 floating-compose-backdrop"
-    aria-label="Close compose"
+    aria-label={i18n.t.compose.closeCompose}
     onclick={handleClose}
   ></button>
 
@@ -238,7 +238,7 @@
     class="fixed top-0 right-0 z-[91] h-full w-full max-w-md bg-[var(--color-bg)] border-l border-[var(--color-border)] shadow-2xl flex flex-col floating-compose-panel"
     role="dialog"
     aria-modal="true"
-    aria-label="Compose post"
+    aria-label={i18n.t.compose.composePost}
     tabindex="-1"
     onkeydown={handleKeydown}
   >

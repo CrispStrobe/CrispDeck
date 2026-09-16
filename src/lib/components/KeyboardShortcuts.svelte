@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { i18n } from '$lib/i18n.svelte';
   import { X, Mic } from '@lucide/svelte';
   import { onMount } from 'svelte';
 
@@ -74,14 +75,14 @@
 </script>
 
 {#if show}
-  <div bind:this={dialogEl} class="fixed inset-0 z-[100] flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" tabindex="-1" onkeydown={(e) => { if (e.key === 'Escape') show = false; }}>
+  <div bind:this={dialogEl} class="fixed inset-0 z-[100] flex items-center justify-center" role="dialog" aria-modal="true" aria-label={i18n.t.app.keyboardShortcutsLabel} tabindex="-1" onkeydown={(e) => { if (e.key === 'Escape') show = false; }}>
     <!-- The scrim is the click-outside target. As a button it is focusable and
          Enter/Space-operable, so dismissing no longer depends on a container
          click handler that inner elements had to stop from bubbling. -->
-    <button type="button" class="absolute inset-0 bg-black/60" aria-label="Close keyboard shortcuts" onclick={() => show = false}></button>
+    <button type="button" class="absolute inset-0 bg-black/60" aria-label={i18n.t.app.closeKeyboardShortcuts} onclick={() => show = false}></button>
     <div class="relative bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] shadow-2xl p-6 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-bold">Keyboard Shortcuts</h2>
+        <h2 class="text-lg font-bold">{i18n.t.app.keyboardShortcuts}</h2>
         <button onclick={() => show = false} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
           <X size={18} />
         </button>
@@ -103,7 +104,7 @@
       <h3 class="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mt-6 mb-2 flex items-center gap-1.5">
         <Mic size={12} /> Voice Commands (while dictating)
       </h3>
-      <p class="text-[10px] text-[var(--color-text-muted)] mb-2">Speak these while the mic is active in Compose. Also works in German.</p>
+      <p class="text-[10px] text-[var(--color-text-muted)] mb-2">{i18n.t.app.voiceCommandsHint}</p>
       {#each voiceCommands as cmd}
         <div class="flex items-center justify-between py-1">
           <span class="text-sm text-[var(--color-text-muted)]">{cmd.desc}</span>

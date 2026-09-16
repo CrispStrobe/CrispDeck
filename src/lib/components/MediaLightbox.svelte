@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { i18n } from '$lib/i18n.svelte';
   import { untrack } from 'svelte';
   import { X, ChevronLeft, ChevronRight, ExternalLink } from '@lucide/svelte';
   import { haptic } from '$lib/haptics';
@@ -89,7 +90,7 @@
       target="_blank"
       rel="noopener noreferrer"
       class="absolute top-4 right-16 z-10 p-2 text-white/70 hover:text-white bg-black/40 rounded-full transition-colors"
-      title="Open in browser"
+      title={i18n.t.common.openInBrowser}
       onclick={(e) => e.stopPropagation()}
     >
       <ExternalLink size={18} />
@@ -130,7 +131,7 @@
          prev/next buttons. -->
     <div
       role="group"
-      aria-label="Media viewer"
+      aria-label={i18n.t.common.mediaViewer}
       class="max-w-[90vw] max-h-[85vh] flex flex-col items-center"
       ontouchstart={onTouchStart}
       ontouchmove={onTouchMove}
