@@ -483,7 +483,7 @@ export const translations = {
       saved: 'Saved {date}',
       calendarView: 'Calendar',
     },
-    deck: {
+    deck: { chooseFeed: 'Choose a feed', yourFeeds: 'Your feeds', searchResults: 'Search results', needBluesky: 'Connect a Bluesky account to browse feeds.', pasteFeedUri: 'Paste a feed URI',
       title: 'Deck',
       col: '{count} col',
       loadLayout: 'Load layout...',
@@ -495,7 +495,6 @@ export const translations = {
       hashtag: 'Hashtag (without #):',
       userHandle: 'User handle (e.g. alice.bsky.social):',
       mastodonListId: 'Mastodon list ID (from /lists page):',
-      blueskyFeedUri: 'Bluesky feed URI (at://...):',
       homeTimeline: 'Home Timeline',
       mentions: 'Mentions',
       localMastodon: 'Local (Mastodon)',
@@ -592,7 +591,7 @@ export const translations = {
       quickActions: 'Quick Actions',
       scanIdentities: 'Scan Identities',
     },
-    common: {
+    common: { cancel: 'Cancel', add: 'Add',
       dismiss: 'dismiss',
       loading: 'Loading...',
       error: 'Error',

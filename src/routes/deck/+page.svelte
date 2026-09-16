@@ -9,6 +9,8 @@
   import DeckColumn from '$lib/components/deck/DeckColumn.svelte';
   import type { ColumnType } from '$lib/components/deck/DeckColumn.svelte';
   import FloatingCompose from '$lib/components/FloatingCompose.svelte';
+  import FeedPickerDialog from '$lib/components/FeedPickerDialog.svelte';
+  import type { FeedChoice } from '$lib/bluesky-feeds';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import { ThreadsClient } from '$lib/api/threads';
@@ -952,31 +954,56 @@
     }
   }
 
+  let showFeedPicker = $state(false);
+
+  /** The first connected Bluesky account's agent, or null. */
+  function blueskyAgent(): any | null {
+    for (const [id, entry] of clientEntries) {
+      if (accounts.find(a => a.id === id)?.platform !== 'bluesky') continue;
+      return entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
+    }
+    return null;
+  }
+
+  function addFeedColumn(choice: FeedChoice) {
+    showFeedPicker = false;
+    if (!choice.uri) return;
+    const id = `feed-${Date.now()}`;
+    columns = [...columns, { id, title: choice.title, type: 'feed', query: choice.uri }];
+    saveColumns();
+    loadColumn(columns[columns.length - 1]);
+  }
+
   function addColumn(type: ColumnType) {
     const id = `${type}-${Date.now()}`;
     let title = availableColumns.find(c => c.type === type)?.label ?? type;
     let query: string | undefined;
 
     if (type === 'search') {
-      query = prompt('Search query:') ?? undefined;
+      query = prompt(i18n.t.deck.searchQuery) ?? undefined;
       if (!query) return;
       title = `Search: ${query}`;
     } else if (type === 'hashtag') {
-      query = prompt('Hashtag (without #):') ?? undefined;
+      query = prompt(i18n.t.deck.hashtag) ?? undefined;
       if (!query) return;
       title = `#${query}`;
     } else if (type === 'user') {
-      query = prompt('User handle (e.g. alice.bsky.social):') ?? undefined;
+      query = prompt(i18n.t.deck.userHandle) ?? undefined;
       if (!query) return;
       title = `@${query}`;
     } else if (type === 'list') {
-      query = prompt('Mastodon list ID (from /lists page):') ?? undefined;
+      query = prompt(i18n.t.deck.mastodonListId) ?? undefined;
       if (!query) return;
       title = `List: ${query}`;
     } else if (type === 'feed') {
-      query = prompt('Bluesky feed URI (at://...):') ?? undefined;
-      if (!query) return;
-      title = `Feed: ${query.split('/').pop()}`;
+      // Handed off to the picker, which calls back into addFeedColumn once the
+      // user has chosen. The old prompt() asked for a raw at:// URI, which is
+      // not a thing anyone has: the official app never shows it, so in practice
+      // only someone willing to dig a DID out of an API response could add a
+      // feed column at all.
+      showFeedPicker = true;
+      showAddMenu = false;
+      return;
     } else if (type === 'tag-group') {
       const groups = listTagGroups();
       if (groups.length === 0) {
@@ -1177,7 +1204,7 @@
       {/if}
       <button
         onclick={() => {
-          const name = prompt('Layout name:');
+          const name = prompt(i18n.t.deck.layoutName);
           if (name) {
             saveLayout(name, columns);
             setActiveLayoutName(name);
@@ -1303,4 +1330,12 @@
     quotePost={composeQuotePost}
     onposted={() => columns.forEach(col => loadColumn(col))}
   />
+
+{#if showFeedPicker}
+  <FeedPickerDialog
+    agent={blueskyAgent()}
+    onselect={addFeedColumn}
+    oncancel={() => showFeedPicker = false}
+  />
+{/if}
 </div>

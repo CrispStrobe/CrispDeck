@@ -469,7 +469,7 @@ export default {
       saved: 'Gespeichert {date}',
       calendarView: 'Kalender',
     },
-    deck: {
+    deck: { chooseFeed: 'Feed auswählen', yourFeeds: 'Deine Feeds', searchResults: 'Suchergebnisse', needBluesky: 'Verbinde ein Bluesky-Konto, um Feeds zu durchsuchen.', pasteFeedUri: 'Feed-URI einfügen',
       title: 'Deck',
       col: '{count} Sp.',
       loadLayout: 'Layout laden...',
@@ -481,7 +481,6 @@ export default {
       hashtag: 'Hashtag (ohne #):',
       userHandle: 'Benutzer-Handle (z.B. alice.bsky.social):',
       mastodonListId: 'Mastodon-Listen-ID (von /lists):',
-      blueskyFeedUri: 'Bluesky-Feed-URI (at://...):',
       homeTimeline: 'Zeitleiste',
       mentions: 'Erwähnungen',
       localMastodon: 'Lokal (Mastodon)',
@@ -575,7 +574,7 @@ export default {
       quickActions: 'Schnellaktionen',
       scanIdentities: 'Identitäten scannen',
     },
-    common: {
+    common: { cancel: 'Abbrechen', add: 'Hinzufügen',
       dismiss: 'schließen',
       loading: 'Laden...',
       error: 'Fehler',

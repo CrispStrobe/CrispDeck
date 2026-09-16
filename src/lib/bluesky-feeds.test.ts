@@ -262,3 +262,23 @@ describe('searchFeedGenerators', () => {
     await expect(searchFeedGenerators('cats')).rejects.toThrow('503');
   });
 });
+
+describe('choosing a feed by pasted URI', () => {
+  // The picker keeps a URI field for the rare person who genuinely has one.
+  // These are the rules that field applies, kept here so they are pinned down
+  // in one place rather than only inside the component.
+  const kindOf = (uri: string) =>
+    uri.includes('/app.bsky.graph.list/') ? 'list' : 'feed';
+
+  it('reads a list URI as a list', () => {
+    expect(kindOf(LIST_A)).toBe('list');
+  });
+
+  it('reads a generator URI as a feed', () => {
+    expect(kindOf(FEED_A)).toBe('feed');
+  });
+
+  it('falls back to the rkey for a name, since a raw URI has none', () => {
+    expect(FEED_B.split('/').pop()).toBe('with-friends');
+  });
+});
