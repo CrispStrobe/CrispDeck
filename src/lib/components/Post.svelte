@@ -851,7 +851,7 @@
   {#if warnedLabels.length > 0 && !labelRevealed}
     <div class="mb-2 p-2 bg-yellow-900/20 border border-yellow-700/30 rounded text-xs text-yellow-300 flex items-center justify-between">
       <span>Content warning: {warnedLabels.join(', ')}</span>
-      <button onclick={() => labelRevealed = true} class="text-yellow-400 hover:underline ml-2">Show</button>
+      <button onclick={() => labelRevealed = true} class="text-yellow-400 hover:underline ml-2">{i18n.t.moderation.show}</button>
     </div>
   {/if}
 

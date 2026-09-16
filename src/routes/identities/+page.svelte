@@ -328,8 +328,8 @@
           placeholder={i18n.t.identities.displayNamePlaceholder}
           class="flex-1 px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]"
         />
-        <button onclick={createManualIdentity} class="px-3 py-2 bg-[var(--color-primary)] text-white text-sm rounded-md">Create</button>
-        <button onclick={() => showLinkForm = false} class="px-3 py-2 text-sm text-[var(--color-text-muted)]">Cancel</button>
+        <button onclick={createManualIdentity} class="px-3 py-2 bg-[var(--color-primary)] text-white text-sm rounded-md">{i18n.t.common.create}</button>
+        <button onclick={() => showLinkForm = false} class="px-3 py-2 text-sm text-[var(--color-text-muted)]">{i18n.t.common.cancel}</button>
       </div>
       <p class="text-xs text-[var(--color-text-muted)] mt-2">{i18n.t.identities.afterCreating}</p>
     </div>
@@ -360,7 +360,7 @@
                   onclick={() => dismissCandidate(candidate)}
                   class="flex items-center gap-1 px-3 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] rounded-md"
                 >
-                  <X size={12} /> Dismiss
+                  <X size={12} /> {i18n.t.common.dismiss}
                 </button>
               </div>
             </div>

@@ -82,7 +82,7 @@
   <!-- Bookmarks tabs -->
   <div class="flex items-center gap-1 mb-4">
     <a href="{base}/bookmarks" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">{i18n.t.nav.bookmarks}</a>
-    <a href="{base}/reading-lists" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Reading Lists</a>
+    <a href="{base}/reading-lists" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">{i18n.t.nav.readingLists}</a>
   </div>
 
   <div class="flex items-center justify-between mb-6">

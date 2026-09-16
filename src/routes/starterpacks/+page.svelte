@@ -233,7 +233,7 @@
 <div class="p-6 max-w-4xl mx-auto">
   <!-- Lists & Feeds tabs -->
   <div class="flex items-center gap-1 mb-4">
-    <a href="{base}/lists" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Lists</a>
+    <a href="{base}/lists" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">{i18n.t.lists.tabLists}</a>
     <a href="{base}/starterpacks" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">{i18n.t.nav.starterPacks}</a>
     <a href="{base}/feed-builder" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">{i18n.t.nav.feedBuilder}</a>
   </div>
@@ -268,7 +268,7 @@
               {#if creating}<Loader2 size={14} class="animate-spin" />{:else}<Plus size={14} />{/if}
               Create
             </button>
-            <button onclick={() => showCreate = false} class="px-4 py-2 text-sm text-[var(--color-text-muted)] border border-[var(--color-border)] rounded-md">Cancel</button>
+            <button onclick={() => showCreate = false} class="px-4 py-2 text-sm text-[var(--color-text-muted)] border border-[var(--color-border)] rounded-md">{i18n.t.common.cancel}</button>
           </div>
         </div>
       {:else}

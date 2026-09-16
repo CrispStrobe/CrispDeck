@@ -624,7 +624,7 @@
             <Check size={14} />
             <span>Posted to {result.platform}</span>
             {#if result.uri}
-              <a href={result.uri} target="_blank" rel="noopener noreferrer" class="underline ml-1">View</a>
+              <a href={result.uri} target="_blank" rel="noopener noreferrer" class="underline ml-1">{i18n.t.common.view}</a>
             {/if}
           {:else}
             <AlertTriangle size={14} />

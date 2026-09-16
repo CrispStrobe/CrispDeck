@@ -151,13 +151,13 @@
 <div class="p-6 max-w-4xl mx-auto">
   <div class="flex items-center gap-2 mb-4">
     <TrendingUp size={24} />
-    <h1 class="text-2xl font-bold">Discover</h1>
+    <h1 class="text-2xl font-bold">{i18n.t.nav.discover}</h1>
   </div>
 
   <!-- Discover tabs: Trending / Catch Up -->
   <div class="flex items-center gap-1 mb-4">
     <a href="{base}/trending" class="px-4 py-2 text-sm font-medium rounded-t-md border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">{i18n.t.nav.trending}</a>
-    <a href="{base}/catchup" class="px-4 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Catch Up</a>
+    <a href="{base}/catchup" class="px-4 py-2 text-sm font-medium rounded-t-md border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">{i18n.t.nav.catchUp}</a>
   </div>
 
   {#if error}

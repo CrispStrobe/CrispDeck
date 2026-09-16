@@ -787,7 +787,7 @@
                 onclick={() => showBskyForm = false}
                 class="px-4 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
               >
-                Cancel
+                {i18n.t.common.cancel}
               </button>
             </div>
           {/if}
@@ -878,7 +878,7 @@
               onclick={() => { showMastoForm = false; mastoOAuthState = null; }}
               class="px-4 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
             >
-              Cancel
+              {i18n.t.common.cancel}
             </button>
           </div>
           {#if mastoOAuthState}
@@ -969,7 +969,7 @@
                 onclick={() => showThreadsForm = false}
                 class="px-4 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
               >
-                Cancel
+                {i18n.t.common.cancel}
               </button>
             </div>
             <button
@@ -1018,7 +1018,7 @@
                 onclick={() => showThreadsForm = false}
                 class="px-4 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
               >
-                Cancel
+                {i18n.t.common.cancel}
               </button>
             </div>
             {#if threadsProxyAvailable}

@@ -42,7 +42,7 @@
         <button
           onclick={() => dismissToast(t.id)}
           class="flex-shrink-0 p-0.5 rounded hover:bg-white/10 transition-colors"
-          aria-label="Dismiss"
+          aria-label={i18n.t.common.dismiss}
         >
           <X size={14} />
         </button>

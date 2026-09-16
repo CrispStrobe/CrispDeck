@@ -239,7 +239,7 @@
     <div class="mb-4 p-3 bg-[var(--color-mastodon)]/10 border border-[var(--color-mastodon)]/30 rounded-lg">
       <div class="flex items-start justify-between gap-2">
         <div class="text-sm text-[var(--color-text)]">{@html ann.content}</div>
-        <button onclick={() => dismissAnnouncement(ann.id)} class="text-[var(--color-text-muted)] hover:text-[var(--color-text)] flex-shrink-0 text-xs">Dismiss</button>
+        <button onclick={() => dismissAnnouncement(ann.id)} class="text-[var(--color-text-muted)] hover:text-[var(--color-text)] flex-shrink-0 text-xs">{i18n.t.common.dismiss}</button>
       </div>
     </div>
   {/each}

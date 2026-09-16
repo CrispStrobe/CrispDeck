@@ -283,7 +283,7 @@
   <!-- Analytics tabs -->
   <div class="flex items-center gap-1 mb-4">
     <a href="{base}/analytics" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">{i18n.t.nav.analytics}</a>
-    <a href="{base}/calendar" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Calendar</a>
+    <a href="{base}/calendar" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">{i18n.t.nav.calendar}</a>
   </div>
 
   <div class="flex items-center justify-between mb-4">
@@ -370,7 +370,7 @@
       <button onclick={() => toggleStat('posts')} class="bg-[var(--color-surface)] p-3 rounded-lg border border-[var(--color-border)] text-center hover:border-[var(--color-primary)] transition-colors {expandedStat === 'posts' ? 'border-[var(--color-primary)]' : ''}">
         <MessageCircle size={18} class="text-[var(--color-text-muted)] mx-auto mb-1" />
         <div class="text-lg font-bold text-[var(--color-primary)]">{originalPosts.length}</div>
-        <div class="text-[10px] text-[var(--color-text-muted)]">Posts</div>
+        <div class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.instance.posts}</div>
       </button>
       <button onclick={() => toggleStat('likes')} class="bg-[var(--color-surface)] p-3 rounded-lg border border-[var(--color-border)] text-center hover:border-red-500 transition-colors {expandedStat === 'likes' ? 'border-red-500' : ''}">
         <Heart size={18} class="text-[var(--color-text-muted)] mx-auto mb-1" />

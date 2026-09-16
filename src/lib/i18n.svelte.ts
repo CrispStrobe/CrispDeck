@@ -5,6 +5,8 @@ const RTL_LANGUAGES: Language[] = ['ar'];
 export const translations = {
   en: {
     nav: {
+      discover: 'Discover',
+      catchUp: 'Catch Up',
       dashboard: 'Dashboard',
       feed: 'Feed',
       deck: 'Deck',
@@ -435,6 +437,7 @@ export const translations = {
       muted: 'Muted',
     },
     lists: {
+      tabLists: 'Lists',
       noPostsInList: 'No posts in this list.',
       selectListOrFeed: 'Select a list or feed to view its timeline.',
       listNamePlaceholder: 'List name...',
@@ -517,6 +520,7 @@ export const translations = {
       selectHint: 'Select a list to view its posts.',
     },
     about: {
+      privacyPolicy: 'Privacy Policy',
       agplLicense: 'AGPL-3.0 Source License',
       appStoreLicense: 'App Store License',
       sourceCode: 'Source code',
@@ -812,6 +816,7 @@ export const translations = {
       backToSettings: 'Back to Settings',
     },
     common: {
+      create: 'Create',
       switchAccount: 'Switch account',
       scrollToTop: 'Scroll to top',
       openInBrowser: 'Open in browser',

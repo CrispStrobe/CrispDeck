@@ -1187,7 +1187,7 @@
     <div class="flex items-center gap-3">
       <div class="flex items-center gap-2">
         <Columns3 size={20} />
-        <h1 class="text-lg font-bold">Deck</h1>
+        <h1 class="text-lg font-bold">{i18n.t.nav.deck}</h1>
         <span class="text-xs text-[var(--color-text-muted)]">{columns.length} col</span>
       </div>
       <!-- Saved layouts -->

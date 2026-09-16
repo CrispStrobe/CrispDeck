@@ -115,7 +115,7 @@
   <!-- Archive tabs -->
   <div class="flex items-center gap-1 mb-4">
     <a href="{base}/archive" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">{i18n.t.nav.archive}</a>
-    <a href="{base}/gallery" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Gallery</a>
+    <a href="{base}/gallery" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">{i18n.t.nav.gallery}</a>
   </div>
 
   <div class="flex items-center justify-between mb-6">

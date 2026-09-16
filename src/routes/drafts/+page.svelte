@@ -425,7 +425,7 @@
                   onclick={() => schedulingDraftId = null}
                   class="px-2 py-1 text-xs text-[var(--color-text-muted)]"
                 >
-                  Cancel
+                  {i18n.t.common.cancel}
                 </button>
               </div>
             {/if}

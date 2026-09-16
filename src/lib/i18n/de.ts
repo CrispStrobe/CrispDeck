@@ -1,5 +1,7 @@
 export default {
     nav: {
+      discover: 'Entdecken',
+      catchUp: 'Aufholen',
       dashboard: 'Übersicht',
       feed: 'Feed',
       deck: 'Deck',
@@ -422,6 +424,7 @@ export default {
       muted: 'Stummgeschaltet',
     },
     lists: {
+      tabLists: 'Listen',
       noPostsInList: 'Keine Beiträge in dieser Liste.',
       selectListOrFeed: 'Wähle eine Liste oder einen Feed, um die Beiträge zu sehen.',
       listNamePlaceholder: 'Listenname …',
@@ -504,6 +507,7 @@ export default {
       selectHint: 'Wählen Sie eine Liste, um ihre Beiträge anzuzeigen.',
     },
     about: {
+      privacyPolicy: 'Datenschutzerklärung',
       agplLicense: 'AGPL-3.0-Quellcode-Lizenz',
       appStoreLicense: 'App-Store-Lizenz',
       sourceCode: 'Quellcode',
@@ -795,6 +799,7 @@ export default {
       backToSettings: 'Zurück zu den Einstellungen',
     },
     common: {
+      create: 'Erstellen',
       switchAccount: 'Konto wechseln',
       scrollToTop: 'Nach oben scrollen',
       openInBrowser: 'Im Browser öffnen',

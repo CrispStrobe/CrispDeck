@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { i18n } from '$lib/i18n.svelte';
   import { Shield } from '@lucide/svelte';
 </script>
 
@@ -10,7 +11,7 @@
 <div class="p-6 max-w-3xl mx-auto">
   <div class="flex items-center gap-2 mb-6">
     <Shield size={24} />
-    <h1 class="text-2xl font-bold">Privacy Policy</h1>
+    <h1 class="text-2xl font-bold">{i18n.t.about.privacyPolicy}</h1>
   </div>
 
   <p class="text-xs text-[var(--color-text-muted)] mb-6">Last updated: July 2026</p>
