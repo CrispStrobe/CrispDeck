@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { i18n } from '$lib/i18n.svelte';
   import { Loader2, X, Search } from '@lucide/svelte';
 
   let { onselect }: { onselect: (gif: { url: string; preview: string; width: number; height: number; title: string }) => void } = $props();
@@ -128,23 +129,23 @@
   }
 </script>
 
-<button type="button" class="gif-trigger" onclick={open} aria-label="Add an animated emoji">
+<button type="button" class="gif-trigger" onclick={open} aria-label={i18n.t.compose.addAnimatedEmoji}>
   GIF
 </button>
 
 {#if show}
   <div class="gif-backdrop" onclick={close} role="presentation"></div>
-  <div class="gif-panel" role="dialog" aria-label="Animated emoji picker">
+  <div class="gif-panel" role="dialog" aria-label={i18n.t.compose.emojiPickerLabel}>
     <div class="gif-head">
       <Search size={16} />
       <input
         bind:value={query}
         oninput={onInput}
-        placeholder="Search emoji…"
-        aria-label="Search emoji"
+        placeholder={i18n.t.compose.searchEmojiPlaceholder}
+        aria-label={i18n.t.compose.searchEmoji}
         use:focusOnMount
       />
-      <button type="button" onclick={close} aria-label="Close"><X size={16} /></button>
+      <button type="button" onclick={close} aria-label={i18n.t.compose.close}><X size={16} /></button>
     </div>
 
     {#if loading}

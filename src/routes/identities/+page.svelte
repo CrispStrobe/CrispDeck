@@ -320,18 +320,18 @@
   <!-- Manual create form -->
   {#if showLinkForm}
     <div class="mb-6 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
-      <h3 class="text-sm font-medium mb-3">Create Identity Group</h3>
+      <h3 class="text-sm font-medium mb-3">{i18n.t.identities.createGroup}</h3>
       <div class="flex items-center gap-2">
         <input
           type="text"
           bind:value={newIdentityName}
-          placeholder="Display name (e.g. Alice)"
+          placeholder={i18n.t.identities.displayNamePlaceholder}
           class="flex-1 px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]"
         />
         <button onclick={createManualIdentity} class="px-3 py-2 bg-[var(--color-primary)] text-white text-sm rounded-md">Create</button>
         <button onclick={() => showLinkForm = false} class="px-3 py-2 text-sm text-[var(--color-text-muted)]">Cancel</button>
       </div>
-      <p class="text-xs text-[var(--color-text-muted)] mt-2">After creating, you can link accounts from the identity card.</p>
+      <p class="text-xs text-[var(--color-text-muted)] mt-2">{i18n.t.identities.afterCreating}</p>
     </div>
   {/if}
 
@@ -416,7 +416,7 @@
   {:else if identities.length === 0 && candidates.length === 0}
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <Users size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
-      <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">No Identities Yet</h3>
+      <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">{i18n.t.identities.noIdentities}</h3>
       <p class="text-sm text-[var(--color-text-muted)]">
         {accounts.length < 2
           ? 'Add accounts on both platforms in Settings first, then scan.'
@@ -446,7 +446,7 @@
             <button
               onclick={() => handleDeleteIdentity(identity.id)}
               class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors"
-              title="Delete identity"
+              title={i18n.t.identities.deleteIdentity}
             >
               <Trash2 size={14} />
             </button>

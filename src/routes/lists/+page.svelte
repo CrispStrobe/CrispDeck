@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { i18n } from '$lib/i18n.svelte';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
@@ -205,7 +206,7 @@
   {#if showCreateForm}
     <div class="mb-6 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
       <div class="flex items-center gap-2">
-        <input type="text" bind:value={newListTitle} placeholder="List name..." class="flex-1 px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)]" />
+        <input type="text" bind:value={newListTitle} placeholder={i18n.t.lists.listNamePlaceholder} class="flex-1 px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)]" />
         <button onclick={createMastoList} class="px-3 py-2 bg-[var(--color-mastodon)] text-white text-sm rounded-md">Create (Mastodon)</button>
       </div>
     </div>
@@ -281,7 +282,7 @@
           {#if loadingPosts}
             <div class="text-center py-8"><Loader2 size={24} class="text-[var(--color-text-muted)] animate-spin mx-auto" /></div>
           {:else if listPosts.length === 0}
-            <p class="text-center py-8 text-sm text-[var(--color-text-muted)]">No posts in this list.</p>
+            <p class="text-center py-8 text-sm text-[var(--color-text-muted)]">{i18n.t.lists.noPostsInList}</p>
           {:else}
             <div class="space-y-3">
               {#each listPosts as post (post.uri)}
@@ -292,7 +293,7 @@
         {:else}
           <div class="text-center py-12 text-[var(--color-text-muted)]">
             <Rss size={48} class="mx-auto mb-4 opacity-50" />
-            <p class="text-sm">Select a list or feed to view its timeline.</p>
+            <p class="text-sm">{i18n.t.lists.selectListOrFeed}</p>
           </div>
         {/if}
       </div>

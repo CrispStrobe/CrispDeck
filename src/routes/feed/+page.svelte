@@ -703,7 +703,7 @@
 
 <svelte:head><title>CrispDeck — Feed</title><meta name="description" content="Your unified Mastodon + Bluesky timeline" /></svelte:head>
 
-<div class="p-6" role="feed" aria-label="Social feed" ontouchstart={onTouchStart} ontouchmove={onTouchMove} ontouchend={onTouchEnd}>
+<div class="p-6" role="feed" aria-label={i18n.t.feed.socialFeed} ontouchstart={onTouchStart} ontouchmove={onTouchMove} ontouchend={onTouchEnd}>
   <div class="flex items-center justify-between mb-4">
     <div class="flex items-center gap-2">
       <Rss size={24} />
@@ -884,7 +884,7 @@
       <button
         onclick={() => hideMedia = !hideMedia}
         class="p-1.5 rounded-md transition-colors {hideMedia ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
-        title="Hide media"
+        title={i18n.t.feed.hideMediaLabel}
       >
         <EyeOff size={14} />
       </button>
@@ -901,7 +901,7 @@
   {#if offlineBanner}
     <div class="mb-4 p-3 bg-yellow-900/50 border border-yellow-700 rounded-lg text-yellow-200 text-sm flex items-center justify-between">
       <span>{offlineBanner}</span>
-      <button onclick={() => { offlineBanner = ''; loadFeed(); }} class="underline ml-2">Retry</button>
+      <button onclick={() => { offlineBanner = ''; loadFeed(); }} class="underline ml-2">{i18n.t.feed.retry}</button>
     </div>
   {/if}
 

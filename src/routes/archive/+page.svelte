@@ -191,7 +191,7 @@
   }
 
   async function handleClear() {
-    if (confirm('Delete entire archive? This cannot be undone.')) {
+    if (confirm(i18n.t.archive.deleteArchiveConfirm)) {
       await clearArchive();
       stats = await getArchiveStats();
       results = [];
@@ -252,7 +252,7 @@
         {building ? 'Building...' : stats.total > 0 ? 'Full Rebuild' : 'Build Archive'}
       </button>
       {#if stats.total > 0}
-        <button onclick={handleClear} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)]" title="Clear archive">
+        <button onclick={handleClear} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)]" title={i18n.t.archive.clearArchive}>
           <Trash2 size={14} />
         </button>
       {/if}
@@ -352,7 +352,7 @@
           </div>
         {/each}
         {#if results.length === 0}
-          <p class="text-center py-8 text-sm text-[var(--color-text-muted)]">No results. Try different search terms or filters.</p>
+          <p class="text-center py-8 text-sm text-[var(--color-text-muted)]">{i18n.t.archive.noResults}</p>
         {/if}
       </div>
     {/if}

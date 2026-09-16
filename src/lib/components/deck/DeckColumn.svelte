@@ -391,7 +391,7 @@
       <button
         onclick={() => oncollapsedchange?.(true)}
         class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
-        title="Collapse column"
+        title={i18n.t.deck.collapseColumn}
       >
         <Minimize2 size={12} />
       </button>
@@ -400,7 +400,7 @@
         <button
           onclick={() => showColorPicker = !showColorPicker}
           class="p-1 transition-colors {color ? '' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
-          title="Column color"
+          title={i18n.t.deck.columnColor}
         >
           {#if color}
             <div class="w-3 h-3 rounded-full" style="background: {color}"></div>
@@ -430,7 +430,7 @@
         <button
           onclick={() => showWidthMenu = !showWidthMenu}
           class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
-          title="Column width"
+          title={i18n.t.deck.columnWidth}
         >
           <Columns3 size={12} />
         </button>
@@ -456,7 +456,7 @@
       {/if}
       <!-- Clear column -->
       {#if onclear}
-        <button onclick={onclear} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors" title="Clear column">
+        <button onclick={onclear} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors" title={i18n.t.deck.clearColumn}>
           <Trash2 size={12} />
         </button>
       {/if}
@@ -547,7 +547,7 @@
       <div class="text-center py-8">
         <p class="text-xs text-[var(--color-text-muted)] mb-2">{filterText ? 'No matches' : 'No posts yet'}</p>
         {#if onrefresh && !filterText}
-          <button onclick={onrefresh} class="text-[10px] text-[var(--color-primary)] hover:underline">Refresh column</button>
+          <button onclick={onrefresh} class="text-[10px] text-[var(--color-primary)] hover:underline">{i18n.t.deck.refreshColumn}</button>
         {/if}
       </div>
     {:else}

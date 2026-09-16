@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { i18n } from '$lib/i18n.svelte';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
@@ -84,17 +85,17 @@
   <div class="max-w-md w-full mx-4 p-8 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] text-center">
     {#if status === 'loading'}
       <Loader2 size={48} class="text-[var(--color-bluesky)] animate-spin mx-auto mb-4" />
-      <h2 class="text-lg font-bold mb-2">Connecting Bluesky</h2>
-      <p class="text-sm text-[var(--color-text-muted)]">Completing OAuth authorization...</p>
+      <h2 class="text-lg font-bold mb-2">{i18n.t.oauth.connectingBluesky}</h2>
+      <p class="text-sm text-[var(--color-text-muted)]">{i18n.t.oauth.completingOAuth}</p>
     {:else if status === 'success'}
       <Check size={48} class="text-[var(--color-success)] mx-auto mb-4" />
-      <h2 class="text-lg font-bold mb-2">Bluesky Connected via OAuth!</h2>
-      <p class="text-sm text-[var(--color-text-muted)]">Full access enabled including DMs. Redirecting...</p>
+      <h2 class="text-lg font-bold mb-2">{i18n.t.oauth.blueskyConnected}</h2>
+      <p class="text-sm text-[var(--color-text-muted)]">{i18n.t.oauth.fullAccessRedirecting}</p>
     {:else}
       <AlertTriangle size={48} class="text-[var(--color-danger)] mx-auto mb-4" />
-      <h2 class="text-lg font-bold mb-2">Connection Failed</h2>
+      <h2 class="text-lg font-bold mb-2">{i18n.t.oauth.connectionFailed}</h2>
       <p class="text-sm text-red-400 mb-4">{errorMsg}</p>
-      <a href="{base}/settings" class="inline-block px-4 py-2 bg-[var(--color-primary)] text-white rounded-md text-sm">Back to Settings</a>
+      <a href="{base}/settings" class="inline-block px-4 py-2 bg-[var(--color-primary)] text-white rounded-md text-sm">{i18n.t.oauth.backToSettings}</a>
     {/if}
   </div>
 </div>

@@ -255,14 +255,14 @@
           onclick={refresh}
           disabled={refreshing}
           class="p-1.5 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors disabled:opacity-50"
-          title="Refresh"
+          title={i18n.t.notifications.refresh}
         >
           <RefreshCw size={16} class={refreshing ? 'animate-spin' : ''} />
         </button>
         <button
           onclick={() => groups = []}
           class="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
-          title="Clear all"
+          title={i18n.t.notifications.clearAll}
         >
           <CheckCheck size={14} />
           Clear
@@ -368,11 +368,11 @@
                     <button
                       onclick={() => handleFollowRequest(group, 'accept')}
                       class="px-3 py-1 text-xs bg-[var(--color-primary)] text-white rounded-md hover:opacity-90 transition-opacity"
-                    >Accept</button>
+                    >{i18n.t.notifications.accept}</button>
                     <button
                       onclick={() => handleFollowRequest(group, 'reject')}
                       class="px-3 py-1 text-xs bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] rounded-md hover:bg-[var(--color-border)] transition-colors"
-                    >Reject</button>
+                    >{i18n.t.notifications.reject}</button>
                   </div>
                 {/if}
               </div>

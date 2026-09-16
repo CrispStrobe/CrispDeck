@@ -339,7 +339,7 @@
               {profile.handle ?? handle}
               <span class="inline-block w-2 h-2 rounded-full ml-1" style="background: var(--color-{platform})"></span>
               {#if followsYou}
-                <span class="ml-2 text-[10px] px-1.5 py-0.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[var(--color-text-muted)]">Follows you</span>
+                <span class="ml-2 text-[10px] px-1.5 py-0.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[var(--color-text-muted)]">{i18n.t.profile.followsYou}</span>
               {/if}
             </p>
           </div>
@@ -351,8 +351,8 @@
           >
             {#if following}<UserMinus size={14} /> Following{:else}<UserPlus size={14} /> Follow{/if}
           </button>
-          <button onclick={muteUser} class="px-3 py-2 text-xs border border-[var(--color-border)] rounded-md text-[var(--color-text-muted)] hover:text-yellow-400 hover:border-yellow-500 transition-colors" title="Mute">{i18n.t.profile.mute}</button>
-          <button onclick={blockUser} class="px-3 py-2 text-xs border border-[var(--color-border)] rounded-md text-[var(--color-text-muted)] hover:text-red-400 hover:border-red-500 transition-colors" title="Block">{i18n.t.profile.block}</button>
+          <button onclick={muteUser} class="px-3 py-2 text-xs border border-[var(--color-border)] rounded-md text-[var(--color-text-muted)] hover:text-yellow-400 hover:border-yellow-500 transition-colors" title={i18n.t.profile.mute}>{i18n.t.profile.mute}</button>
+          <button onclick={blockUser} class="px-3 py-2 text-xs border border-[var(--color-border)] rounded-md text-[var(--color-text-muted)] hover:text-red-400 hover:border-red-500 transition-colors" title={i18n.t.profile.block}>{i18n.t.profile.block}</button>
         </div>
         {#if profile.description}
           <p class="text-sm text-[var(--color-text)] mt-2">{profile.description}</p>
@@ -434,7 +434,7 @@
     {:else if activeTab === 'media'}
       <!-- Media gallery grid -->
       {#if mediaGallery.length === 0}
-        <p class="text-center py-8 text-sm text-[var(--color-text-muted)]">No media to show.</p>
+        <p class="text-center py-8 text-sm text-[var(--color-text-muted)]">{i18n.t.profile.noMedia}</p>
       {:else}
         <div class="grid grid-cols-3 gap-1">
           {#each mediaGallery as item}
