@@ -946,6 +946,19 @@ export class TranslationService {
         loadLanguage(saved).then(data => { this._langData = data; });
       }
     }
+    // Apply the direction on load, not only when the language is changed.
+    // setLanguage() did this and the constructor did not, so Arabic was
+    // right-to-left for the rest of the session in which you selected it and
+    // left-to-right on every reload after — the whole layout mirrored back,
+    // with Arabic text in it.
+    this.applyDirection();
+  }
+
+  /** Reflect the current language's direction onto the document. */
+  applyDirection() {
+    if (typeof document === 'undefined') return;
+    document.documentElement.dir = RTL_LANGUAGES.includes(this.lang) ? 'rtl' : 'ltr';
+    document.documentElement.lang = this.lang;
   }
 
   setLanguage(l: Language) {
@@ -953,10 +966,7 @@ export class TranslationService {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem('crispdeck-language', l);
     }
-    // Update document direction for RTL support
-    if (typeof document !== 'undefined') {
-      document.documentElement.dir = RTL_LANGUAGES.includes(l) ? 'rtl' : 'ltr';
-    }
+    this.applyDirection();
     // Load translation data
     if (l === 'en') {
       this._langData = null;
