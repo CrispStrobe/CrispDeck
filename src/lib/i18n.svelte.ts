@@ -620,8 +620,7 @@ export const translations = {
       selectConversation: 'Select a conversation',
     },
     search: {
-      requiresScope: 'Requires',
-      permission: 'permission',
+      requiresScope: 'Requires permission:',
       addAccountsToSearch: 'Add accounts to search, in',
       opFromUser: '— posts by a user',
       opSince: '— posts after date',

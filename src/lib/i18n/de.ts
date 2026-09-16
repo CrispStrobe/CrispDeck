@@ -607,8 +607,7 @@ export default {
       selectConversation: 'Unterhaltung auswählen',
     },
     search: {
-      requiresScope: 'Erfordert die',
-      permission: '-Berechtigung',
+      requiresScope: 'Erfordert die Berechtigung:',
       addAccountsToSearch: 'Konten zum Suchen hinzufügen, unter',
       opFromUser: '— Beiträge einer Person',
       opSince: '— Beiträge nach einem Datum',

@@ -116,4 +116,18 @@ describe('i18n coverage', () => {
       expect(extra, `${f} has keys English does not`).toEqual([]);
     }
   });
+
+  it('no translation is an empty string, in any locale', () => {
+    // An empty value renders as nothing and reads as a missing word. It came
+    // from splitting "Requires <code>scope</code> permission" into a prefix
+    // and a suffix: every language whose grammar needs nothing after the code
+    // element got "". The existing empty-value test only covered English and
+    // German, so four locales carried one silently.
+    const bad: string[] = [];
+    for (const f of readdirSync('src/lib/i18n')) {
+      const src = readFileSync(join('src/lib/i18n', f), 'utf8');
+      for (const m of src.matchAll(/(\w+):\s*(''|"")/g)) bad.push(`${f}: ${m[1]}`);
+    }
+    expect(bad).toEqual([]);
+  });
 });

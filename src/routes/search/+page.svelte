@@ -245,7 +245,7 @@
           <span class="font-medium" style="color: var(--color-threads, #666)">{i18n.t.common.threads}</span>
           <div class="text-[var(--color-text-muted)] mt-1 space-y-0.5">
             <p>{i18n.t.search.threadsNote}</p>
-            <p>{i18n.t.search.requiresScope} <code class="bg-[var(--color-bg)] px-1 rounded">threads_keyword_search</code> {i18n.t.search.permission}</p>
+            <p>{i18n.t.search.requiresScope} <code class="bg-[var(--color-bg)] px-1 rounded">threads_keyword_search</code></p>
           </div>
         </div>
       </div>
