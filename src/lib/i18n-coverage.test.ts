@@ -30,16 +30,17 @@ const NOT_TRANSLATABLE = new Map<string, string>([
   ['Nederlands', 'language endonym'],
   ['Inter', 'font name'],
   ['Monospace', 'font name'],
+  // Named services, listed so a reader can go and look them up.
+  ['LibreTranslate', 'service name'],
+  ['Lingva', 'service name'],
+  ['MyMemory', 'service name'],
+  ['CrispASR', 'service name'],
 ]);
 
 /** Model catalogue entries: proper nouns with their download sizes. */
 const MODEL_ENTRY = /^(Pocket TTS|Chatterbox|Kartoffel|Lex\.au|Whisper|Moonshine|FastConformer|Parakeet|OmniASR|FireRed|VibeVoice|Mega ASR|WMT21|Gemma4)\b/;
 
-/** The privacy policy is a legal text; see its own note in the README. */
-const SKIP_FILES = [
-  'src/routes/privacy/+page.svelte',
-  'src/lib/components/LogViewer.svelte',
-];
+const SKIP_FILES = ['src/lib/components/LogViewer.svelte'];
 
 const STR = String.raw`(?:'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")`;
 
