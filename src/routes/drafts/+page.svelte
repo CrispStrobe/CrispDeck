@@ -195,8 +195,8 @@
 <div class="p-6 max-w-4xl mx-auto">
   <!-- Compose tabs -->
   <div class="flex items-center gap-1 mb-4">
-    <a href="{base}/compose" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Compose</a>
-    <a href="{base}/drafts" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Drafts</a>
+    <a href="{base}/compose" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">{i18n.t.nav.compose}</a>
+    <a href="{base}/drafts" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">{i18n.t.nav.drafts}</a>
   </div>
 
   <div class="flex items-center justify-between mb-6">

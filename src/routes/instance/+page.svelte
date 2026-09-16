@@ -138,7 +138,7 @@
     <div class="flex items-center gap-2">
       <Server size={24} />
       <h1 class="text-2xl font-bold">{i18n.t.nav.instance}</h1>
-      <span class="text-xs px-2 py-0.5 bg-[var(--color-mastodon)]/20 text-[var(--color-mastodon)] rounded">Mastodon</span>
+      <span class="text-xs px-2 py-0.5 bg-[var(--color-mastodon)]/20 text-[var(--color-mastodon)] rounded">{i18n.t.common.mastodon}</span>
     </div>
     <button onclick={loadDifferentInstance} class="flex items-center gap-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] rounded-md px-3 py-1.5">
       <Globe size={12} /> Other instance

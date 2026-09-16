@@ -1196,7 +1196,7 @@
   <div class="flex items-center justify-between mt-3 pl-13">
     <div class="flex items-center gap-4">
       {#if onreply}
-        <button onclick={() => onreply?.(post)} class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-blue-400 transition-all hover:scale-110 active:scale-90" title="Reply" aria-label="Reply ({post.replyCount ?? 0} replies)">
+        <button onclick={() => onreply?.(post)} class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-blue-400 transition-all hover:scale-110 active:scale-90" title={i18n.t.post.reply} aria-label="Reply ({post.replyCount ?? 0} replies)">
           <MessageCircle size={14} />
           {#if !hideEngagement}<span class="text-xs">{post.replyCount ?? 0}</span>{/if}
         </button>
@@ -1211,7 +1211,7 @@
         onclick={handleBoost}
         disabled={!onboost}
         class="flex items-center gap-1.5 transition-all {boosted ? 'text-green-400' : 'text-[var(--color-text-muted)]'} {onboost ? 'hover:text-green-400 hover:scale-110 active:scale-90' : ''}"
-        title="Boost"
+        title={i18n.t.post.boost}
         aria-label="{boosted ? 'Undo boost' : 'Boost'} ({localBoostCount} boosts)"
         aria-pressed={boosted}
       >
@@ -1223,7 +1223,7 @@
         <button
           onclick={() => onquote?.(post)}
           class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-purple-400 transition-all hover:scale-110 active:scale-90"
-          title="Quote"
+          title={i18n.t.post.quote}
           aria-label={i18n.t.post.quotePost}
         >
           <Quote size={14} />
@@ -1234,7 +1234,7 @@
         onclick={handleLike}
         disabled={!onlike}
         class="flex items-center gap-1.5 transition-all relative {liked ? 'text-red-400' : 'text-[var(--color-text-muted)]'} {onlike ? 'hover:text-red-400 hover:scale-110 active:scale-90' : ''}"
-        title="Like"
+        title={i18n.t.post.like}
         aria-label="{liked ? 'Unlike' : 'Like'} ({localLikeCount} likes)"
         aria-pressed={liked}
       >
@@ -1367,7 +1367,7 @@
       <button
         onclick={handleReport}
         class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors opacity-0 group-hover:opacity-100"
-        title="Report"
+        title={i18n.t.post.report}
         aria-label={i18n.t.post.reportPost}
       >
         <Flag size={12} />

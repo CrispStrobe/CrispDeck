@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { i18n } from '$lib/i18n.svelte';
   import { getToasts, dismissToast, type ToastType } from '$lib/toast.svelte';
   import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from '@lucide/svelte';
 
@@ -28,7 +29,7 @@
   <div
     class="fixed bottom-16 md:bottom-4 right-4 z-[100] flex flex-col gap-2 max-w-sm w-full pointer-events-none"
     aria-live="polite"
-    aria-label="Notifications"
+    aria-label={i18n.t.nav.notifications}
   >
     {#each getToasts() as t (t.id)}
       {@const Icon = iconMap[t.type]}

@@ -153,7 +153,7 @@
       <div class="bg-[var(--color-surface)] rounded-lg p-4 border border-[var(--color-border)]">
         <div class="flex items-center gap-2 mb-2">
           <div class="w-3 h-3 rounded-full bg-[var(--color-threads,#000)]"></div>
-          <span class="text-sm font-medium">Threads</span>
+          <span class="text-sm font-medium">{i18n.t.common.threads}</span>
         </div>
         <p class="text-2xl font-bold">{threadsAccounts.length}</p>
         <p class="text-xs text-[var(--color-text-muted)]">

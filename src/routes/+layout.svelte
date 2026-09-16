@@ -232,13 +232,13 @@
         const link = focused.querySelector('a[href*="/thread"], a[href*="/post"]') as HTMLAnchorElement;
         if (link) link.click();
       } else if (e.key === 'l') {
-        const likeBtn = focused.querySelector('[title="Like"]') as HTMLButtonElement;
+        const likeBtn = focused.querySelector('[title={i18n.t.post.like}]') as HTMLButtonElement;
         likeBtn?.click();
       } else if (e.key === 'r') {
-        const replyBtn = focused.querySelector('[title="Reply"]') as HTMLButtonElement;
+        const replyBtn = focused.querySelector('[title={i18n.t.post.reply}]') as HTMLButtonElement;
         replyBtn?.click();
       } else if (e.key === 'b' && !pendingG) {
-        const boostBtn = focused.querySelector('[title="Boost"]') as HTMLButtonElement;
+        const boostBtn = focused.querySelector('[title={i18n.t.post.boost}]') as HTMLButtonElement;
         boostBtn?.click();
       }
     }

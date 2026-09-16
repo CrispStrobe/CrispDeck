@@ -224,7 +224,7 @@
     {#if showSearchHelp}
       <div class="mt-2 p-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-xs space-y-2">
         <div>
-          <span class="font-medium text-[var(--color-bluesky)]">Bluesky</span>
+          <span class="font-medium text-[var(--color-bluesky)]">{i18n.t.common.bluesky}</span>
           <div class="text-[var(--color-text-muted)] mt-1 space-y-0.5">
             <p><code class="bg-[var(--color-bg)] px-1 rounded">from:handle.bsky.social</code>{i18n.t.search.opFromUser}</p>
             <p><code class="bg-[var(--color-bg)] px-1 rounded">since:2026-01-01</code>{i18n.t.search.opSince}</p>
@@ -234,7 +234,7 @@
           </div>
         </div>
         <div>
-          <span class="font-medium text-[var(--color-mastodon)]">Mastodon</span>
+          <span class="font-medium text-[var(--color-mastodon)]">{i18n.t.common.mastodon}</span>
           <div class="text-[var(--color-text-muted)] mt-1 space-y-0.5">
             <p><code class="bg-[var(--color-bg)] px-1 rounded">from:@user@instance</code>{i18n.t.search.opFromUser}</p>
             <p><code class="bg-[var(--color-bg)] px-1 rounded">#hashtag</code>{i18n.t.search.opTag}</p>
@@ -242,7 +242,7 @@
           </div>
         </div>
         <div>
-          <span class="font-medium" style="color: var(--color-threads, #666)">Threads</span>
+          <span class="font-medium" style="color: var(--color-threads, #666)">{i18n.t.common.threads}</span>
           <div class="text-[var(--color-text-muted)] mt-1 space-y-0.5">
             <p>{i18n.t.search.threadsNote}</p>
             <p>Requires <code class="bg-[var(--color-bg)] px-1 rounded">threads_keyword_search</code> permission</p>

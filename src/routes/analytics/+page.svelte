@@ -282,7 +282,7 @@
 <div class="p-6 max-w-4xl mx-auto">
   <!-- Analytics tabs -->
   <div class="flex items-center gap-1 mb-4">
-    <a href="{base}/analytics" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Analytics</a>
+    <a href="{base}/analytics" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">{i18n.t.nav.analytics}</a>
     <a href="{base}/calendar" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Calendar</a>
   </div>
 
@@ -421,7 +421,7 @@
       <div class="bg-[var(--color-surface)] p-4 rounded-lg border border-[var(--color-border)]">
         <div class="flex items-center gap-2 mb-3">
           <span class="w-3 h-3 rounded-full bg-[var(--color-bluesky)]"></span>
-          <span class="text-sm font-medium">Bluesky</span>
+          <span class="text-sm font-medium">{i18n.t.common.bluesky}</span>
           <span class="text-xs text-[var(--color-text-muted)] ml-auto">{bskyCount} posts</span>
         </div>
         <div class="grid grid-cols-2 gap-2 text-xs">
@@ -446,7 +446,7 @@
       <div class="bg-[var(--color-surface)] p-4 rounded-lg border border-[var(--color-border)]">
         <div class="flex items-center gap-2 mb-3">
           <span class="w-3 h-3 rounded-full bg-[var(--color-mastodon)]"></span>
-          <span class="text-sm font-medium">Mastodon</span>
+          <span class="text-sm font-medium">{i18n.t.common.mastodon}</span>
           <span class="text-xs text-[var(--color-text-muted)] ml-auto">{mastoCount} posts</span>
         </div>
         <div class="grid grid-cols-2 gap-2 text-xs">
@@ -543,8 +543,8 @@
             {/each}
           </div>
           <div class="flex items-center justify-center gap-4 mt-2 text-[9px] text-[var(--color-text-muted)]">
-            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded bg-[var(--color-bluesky)]/60"></span> Bluesky</span>
-            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded bg-[var(--color-mastodon)]/60"></span> Mastodon</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded bg-[var(--color-bluesky)]/60"></span> {i18n.t.common.bluesky}</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded bg-[var(--color-mastodon)]/60"></span> {i18n.t.common.mastodon}</span>
           </div>
         </div>
 

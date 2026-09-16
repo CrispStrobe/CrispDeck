@@ -234,14 +234,14 @@
   <!-- Lists & Feeds tabs -->
   <div class="flex items-center gap-1 mb-4">
     <a href="{base}/lists" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Lists</a>
-    <a href="{base}/starterpacks" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Starter Packs</a>
-    <a href="{base}/feed-builder" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Feed Builder</a>
+    <a href="{base}/starterpacks" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">{i18n.t.nav.starterPacks}</a>
+    <a href="{base}/feed-builder" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">{i18n.t.nav.feedBuilder}</a>
   </div>
 
   <div class="flex items-center gap-2 mb-6">
     <Package size={24} />
-    <h1 class="text-2xl font-bold">Starter Packs</h1>
-    <span class="text-xs px-2 py-0.5 bg-[var(--color-bluesky)]/20 text-[var(--color-bluesky)] rounded">Bluesky</span>
+    <h1 class="text-2xl font-bold">{i18n.t.nav.starterPacks}</h1>
+    <span class="text-xs px-2 py-0.5 bg-[var(--color-bluesky)]/20 text-[var(--color-bluesky)] rounded">{i18n.t.common.bluesky}</span>
   </div>
 
   {#if error}

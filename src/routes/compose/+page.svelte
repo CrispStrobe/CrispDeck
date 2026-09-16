@@ -593,8 +593,8 @@
 <div class="p-6 max-w-4xl mx-auto">
   <!-- Compose tabs -->
   <div class="flex items-center gap-1 mb-4">
-    <a href="{base}/compose" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Compose</a>
-    <a href="{base}/drafts" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Drafts</a>
+    <a href="{base}/compose" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">{i18n.t.nav.compose}</a>
+    <a href="{base}/drafts" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">{i18n.t.nav.drafts}</a>
   </div>
 
   <div class="flex items-center gap-2 mb-6">
@@ -1076,7 +1076,7 @@
                 <div class="flex items-center justify-between mb-2">
                   <div class="flex items-center gap-2">
                     <span class="w-2 h-2 rounded-full bg-[var(--color-bluesky)]"></span>
-                    <span class="text-xs font-medium text-[var(--color-text-muted)]">Bluesky</span>
+                    <span class="text-xs font-medium text-[var(--color-text-muted)]">{i18n.t.common.bluesky}</span>
                   </div>
                   {#if bskyPlan.needsThread}
                     <span class="text-[10px] px-1.5 py-0.5 bg-blue-900/50 rounded text-blue-300">{bskyPlan.parts.length} posts</span>
@@ -1095,7 +1095,7 @@
                 <div class="flex items-center justify-between mb-2">
                   <div class="flex items-center gap-2">
                     <span class="w-2 h-2 rounded-full bg-[var(--color-mastodon)]"></span>
-                    <span class="text-xs font-medium text-[var(--color-text-muted)]">Mastodon</span>
+                    <span class="text-xs font-medium text-[var(--color-text-muted)]">{i18n.t.common.mastodon}</span>
                     {#if visibility !== 'public'}
                       <span class="text-[10px] px-1.5 py-0.5 bg-[var(--color-surface-hover)] rounded text-[var(--color-text-muted)]">{visibility}</span>
                     {/if}
@@ -1120,7 +1120,7 @@
                 <div class="flex items-center justify-between mb-2">
                   <div class="flex items-center gap-2">
                     <span class="w-2 h-2 rounded-full bg-[var(--color-threads,#000)]"></span>
-                    <span class="text-xs font-medium text-[var(--color-text-muted)]">Threads</span>
+                    <span class="text-xs font-medium text-[var(--color-text-muted)]">{i18n.t.common.threads}</span>
                   </div>
                   {#if threadsPlan.needsThread}
                     <span class="text-[10px] px-1.5 py-0.5 bg-gray-800/50 rounded text-gray-300">{threadsPlan.parts.length} posts</span>

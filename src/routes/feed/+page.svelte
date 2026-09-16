@@ -868,7 +868,7 @@
             <button
               onclick={() => platformFilter = 'threads'}
               class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1 {platformFilter === 'threads' ? 'bg-[var(--color-threads)] text-white' : 'text-[var(--color-text-muted)]'}"
-            ><span class="w-1.5 h-1.5 rounded-full bg-[var(--color-threads)]"></span> Threads</button>
+            ><span class="w-1.5 h-1.5 rounded-full bg-[var(--color-threads)]"></span> {i18n.t.common.threads}</button>
           {/if}
         </div>
       {/if}

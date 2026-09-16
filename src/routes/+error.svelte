@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { i18n } from '$lib/i18n.svelte';
   import { base } from '$app/paths';
   import { page } from '$app/state';
   import { Home, ArrowLeft, Search } from '@lucide/svelte';
@@ -39,7 +40,7 @@
         class="flex items-center gap-2 px-4 py-2 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-lg text-sm font-medium transition-colors"
       >
         <Search size={16} />
-        Search
+        {i18n.t.nav.search}
       </a>
     </div>
   </div>

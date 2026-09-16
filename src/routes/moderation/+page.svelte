@@ -203,8 +203,8 @@
 <div class="p-6 max-w-3xl mx-auto">
   <!-- Moderation tabs -->
   <div class="flex items-center gap-1 mb-4">
-    <a href="{base}/moderation" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Moderation</a>
-    <a href="{base}/labelers" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Labelers</a>
+    <a href="{base}/moderation" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">{i18n.t.nav.moderation}</a>
+    <a href="{base}/labelers" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">{i18n.t.nav.labelers}</a>
   </div>
 
   <div class="flex items-center gap-2 mb-6">
