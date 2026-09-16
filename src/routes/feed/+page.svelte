@@ -856,13 +856,13 @@
             <button
               onclick={() => platformFilter = 'bluesky'}
               class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1 {platformFilter === 'bluesky' ? 'bg-[var(--color-bluesky)] text-white' : 'text-[var(--color-text-muted)]'}"
-            ><span class="w-1.5 h-1.5 rounded-full bg-[var(--color-bluesky)]"></span> Bsky</button>
+            ><span class="w-1.5 h-1.5 rounded-full bg-[var(--color-bluesky)]"></span>{i18n.t.feed.filterBsky}</button>
           {/if}
           {#if connectedPlatforms.has('mastodon')}
             <button
               onclick={() => platformFilter = 'mastodon'}
               class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1 {platformFilter === 'mastodon' ? 'bg-[var(--color-mastodon)] text-white' : 'text-[var(--color-text-muted)]'}"
-            ><span class="w-1.5 h-1.5 rounded-full bg-[var(--color-mastodon)]"></span> Masto</button>
+            ><span class="w-1.5 h-1.5 rounded-full bg-[var(--color-mastodon)]"></span>{i18n.t.feed.filterMasto}</button>
           {/if}
           {#if connectedPlatforms.has('threads')}
             <button

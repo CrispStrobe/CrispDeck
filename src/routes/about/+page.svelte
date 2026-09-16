@@ -119,7 +119,7 @@
   </section>
 
   <section class="mb-6 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
-    <h3 class="text-sm font-semibold mb-2 flex items-center gap-1.5"><Shield size={14} /> Disclaimer</h3>
+    <h3 class="text-sm font-semibold mb-2 flex items-center gap-1.5"><Shield size={14} />{i18n.t.about.disclaimer}</h3>
     <p class="text-xs text-[var(--color-text-muted)] leading-relaxed">
       This software is provided "as is", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement.
     </p>
@@ -127,7 +127,7 @@
 
   <!-- License -->
   <section class="mb-6 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
-    <h3 class="text-sm font-semibold mb-2 flex items-center gap-1.5"><ScrollText size={14} /> License</h3>
+    <h3 class="text-sm font-semibold mb-2 flex items-center gap-1.5"><ScrollText size={14} />{i18n.t.about.license}</h3>
     <div class="text-xs text-[var(--color-text-muted)] leading-relaxed space-y-1">
       <p>
         <span class="font-medium text-[var(--color-text)]">{i18n.t.about.sourceCode}</span> —

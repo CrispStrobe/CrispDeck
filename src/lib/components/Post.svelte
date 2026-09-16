@@ -372,7 +372,7 @@
     // Open the post on the platform's web UI where reporting is handled
     const url = getPostUrl(post);
     window.open(url, '_blank');
-    alert('To complete the report, use the platform\'s reporting tool on the opened page.');
+    alert(i18n.t.post.reportHint);
   }
 
   async function handleBookmark() {

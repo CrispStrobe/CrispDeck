@@ -147,6 +147,7 @@ export const translations = {
       discard: 'Discard',
     },
     post: {
+      reportHint: "To complete the report, use the platform's reporting tool on the opened page.",
       noReadingLists: 'No reading lists yet',
       engagementBreakdown: 'Engagement breakdown',
       likes: 'Likes',
@@ -470,6 +471,8 @@ export const translations = {
       addAccount: 'Add a Bluesky or Mastodon account in Settings to see trending content.',
     },
     starterPacks: {
+      pageTitle: 'CrispDeck — Starter Packs',
+      handlesPlaceholder: 'Handles (one per line or comma-separated)&#10;alice.bsky.social&#10;bob.bsky.social',
       createPack: 'Create Starter Pack',
       addAccountToBrowse: 'Add a Bluesky account to browse starter packs, in',
       packName: 'Pack name',
@@ -520,6 +523,7 @@ export const translations = {
       selectHint: 'Select a list to view its posts.',
     },
     about: {
+      license: 'License',
       privacyPolicy: 'Privacy Policy',
       agplLicense: 'AGPL-3.0 Source License',
       appStoreLicense: 'App Store License',
@@ -540,6 +544,8 @@ export const translations = {
       generated: 'Generated',
     },
     feed: {
+      filterBsky: 'Bsky',
+      filterMasto: 'Masto',
       retry: 'Retry',
       socialFeed: 'Social feed',
       hideMediaLabel: 'Hide media',
@@ -771,6 +777,9 @@ export const translations = {
       parts: 'parts',
     },
     instance: {
+      pageTitle: 'CrispDeck — Instance Info',
+      noInstanceDesc: 'Add a Mastodon account in Settings, or click "Other instance" to view any instance.',
+      contact: 'Contact',
       noInstance: 'No Instance Connected',
       users: 'Users',
       posts: 'Posts',

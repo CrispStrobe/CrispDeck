@@ -125,7 +125,7 @@
   }
 </script>
 
-<svelte:head><title>CrispDeck — Instance Info</title></svelte:head>
+<svelte:head><title>{i18n.t.instance.pageTitle}</title></svelte:head>
 
 <div class="p-6 max-w-3xl mx-auto">
   <!-- Settings tabs -->
@@ -155,7 +155,7 @@
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <Server size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
       <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">{i18n.t.instance.noInstance}</h3>
-      <p class="text-sm text-[var(--color-text-muted)]">Add a Mastodon account in Settings, or click "Other instance" to view any instance.</p>
+      <p class="text-sm text-[var(--color-text-muted)]">{i18n.t.instance.noInstanceDesc}</p>
     </div>
   {:else}
     <!-- Instance header -->
@@ -202,7 +202,7 @@
     <!-- Contact -->
     {#if instance.contact}
       <div class="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-4 mb-6">
-        <h3 class="text-sm font-semibold mb-3 flex items-center gap-2"><Mail size={14} /> Contact</h3>
+        <h3 class="text-sm font-semibold mb-3 flex items-center gap-2"><Mail size={14} />{i18n.t.instance.contact}</h3>
         <div class="flex items-center gap-3">
           {#if instance.contact.account}
             <a href="{base}/profile?handle={encodeURIComponent(instance.contact.account.acct)}&platform=mastodon" class="flex items-center gap-2 hover:underline">

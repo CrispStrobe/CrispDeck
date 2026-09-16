@@ -135,6 +135,7 @@ export default {
       discard: 'Verwerfen',
     },
     post: {
+      reportHint: 'Nutze zum Abschließen der Meldung das Meldewerkzeug der Plattform auf der geöffneten Seite.',
       noReadingLists: 'Noch keine Leselisten',
       engagementBreakdown: 'Interaktionen im Detail',
       likes: 'Likes',
@@ -457,6 +458,8 @@ export default {
       addAccount: 'Fügen Sie ein Bluesky- oder Mastodon-Konto in den Einstellungen hinzu.',
     },
     starterPacks: {
+      pageTitle: 'CrispDeck — Starter Packs',
+      handlesPlaceholder: 'Handles (eines pro Zeile oder kommagetrennt)&#10;alice.bsky.social&#10;bob.bsky.social',
       createPack: 'Starter Pack erstellen',
       addAccountToBrowse: 'Bluesky-Konto hinzufügen, um Starter Packs zu durchsuchen, unter',
       packName: 'Name des Packs',
@@ -507,6 +510,7 @@ export default {
       selectHint: 'Wählen Sie eine Liste, um ihre Beiträge anzuzeigen.',
     },
     about: {
+      license: 'Lizenz',
       privacyPolicy: 'Datenschutzerklärung',
       agplLicense: 'AGPL-3.0-Quellcode-Lizenz',
       appStoreLicense: 'App-Store-Lizenz',
@@ -527,6 +531,8 @@ export default {
       generated: 'Erstellt',
     },
     feed: {
+      filterBsky: 'Bsky',
+      filterMasto: 'Masto',
       retry: 'Erneut versuchen',
       socialFeed: 'Social-Feed',
       hideMediaLabel: 'Medien ausblenden',
@@ -754,6 +760,9 @@ export default {
       parts: 'Teile',
     },
     instance: {
+      pageTitle: 'CrispDeck — Instanz-Info',
+      noInstanceDesc: 'Füge in den Einstellungen ein Mastodon-Konto hinzu oder klicke auf „Andere Instanz“, um eine beliebige Instanz anzusehen.',
+      contact: 'Kontakt',
       noInstance: 'Keine Instanz verbunden',
       users: 'Nutzerinnen und Nutzer',
       posts: 'Beiträge',
