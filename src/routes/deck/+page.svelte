@@ -1196,7 +1196,7 @@
           onchange={(e) => { const v = (e.target as HTMLSelectElement).value; if (v) loadLayoutByName(v); }}
           class="px-2 py-1 text-[10px] bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-[var(--color-text)]"
         >
-          <option value="">Load layout...</option>
+          <option value="">{i18n.t.deck.loadLayoutPlaceholder}</option>
           {#each savedLayoutNames as name}
             <option value={name}>{name}</option>
           {/each}

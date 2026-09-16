@@ -253,7 +253,7 @@
             </h3>
             <!-- Feed search -->
             <form onsubmit={(e) => { e.preventDefault(); searchFeeds(); }} class="mb-2">
-              <input type="text" bind:value={feedSearch} oninput={() => { if (!feedSearch.trim()) feedSearchResults = []; }} placeholder="Search feeds..." class="w-full px-2 py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-xs text-[var(--color-text)] focus:outline-none" />
+              <input type="text" bind:value={feedSearch} oninput={() => { if (!feedSearch.trim()) feedSearchResults = []; }} placeholder={i18n.t.lists.searchFeedsPlaceholder} class="w-full px-2 py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-xs text-[var(--color-text)] focus:outline-none" />
             </form>
             {#if feedSearchResults.length > 0}
               <div class="mb-2 border-b border-[var(--color-border)] pb-2">

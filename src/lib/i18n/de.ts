@@ -425,6 +425,7 @@ export default {
       muted: 'Stummgeschaltet',
     },
     lists: {
+      searchFeedsPlaceholder: 'Feeds suchen …',
       tabLists: 'Listen',
       noPostsInList: 'Keine Beiträge in dieser Liste.',
       selectListOrFeed: 'Wähle eine Liste oder einen Feed, um die Beiträge zu sehen.',
@@ -606,6 +607,8 @@ export default {
       selectConversation: 'Unterhaltung auswählen',
     },
     search: {
+      requiresScope: 'Erfordert die',
+      permission: '-Berechtigung',
       addAccountsToSearch: 'Konten zum Suchen hinzufügen, unter',
       opFromUser: '— Beiträge einer Person',
       opSince: '— Beiträge nach einem Datum',
@@ -659,6 +662,7 @@ export default {
       calendarView: 'Kalender',
     },
     deck: {
+      loadLayoutPlaceholder: 'Layout laden …',
       liveStreaming: 'Live-Übertragung',
       refreshColumn: 'Spalte aktualisieren',
       collapseColumn: 'Spalte einklappen',

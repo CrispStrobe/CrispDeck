@@ -438,6 +438,7 @@ export const translations = {
       muted: 'Muted',
     },
     lists: {
+      searchFeedsPlaceholder: 'Search feeds...',
       tabLists: 'Lists',
       noPostsInList: 'No posts in this list.',
       selectListOrFeed: 'Select a list or feed to view its timeline.',
@@ -619,6 +620,8 @@ export const translations = {
       selectConversation: 'Select a conversation',
     },
     search: {
+      requiresScope: 'Requires',
+      permission: 'permission',
       addAccountsToSearch: 'Add accounts to search, in',
       opFromUser: '— posts by a user',
       opSince: '— posts after date',
@@ -673,6 +676,7 @@ export const translations = {
       calendarView: 'Calendar',
     },
     deck: {
+      loadLayoutPlaceholder: 'Load layout...',
       liveStreaming: 'Live streaming',
       refreshColumn: 'Refresh column',
       collapseColumn: 'Collapse column',

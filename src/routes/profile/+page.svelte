@@ -315,7 +315,7 @@
     </div>
   {:else if error}
     <div class="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">{error}</div>
-    <button onclick={() => history.back()} class="flex items-center gap-1 text-sm text-[var(--color-primary)]"><ArrowLeft size={14} /> Back to feed</button>
+    <button onclick={() => history.back()} class="flex items-center gap-1 text-sm text-[var(--color-primary)]"><ArrowLeft size={14} />{i18n.t.profile.backToFeed}</button>
   {:else if profile}
     <!-- Banner -->
     {#if profile.banner}
