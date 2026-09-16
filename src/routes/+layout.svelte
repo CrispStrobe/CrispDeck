@@ -303,11 +303,11 @@
 <svelte:window onkeydown={handleGlobalKeydown} />
 <KeyboardShortcuts bind:show={showShortcuts} />
 
-<a href="#main-content" class="skip-to-content">Skip to content</a>
+<a href="#main-content" class="skip-to-content">{i18n.t.app.skipToContent}</a>
 
 <div class="flex h-screen" dir={i18n.dir}>
   <!-- Desktop sidebar -->
-  <nav aria-label="Main navigation" class="hidden md:flex {collapsed ? 'w-14' : 'w-52'} bg-[var(--color-surface)] border-r border-[var(--color-border)] flex-col transition-all duration-200 flex-shrink-0">
+  <nav aria-label={i18n.t.app.mainNavigation} class="hidden md:flex {collapsed ? 'w-14' : 'w-52'} bg-[var(--color-surface)] border-r border-[var(--color-border)] flex-col transition-all duration-200 flex-shrink-0">
     <div class="flex items-center justify-between px-3 py-3 border-b border-[var(--color-border)]">
       {#if !collapsed}
         <div>
@@ -353,7 +353,7 @@
     {#if !collapsed}
       <div class="px-3 py-2 border-t border-[var(--color-border)] flex items-center justify-between">
         <span class="text-[10px] text-[var(--color-text-muted)]">v{__VERSION__}</span>
-        <button onclick={() => showNavCustomize = !showNavCustomize} class="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)]" title="Customize sidebar">
+        <button onclick={() => showNavCustomize = !showNavCustomize} class="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)]" title={i18n.t.app.customizeSidebar}>
           <Settings size={12} />
         </button>
       </div>
@@ -386,7 +386,7 @@
       <a href={base || "/"} class="text-sm font-bold text-[var(--color-text)]">CrispDeck</a>
     </div>
     <div class="flex items-center gap-1">
-      <button onclick={toggleTheme} class="p-1.5 text-[var(--color-text-muted)]" title="Toggle theme">
+      <button onclick={toggleTheme} class="p-1.5 text-[var(--color-text-muted)]" title={i18n.t.app.toggleTheme}>
         {#if theme === 'dark'}<Smartphone size={14} />{:else if theme === 'oled'}<Sun size={14} />{:else}<Moon size={14} />{/if}
       </button>
       <a href="{base}/notifications" class="p-1.5 text-[var(--color-text-muted)]">
@@ -417,7 +417,7 @@
           {/each}
         </ul>
       </div>
-      <button type="button" class="flex-1 mobile-menu-overlay" aria-label="Close menu" onclick={closeMobileMenu}></button>
+      <button type="button" class="flex-1 mobile-menu-overlay" aria-label={i18n.t.app.closeMenu} onclick={closeMobileMenu}></button>
     </div>
   {/if}
 
@@ -425,8 +425,8 @@
   <main id="main-content" class="flex-1 overflow-y-auto md:pt-0 pt-10 pb-14 md:pb-0">
     {#if offline}
       <div class="bg-yellow-900/50 border-b border-yellow-700 px-4 py-2 text-center text-xs text-yellow-200 flex items-center justify-center gap-2">
-        <span>You're offline — some features may be unavailable</span>
-        <button onclick={() => offline = false} class="p-0.5 hover:bg-yellow-800/50 rounded" aria-label="Dismiss">
+        <span>{i18n.t.app.offlineBanner}</span>
+        <button onclick={() => offline = false} class="p-0.5 hover:bg-yellow-800/50 rounded" aria-label={i18n.t.app.dismissLabel}>
           <X size={12} />
         </button>
       </div>

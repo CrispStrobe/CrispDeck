@@ -228,7 +228,7 @@
       <input
         type="text"
         bind:value={searchQuery}
-        placeholder="Search for labelers by name or handle..."
+        placeholder={i18n.t.moderation.searchLabelers}
         class="flex-1 px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-bluesky)]"
       />
       <button type="submit" disabled={searching} class="px-4 py-2 bg-[var(--color-bluesky)] text-white text-sm rounded-lg disabled:opacity-50">
@@ -240,7 +240,7 @@
   <!-- Search results -->
   {#if searchResults.length > 0}
     <div class="mb-8">
-      <h2 class="text-sm font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-3">Search Results</h2>
+      <h2 class="text-sm font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-3">{i18n.t.moderation.searchResults}</h2>
       <div class="space-y-3">
         {#each searchResults as labeler}
           <div class="p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
@@ -279,8 +279,8 @@
   {:else if labelers.length === 0 && searchResults.length === 0}
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <Tag size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
-      <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">No Labelers Subscribed</h3>
-      <p class="text-sm text-[var(--color-text-muted)]">Search for labelers to subscribe to content moderation services.</p>
+      <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">{i18n.t.moderation.noLabelers}</h3>
+      <p class="text-sm text-[var(--color-text-muted)]">{i18n.t.moderation.noLabelersDesc}</p>
     </div>
   {:else}
     <!-- Subscribed labelers -->
@@ -307,7 +307,7 @@
           <!-- Label definitions with preferences -->
           {#if labeler.labelDefinitions.length > 0}
             <div class="border-t border-[var(--color-border)] px-4 py-3">
-              <p class="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider mb-2">Label Preferences</p>
+              <p class="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider mb-2">{i18n.t.moderation.labelPreferences}</p>
               <div class="space-y-2">
                 {#each labeler.labelDefinitions as def}
                   {@const currentPref = getLabelPref(def)}
@@ -328,18 +328,18 @@
                       <button
                         onclick={() => setLabelPref(def.identifier, 'hide')}
                         class="px-2 py-0.5 text-[10px] rounded transition-colors {currentPref === 'hide' ? 'bg-red-600 text-white' : 'text-[var(--color-text-muted)]'}"
-                        title="Hide labeled content"
-                      >Hide</button>
+                        title={i18n.t.moderation.hideLabeled}
+                      >{i18n.t.moderation.hide}</button>
                       <button
                         onclick={() => setLabelPref(def.identifier, 'warn')}
                         class="px-2 py-0.5 text-[10px] rounded transition-colors {currentPref === 'warn' ? 'bg-yellow-600 text-white' : 'text-[var(--color-text-muted)]'}"
-                        title="Show warning on labeled content"
-                      >Warn</button>
+                        title={i18n.t.moderation.warnLabeled}
+                      >{i18n.t.moderation.warn}</button>
                       <button
                         onclick={() => setLabelPref(def.identifier, 'ignore')}
                         class="px-2 py-0.5 text-[10px] rounded transition-colors {currentPref === 'ignore' ? 'bg-green-600 text-white' : 'text-[var(--color-text-muted)]'}"
-                        title="Show labeled content normally"
-                      >Show</button>
+                        title={i18n.t.moderation.showLabeled}
+                      >{i18n.t.moderation.show}</button>
                     </div>
                   </div>
                 {/each}

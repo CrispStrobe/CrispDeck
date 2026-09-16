@@ -226,25 +226,25 @@
         <div>
           <span class="font-medium text-[var(--color-bluesky)]">Bluesky</span>
           <div class="text-[var(--color-text-muted)] mt-1 space-y-0.5">
-            <p><code class="bg-[var(--color-bg)] px-1 rounded">from:handle.bsky.social</code> — posts by a user</p>
-            <p><code class="bg-[var(--color-bg)] px-1 rounded">since:2026-01-01</code> — posts after date</p>
-            <p><code class="bg-[var(--color-bg)] px-1 rounded">until:2026-12-31</code> — posts before date</p>
-            <p><code class="bg-[var(--color-bg)] px-1 rounded">lang:en</code> — filter by language</p>
-            <p><code class="bg-[var(--color-bg)] px-1 rounded">has:media</code> — posts with images/video</p>
+            <p><code class="bg-[var(--color-bg)] px-1 rounded">from:handle.bsky.social</code>{i18n.t.search.opFromUser}</p>
+            <p><code class="bg-[var(--color-bg)] px-1 rounded">since:2026-01-01</code>{i18n.t.search.opSince}</p>
+            <p><code class="bg-[var(--color-bg)] px-1 rounded">until:2026-12-31</code>{i18n.t.search.opUntil}</p>
+            <p><code class="bg-[var(--color-bg)] px-1 rounded">lang:en</code>{i18n.t.search.opLang}</p>
+            <p><code class="bg-[var(--color-bg)] px-1 rounded">has:media</code>{i18n.t.search.opMedia}</p>
           </div>
         </div>
         <div>
           <span class="font-medium text-[var(--color-mastodon)]">Mastodon</span>
           <div class="text-[var(--color-text-muted)] mt-1 space-y-0.5">
-            <p><code class="bg-[var(--color-bg)] px-1 rounded">from:@user@instance</code> — posts by a user</p>
-            <p><code class="bg-[var(--color-bg)] px-1 rounded">#hashtag</code> — posts with hashtag</p>
-            <p>Full-text search depends on server indexing</p>
+            <p><code class="bg-[var(--color-bg)] px-1 rounded">from:@user@instance</code>{i18n.t.search.opFromUser}</p>
+            <p><code class="bg-[var(--color-bg)] px-1 rounded">#hashtag</code>{i18n.t.search.opTag}</p>
+            <p>{i18n.t.search.fullTextNote}</p>
           </div>
         </div>
         <div>
           <span class="font-medium" style="color: var(--color-threads, #666)">Threads</span>
           <div class="text-[var(--color-text-muted)] mt-1 space-y-0.5">
-            <p>Plain keyword search only (no operators)</p>
+            <p>{i18n.t.search.threadsNote}</p>
             <p>Requires <code class="bg-[var(--color-bg)] px-1 rounded">threads_keyword_search</code> permission</p>
           </div>
         </div>
@@ -278,13 +278,13 @@
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <Search size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
       <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">{i18n.t.search.noAccounts}</h3>
-      <p class="text-sm text-[var(--color-text-muted)]">Add accounts in <a href="{base}/settings" class="text-[var(--color-primary)] underline">Settings</a> to search.</p>
+      <p class="text-sm text-[var(--color-text-muted)]">{i18n.t.search.addAccountsToSearch} <a href="{base}/settings" class="text-[var(--color-primary)] underline">{i18n.t.nav.settings}</a></p>
     </div>
   {:else}
     <!-- Pre-search suggestions -->
     <div class="text-center py-12">
       <Search size={40} class="text-[var(--color-text-muted)]/40 mx-auto mb-4" />
-      <h3 class="text-base font-medium text-[var(--color-text-muted)] mb-3">Search across all your networks</h3>
+      <h3 class="text-base font-medium text-[var(--color-text-muted)] mb-3">{i18n.t.search.searchAcrossNetworks}</h3>
       <div class="flex flex-wrap justify-center gap-2 max-w-md mx-auto">
         {#each ['#news', '#photography', '#tech', '#fediverse', '#art'] as tag}
           <button

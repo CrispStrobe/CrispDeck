@@ -298,7 +298,7 @@
       return false;
     }
     if (mode === 'warn') {
-      return confirm('Some images are missing alt text. Post anyway?');
+      return confirm(i18n.t.compose.missingAltConfirm);
     }
     return true;
   }
@@ -395,7 +395,7 @@
       }
     } catch (e) {
       error = String(e);
-      toast.error('Post failed — see details above');
+      toast.error(i18n.t.compose.postFailedSeeDetails);
     } finally {
       posting = false;
       videoUploadStatus = '';
@@ -666,7 +666,7 @@
         {#if editingDraftId}
           <div class="p-2 bg-yellow-950/30 border border-yellow-700/30 rounded-lg text-xs text-yellow-300 flex items-center justify-between">
             <span>Editing draft #{editingDraftId}</span>
-            <button onclick={async () => { await dbDeleteDraft(editingDraftId!); editingDraftId = null; }} class="text-yellow-400 hover:text-yellow-200 underline">Discard draft</button>
+            <button onclick={async () => { await dbDeleteDraft(editingDraftId!); editingDraftId = null; }} class="text-yellow-400 hover:text-yellow-200 underline">{i18n.t.compose.discardDraft}</button>
           </div>
         {/if}
 
@@ -887,7 +887,7 @@
                       </div>
                     {/each}
                   {:else}
-                    <p class="px-3 py-1.5 text-[10px] text-[var(--color-text-muted)]">No templates saved</p>
+                    <p class="px-3 py-1.5 text-[10px] text-[var(--color-text-muted)]">{i18n.t.compose.noTemplates}</p>
                   {/if}
                 </div>
               {/if}
@@ -907,7 +907,7 @@
               <button
                 onclick={() => showPoll = !showPoll}
                 class="p-1.5 rounded-md transition-colors {showPoll ? 'text-[var(--color-mastodon)] bg-[var(--color-mastodon)]/10' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
-                title="Add poll (Mastodon)"
+                title={i18n.t.compose.addPollMastodon}
               >
                 <BarChart3 size={14} />
               </button>
@@ -917,7 +917,7 @@
               <select
                 bind:value={threadGate}
                 class="px-2 py-1 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-[var(--color-text)] focus:outline-none"
-                title="Who can reply (Bluesky)"
+                title={i18n.t.compose.whoCanReplyBluesky}
               >
                 <option value="everyone">{i18n.t.compose.anyoneCanReply}</option>
                 <option value="mentioned">{i18n.t.compose.mentionedOnly}</option>
@@ -927,15 +927,15 @@
               <select
                 bind:value={selfLabel}
                 class="px-2 py-1 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-[var(--color-text)] focus:outline-none"
-                title="Content label (Bluesky)"
+                title={i18n.t.compose.contentLabelBluesky}
               >
-                <option value="none">No label</option>
-                <option value="graphic-media">Graphic Media</option>
-                <option value="nudity">Nudity</option>
-                <option value="porn">Porn</option>
-                <option value="gore">Gore</option>
+                <option value="none">{i18n.t.compose.noLabel}</option>
+                <option value="graphic-media">{i18n.t.compose.labelGraphicMedia}</option>
+                <option value="nudity">{i18n.t.compose.labelNudity}</option>
+                <option value="porn">{i18n.t.compose.labelPorn}</option>
+                <option value="gore">{i18n.t.compose.labelGore}</option>
               </select>
-              <label class="flex items-center gap-1 text-xs text-[var(--color-text-muted)] cursor-pointer" title="Disable quoting (Bluesky post gate)">
+              <label class="flex items-center gap-1 text-xs text-[var(--color-text-muted)] cursor-pointer" title={i18n.t.compose.disableQuoting}>
                 <input type="checkbox" bind:checked={disableQuotes} class="rounded" />
                 No quotes
               </label>
@@ -980,11 +980,11 @@
               {#if showSchedule}
                 <div class="absolute bottom-full right-0 mb-1 p-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl z-50 w-56">
                   <div class="space-y-2">
-                    <label for="schedule-date" class="text-xs text-[var(--color-text-muted)]">Date</label>
+                    <label for="schedule-date" class="text-xs text-[var(--color-text-muted)]">{i18n.t.compose.date}</label>
                     <input id="schedule-date" type="date" bind:value={scheduleDate}
                       min={new Date().toISOString().split('T')[0]}
                       class="w-full px-2 py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-xs text-[var(--color-text)] focus:outline-none" />
-                    <label for="schedule-time" class="text-xs text-[var(--color-text-muted)]">Time</label>
+                    <label for="schedule-time" class="text-xs text-[var(--color-text-muted)]">{i18n.t.compose.time}</label>
                     <input id="schedule-time" type="time" bind:value={scheduleTime}
                       class="w-full px-2 py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-xs text-[var(--color-text)] focus:outline-none" />
                     <button
