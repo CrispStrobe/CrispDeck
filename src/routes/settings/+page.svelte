@@ -273,7 +273,7 @@
     calcCacheStats();
   }
   async function purgeAllData() {
-    if (!confirm('This will delete all cached data, drafts, bookmarks, and archive. Accounts and settings are preserved. Continue?')) return;
+    if (!confirm(i18n.t.settings.purgeConfirm)) return;
     // Delete IndexedDB databases
     for (const name of ['crispdeck-archive', 'crispdeck-bookmarks', 'crispdeck-engagement', 'crispdeck-translations']) {
       try { indexedDB.deleteDatabase(name); } catch {}
@@ -654,8 +654,8 @@
 
   <!-- Page-level tabs (Settings / Instance Info) -->
   <div class="flex items-center gap-1 mb-4">
-    <a href="{base}/settings" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">Settings</a>
-    <a href="{base}/instance" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Instance Info</a>
+    <a href="{base}/settings" class="px-4 py-2 text-sm font-medium border-b-2 border-[var(--color-primary)] text-[var(--color-text)]">{i18n.t.settings.title}</a>
+    <a href="{base}/instance" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]">{i18n.t.settings.instanceInfo}</a>
   </div>
 
   <!-- Settings section tabs -->
@@ -764,7 +764,7 @@
             </div>
             {#if bskyNeeds2fa}
               <div>
-                <label for="bsky-2fa" class="block text-sm text-[var(--color-text-muted)] mb-1">2FA Code (check your email)</label>
+                <label for="bsky-2fa" class="block text-sm text-[var(--color-text-muted)] mb-1">{i18n.t.settings.twoFactorCode}</label>
                 <input
                   id="bsky-2fa"
                   type="text"
@@ -818,11 +818,11 @@
             </div>
             <div class="flex items-center gap-1">
               {#if !account.is_primary}
-                <button onclick={() => setPrimary(account.id)} title="Set as primary" class="p-1.5 text-[var(--color-text-muted)] hover:text-yellow-400 transition-colors">
+                <button onclick={() => setPrimary(account.id)} title={i18n.t.settings.setAsPrimary} class="p-1.5 text-[var(--color-text-muted)] hover:text-yellow-400 transition-colors">
                   <Star size={14} />
                 </button>
               {/if}
-              <button onclick={() => removeAccount(account.id)} title="Remove account" class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors">
+              <button onclick={() => removeAccount(account.id)} title={i18n.t.settings.removeAccount} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors">
                 <Trash2 size={14} />
               </button>
             </div>
@@ -907,7 +907,7 @@
               <div>
                 <span class="text-sm font-medium">{account.display_name || account.handle}</span>
                 {#if account.handle.startsWith('@user@') || account.handle === '@user'}
-                  <span class="ml-2 text-xs text-red-400 bg-red-900/30 px-1.5 py-0.5 rounded">setup incomplete — delete and re-add</span>
+                  <span class="ml-2 text-xs text-red-400 bg-red-900/30 px-1.5 py-0.5 rounded">{i18n.t.settings.setupIncomplete}</span>
                 {:else}
                   <span class="text-xs text-[var(--color-text-muted)] ml-1">{account.handle}</span>
                 {/if}
@@ -918,11 +918,11 @@
             </div>
             <div class="flex items-center gap-1">
               {#if !account.is_primary}
-                <button onclick={() => setPrimary(account.id)} title="Set as primary" class="p-1.5 text-[var(--color-text-muted)] hover:text-yellow-400 transition-colors">
+                <button onclick={() => setPrimary(account.id)} title={i18n.t.settings.setAsPrimary} class="p-1.5 text-[var(--color-text-muted)] hover:text-yellow-400 transition-colors">
                   <Star size={14} />
                 </button>
               {/if}
-              <button onclick={() => removeAccount(account.id)} title="Remove account" class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors">
+              <button onclick={() => removeAccount(account.id)} title={i18n.t.settings.removeAccount} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors">
                 <Trash2 size={14} />
               </button>
             </div>
@@ -963,7 +963,7 @@
               >
                 {#if threadsLoading}<Loader2 size={14} class="animate-spin" />{/if}
                 <Shield size={14} />
-                Connect with Threads
+                {i18n.t.settings.connectThreads}
               </button>
               <button
                 onclick={() => showThreadsForm = false}
@@ -976,7 +976,7 @@
               onclick={() => threadsAdvanced = true}
               class="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] underline"
             >
-              Advanced: use your own Meta App credentials
+              {i18n.t.settings.threadsAdvanced}
             </button>
           {:else}
             <p class="text-xs text-[var(--color-text-muted)]">
@@ -985,7 +985,7 @@
               with the Threads API product enabled. Add <code class="text-[10px] bg-[var(--color-bg)] px-1 rounded">{typeof window !== 'undefined' ? window.location.origin : ''}/oauth/threads-callback</code> as a redirect URI.
             </p>
             <div>
-              <label for="threads-client-id" class="block text-sm text-[var(--color-text-muted)] mb-1">App ID (Client ID)</label>
+              <label for="threads-client-id" class="block text-sm text-[var(--color-text-muted)] mb-1">{i18n.t.settings.appId}</label>
               <input
                 id="threads-client-id"
                 type="text"
@@ -995,7 +995,7 @@
               />
             </div>
             <div>
-              <label for="threads-client-secret" class="block text-sm text-[var(--color-text-muted)] mb-1">App Secret</label>
+              <label for="threads-client-secret" class="block text-sm text-[var(--color-text-muted)] mb-1">{i18n.t.settings.appSecret}</label>
               <input
                 id="threads-client-secret"
                 type="password"
@@ -1026,7 +1026,7 @@
                 onclick={() => threadsAdvanced = false}
                 class="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] underline"
               >
-                Back to simple mode
+                {i18n.t.settings.backToSimple}
               </button>
             {/if}
           {/if}
@@ -1042,12 +1042,12 @@
             {#if threadsTokenMode}
               <div class="mt-2 space-y-2">
                 <p class="text-[10px] text-[var(--color-text-muted)]">
-                  Generate a token from the <a href="https://developers.facebook.com/apps/{threadsClientId || '...'}/use_cases/" target="_blank" rel="noopener" class="underline">Meta Developer Portal</a> → Threads API → User Token Generator. No redirect URI setup needed.
+                  {i18n.t.settings.generateTokenFrom} <a href="https://developers.facebook.com/apps/{threadsClientId || '...'}/use_cases/" target="_blank" rel="noopener" class="underline">{i18n.t.settings.metaDevPortal}</a>{i18n.t.settings.generateTokenPath}
                 </p>
                 <input
                   type="password"
                   bind:value={threadsManualToken}
-                  placeholder="Paste your Threads access token..."
+                  placeholder={i18n.t.settings.pasteThreadsToken}
                   class="w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] font-mono focus:outline-none focus:border-[var(--color-primary)]"
                 />
                 <button
@@ -1089,11 +1089,11 @@
             </div>
             <div class="flex items-center gap-1">
               {#if !account.is_primary}
-                <button onclick={() => setPrimary(account.id)} title="Set as primary" class="p-1.5 text-[var(--color-text-muted)] hover:text-yellow-400 transition-colors">
+                <button onclick={() => setPrimary(account.id)} title={i18n.t.settings.setAsPrimary} class="p-1.5 text-[var(--color-text-muted)] hover:text-yellow-400 transition-colors">
                   <Star size={14} />
                 </button>
               {/if}
-              <button onclick={() => removeAccount(account.id)} title="Remove account" class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors">
+              <button onclick={() => removeAccount(account.id)} title={i18n.t.settings.removeAccount} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors">
                 <Trash2 size={14} />
               </button>
             </div>
@@ -1192,8 +1192,8 @@
       <!-- Display density -->
       <div class="flex items-center justify-between">
         <div>
-          <label for="density-mode" class="text-sm text-[var(--color-text-muted)]">Display density</label>
-          <p class="text-[10px] text-[var(--color-text-muted)]">Adjusts spacing, avatar size, and padding across the entire UI</p>
+          <label for="density-mode" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.displayDensity}</label>
+          <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.densityDesc}</p>
         </div>
         <select
           id="density-mode"
@@ -1209,13 +1209,13 @@
 
       <!-- Display settings -->
       <div class="border-t border-[var(--color-border)] pt-3 mt-3">
-        <h3 class="text-sm font-medium mb-2">Display</h3>
+        <h3 class="text-sm font-medium mb-2">{i18n.t.settings.displayHeading}</h3>
 
         <div class="space-y-3">
           <div class="flex items-center justify-between">
-            <label for="font-family" class="text-xs text-[var(--color-text-muted)]">Font</label>
+            <label for="font-family" class="text-xs text-[var(--color-text-muted)]">{i18n.t.settings.font}</label>
             <select id="font-family" bind:value={fontFamily} onchange={applyDisplaySettings} class="px-2 py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)]">
-              <option value="system">System default</option>
+              <option value="system">{i18n.t.settings.systemDefault}</option>
               <option value="inter">Inter</option>
               <option value="georgia">Georgia (serif)</option>
               <option value="mono">Monospace</option>
@@ -1471,7 +1471,7 @@
         <input
           type="text"
           bind:value={newGroupName}
-          placeholder="Group name"
+          placeholder={i18n.t.settings.groupName}
           class="flex-1 px-2 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
         />
         <input
@@ -1568,12 +1568,12 @@
 
   <!-- Feed cache size (Content tab) -->
   <section class="mb-8">
-    <h2 class="text-lg font-semibold mb-3">Feed Cache</h2>
+    <h2 class="text-lg font-semibold mb-3">{i18n.t.settings.feedCache}</h2>
     <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
       <div class="flex items-center justify-between">
         <div>
           <label for="feed-cache-size" class="text-xs text-[var(--color-text-muted)]">Feed cache size: {feedCacheSize} posts</label>
-          <p class="text-[10px] text-[var(--color-text-muted)]">Posts cached for instant display on page revisit</p>
+          <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.feedCacheDesc}</p>
         </div>
         <input id="feed-cache-size" type="range" min="50" max="500" step="50" bind:value={feedCacheSize}
           oninput={() => localStorage.setItem('crispdeck-feed-cache-size', String(feedCacheSize))}
@@ -1647,7 +1647,7 @@
 
       <!-- Target language -->
       <div class="flex items-center justify-between">
-        <label for="translate-lang" class="text-sm text-[var(--color-text-muted)]">Target language</label>
+        <label for="translate-lang" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.targetLanguage}</label>
         <select
           id="translate-lang"
           bind:value={translateLang}
@@ -1674,10 +1674,10 @@
         <div class="space-y-2">
           <p class="text-xs text-[var(--color-text-muted)]">
             Free Google Translate proxy. No API key, no commercial restriction.
-            Uses public instances by default. You can self-host or use any <a href="https://github.com/thedaviddelta/lingva-translate" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">Lingva instance</a>.
+            Uses public instances by default. You can self-host or use any <a href="https://github.com/thedaviddelta/lingva-translate" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">{i18n.t.settings.lingvaInstance}</a>.
           </p>
           <div>
-            <label for="lingva-instance" class="block text-xs text-[var(--color-text-muted)] mb-1">Instance URL (optional)</label>
+            <label for="lingva-instance" class="block text-xs text-[var(--color-text-muted)] mb-1">{i18n.t.settings.instanceUrlOptional}</label>
             <input
               id="lingva-instance"
               type="text"
@@ -1693,11 +1693,11 @@
       {#if translateProvider === 'libretranslate'}
         <div class="space-y-2">
           <p class="text-xs text-[var(--color-text-muted)]">
-            Open-source translation (AGPL). Self-host or use a <a href="https://github.com/LibreTranslate/LibreTranslate" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">public instance</a>.
+            Open-source translation (AGPL). Self-host or use a <a href="https://github.com/LibreTranslate/LibreTranslate" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">{i18n.t.settings.publicInstance}</a>.
             Some instances require an API key.
           </p>
           <div>
-            <label for="libre-instance" class="block text-xs text-[var(--color-text-muted)] mb-1">Instance URL</label>
+            <label for="libre-instance" class="block text-xs text-[var(--color-text-muted)] mb-1">{i18n.t.settings.instanceUrl}</label>
             <input
               id="libre-instance"
               type="text"
@@ -1708,13 +1708,13 @@
             />
           </div>
           <div>
-            <label for="libre-key" class="block text-xs text-[var(--color-text-muted)] mb-1">API key (optional)</label>
+            <label for="libre-key" class="block text-xs text-[var(--color-text-muted)] mb-1">{i18n.t.settings.apiKeyOptional}</label>
             <input
               id="libre-key"
               type="password"
               bind:value={libreTranslateApiKey}
               onchange={saveTranslateConfig}
-              placeholder="Leave empty if not required"
+              placeholder={i18n.t.settings.leaveEmptyIfNotRequired}
               class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
             />
           </div>
@@ -1735,7 +1735,7 @@
             Local translation via CrispASR GGUF models. Runs natively on CPU/GPU — no API key, fully offline. Model auto-downloaded on first use. Requires desktop app built with <code class="bg-[var(--color-bg)] px-1 rounded text-[10px]">--features crispasr-metal</code>.
           </p>
           <div>
-            <label for="crispasr-model" class="block text-xs text-[var(--color-text-muted)] mb-1">Translation model</label>
+            <label for="crispasr-model" class="block text-xs text-[var(--color-text-muted)] mb-1">{i18n.t.settings.translationModel}</label>
             <select
               id="crispasr-model"
               bind:value={crispasrModel}
@@ -1768,7 +1768,7 @@
             Bring your own key. Works with OpenAI, Mistral, Groq, Ollama, llama.cpp, or any OpenAI-compatible endpoint.
           </p>
           <div>
-            <label for="openai-base" class="block text-xs text-[var(--color-text-muted)] mb-1">API Base URL</label>
+            <label for="openai-base" class="block text-xs text-[var(--color-text-muted)] mb-1">{i18n.t.settings.apiBaseUrlLabel}</label>
             <input
               id="openai-base"
               type="text"
@@ -1779,7 +1779,7 @@
             />
           </div>
           <div>
-            <label for="openai-key" class="block text-xs text-[var(--color-text-muted)] mb-1">API Key</label>
+            <label for="openai-key" class="block text-xs text-[var(--color-text-muted)] mb-1">{i18n.t.settings.apiKeyLabel}</label>
             <input
               id="openai-key"
               type="password"
@@ -1790,7 +1790,7 @@
             />
           </div>
           <div>
-            <label for="openai-model" class="block text-xs text-[var(--color-text-muted)] mb-1">Model</label>
+            <label for="openai-model" class="block text-xs text-[var(--color-text-muted)] mb-1">{i18n.t.settings.model}</label>
             <input
               id="openai-model"
               type="text"
@@ -1930,7 +1930,7 @@
               onchange={saveAIConfig}
               class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none"
             >
-              <option value="">Same as text model</option>
+              <option value="">{i18n.t.settings.sameAsTextModel}</option>
               {#each aiModels as model}
                 <option value={model.id}>{model.id}</option>
               {/each}
@@ -1956,7 +1956,7 @@
   <section class="mb-8">
     <h2 class="text-lg font-semibold mb-3">{i18n.t.compose.hashtagBank}</h2>
     <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
-      <p class="text-[11px] text-[var(--color-text-muted)]">Save sets of hashtags for quick insertion into compose.</p>
+      <p class="text-[11px] text-[var(--color-text-muted)]">{i18n.t.settings.hashtagSetsDesc}</p>
 
       {#if hashtagSets.length > 0}
         <div class="space-y-2">
@@ -2220,7 +2220,7 @@
             <option value="pocket-tts">Pocket TTS · ~220 MB · English</option>
             <option value="fastpitch">FastPitch · ~120 MB · English</option>
           </optgroup>
-          <optgroup label="High quality">
+          <optgroup label={i18n.t.settings.voiceGroupHighQuality}>
             <option value="qwen3-tts">Qwen3 TTS 0.6B Q8 · ~986 MB</option>
             <option value="qwen3-tts-1.7b-base">Qwen3 TTS 1.7B Q8 · ~1.9 GB</option>
             <option value="chatterbox">Chatterbox Q8 · ~880 MB</option>
@@ -2228,12 +2228,12 @@
             <option value="vibevoice-tts">VibeVoice 0.5B Q4 · ~636 MB</option>
             <option value="orpheus">Orpheus 3B Q8 · ~3.5 GB</option>
           </optgroup>
-          <optgroup label="German voices">
+          <optgroup label={i18n.t.settings.voiceGroupGerman}>
             <option value="kartoffel-orpheus-de-natural">Kartoffel Orpheus DE (natural) · ~3.5 GB</option>
             <option value="kartoffel-orpheus-de-synthetic">Kartoffel Orpheus DE (synthetic) · ~3.5 GB</option>
             <option value="lex-au-orpheus-de">Lex.au Orpheus DE · ~3.5 GB</option>
           </optgroup>
-          <optgroup label="Multilingual">
+          <optgroup label={i18n.t.settings.voiceGroupMultilingual}>
             <option value="cosyvoice3-tts">CosyVoice3 Q4 · ~384 MB</option>
             <option value="voxcpm2-tts">VoxCPM2 Q4 · ~1.6 GB</option>
             <option value="f5-tts">F5-TTS F16 · ~953 MB</option>
@@ -2277,12 +2277,12 @@
             <option value="parakeet">Parakeet TDT 0.6B Q4 · ~467 MB · 25 EU langs</option>
             <option value="parakeet-tdt-1.1b">Parakeet TDT 1.1B Q4 · ~808 MB</option>
           </optgroup>
-          <optgroup label="German">
+          <optgroup label={i18n.t.settings.voiceGroupGermanShort}>
             <option value="moonshine-de">Moonshine Base DE Q4 · ~39 MB</option>
             <option value="moonshine-tiny-de">Moonshine Tiny DE Q4 · ~17 MB</option>
             <option value="wav2vec2-de">Wav2Vec2 DE Q4 · ~222 MB</option>
           </optgroup>
-          <optgroup label="Specialized">
+          <optgroup label={i18n.t.settings.voiceGroupSpecialized}>
             <option value="sensevoice">SenseVoice Q4 · ~129 MB · Chinese/EN/JA/KO</option>
             <option value="omniasr">OmniASR CTC 1B Q4 · ~658 MB · 1600+ langs</option>
             <option value="firered-asr">FireRed ASR Q4 · ~918 MB</option>
@@ -2297,7 +2297,7 @@
 
   <!-- Model Manager (CrispASR desktop only) -->
   <section class="mb-8">
-    <h2 class="text-lg font-semibold mb-3">Model Manager</h2>
+    <h2 class="text-lg font-semibold mb-3">{i18n.t.settings.modelManager}</h2>
     <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
       {#if !isTauri}
         <p class="text-xs text-[var(--color-text-muted)]">
@@ -2326,7 +2326,7 @@
           </div>
         {:else}
           <button onclick={loadRegistry} class="px-3 py-1.5 text-xs bg-[var(--color-primary)] text-white rounded-md">
-            Load Model Registry
+            {i18n.t.settings.loadModelRegistry}
           </button>
         {/if}
       {/if}
@@ -2335,14 +2335,14 @@
 
   <!-- Debug Log -->
   <section class="mb-8">
-    <h2 class="text-lg font-semibold mb-3">Debug Log</h2>
+    <h2 class="text-lg font-semibold mb-3">{i18n.t.settings.debugLog}</h2>
     <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
       <div class="flex items-center justify-between">
         <p class="text-[11px] text-[var(--color-text-muted)]">
           Recent errors and warnings ({getLogCount()} entries). Useful for diagnosing issues.
         </p>
         {#if getLogCount() > 0}
-          <button onclick={() => { clearLogs(); debugLogs = []; }} class="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-danger)]">Clear</button>
+          <button onclick={() => { clearLogs(); debugLogs = []; }} class="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-danger)]">{i18n.t.settings.clear}</button>
         {/if}
       </div>
       <button onclick={() => { debugLogs = getLogs(); showDebugLog = !showDebugLog; }} class="text-xs text-[var(--color-primary)] hover:underline">
@@ -2351,7 +2351,7 @@
       {#if showDebugLog}
         <div class="max-h-64 overflow-y-auto bg-[var(--color-bg)] rounded-md border border-[var(--color-border)] p-2 font-mono text-[10px] space-y-1">
           {#if debugLogs.length === 0}
-            <p class="text-[var(--color-text-muted)]">No log entries.</p>
+            <p class="text-[var(--color-text-muted)]">{i18n.t.settings.noLogEntries}</p>
           {:else}
             {#each debugLogs as entry}
               <div class="flex gap-2 {entry.level === 'error' ? 'text-red-400' : entry.level === 'warn' ? 'text-yellow-400' : 'text-[var(--color-text-muted)]'}">
@@ -2376,10 +2376,10 @@
       </div>
       <div class="flex gap-2">
         <button onclick={purgeViewCache} class="px-2 py-1 text-[10px] bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
-          Clear feed cache
+          {i18n.t.settings.clearFeedCache}
         </button>
         <button onclick={purgeAllData} class="px-2 py-1 text-[10px] bg-red-900/20 border border-red-800/30 rounded text-red-400 hover:text-red-300 transition-colors">
-          Purge all cached data
+          {i18n.t.settings.purgeAllCached}
         </button>
         <button onclick={calcCacheStats} class="px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
           Refresh
@@ -2396,13 +2396,13 @@
     <div class="space-y-4 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
       <div>
         <p class="text-sm font-medium">CrispDeck v{__VERSION__}</p>
-        <p class="text-xs text-[var(--color-text-muted)] mt-1">Cross-platform social media client for Bluesky, Mastodon, and Threads.</p>
+        <p class="text-xs text-[var(--color-text-muted)] mt-1">{i18n.t.settings.appTagline}</p>
         {#if __GIT_HASH__}
           <p class="text-[10px] text-[var(--color-text-muted)] mt-0.5 font-mono">Commit: {__GIT_HASH__}</p>
         {/if}
       </div>
       <div class="text-xs text-[var(--color-text-muted)] space-y-1">
-        <p>Licensed under <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">AGPL-3.0</a></p>
+        <p>{i18n.t.settings.licensedUnder} <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">AGPL-3.0</a></p>
       </div>
     </div>
   </section>

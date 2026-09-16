@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { i18n } from '$lib/i18n.svelte';
   import { base } from '$app/paths';
   import { Heart, Repeat, MessageCircle, Quote, Bookmark, Share, Flag, Languages, Camera, Loader2, Volume2, VolumeOff, BarChart3, UserPlus, UserCheck, Pin, ListPlus, X as XIcon } from '@lucide/svelte';
   import { goto } from '$app/navigation';
@@ -201,7 +202,7 @@
         if (engine === 'crispasr') {
           speaking = false;
           console.error('CrispASR TTS failed:', e);
-          toast.error('Text-to-speech failed');
+          toast.error(i18n.t.post.ttsFailed);
           return;
         }
         console.error('CrispASR TTS failed, falling back to browser:', e);
@@ -252,7 +253,7 @@
       translation = await translateText(sourceText);
     } catch (e) {
       translateError = String(e);
-      toast.error('Translation failed');
+      toast.error(i18n.t.post.translationFailed);
     } finally {
       translating = false;
     }
@@ -329,7 +330,7 @@
 
       if (!token || !instanceUrl) {
         voteError = 'No Mastodon account connected';
-        toast.error('Connect a Mastodon account to vote on polls');
+        toast.error(i18n.t.post.needMastodonToVote);
         return;
       }
 
@@ -341,7 +342,7 @@
       if (resp.ok) {
         const updated = await resp.json();
         (post.raw as any).poll = updated;
-        toast.success('Vote recorded');
+        toast.success(i18n.t.post.voteRecorded);
       } else {
         const errText = await resp.text().catch(() => resp.statusText);
         voteError = `Vote failed: ${errText}`;
@@ -349,7 +350,7 @@
       }
     } catch (e) {
       voteError = String(e);
-      toast.error('Vote failed — check your connection');
+      toast.error(i18n.t.post.voteFailed);
     }
   }
 
@@ -366,7 +367,7 @@
   }
 
   function handleReport() {
-    const reason = prompt('Report reason (optional):');
+    const reason = prompt(i18n.t.post.reportReason);
     if (reason === null) return; // Cancelled
     // Open the post on the platform's web UI where reporting is handled
     const url = getPostUrl(post);
@@ -384,7 +385,7 @@
       bookmarked = !bookmarked;
     } catch (e) {
       console.error('Bookmark failed:', e);
-      toast.error('Bookmark failed');
+      toast.error(i18n.t.post.bookmarkFailed);
       return;
     }
     // Best-effort write-through to Bluesky's official server-side bookmarks
@@ -402,7 +403,7 @@
         }
       } catch (e) {
         console.warn('Bluesky server bookmark sync failed:', e);
-        toast.warning('Saved locally but server sync failed');
+        toast.warning(i18n.t.post.savedLocallyOnly);
       }
     }
   }
@@ -842,7 +843,7 @@
 {#if hiddenByLabel && !labelRevealed}
   <div class="p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] text-center">
     <p class="text-xs text-[var(--color-text-muted)]">Content hidden: {postLabels.join(', ')}</p>
-    <button onclick={() => labelRevealed = true} class="text-xs text-[var(--color-primary)] hover:underline mt-1">Show anyway</button>
+    <button onclick={() => labelRevealed = true} class="text-xs text-[var(--color-primary)] hover:underline mt-1">{i18n.t.post.showAnyway}</button>
   </div>
 {:else}
 <div bind:this={postEl} data-post-uri={post.uri} class="group {compact ? 'p-2.5' : 'p-4'} bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] transition-shadow">
@@ -975,7 +976,7 @@
                   class="absolute bottom-1 left-1 px-1 py-0.5 text-[9px] font-bold bg-black/70 text-white rounded"
                   onclick={(e) => toggleAltPopover(i, e)}
                   aria-expanded={altPopoverIndex === i}
-                  aria-label="Show alt text"
+                  aria-label={i18n.t.post.showAltText}
                 >ALT</button>
                 {#if altPopoverIndex === i}
                   <div class="absolute bottom-full left-0 mb-1 p-2 bg-black/90 text-white text-xs rounded-lg max-w-[250px] z-10">
@@ -1040,7 +1041,7 @@
           {#if bskyQuote.embeds?.[0]}
             {@const qEmbed = bskyQuote.embeds[0]}
             {#if qEmbed.$type === 'app.bsky.embed.images#view' && qEmbed.images?.[0]}
-              <div onclick={(e: MouseEvent) => { e.stopPropagation(); openLightbox(qEmbed.images.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0); }} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openLightbox(qEmbed.images.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0); } }} class="cursor-pointer" role="button" tabindex="0" aria-label="View quoted post images">
+              <div onclick={(e: MouseEvent) => { e.stopPropagation(); openLightbox(qEmbed.images.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0); }} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openLightbox(qEmbed.images.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0); } }} class="cursor-pointer" role="button" tabindex="0" aria-label={i18n.t.post.viewQuotedImages}>
                 <img decoding="async" loading="lazy" src={qEmbed.images[0].thumb} alt={qEmbed.images[0].alt || ''} class="mt-2 rounded w-full max-h-48 object-cover" />
                 {#if qEmbed.images.length > 1}
                   <p class="mt-1 text-[10px] text-[var(--color-text-muted)]">+{qEmbed.images.length - 1} more</p>
@@ -1128,7 +1129,7 @@
                     class="absolute bottom-1 left-1 px-1 py-0.5 text-[9px] font-bold bg-black/70 text-white rounded"
                     onclick={(e) => toggleAltPopover(mastoAltIndex, e)}
                     aria-expanded={altPopoverIndex === mastoAltIndex}
-                    aria-label="Show alt text"
+                    aria-label={i18n.t.post.showAltText}
                   >ALT</button>
                   {#if altPopoverIndex === mastoAltIndex}
                       <div class="absolute bottom-full left-0 mb-1 p-2 bg-black/90 text-white text-xs rounded-lg max-w-[250px] z-10">
@@ -1223,7 +1224,7 @@
           onclick={() => onquote?.(post)}
           class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-purple-400 transition-all hover:scale-110 active:scale-90"
           title="Quote"
-          aria-label="Quote post"
+          aria-label={i18n.t.post.quotePost}
         >
           <Quote size={14} />
         </button>
@@ -1271,8 +1272,8 @@
         <button
           onclick={openListPicker}
           class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors opacity-0 group-hover:opacity-100"
-          title="Add to reading list"
-          aria-label="Add post to reading list"
+          title={i18n.t.post.addToReadingList}
+          aria-label={i18n.t.post.addPostToReadingList}
         >
           <ListPlus size={12} />
         </button>
@@ -1290,7 +1291,7 @@
                 </button>
               {/each}
             {:else}
-              <p class="px-3 py-1.5 text-[10px] text-[var(--color-text-muted)]">No reading lists yet</p>
+              <p class="px-3 py-1.5 text-[10px] text-[var(--color-text-muted)]">{i18n.t.post.noReadingLists}</p>
             {/if}
             <a
               href="{base}/bookmarks?tab=reading-lists"
@@ -1307,7 +1308,7 @@
         onclick={handleShare}
         class="flex items-center gap-1.5 transition-colors {copied ? 'text-[var(--color-success)]' : 'text-[var(--color-text-muted)]'} hover:text-[var(--color-text)]"
         title={copied ? 'Copied!' : 'Copy link'}
-        aria-label="Copy link to post"
+        aria-label={i18n.t.post.copyLinkToPost}
       >
         <Share size={14} />
       </button>
@@ -1340,8 +1341,8 @@
         onclick={handleShareAsImage}
         disabled={capturingImage}
         class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors opacity-0 group-hover:opacity-100"
-        title="Share as image"
-        aria-label="Share post as image"
+        title={i18n.t.post.shareAsImage}
+        aria-label={i18n.t.post.sharePostAsImage}
       >
         {#if capturingImage}
           <Loader2 size={12} class="animate-spin" />
@@ -1356,8 +1357,8 @@
       <button
         onclick={() => showStats = !showStats}
         class="flex items-center gap-1.5 transition-colors {showStats ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'} hover:text-[var(--color-primary)] opacity-0 group-hover:opacity-100"
-        title="Post statistics"
-        aria-label="Show post statistics"
+        title={i18n.t.post.postStatistics}
+        aria-label={i18n.t.post.showPostStatistics}
         aria-pressed={showStats}
       >
         <BarChart3 size={12} />
@@ -1367,7 +1368,7 @@
         onclick={handleReport}
         class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors opacity-0 group-hover:opacity-100"
         title="Report"
-        aria-label="Report post"
+        aria-label={i18n.t.post.reportPost}
       >
         <Flag size={12} />
       </button>
@@ -1384,21 +1385,21 @@
     <div class="mt-3 pl-13 p-3 bg-[var(--color-bg)] rounded-lg border border-[var(--color-border)] space-y-2">
       <div class="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
         <BarChart3 size={12} />
-        <span class="font-medium">Engagement breakdown</span>
+        <span class="font-medium">{i18n.t.post.engagementBreakdown}</span>
         <span class="ml-auto text-[10px]">{post.platform}</span>
       </div>
       <div class="grid grid-cols-3 gap-2">
         <div class="text-center p-2 bg-[var(--color-surface)] rounded">
           <div class="text-lg font-bold text-red-400">{post.likeCount ?? 0}</div>
-          <div class="text-[10px] text-[var(--color-text-muted)]">Likes</div>
+          <div class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.post.likes}</div>
         </div>
         <div class="text-center p-2 bg-[var(--color-surface)] rounded">
           <div class="text-lg font-bold text-green-400">{post.repostCount ?? 0}</div>
-          <div class="text-[10px] text-[var(--color-text-muted)]">Reposts</div>
+          <div class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.post.reposts}</div>
         </div>
         <div class="text-center p-2 bg-[var(--color-surface)] rounded">
           <div class="text-lg font-bold text-blue-400">{post.replyCount ?? 0}</div>
-          <div class="text-[10px] text-[var(--color-text-muted)]">Replies</div>
+          <div class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.post.replies}</div>
         </div>
       </div>
       <div class="flex items-center justify-between text-[10px] text-[var(--color-text-muted)]">
