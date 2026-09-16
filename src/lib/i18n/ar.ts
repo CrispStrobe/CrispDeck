@@ -1,5 +1,5 @@
 export default {
-    nav: {
+    nav: { discover: 'استكشاف', catchUp: 'اللحاق بالجديد',
       dashboard: 'لوحة التحكم', feed: 'الخلاصة', deck: 'الأعمدة', compose: 'كتابة', drafts: 'المسودات',
       notifications: 'الإشعارات', messages: 'الرسائل', bookmarks: 'الإشارات المرجعية',
       lists: 'القوائم والتغذيات', feedBuilder: 'منشئ التغذية', starterPacks: 'حزم البداية', identities: 'الهويات',
@@ -8,7 +8,7 @@ export default {
       analytics: 'التحليلات', settings: 'الإعدادات', post: 'نشر', alerts: 'تنبيهات', dms: 'رسائل مباشرة',
       gallery: 'معرض الوسائط', calendar: 'تقويم المحتوى', readingLists: 'قوائم القراءة',
     },
-    app: { name: 'CrispDeck', subtitle: 'ماستودون + بلوسكاي', collapse: 'طي', expand: 'توسيع' },
+    app: { voiceCommandsHint: 'انطق هذه الأوامر أثناء تشغيل الميكروفون في صفحة الإنشاء. تعمل بالألمانية أيضًا.', toggleTheme: 'تبديل المظهر', skipToContent: 'تخطٍّ إلى المحتوى', offlineBanner: 'أنت غير متصل — قد لا تتوفر بعض الميزات', mainNavigation: 'التنقل الرئيسي', keyboardShortcutsLabel: 'اختصارات لوحة المفاتيح', keyboardShortcuts: 'اختصارات لوحة المفاتيح', dismissLabel: 'تجاهل', customizeSidebar: 'تخصيص الشريط الجانبي', closeMenu: 'إغلاق القائمة', closeKeyboardShortcuts: 'إغلاق اختصارات لوحة المفاتيح', name: 'CrispDeck', subtitle: 'ماستودون + بلوسكاي', collapse: 'طي', expand: 'توسيع' },
     compose: {
       title: 'كتابة', placeholder: 'ما الذي يدور في ذهنك؟ اكتب @ للإشارة إلى شخص...',
       post: 'نشر', postThread: 'نشر سلسلة', postToAccounts: 'إلى {count} حسابات', posting: 'جاري النشر...',
@@ -32,7 +32,7 @@ export default {
       pollMastodon: 'استطلاع (Mastodon)', addOption: '+ إضافة خيار', multipleChoice: 'اختيار متعدد',
       hour1: 'ساعة', hours6: '٦ ساعات', hours24: '٢٤ ساعة', days3: '٣ أيام', days7: '٧ أيام',
     },
-    post: {
+    post: { voteRecorded: 'تم تسجيل صوتك', voteFailed: 'فشل التصويت — تحقق من اتصالك', viewQuotedImages: 'عرض صور المنشور المقتبس', ttsFailed: 'فشل النطق الصوتي', translationFailed: 'فشلت الترجمة', showPostStatistics: 'إظهار إحصاءات المنشور', showAltText: 'إظهار النص البديل', sharePostAsImage: 'مشاركة المنشور كصورة', savedLocallyOnly: 'تم الحفظ محليًا لكن فشلت المزامنة مع الخادم', reposts: 'إعادة النشر', reportReason: 'سبب البلاغ (اختياري):', reportPost: 'الإبلاغ عن المنشور', reportHint: 'لإكمال البلاغ، استخدم أداة الإبلاغ الخاصة بالمنصة في الصفحة المفتوحة.', replies: 'الردود', quotePost: 'اقتباس المنشور', postStatistics: 'إحصاءات المنشور', noReadingLists: 'لا توجد قوائم قراءة بعد', needMastodonToVote: 'اربط حساب ماستودون للتصويت في الاستطلاعات', likes: 'إعجابات', engagementBreakdown: 'تفاصيل التفاعل', copyLinkToPost: 'نسخ رابط المنشور', bookmarkFailed: 'فشل الحفظ في المحفوظات', addToReadingList: 'إضافة إلى قائمة القراءة', addPostToReadingList: 'إضافة إلى قائمة القراءة',
       reply: 'رد', boost: 'إعادة نشر', quote: 'اقتباس', like: 'إعجاب',
       bookmark: 'إشارة مرجعية', removeBookmark: 'إزالة الإشارة', copyLink: 'نسخ الرابط',
       copied: 'تم النسخ!', report: 'إبلاغ', translate: 'ترجمة',
@@ -42,7 +42,7 @@ export default {
       show: 'عرض', votes: 'أصوات', closed: 'مغلق', voted: 'تم التصويت', open: 'مفتوح',
       translatedFrom: 'مترجم من {lang}', sharedVia: 'تمت المشاركة عبر CrispDeck',
     },
-    feed: {
+    feed: { sortTopEngagement: 'الترتيب: الأعلى تفاعلًا', sortMostReposted: 'الترتيب: الأكثر إعادة نشر', sortMostLiked: 'الترتيب: الأكثر إعجابًا', socialFeed: 'الخلاصة الاجتماعية', searchInPosts: 'ابحث في المنشورات…', retry: 'إعادة المحاولة', minLikes: 'أدنى عدد إعجابات', hideReposts: 'إخفاء إعادة النشر', hideReplies: 'إخفاء الردود', hideMediaLabel: 'إخفاء الوسائط', hasMedia: 'يحتوي وسائط', forYouHint: 'أنشئ أرشيفك أولًا لتفعيل الترتيب المخصص بناءً على من تتفاعل معهم أكثر.', forYou: 'مخصص لك', filterMasto: 'Masto', filterBsky: 'Bsky', buildArchive: 'إنشاء الأرشيف',
       title: 'الخلاصة', timeline: 'الجدول الزمني', switchFeed: 'تبديل الخلاصة', savedNotPinned: 'محفوظة', searchFeeds: 'ابحث عن خلاصات…', noFeedsFound: 'لا توجد خلاصات مطابقة.', feedSearchFailed: 'بحث الخلاصات غير متاح حاليًا.', pinFeed: 'إضافة إلى خلاصاتي', unpinFeed: 'إزالة من خلاصاتي', feeds: 'الخلاصات', discoverFeeds: 'اكتشف المزيد من الخلاصات ←', myPosts: 'منشوراتي', all: 'الكل',
       noAccounts: 'لا توجد حسابات', addAccountsFirst: 'أضف حسابات في الإعدادات أولاً.',
       loadingTimeline: 'جاري تحميل الجدول الزمني...', loadingYourPosts: 'جاري تحميل منشوراتك...',
@@ -82,16 +82,17 @@ export default {
     readingLists: { newList: 'قائمة جديدة', namePlaceholder: 'اسم القائمة', descPlaceholder: 'وصف اختياري', create: 'إنشاء', empty: 'لا توجد قوائم قراءة', emptyHint: 'أنشئ مجموعات موضوعية لتنظيم المنشورات المحفوظة.', listEmpty: 'لا توجد منشورات في هذه القائمة بعد.', selectHint: 'اختر قائمة لعرض منشوراتها.' },
     about: { title: 'عن CrispDeck', description: 'عميل متعدد المنصات متكامل يدعم النشر المتقاطع وربط الهويات والترجمة.', serviceProvider: 'مزود الخدمة', contact: 'التواصل', disclaimer: 'إخلاء المسؤولية', disclaimerText: 'يُقدَّم هذا البرنامج "كما هو" دون أي ضمان من أي نوع.', licenses: 'تراخيص المصدر المفتوح', searchLicenses: 'البحث في {count} ترخيص...', noLicenses: 'لم يتم العثور على تراخيص.', generated: 'تم التوليد' },
     notifications: { title: 'الإشعارات', noNotifications: 'لا توجد إشعارات', addAccountsFirst: 'أضف حسابات في الإعدادات أولاً.', nothingNew: 'لا جديد حتى الآن.', liked: 'أعجب بمنشورك', boosted: 'أعاد نشر منشورك', followed: 'بدأ متابعتك', mentioned: 'أشار إليك', replied: 'رد على منشورك', quoted: 'اقتبس منشورك', justNow: 'الآن', likedGroup: 'و{count} آخرون أعجبوا بمنشورك', boostedGroup: 'و{count} آخرون أعادوا نشر منشورك', followedGroup: 'و{count} آخرون بدأوا متابعتك' },
-    messages: { title: 'الرسائل', blueskyDmsNote: 'رسائل بلوسكاي المباشرة تتطلب OAuth للوصول إلى المحادثات.', userPlaceholder: '@مستخدم أو معرّف...', go: 'انتقال', newConversation: '+ محادثة جديدة', noConversations: 'لا توجد محادثات بعد.', typePlaceholder: 'اكتب رسالة...', selectConversation: 'اختر محادثة' },
+    messages: { userOrHandle: '@مستخدم أو معرّف…', title: 'الرسائل', blueskyDmsNote: 'رسائل بلوسكاي المباشرة تتطلب OAuth للوصول إلى المحادثات.', userPlaceholder: '@مستخدم أو معرّف...', go: 'انتقال', newConversation: '+ محادثة جديدة', noConversations: 'لا توجد محادثات بعد.', typePlaceholder: 'اكتب رسالة...', selectConversation: 'اختر محادثة' },
     search: { title: 'بحث', placeholder: 'بحث في المنشورات عبر جميع الحسابات...', button: 'بحث', searching: 'جاري البحث...', noResults: 'لا نتائج', noPostsFor: 'لم يتم العثور على منشورات لـ "{query}".', results: '{count} نتيجة', noAccounts: 'لا توجد حسابات مرتبطة', addAccounts: 'أضف حسابات في الإعدادات للبحث.' },
-    bookmarks: { title: 'الإشارات المرجعية', noBookmarks: 'لا توجد إشارات مرجعية', hint: 'انقر على أيقونة الإشارة المرجعية في أي منشور لحفظه هنا.', sync: 'مزامنة من ماستودون' },
+    bookmarks: { importFromPlatforms: 'استيراد المحفوظات من المنصات المتصلة', title: 'الإشارات المرجعية', noBookmarks: 'لا توجد إشارات مرجعية', hint: 'انقر على أيقونة الإشارة المرجعية في أي منشور لحفظه هنا.', sync: 'مزامنة من ماستودون' },
     drafts: { title: 'المسودات', newPost: 'منشور جديد', posted: 'تم النشر', failed: 'فشل', noDrafts: 'لا توجد مسودات', hint: 'المسودات المحفوظة تظهر هنا.', scheduled: 'مجدول', to: 'إلى:', postNow: 'نشر الآن', delete: 'حذف', edit: 'تعديل', schedule: 'جدولة', cancel: 'إلغاء', saved: 'حُفظ في {date}', calendarView: 'التقويم' },
     deck: { title: 'الأعمدة', col: '{count} عمود', loadLayout: 'تحميل التخطيط...', save: 'حفظ', addColumn: 'إضافة عمود', addAccountsFirst: 'أضف حسابات في الإعدادات أولاً.', homeTimeline: 'الجدول الزمني الرئيسي', mentions: 'الإشارات', streaming: 'البث المباشر', streamingOn: 'البث شغّال', streamingOff: 'البث متوقف' },
     archive: { title: 'الأرشيف', building: 'جاري البناء...', refresh: 'تحديث', buildArchive: 'بناء الأرشيف', clearArchive: 'مسح الأرشيف', totalArchived: 'إجمالي المؤرشف', byPlatform: 'حسب المنصة', searchPlaceholder: 'بحث في الأرشيف...', posts: 'منشورات', likes: 'إعجابات', reposts: 'إعادة نشر', replies: 'ردود', noArchive: 'لا يوجد أرشيف بعد', noArchiveHint: 'أنشئ أرشيفًا محليًا للبحث السريع والتصدير.', done: 'تم! {count} عنصر مؤرشف.' },
-    profile: { backToFeed: 'العودة إلى الخلاصة', following: 'تتابعه', follow: 'متابعة', mute: 'كتم', block: 'حظر', followers: 'متابعون', posts: 'منشورات', media: 'وسائط', noMedia: 'لا توجد وسائط لعرضها.' },
-    identities: { followerOverlap: 'تداخل المتابعين', bskyOnly: 'بلوسكاي فقط', mastoOnly: 'ماستودون فقط', bothPlatforms: 'كلتا المنصتين', totalMatched: 'هوية متطابقة' },
-    thread: { readAsArticle: 'قراءة كمقال', parts: 'أجزاء' },
+    profile: { noHandle: 'لم يُحدَّد أي معرّف.', noAccount: 'لا يوجد حساب {platform} متصل', muted: 'تم كتم المستخدم.', followsYou: 'يتابعك', blocked: 'تم حظر المستخدم.', backToFeed: 'العودة إلى الخلاصة', following: 'تتابعه', follow: 'متابعة', mute: 'كتم', block: 'حظر', followers: 'متابعون', posts: 'منشورات', media: 'وسائط', noMedia: 'لا توجد وسائط لعرضها.' },
+    identities: { noIdentities: 'لا توجد هويات بعد', displayNamePlaceholder: 'الاسم المعروض (مثل Alice)', deleteIdentity: 'حذف الهوية', createGroup: 'إنشاء مجموعة هوية', afterCreating: 'بعد الإنشاء، يمكنك ربط الحسابات من بطاقة الهوية.', followerOverlap: 'تداخل المتابعين', bskyOnly: 'بلوسكاي فقط', mastoOnly: 'ماستودون فقط', bothPlatforms: 'كلتا المنصتين', totalMatched: 'هوية متطابقة' },
+    thread: { postNotFound: 'المنشور غير موجود.', readAsArticle: 'قراءة كمقال', parts: 'أجزاء' },
     instance: { openRegistrations: 'التسجيل مفتوح', closedRegistrations: 'التسجيل مغلق' },
     dashboard: { accountsConnected: '{count} مرتبط', quickActions: 'إجراءات سريعة', scanIdentities: 'فحص الهويات' },
-    common: { dismiss: 'إغلاق', loading: 'جاري التحميل...', error: 'خطأ', postedTo: 'تم النشر على {platform}', view: 'عرض', bluesky: 'بلوسكاي', mastodon: 'ماستودون', threads: 'ثريدز' },
-  };
+    common: { technicalDetails: 'تفاصيل تقنية', switchAccount: 'تبديل الحساب', somethingWentWrong: 'حدث خطأ ما', scrollToTop: 'العودة إلى الأعلى', openInBrowser: 'فتح في المتصفح', mediaViewer: 'عارض الوسائط', create: 'إنشاء', cancel: 'إلغاء', add: 'إضافة', dismiss: 'إغلاق', loading: 'جاري التحميل...', error: 'خطأ', postedTo: 'تم النشر على {platform}', view: 'عرض', bluesky: 'بلوسكاي', mastodon: 'ماستودون', threads: 'ثريدز' },
+      oauth: { threadsConnected: 'تم ربط حساب ثريدز!', redirectingToSettings: 'جارٍ إعادة التوجيه إلى الإعدادات…', fullAccessRedirecting: 'تم تفعيل الوصول الكامل بما في ذلك الرسائل. جارٍ إعادة التوجيه…', connectionFailed: 'فشل الاتصال', connectingThreads: 'جارٍ ربط حساب ثريدز', connectingMastodon: 'جارٍ ربط حساب ماستودون', connectingBluesky: 'جارٍ ربط بلوسكاي', completingOAuth: 'جارٍ إكمال تفويض OAuth…', completingAuth: 'جارٍ إكمال التفويض…', blueskyConnected: 'تم ربط بلوسكاي عبر OAuth!', backToSettings: 'العودة إلى الإعدادات', accountConnected: 'تم ربط الحساب!' },
+};

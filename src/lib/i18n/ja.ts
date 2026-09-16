@@ -1,5 +1,5 @@
 export default {
-    nav: {
+    nav: { readingLists: 'リーディングリスト', gallery: 'ギャラリー', discover: 'みつける', catchUp: 'あとで読む', calendar: 'コンテンツカレンダー',
       dashboard: 'ダッシュボード', feed: 'フィード', deck: 'デッキ', compose: '作成',
       drafts: '下書き', notifications: '通知', messages: 'メッセージ',
       bookmarks: 'ブックマーク', lists: 'リスト＆フィード', feedBuilder: 'フィードビルダー', starterPacks: 'スターターパック',
@@ -8,7 +8,7 @@ export default {
       moderation: 'モデレーション', analytics: '分析', settings: '設定',
       post: '投稿', alerts: 'アラート', dms: 'DM',
     },
-    app: { name: 'CrispDeck', subtitle: 'Mastodon + Bluesky', collapse: '折りたたむ', expand: '展開' },
+    app: { voiceCommandsHint: '投稿画面でマイクが有効なときに話しかけてください。ドイツ語でも使えます。', toggleTheme: 'テーマを切り替え', skipToContent: '本文へスキップ', offlineBanner: 'オフラインです。一部の機能が利用できない場合があります', mainNavigation: 'メインナビゲーション', keyboardShortcutsLabel: 'キーボードショートカット', keyboardShortcuts: 'キーボードショートカット', dismissLabel: '閉じる', customizeSidebar: 'サイドバーをカスタマイズ', closeMenu: 'メニューを閉じる', closeKeyboardShortcuts: 'キーボードショートカットを閉じる', name: 'CrispDeck', subtitle: 'Mastodon + Bluesky', collapse: '折りたたむ', expand: '展開' },
     compose: {
       title: '作成', placeholder: '何を考えていますか？@で誰かをメンション...',
       post: '投稿', postThread: 'スレッド投稿', posting: '投稿中...',
@@ -26,7 +26,7 @@ export default {
       multipleChoice: '複数選択', hour1: '1時間', hours6: '6時間',
       hours24: '24時間', days3: '3日', days7: '7日',
     },
-    post: {
+    post: { voteRecorded: '投票しました', voteFailed: '投票に失敗しました。接続を確認してください', viewQuotedImages: '引用された投稿の画像を見る', ttsFailed: '読み上げに失敗しました', translationFailed: '翻訳に失敗しました', showPostStatistics: '投稿の統計を表示', showAltText: '代替テキストを表示', sharePostAsImage: '投稿を画像として共有', savedLocallyOnly: 'ローカルには保存しましたが、サーバー同期に失敗しました', reposts: 'リポスト', reportReason: '報告の理由（任意）:', reportPost: '投稿を報告', reportHint: '報告を完了するには、開いたページでプラットフォームの報告機能を使用してください。', replies: '返信', quotePost: '投稿を引用', postStatistics: '投稿の統計', noReadingLists: 'リーディングリストはまだありません', needMastodonToVote: 'アンケートに投票するには Mastodon アカウントを接続してください', likes: 'いいね', engagementBreakdown: '反応の内訳', copyLinkToPost: '投稿のリンクをコピー', bookmarkFailed: 'ブックマークに失敗しました', addToReadingList: 'リーディングリストに追加', addPostToReadingList: 'リーディングリストに追加',
       reply: '返信', boost: 'ブースト', quote: '引用', like: 'いいね',
       bookmark: 'ブックマーク', removeBookmark: 'ブックマーク解除', copyLink: 'リンクをコピー',
       copied: 'コピーしました！', report: '報告', translate: '翻訳',
@@ -37,7 +37,7 @@ export default {
       translatedFrom: '{lang}から翻訳',
       sharedVia: 'CrispDeckで共有',
     },
-    feed: {
+    feed: { sortTopEngagement: '並び替え: 反応が多い順', sortMostReposted: '並び替え: リポストが多い順', sortMostLiked: '並び替え: いいねが多い順', socialFeed: 'ソーシャルフィード', searchInPosts: '投稿を検索…', retry: '再試行', minLikes: '最小いいね数', hideReposts: 'リポストを隠す', hideReplies: '返信を隠す', hideMediaLabel: 'メディアを隠す', hasMedia: 'メディアあり', forYouHint: 'まずアーカイブを作成すると、よく交流する相手に基づく並び替えが使えます。', forYou: 'おすすめ', filterMasto: 'Masto', filterBsky: 'Bsky', buildArchive: 'アーカイブを作成',
       title: 'フィード', timeline: 'タイムライン', switchFeed: 'フィードを切り替え', savedNotPinned: '保存済み', searchFeeds: 'フィードを検索…', noFeedsFound: '該当するフィードはありません。', feedSearchFailed: 'フィード検索を利用できません。', pinFeed: 'マイフィードに追加', unpinFeed: 'マイフィードから削除', feeds: 'フィード', discoverFeeds: 'フィードを探す →', myPosts: '自分の投稿', all: 'すべて',
       noAccounts: 'アカウント未接続', addAccountsFirst: '設定でアカウントを追加してください。',
       loadingTimeline: 'タイムラインを読み込み中...', loadingYourPosts: '投稿を読み込み中...',
@@ -77,16 +77,17 @@ export default {
     readingLists: { newList: '新しいリスト', namePlaceholder: 'リスト名', descPlaceholder: '説明（任意）', create: '作成', empty: 'リーディングリストなし', emptyHint: 'テーマ別コレクションを作成して保存済み投稿を整理しましょう。', listEmpty: 'このリストにはまだ投稿がありません。', selectHint: 'リストを選択して投稿を表示。' },
     about: { title: 'CrispDeckについて', description: 'クロスポスト・アイデンティティマッピング・翻訳機能を備えたフル機能クロスプラットフォームクライアント。', serviceProvider: 'サービスプロバイダー', contact: '連絡先', disclaimer: '免責事項', disclaimerText: 'このソフトウェアは「現状のまま」提供され、いかなる保証もありません。', licenses: 'オープンソースライセンス', searchLicenses: '{count}件のライセンスを検索...', noLicenses: 'ライセンスが見つかりません。', generated: '生成日時' },
     notifications: { title: '通知', noNotifications: '通知なし', addAccountsFirst: '最初に設定でアカウントを追加してください。', nothingNew: '新しい通知はありません。', liked: 'があなたの投稿をいいねしました', boosted: 'があなたの投稿をブーストしました', followed: 'がフォローしました', mentioned: 'があなたをメンションしました', replied: 'が返信しました', quoted: 'があなたの投稿を引用しました', justNow: 'たった今', likedGroup: 'と他{count}人があなたの投稿をいいねしました', boostedGroup: 'と他{count}人があなたの投稿をブーストしました', followedGroup: 'と他{count}人がフォローしました' },
-    messages: { title: 'メッセージ', blueskyDmsNote: 'Bluesky DMにはチャットアクセス用のOAuthが必要です。', userPlaceholder: '@ユーザーまたはハンドル...', go: '移動', newConversation: '＋ 新しい会話', noConversations: 'まだ会話がありません。', typePlaceholder: 'メッセージを入力...', selectConversation: '会話を選択' },
+    messages: { userOrHandle: '@ユーザーまたはハンドル…', title: 'メッセージ', blueskyDmsNote: 'Bluesky DMにはチャットアクセス用のOAuthが必要です。', userPlaceholder: '@ユーザーまたはハンドル...', go: '移動', newConversation: '＋ 新しい会話', noConversations: 'まだ会話がありません。', typePlaceholder: 'メッセージを入力...', selectConversation: '会話を選択' },
     search: { title: '検索', placeholder: 'すべてのアカウントで投稿を検索...', button: '検索', searching: '検索中...', noResults: '結果なし', noPostsFor: '「{query}」の投稿が見つかりませんでした。', results: '{count}件の結果', noAccounts: 'アカウント未接続', addAccounts: '検索するには設定でアカウントを追加してください。' },
-    bookmarks: { title: 'ブックマーク', noBookmarks: 'ブックマークなし', hint: '投稿のブックマークアイコンをクリックしてここに保存。', sync: 'Mastodonから同期' },
+    bookmarks: { importFromPlatforms: '接続済みのプラットフォームからブックマークを取り込む', title: 'ブックマーク', noBookmarks: 'ブックマークなし', hint: '投稿のブックマークアイコンをクリックしてここに保存。', sync: 'Mastodonから同期' },
     drafts: { title: '下書き', newPost: '新しい投稿', posted: '投稿済み', failed: '失敗', noDrafts: '下書きなし', hint: '保存した下書きがここに表示されます。', scheduled: 'スケジュール済み', to: '宛先：', postNow: '今すぐ投稿', delete: '削除', edit: '編集', schedule: 'スケジュール', cancel: 'キャンセル', saved: '{date}に保存', calendarView: 'カレンダー' },
     deck: { title: 'デッキ', col: '{count}列', loadLayout: 'レイアウトを読み込む...', save: '保存', addColumn: '列を追加', addAccountsFirst: '最初に設定でアカウントを追加してください。', homeTimeline: 'ホームタイムライン', mentions: 'メンション', streaming: 'ライブストリーミング', streamingOn: 'ストリーミング中', streamingOff: 'ストリーミング停止' },
     archive: { title: 'アーカイブ', building: '構築中...', refresh: '更新', buildArchive: 'アーカイブを構築', clearArchive: 'アーカイブを削除', totalArchived: '総アーカイブ数', byPlatform: 'プラットフォーム別', searchPlaceholder: 'アーカイブを検索...', posts: '投稿', likes: 'いいね', reposts: 'リポスト', replies: '返信', noArchive: 'アーカイブなし', noArchiveHint: '高速検索とエクスポートのためにローカルアーカイブを構築しましょう。', done: '完了！{count}件をアーカイブしました。' },
-    profile: { backToFeed: 'フィードに戻る', following: 'フォロー中', follow: 'フォロー', mute: 'ミュート', block: 'ブロック', followers: 'フォロワー', posts: '投稿', media: 'メディア', noMedia: '表示できるメディアがありません。' },
-    identities: { followerOverlap: 'フォロワーの重複', bskyOnly: 'Blueskyのみ', mastoOnly: 'Mastodonのみ', bothPlatforms: '両方', totalMatched: 'マッチしたアイデンティティ' },
-    thread: { readAsArticle: '記事として読む', parts: 'パート' },
+    profile: { noHandle: 'ハンドルが指定されていません。', noAccount: '{platform} アカウントが接続されていません', muted: 'ユーザーをミュートしました。', followsYou: 'あなたをフォロー中', blocked: 'ユーザーをブロックしました。', backToFeed: 'フィードに戻る', following: 'フォロー中', follow: 'フォロー', mute: 'ミュート', block: 'ブロック', followers: 'フォロワー', posts: '投稿', media: 'メディア', noMedia: '表示できるメディアがありません。' },
+    identities: { noIdentities: 'アイデンティティはまだありません', displayNamePlaceholder: '表示名（例: Alice）', deleteIdentity: 'アイデンティティを削除', createGroup: 'アイデンティティグループを作成', afterCreating: '作成後、アイデンティティカードからアカウントを紐づけできます。', followerOverlap: 'フォロワーの重複', bskyOnly: 'Blueskyのみ', mastoOnly: 'Mastodonのみ', bothPlatforms: '両方', totalMatched: 'マッチしたアイデンティティ' },
+    thread: { postNotFound: '投稿が見つかりません。', readAsArticle: '記事として読む', parts: 'パート' },
     instance: { openRegistrations: '登録受付中', closedRegistrations: '登録停止中' },
     dashboard: { accountsConnected: '{count}接続中', quickActions: 'クイックアクション', scanIdentities: 'アイデンティティをスキャン' },
-    common: { dismiss: '閉じる', loading: '読み込み中...', error: 'エラー', postedTo: '{platform}に投稿', view: '表示', bluesky: 'Bluesky', mastodon: 'Mastodon', threads: 'Threads' },
-  };
+    common: { technicalDetails: '技術的な詳細', switchAccount: 'アカウントを切り替え', somethingWentWrong: '問題が発生しました', scrollToTop: '先頭へ戻る', openInBrowser: 'ブラウザで開く', mediaViewer: 'メディアビューア', create: '作成', cancel: 'キャンセル', add: '追加', dismiss: '閉じる', loading: '読み込み中...', error: 'エラー', postedTo: '{platform}に投稿', view: '表示', bluesky: 'Bluesky', mastodon: 'Mastodon', threads: 'Threads' },
+      oauth: { threadsConnected: 'Threads アカウントを接続しました。', redirectingToSettings: '設定にリダイレクトしています…', fullAccessRedirecting: 'DM を含む全機能が有効になりました。リダイレクトします…', connectionFailed: '接続に失敗しました', connectingThreads: 'Threads アカウントに接続中', connectingMastodon: 'Mastodon アカウントに接続中', connectingBluesky: 'Bluesky に接続中', completingOAuth: 'OAuth 認可を完了しています…', completingAuth: '認可を完了しています…', blueskyConnected: 'OAuth で Bluesky を接続しました。', backToSettings: '設定に戻る', accountConnected: 'アカウントを接続しました。' },
+};

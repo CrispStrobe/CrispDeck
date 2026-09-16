@@ -1,5 +1,5 @@
 export default {
-    nav: {
+    nav: { readingLists: '阅读列表', gallery: '图库', discover: '发现', catchUp: '补看', calendar: '内容日历',
       dashboard: '仪表板', feed: '信息流', deck: '多栏', compose: '撰写',
       drafts: '草稿', notifications: '通知', messages: '消息',
       bookmarks: '书签', lists: '列表与信息源', feedBuilder: '信息源构建器', starterPacks: '入门包',
@@ -8,7 +8,7 @@ export default {
       moderation: '管理', analytics: '分析', settings: '设置',
       post: '发布', alerts: '提醒', dms: '私信',
     },
-    app: { name: 'CrispDeck', subtitle: 'Mastodon + Bluesky', collapse: '折叠', expand: '展开' },
+    app: { voiceCommandsHint: '在撰写页面麦克风开启时说出这些指令。德语同样适用。', toggleTheme: '切换主题', skipToContent: '跳到主要内容', offlineBanner: '你当前离线 — 部分功能可能不可用', mainNavigation: '主导航', keyboardShortcutsLabel: '键盘快捷键', keyboardShortcuts: '键盘快捷键', dismissLabel: '忽略', customizeSidebar: '自定义侧边栏', closeMenu: '关闭菜单', closeKeyboardShortcuts: '关闭键盘快捷键', name: 'CrispDeck', subtitle: 'Mastodon + Bluesky', collapse: '折叠', expand: '展开' },
     compose: {
       title: '撰写', placeholder: '有什么想说的？输入@来提及...',
       post: '发布', postThread: '发布串', posting: '发布中...',
@@ -26,7 +26,7 @@ export default {
       multipleChoice: '多选', hour1: '1小时', hours6: '6小时',
       hours24: '24小时', days3: '3天', days7: '7天',
     },
-    post: {
+    post: { voteRecorded: '投票已记录', voteFailed: '投票失败 — 请检查网络连接', viewQuotedImages: '查看引用帖子的图片', ttsFailed: '语音朗读失败', translationFailed: '翻译失败', showPostStatistics: '显示帖子统计', showAltText: '显示替代文本', sharePostAsImage: '以图片分享帖子', savedLocallyOnly: '已本地保存，但服务器同步失败', reposts: '转发', reportReason: '举报原因（可选）：', reportPost: '举报帖子', reportHint: '请在打开的页面上使用该平台的举报功能来完成举报。', replies: '回复', quotePost: '引用帖子', postStatistics: '帖子统计', noReadingLists: '暂无阅读列表', needMastodonToVote: '请连接 Mastodon 账户以参与投票', likes: '点赞', engagementBreakdown: '互动明细', copyLinkToPost: '复制帖子链接', bookmarkFailed: '添加书签失败', addToReadingList: '添加到阅读列表', addPostToReadingList: '添加到阅读列表',
       reply: '回复', boost: '转发', quote: '引用', like: '喜欢',
       bookmark: '书签', removeBookmark: '取消书签', copyLink: '复制链接',
       copied: '已复制！', report: '举报', translate: '翻译',
@@ -36,7 +36,7 @@ export default {
       show: '显示', votes: '票', closed: '已结束', voted: '已投票', open: '进行中',
       translatedFrom: '翻译自{lang}', sharedVia: '通过CrispDeck分享',
     },
-    feed: {
+    feed: { sortTopEngagement: '排序：互动最高', sortMostReposted: '排序：转发最多', sortMostLiked: '排序：点赞最多', socialFeed: '社交信息流', searchInPosts: '在帖子中搜索…', retry: '重试', minLikes: '最少点赞', hideReposts: '隐藏转发', hideReplies: '隐藏回复', hideMediaLabel: '隐藏媒体', hasMedia: '含媒体', forYouHint: '请先建立存档，以启用基于互动对象的个性化排序。', forYou: '为你推荐', filterMasto: 'Masto', filterBsky: 'Bsky', buildArchive: '建立存档',
       title: '信息流', timeline: '时间线', switchFeed: '切换信息源', savedNotPinned: '已保存', searchFeeds: '搜索信息源…', noFeedsFound: '没有匹配的信息源。', feedSearchFailed: '信息源搜索暂时不可用。', pinFeed: '添加到我的信息源', unpinFeed: '从我的信息源移除', feeds: '信息源', discoverFeeds: '发现更多信息源 →', myPosts: '我的帖子', all: '全部',
       noAccounts: '未连接账户', addAccountsFirst: '请先在设置中添加账户。',
       loadingTimeline: '正在加载时间线...', loadingYourPosts: '正在加载您的帖子...',
@@ -76,16 +76,17 @@ export default {
     readingLists: { newList: '新建列表', namePlaceholder: '列表名称', descPlaceholder: '可选描述', create: '创建', empty: '暂无阅读列表', emptyHint: '创建主题合集来整理已保存的帖子。', listEmpty: '此列表中暂无帖子。', selectHint: '选择列表以查看其帖子。' },
     about: { title: '关于CrispDeck', description: '功能齐全的跨平台客户端，支持跨平台发帖、身份映射和翻译。', serviceProvider: '服务提供商', contact: '联系方式', disclaimer: '免责声明', disclaimerText: '本软件按"原样"提供，不附带任何形式的保证。', licenses: '开源许可证', searchLicenses: '搜索{count}个许可证...', noLicenses: '未找到许可证。', generated: '生成时间' },
     notifications: { title: '通知', noNotifications: '暂无通知', addAccountsFirst: '请先在设置中添加账户。', nothingNew: '暂无新通知。', liked: '点赞了您的帖子', boosted: '转发了您的帖子', followed: '关注了您', mentioned: '提及了您', replied: '回复了', quoted: '引用了您的帖子', justNow: '刚刚', likedGroup: '和另外{count}人点赞了您的帖子', boostedGroup: '和另外{count}人转发了您的帖子', followedGroup: '和另外{count}人关注了您' },
-    messages: { title: '消息', blueskyDmsNote: 'Bluesky私信需要OAuth才能访问聊天。', userPlaceholder: '@用户或用户名...', go: '前往', newConversation: '+ 新建对话', noConversations: '暂无对话。', typePlaceholder: '输入消息...', selectConversation: '选择对话' },
+    messages: { userOrHandle: '@用户或帐号…', title: '消息', blueskyDmsNote: 'Bluesky私信需要OAuth才能访问聊天。', userPlaceholder: '@用户或用户名...', go: '前往', newConversation: '+ 新建对话', noConversations: '暂无对话。', typePlaceholder: '输入消息...', selectConversation: '选择对话' },
     search: { title: '搜索', placeholder: '在所有账户中搜索帖子...', button: '搜索', searching: '搜索中...', noResults: '无结果', noPostsFor: '未找到"{query}"的帖子。', results: '{count}条结果', noAccounts: '未连接账户', addAccounts: '请在设置中添加账户以进行搜索。' },
-    bookmarks: { title: '书签', noBookmarks: '暂无书签', hint: '点击任意帖子上的书签图标将其保存到此处。', sync: '从Mastodon同步' },
+    bookmarks: { importFromPlatforms: '从已连接的平台导入书签', title: '书签', noBookmarks: '暂无书签', hint: '点击任意帖子上的书签图标将其保存到此处。', sync: '从Mastodon同步' },
     drafts: { title: '草稿', newPost: '新建帖子', posted: '已发布', failed: '失败', noDrafts: '暂无草稿', hint: '已保存的草稿显示在此处。', scheduled: '已定时', to: '发给：', postNow: '立即发布', delete: '删除', edit: '编辑', schedule: '定时发布', cancel: '取消', saved: '保存于{date}', calendarView: '日历' },
     deck: { title: '多栏', col: '{count}列', loadLayout: '加载布局...', save: '保存', addColumn: '添加栏目', addAccountsFirst: '请先在设置中添加账户。', homeTimeline: '主页时间线', mentions: '提及', streaming: '实时推送', streamingOn: '推送中', streamingOff: '推送已关闭' },
     archive: { title: '归档', building: '构建中...', refresh: '刷新', buildArchive: '构建归档', clearArchive: '清除归档', totalArchived: '归档总数', byPlatform: '按平台', searchPlaceholder: '搜索归档...', posts: '帖子', likes: '点赞', reposts: '转发', replies: '回复', noArchive: '暂无归档', noArchiveHint: '构建本地归档以实现快速搜索和导出。', done: '完成！已归档{count}条。' },
-    profile: { backToFeed: '返回信息流', following: '正在关注', follow: '关注', mute: '静音', block: '屏蔽', followers: '粉丝', posts: '帖子', media: '媒体', noMedia: '没有可显示的媒体。' },
-    identities: { followerOverlap: '粉丝重叠', bskyOnly: '仅Bluesky', mastoOnly: '仅Mastodon', bothPlatforms: '两者均有', totalMatched: '匹配的身份' },
-    thread: { readAsArticle: '以文章形式阅读', parts: '部分' },
+    profile: { noHandle: '未指定帐号。', noAccount: '未连接 {platform} 账户', muted: '已静音该用户。', followsYou: '关注了你', blocked: '已拉黑该用户。', backToFeed: '返回信息流', following: '正在关注', follow: '关注', mute: '静音', block: '屏蔽', followers: '粉丝', posts: '帖子', media: '媒体', noMedia: '没有可显示的媒体。' },
+    identities: { noIdentities: '暂无身份', displayNamePlaceholder: '显示名称（例如 Alice）', deleteIdentity: '删除身份', createGroup: '创建身份组', afterCreating: '创建后，你可以从身份卡片关联账户。', followerOverlap: '粉丝重叠', bskyOnly: '仅Bluesky', mastoOnly: '仅Mastodon', bothPlatforms: '两者均有', totalMatched: '匹配的身份' },
+    thread: { postNotFound: '未找到该帖子。', readAsArticle: '以文章形式阅读', parts: '部分' },
     instance: { openRegistrations: '开放注册', closedRegistrations: '注册已关闭' },
     dashboard: { accountsConnected: '已连接{count}个', quickActions: '快捷操作', scanIdentities: '扫描身份' },
-    common: { dismiss: '关闭', loading: '加载中...', error: '错误', postedTo: '已发布到{platform}', view: '查看', bluesky: 'Bluesky', mastodon: 'Mastodon', threads: 'Threads' },
-  };
+    common: { technicalDetails: '技术详情', switchAccount: '切换账户', somethingWentWrong: '出了点问题', scrollToTop: '回到顶部', openInBrowser: '在浏览器中打开', mediaViewer: '媒体查看器', create: '创建', cancel: '取消', add: '添加', dismiss: '关闭', loading: '加载中...', error: '错误', postedTo: '已发布到{platform}', view: '查看', bluesky: 'Bluesky', mastodon: 'Mastodon', threads: 'Threads' },
+      oauth: { threadsConnected: 'Threads 账户已连接！', redirectingToSettings: '正在跳转到设置…', fullAccessRedirecting: '已启用完整权限（含私信）。正在跳转…', connectionFailed: '连接失败', connectingThreads: '正在连接 Threads 账户', connectingMastodon: '正在连接 Mastodon 账户', connectingBluesky: '正在连接 Bluesky', completingOAuth: '正在完成 OAuth 授权…', completingAuth: '正在完成授权…', blueskyConnected: '已通过 OAuth 连接 Bluesky！', backToSettings: '返回设置', accountConnected: '账户已连接！' },
+};

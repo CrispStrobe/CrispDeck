@@ -1,5 +1,5 @@
 export default {
-    nav: {
+    nav: { readingLists: 'Listas de leitura', gallery: 'Galeria', discover: 'Descobrir', catchUp: 'Pôr em dia', calendar: 'Calendário de conteúdo',
       dashboard: 'Painel', feed: 'Feed', deck: 'Deck', compose: 'Escrever',
       drafts: 'Rascunhos', notifications: 'Notificações', messages: 'Mensagens',
       bookmarks: 'Favoritos', lists: 'Listas & Feeds', feedBuilder: 'Construtor de Feeds', starterPacks: 'Starter Packs',
@@ -8,7 +8,7 @@ export default {
       moderation: 'Moderação', analytics: 'Análise', settings: 'Configurações',
       post: 'Publicar', alerts: 'Alertas', dms: 'DMs',
     },
-    app: { name: 'CrispDeck', subtitle: 'Mastodon + Bluesky', collapse: 'Recolher', expand: 'Expandir' },
+    app: { voiceCommandsHint: 'Di-los enquanto o microfone estiver ativo em Redigir. Também funciona em alemão.', toggleTheme: 'Mudar de tema', skipToContent: 'Saltar para o conteúdo', offlineBanner: 'Estás offline — algumas funcionalidades podem não estar disponíveis', mainNavigation: 'Navegação principal', keyboardShortcutsLabel: 'Atalhos de teclado', keyboardShortcuts: 'Atalhos de teclado', dismissLabel: 'Dispensar', customizeSidebar: 'Personalizar barra lateral', closeMenu: 'Fechar menu', closeKeyboardShortcuts: 'Fechar atalhos de teclado', name: 'CrispDeck', subtitle: 'Mastodon + Bluesky', collapse: 'Recolher', expand: 'Expandir' },
     compose: {
       title: 'Escrever', placeholder: 'O que está pensando? Digite @ para mencionar...',
       post: 'Publicar', postThread: 'Publicar thread', posting: 'Publicando...',
@@ -26,7 +26,7 @@ export default {
       multipleChoice: 'Múltipla escolha', hour1: '1 hora', hours6: '6 horas',
       hours24: '24 horas', days3: '3 dias', days7: '7 dias',
     },
-    post: {
+    post: { voteRecorded: 'Voto registado', voteFailed: 'Falha ao votar — verifica a tua ligação', viewQuotedImages: 'Ver as imagens da publicação citada', ttsFailed: 'Falha na leitura em voz alta', translationFailed: 'Falha na tradução', showPostStatistics: 'Mostrar estatísticas da publicação', showAltText: 'Mostrar texto alternativo', sharePostAsImage: 'Partilhar a publicação como imagem', savedLocallyOnly: 'Guardado localmente, mas a sincronização com o servidor falhou', reposts: 'Republicações', reportReason: 'Motivo da denúncia (opcional):', reportPost: 'Denunciar publicação', reportHint: 'Para concluir a denúncia, usa a ferramenta da plataforma na página aberta.', replies: 'Respostas', quotePost: 'Citar publicação', postStatistics: 'Estatísticas da publicação', noReadingLists: 'Ainda não há listas de leitura', needMastodonToVote: 'Liga uma conta Mastodon para votar em sondagens', likes: 'Gostos', engagementBreakdown: 'Detalhe das interações', copyLinkToPost: 'Copiar ligação da publicação', bookmarkFailed: 'Falha ao guardar o marcador', addToReadingList: 'Adicionar à lista de leitura', addPostToReadingList: 'Adicionar à lista de leitura',
       reply: 'Responder', boost: 'Compartilhar', quote: 'Citar', like: 'Curtir',
       bookmark: 'Favoritar', removeBookmark: 'Remover favorito', copyLink: 'Copiar link',
       copied: 'Copiado!', report: 'Denunciar', translate: 'Traduzir',
@@ -36,7 +36,7 @@ export default {
       show: 'Mostrar', votes: 'votos', closed: 'Encerrada', voted: 'Votado', open: 'Aberta',
       translatedFrom: 'Traduzido de {lang}', sharedVia: 'compartilhado via CrispDeck',
     },
-    feed: {
+    feed: { sortTopEngagement: 'Ordem: mais interação', sortMostReposted: 'Ordem: mais republicadas', sortMostLiked: 'Ordem: mais gostos', socialFeed: 'Cronologia social', searchInPosts: 'Procurar nas publicações…', retry: 'Tentar de novo', minLikes: 'Mín. gostos', hideReposts: 'Ocultar republicações', hideReplies: 'Ocultar respostas', hideMediaLabel: 'Ocultar média', hasMedia: 'Com média', forYouHint: 'Cria primeiro o teu arquivo para ativar a ordenação personalizada com base em quem mais interages.', forYou: 'Para ti', filterMasto: 'Masto', filterBsky: 'Bsky', buildArchive: 'Criar arquivo',
       title: 'Feed', timeline: 'Linha do tempo', switchFeed: 'Mudar de feed', savedNotPinned: 'Guardados', searchFeeds: 'Procurar feeds…', noFeedsFound: 'Nenhum feed corresponde.', feedSearchFailed: 'A pesquisa de feeds está indisponível.', pinFeed: 'Adicionar aos meus feeds', unpinFeed: 'Remover dos meus feeds', feeds: 'Feeds', discoverFeeds: 'Descobrir mais feeds →', myPosts: 'Meus posts', all: 'Todos',
       noAccounts: 'Nenhuma conta conectada', addAccountsFirst: 'Adicione contas nas Configurações.',
       loadingTimeline: 'Carregando linha do tempo...', loadingYourPosts: 'Carregando seus posts...',
@@ -76,16 +76,17 @@ export default {
     readingLists: { newList: 'Nova Lista', namePlaceholder: 'Nome da lista', descPlaceholder: 'Descrição opcional', create: 'Criar', empty: 'Nenhuma Lista de Leitura', emptyHint: 'Crie coleções temáticas para organizar posts salvos.', listEmpty: 'Nenhum post nesta lista ainda.', selectHint: 'Selecione uma lista para ver seus posts.' },
     about: { title: 'Sobre o CrispDeck', description: 'Cliente multiplataforma completo com crossposting, mapeamento de identidade e tradução.', serviceProvider: 'Provedor de Serviço', contact: 'Contato', disclaimer: 'Aviso Legal', disclaimerText: 'Este software é fornecido "como está", sem garantia de qualquer tipo.', licenses: 'Licenças de Código Aberto', searchLicenses: 'Pesquisar {count} licenças...', noLicenses: 'Nenhuma licença encontrada.', generated: 'Gerado' },
     notifications: { title: 'Notificações', noNotifications: 'Sem Notificações', addAccountsFirst: 'Adicione contas nas Configurações primeiro.', nothingNew: 'Nada novo ainda.', liked: 'curtiu seu post', boosted: 'compartilhou seu post', followed: 'seguiu você', mentioned: 'mencionou você', replied: 'respondeu', quoted: 'citou seu post', justNow: 'agora mesmo', likedGroup: 'e mais {count} curtiram seu post', boostedGroup: 'e mais {count} compartilharam seu post', followedGroup: 'e mais {count} seguiram você' },
-    messages: { title: 'Mensagens', blueskyDmsNote: 'DMs do Bluesky requerem OAuth para acesso ao chat.', userPlaceholder: '@usuário ou handle...', go: 'Ir', newConversation: '+ Nova Conversa', noConversations: 'Nenhuma conversa ainda.', typePlaceholder: 'Digite uma mensagem...', selectConversation: 'Selecione uma conversa' },
+    messages: { userOrHandle: '@utilizador ou identificador…', title: 'Mensagens', blueskyDmsNote: 'DMs do Bluesky requerem OAuth para acesso ao chat.', userPlaceholder: '@usuário ou handle...', go: 'Ir', newConversation: '+ Nova Conversa', noConversations: 'Nenhuma conversa ainda.', typePlaceholder: 'Digite uma mensagem...', selectConversation: 'Selecione uma conversa' },
     search: { title: 'Buscar', placeholder: 'Buscar posts em todas as contas...', button: 'Buscar', searching: 'Buscando...', noResults: 'Sem Resultados', noPostsFor: 'Nenhum post encontrado para "{query}".', results: '{count} resultados', noAccounts: 'Nenhuma Conta Conectada', addAccounts: 'Adicione contas nas Configurações para buscar.' },
-    bookmarks: { title: 'Favoritos', noBookmarks: 'Sem Favoritos', hint: 'Clique no ícone de favorito em qualquer post para salvá-lo aqui.', sync: 'Sincronizar do Mastodon' },
+    bookmarks: { importFromPlatforms: 'Importar marcadores das plataformas ligadas', title: 'Favoritos', noBookmarks: 'Sem Favoritos', hint: 'Clique no ícone de favorito em qualquer post para salvá-lo aqui.', sync: 'Sincronizar do Mastodon' },
     drafts: { title: 'Rascunhos', newPost: 'Novo Post', posted: 'Publicado', failed: 'Falhou', noDrafts: 'Sem Rascunhos', hint: 'Rascunhos salvos aparecem aqui.', scheduled: 'Agendado', to: 'Para:', postNow: 'Publicar agora', delete: 'Excluir', edit: 'Editar', schedule: 'Agendar', cancel: 'Cancelar', saved: 'Salvo em {date}', calendarView: 'Calendário' },
     deck: { title: 'Deck', col: '{count} col', loadLayout: 'Carregar layout...', save: 'Salvar', addColumn: 'Adicionar Coluna', addAccountsFirst: 'Adicione contas nas Configurações primeiro.', homeTimeline: 'Linha do Tempo Principal', mentions: 'Menções', streaming: 'Transmissão ao vivo', streamingOn: 'Transmitindo', streamingOff: 'Transmissão pausada' },
     archive: { title: 'Arquivo', building: 'Construindo...', refresh: 'Atualizar', buildArchive: 'Construir Arquivo', clearArchive: 'Limpar arquivo', totalArchived: 'Total Arquivado', byPlatform: 'Por Plataforma', searchPlaceholder: 'Pesquisar no arquivo...', posts: 'Posts', likes: 'Curtidas', reposts: 'Compartilhamentos', replies: 'Respostas', noArchive: 'Sem Arquivo', noArchiveHint: 'Crie um arquivo local para busca rápida e exportação.', done: 'Concluído! {count} itens arquivados.' },
-    profile: { backToFeed: 'Voltar ao feed', following: 'Seguindo', follow: 'Seguir', mute: 'Silenciar', block: 'Bloquear', followers: 'seguidores', posts: 'posts', media: 'mídia', noMedia: 'Nenhuma mídia para exibir.' },
-    identities: { followerOverlap: 'Sobreposição de Seguidores', bskyOnly: 'Somente Bluesky', mastoOnly: 'Somente Mastodon', bothPlatforms: 'Ambas', totalMatched: 'identidades correspondentes' },
-    thread: { readAsArticle: 'Ler como artigo', parts: 'partes' },
+    profile: { noHandle: 'Nenhum identificador indicado.', noAccount: 'Nenhuma conta {platform} ligada', muted: 'Utilizador silenciado.', followsYou: 'Segue-te', blocked: 'Utilizador bloqueado.', backToFeed: 'Voltar ao feed', following: 'Seguindo', follow: 'Seguir', mute: 'Silenciar', block: 'Bloquear', followers: 'seguidores', posts: 'posts', media: 'mídia', noMedia: 'Nenhuma mídia para exibir.' },
+    identities: { noIdentities: 'Ainda não há identidades', displayNamePlaceholder: 'Nome a apresentar (ex.: Alice)', deleteIdentity: 'Eliminar identidade', createGroup: 'Criar grupo de identidade', afterCreating: 'Depois de criar, podes ligar contas a partir do cartão de identidade.', followerOverlap: 'Sobreposição de Seguidores', bskyOnly: 'Somente Bluesky', mastoOnly: 'Somente Mastodon', bothPlatforms: 'Ambas', totalMatched: 'identidades correspondentes' },
+    thread: { postNotFound: 'Publicação não encontrada.', readAsArticle: 'Ler como artigo', parts: 'partes' },
     instance: { openRegistrations: 'Registros abertos', closedRegistrations: 'Registros fechados' },
     dashboard: { accountsConnected: '{count} conectadas', quickActions: 'Ações Rápidas', scanIdentities: 'Verificar Identidades' },
-    common: { dismiss: 'fechar', loading: 'Carregando...', error: 'Erro', postedTo: 'Publicado em {platform}', view: 'Ver', bluesky: 'Bluesky', mastodon: 'Mastodon', threads: 'Threads' },
-  };
+    common: { technicalDetails: 'Detalhes técnicos', switchAccount: 'Mudar de conta', somethingWentWrong: 'Algo correu mal', scrollToTop: 'Ir para o topo', openInBrowser: 'Abrir no navegador', mediaViewer: 'Visualizador de média', create: 'Criar', cancel: 'Cancelar', add: 'Adicionar', dismiss: 'fechar', loading: 'Carregando...', error: 'Erro', postedTo: 'Publicado em {platform}', view: 'Ver', bluesky: 'Bluesky', mastodon: 'Mastodon', threads: 'Threads' },
+      oauth: { threadsConnected: 'Conta Threads ligada!', redirectingToSettings: 'A redirecionar para as Definições…', fullAccessRedirecting: 'Acesso total ativado, incluindo mensagens. A redirecionar…', connectionFailed: 'Falha na ligação', connectingThreads: 'A ligar a conta Threads', connectingMastodon: 'A ligar a conta Mastodon', connectingBluesky: 'A ligar o Bluesky', completingOAuth: 'A concluir a autorização OAuth…', completingAuth: 'A concluir a autorização…', blueskyConnected: 'Bluesky ligado via OAuth!', backToSettings: 'Voltar às Definições', accountConnected: 'Conta ligada!' },
+};
