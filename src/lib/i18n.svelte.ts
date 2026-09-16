@@ -47,6 +47,7 @@ export const translations = {
       expand: 'Expand',
     },
     compose: {
+      time: 'Time',
       noLabel: 'No label',
       labelGraphicMedia: 'Graphic Media',
       labelNudity: 'Nudity',
