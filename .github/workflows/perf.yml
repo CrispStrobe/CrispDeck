@@ -67,7 +67,16 @@ jobs:
               console.log("");
               console.log("Largest chunks:");
               console.log("");
-              for (const c of b.biggestChunks) console.log(`- \`${c.file}\` — ${kb(c.gzip)}`);
+              for (const c of b.biggestChunks)
+                console.log(`- \`${c.file}\` — ${kb(c.gzip)}${c.contains.length ? " — " + c.contains.join(", ") : ""}`);
+              if (b.routes && b.routes.length) {
+                console.log("");
+                console.log("Cost to visit a route, on top of the entry:");
+                console.log("");
+                console.log("| route | extra gzip |");
+                console.log("|---|---|");
+                for (const r of b.routes.slice(0, 15)) console.log(`| \`${r.route}\` | ${kb(r.extraGzip)} |`);
+              }
             '
           } >> "$GITHUB_STEP_SUMMARY"
 
