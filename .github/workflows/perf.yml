@@ -72,6 +72,33 @@ jobs:
           set -o pipefail
           node bench/deck-render.mjs | tee bench-result.json
 
+      - name: Check the measurement actually measured something
+        run: |
+          # Not a wall-clock threshold -- those are machine-dependent and this
+          # runner is shared. This only asserts the benchmark did its job: a
+          # step that silently skips is indistinguishable from a fast deck,
+          # which is exactly how a broken scroll metric survived two runs.
+          node -e '
+            const r = require("./bench-result.json");
+            const fail = [];
+            if (r.pageErrors > 0) fail.push(`${r.pageErrors} page errors`);
+            if (!r.scroll || r.scroll.skipped)
+              fail.push(`scroll not measured: ${r.scroll ? r.scroll.skipped : "null"}`);
+            // Not an equality check: DeckColumn caps rendering per column, so
+            // a fixture with more items than the cap legitimately renders
+            // fewer. The ceiling still catches double-counting -- a row
+            // carrying the key on two nested elements once reported 480.
+            const ceiling = r.columns * r.itemsPerColumn;
+            if (!(r.postsRendered > 0))
+              fail.push("no posts rendered");
+            else if (r.postsRendered > ceiling)
+              fail.push(`rendered ${r.postsRendered} posts, more than the ${ceiling} supplied`);
+            else if (r.postsRendered % r.columns !== 0)
+              fail.push(`${r.postsRendered} posts across ${r.columns} columns is uneven`);
+            if (fail.length) { console.error("benchmark invalid:\n  " + fail.join("\n  ")); process.exit(1); }
+            console.log("measurement complete: " + r.postsRendered + " posts, " + r.scroll.frames + " frames sampled");
+          '
+
       - name: Report
         if: always()
         run: |
