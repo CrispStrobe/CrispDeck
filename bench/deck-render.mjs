@@ -37,13 +37,21 @@ const page = await browser.newPage();
 const pageErrors = [];
 page.on('pageerror', (e) => pageErrors.push(String(e)));
 
-await page.route('https://bench.invalid/**', (route) => {
-  const m = route.request().url().match(/feed-(\d+)\.xml/);
-  route.fulfill({ status: 200, contentType: 'application/rss+xml', body: rssFeed(m ? +m[1] : 0) });
+// One handler, not two. Playwright matches the most recently registered route
+// first, so a catch-all added after the feed handler takes precedence over it
+// and aborts the very requests the benchmark depends on — which is exactly
+// what happened: no posts, and a 30-second timeout with no explanation.
+await page.route('**', (route) => {
+  const url = route.request().url();
+  const feed = url.match(/^https:\/\/bench\.invalid\/feed-(\d+)\.xml/);
+  if (feed) {
+    return route.fulfill({
+      status: 200, contentType: 'application/rss+xml', body: rssFeed(+feed[1]),
+    });
+  }
+  // Nothing else should reach the network from a benchmark.
+  return url.startsWith(BASE) ? route.continue() : route.abort();
 });
-// Nothing else should reach the network from a benchmark.
-await page.route('**', (route) =>
-  route.request().url().startsWith(BASE) ? route.continue() : route.abort());
 
 await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(300);
@@ -80,7 +88,18 @@ await page.addInitScript(() => {
 
 const t0 = Date.now();
 await page.goto(`${BASE}/deck`, { waitUntil: 'load' });
-await page.waitForSelector('[data-post-uri]', { timeout: 30000 });
+try {
+  await page.waitForSelector('[data-post-uri]', { timeout: 30000 });
+} catch {
+  // A benchmark that measures nothing must say why, not just time out.
+  const main = await page.locator('#main-content').innerText().catch(() => '(no main)');
+  console.error('no posts rendered. page said:', JSON.stringify(main.slice(0, 300)));
+  console.error('columns in storage:',
+    await page.evaluate(() => localStorage.getItem('crispdeck-deck-columns')?.slice(0, 200)));
+  console.error('page errors:', pageErrors.slice(0, 3));
+  await browser.close();
+  process.exit(1);
+}
 await page.waitForTimeout(3000);
 const settleMs = Date.now() - t0;
 
