@@ -21,13 +21,18 @@ on:
         default: '50'
   push:
     branches: [main]
+    # Broad on purpose. The narrow list this replaces named the rendering path
+    # only, from when the job measured deck rendering alone. It now measures
+    # bundle weight too, and that regresses from any source file or any
+    # dependency change -- the commit that moved 221 KB off every route
+    # touched src/lib/api and so skipped the job entirely.
     paths:
-      - 'src/lib/components/**'
-      - 'src/routes/deck/**'
-      - 'src/routes/feed/**'
-      - 'src/lib/api/unified.ts'
-      - 'src/lib/api/near-duplicate.ts'
+      - 'src/**'
       - 'bench/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.js'
+      - 'svelte.config.js'
       - '.github/workflows/perf.yml'
 
 concurrency:
