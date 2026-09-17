@@ -1,0 +1,90 @@
+# Render benchmarks, run on a CI runner rather than a workstation.
+#
+# Frame times and long-task durations are only meaningful on an idle machine.
+# Measured on a loaded dev box the same work swung between 55ms and 290ms,
+# which is enough to "prove" whatever you were hoping for. The runner is not
+# fast, but it is consistent, and consistency is what a before/after needs.
+#
+# Runs on demand and on pushes that touch the rendering path, so a regression
+# shows up next to the change that caused it.
+
+name: Perf
+
+on:
+  workflow_dispatch:
+    inputs:
+      columns:
+        description: 'Deck columns to render'
+        default: '8'
+      items:
+        description: 'Items per column'
+        default: '30'
+  push:
+    branches: [main]
+    paths:
+      - 'src/lib/components/**'
+      - 'src/routes/deck/**'
+      - 'src/routes/feed/**'
+      - 'src/lib/api/unified.ts'
+      - 'src/lib/api/near-duplicate.ts'
+      - 'bench/**'
+      - '.github/workflows/perf.yml'
+
+concurrency:
+  group: perf-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deck:
+    name: Deck render
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx svelte-kit sync && npx vite build
+
+      - name: Serve the build
+        run: |
+          npx vite preview --port 4173 &
+          # Wait for it rather than sleeping a fixed amount: a cold runner can
+          # take several seconds, and a fixed sleep either wastes time or
+          # measures a server that is not up yet.
+          for i in $(seq 1 60); do
+            curl -sf -o /dev/null http://localhost:4173/ && break
+            sleep 1
+          done
+          curl -sf -o /dev/null http://localhost:4173/ || { echo "preview never came up"; exit 1; }
+
+      - name: Measure
+        id: bench
+        env:
+          BENCH_COLUMNS: ${{ github.event.inputs.columns || '8' }}
+          BENCH_ITEMS: ${{ github.event.inputs.items || '30' }}
+        run: |
+          node bench/deck-render.mjs | tee bench-result.json
+
+      - name: Report
+        if: always()
+        run: |
+          {
+            echo "### Deck render benchmark"
+            echo
+            echo '```json'
+            cat bench-result.json 2>/dev/null || echo '{}'
+            echo '```'
+            echo
+            echo "Runner: \`$(nproc)\` cores, $(free -m | awk '/Mem:/ {print $2}') MB RAM."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: deck-bench
+          path: bench-result.json
+          retention-days: 7
