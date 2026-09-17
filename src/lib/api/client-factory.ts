@@ -12,6 +12,7 @@ import { listAccounts, getDecryptedCredentials } from '$lib/db';
 // around. A value import here put the whole SDK in every route that
 // initialises a client, which is all of them.
 import type { Agent } from '@atproto/api';
+import { prefetchAtprotoSdk, prefetchOAuthSdk } from './atproto-sdk';
 import type { Account, Platform } from '$lib/types';
 
 export interface ClientEntry {
@@ -45,7 +46,24 @@ let _cacheTtl = 300000; // 5 minutes; shortened when an OAuth restore failed tra
 export async function initAllClients(): Promise<{ accounts: Account[]; clients: Map<number, ClientEntry> }> {
   const now = Date.now();
   if (_cachedResult && now - _cacheTime < _cacheTtl) return _cachedResult;
+
+  // Start the SDK download before the account read, not after it.
+  //
+  // It is a dynamic import so it stays out of the critical path of routes that
+  // never make a request. The cost of that is losing the parallel fetch a
+  // static import gets from modulepreload -- measured at 963ms to first post
+  // before, 1314ms after, medians of five. Kicking it off here overlaps the
+  // download with the IndexedDB read and the render that follow, which is the
+  // parallelism back without the bytes returning to the critical path.
+  //
+  // Not awaited: nothing here needs it yet.
+  prefetchAtprotoSdk();
+
   const accounts = await listAccounts();
+
+  // The OAuth stack is a further ~200 KB and only OAuth accounts need it, so
+  // this one waits until the accounts are known rather than firing blind.
+  if (accounts.some((a) => a.platform === 'bluesky')) prefetchOAuthSdk();
   const clients = new Map<number, ClientEntry>();
   let transientOAuthFailure = false;
 

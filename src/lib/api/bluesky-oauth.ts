@@ -32,19 +32,7 @@ import type { OAuthClientMetadataInput } from '@atproto/oauth-types';
  *
  * The module handles are cached, so concurrent callers share one import.
  */
-type OAuthModule = typeof import('@atproto/oauth-client-browser');
-let oauthModule: OAuthModule | null = null;
-async function loadOAuthModule(): Promise<OAuthModule> {
-  if (!oauthModule) oauthModule = await import('@atproto/oauth-client-browser');
-  return oauthModule;
-}
-
-type AtpModule = typeof import('@atproto/api');
-let atpModule: AtpModule | null = null;
-async function loadAtp(): Promise<AtpModule> {
-  if (!atpModule) atpModule = await import('@atproto/api');
-  return atpModule;
-}
+import { loadAtprotoSdk, loadOAuthSdk, oauthSdkIfLoaded } from './atproto-sdk';
 
 /**
  * A JSON import widens every literal — `string[]` where the schema wants a
@@ -115,7 +103,7 @@ async function createOAuthClient(): Promise<BrowserOAuthClient> {
     // Note the library will bounce a `localhost` page to `127.0.0.1` on init:
     // AT Protocol's loopback client is defined in terms of the IP, not the
     // name. Browse the dev server on 127.0.0.1 to avoid the hop.
-    const { BrowserOAuthClient } = await loadOAuthModule();
+    const { BrowserOAuthClient } = await loadOAuthSdk();
     return new BrowserOAuthClient({ handleResolver: HANDLE_RESOLVER });
   }
 
@@ -125,7 +113,7 @@ async function createOAuthClient(): Promise<BrowserOAuthClient> {
   // restoreBlueskyOAuthSession() goes through here, and making client creation
   // depend on the network would stop a cached PWA from resuming its session
   // offline.
-  const { BrowserOAuthClient } = await loadOAuthModule();
+  const { BrowserOAuthClient } = await loadOAuthSdk();
   return new BrowserOAuthClient({
     clientMetadata: DEPLOYED_CLIENT_METADATA,
     handleResolver: HANDLE_RESOLVER,
@@ -173,7 +161,7 @@ export async function initBlueskyOAuth(): Promise<{
     const result = await client.init();
 
     if (result?.session) {
-      const { Agent } = await loadAtp();
+      const { Agent } = await loadAtprotoSdk();
       const agent = new Agent(result.session);
       return {
         did: result.session.did,
@@ -210,7 +198,7 @@ export function isSessionDeadError(err: unknown): boolean {
 
   // instanceof against the cached module. Every path that reaches here has
   // already built an OAuth client, so the module is loaded.
-  const m = oauthModule;
+  const m = oauthSdkIfLoaded();
   if (
     m &&
     (err instanceof m.TokenRefreshError ||
@@ -265,7 +253,7 @@ export async function restoreBlueskyOAuthSession(did: string): Promise<OAuthRest
     if (delay) await new Promise((r) => setTimeout(r, delay));
     try {
       const session = await client.restore(did);
-      const { Agent } = await loadAtp();
+      const { Agent } = await loadAtprotoSdk();
       return { status: 'ok', did: session.did, agent: new Agent(session) };
     } catch (e) {
       if (isSessionDeadError(e)) {

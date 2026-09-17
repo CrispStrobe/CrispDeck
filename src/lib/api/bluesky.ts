@@ -1,4 +1,5 @@
 import type { BskyAgent, AppBskyFeedDefs } from '@atproto/api';
+import { loadAtprotoSdk } from './atproto-sdk';
 
 const PUBLIC_API = 'https://public.api.bsky.app';
 const AUTH_API = 'https://bsky.social';
@@ -85,7 +86,7 @@ export class BlueskyClient {
    */
   private ensureAgents(): Promise<void> {
     if (this.agentsReady) return this.agentsReady;
-    this.agentsReady = import('@atproto/api').then(({ BskyAgent }) => {
+    this.agentsReady = loadAtprotoSdk().then(({ BskyAgent }) => {
       this.Agent = BskyAgent;
       this.publicAgent = new BskyAgent({ service: PUBLIC_API });
       if (this.appPassword && !this.authAgent) {
