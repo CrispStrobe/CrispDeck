@@ -114,7 +114,7 @@
 
   function rememberPosition() {
     if (!contentEl || !scrollLock) return;
-    const anchor = pickAnchor(measureItems(contentEl, 'data-post-uri'), contentEl.scrollTop);
+    const anchor = pickAnchor(measureItems(contentEl), contentEl.scrollTop);
     if (anchor) saveReadPosition(posKey, anchor.key, anchor.offset);
   }
 
@@ -134,7 +134,7 @@
       const anchor: ScrollAnchor | null = pos
         ? { key: pos.lastSeenUri, offset: pos.scrollY ?? 0 }
         : null;
-      restoreAnchor(contentEl, anchor, { attr: 'data-post-uri' });
+      restoreAnchor(contentEl, anchor);
     }
   });
 
@@ -552,7 +552,11 @@
       </div>
     {:else}
       {#each visiblePosts as post, postIdx (post.uri)}
-        <div class="deck-post {focusedPostIdx === postIdx ? 'ring-1 ring-[var(--color-primary)]/60 rounded-lg' : ''}" data-post-uri={post.uri}>
+        <!-- data-feed-key, not data-post-uri: Post.svelte already puts
+             data-post-uri on its own root, so carrying it here too made every
+             post count twice — j/k keyboard navigation needed two presses to
+             move one post, and the scroll anchor could match either element. -->
+        <div class="deck-post {focusedPostIdx === postIdx ? 'ring-1 ring-[var(--color-primary)]/60 rounded-lg' : ''}" data-feed-key={post.uri}>
           <Post {post} {onlike} {onboost} {onreply} {onquote} />
         </div>
       {/each}

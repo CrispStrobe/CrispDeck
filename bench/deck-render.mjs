@@ -108,26 +108,48 @@ const stats = await page.evaluate(() => {
   return { posts: cols.length, nodes: document.querySelectorAll('*').length };
 });
 
-// Scroll the first column through its whole length, timing each step.
+// Scroll the first column and record the gaps between frames the browser
+// actually painted.
+//
+// The first version waited two requestAnimationFrames per step and timed the
+// wait, which cannot report less than about 33ms at 60Hz — and duly reported
+// "median 33.3, p95 33.5, 29 of 30 janky" for every configuration, which is
+// the measurement's floor rather than the deck's cost. Sampling frame
+// timestamps during a continuous scroll measures dropped frames instead.
 const scroll = await page.evaluate(async () => {
   const el = [...document.querySelectorAll('.overflow-y-auto')]
-    .find((e) => e.querySelector('[data-post-uri]'));
+    .find((e) => e.querySelector('[data-feed-key]'));
   if (!el) return null;
-  const frames = [];
-  const steps = 30;
-  const step = Math.max(1, (el.scrollHeight - el.clientHeight) / steps);
-  for (let i = 0; i < steps; i++) {
-    const t = performance.now();
-    el.scrollTop = step * i;
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    frames.push(performance.now() - t);
-  }
-  frames.sort((a, b) => a - b);
+
+  const gaps = [];
+  const distance = el.scrollHeight - el.clientHeight;
+  if (distance <= 0) return null;
+
+  await new Promise((done) => {
+    let last = performance.now();
+    const started = last;
+    const DURATION = 2000;
+    function frame(now) {
+      gaps.push(now - last);
+      last = now;
+      const progress = Math.min(1, (now - started) / DURATION);
+      el.scrollTop = distance * progress;
+      if (progress < 1) requestAnimationFrame(frame);
+      else done();
+    }
+    requestAnimationFrame(frame);
+  });
+
+  gaps.shift(); // first gap includes scheduling, not rendering
+  const sorted = [...gaps].sort((a, b) => a - b);
+  const at = (q) => +sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))].toFixed(1);
   return {
-    median: +frames[Math.floor(frames.length / 2)].toFixed(1),
-    p95: +frames[Math.floor(frames.length * 0.95)].toFixed(1),
-    janky: frames.filter((f) => f > 16.7).length,
-    steps,
+    frames: sorted.length,
+    medianGapMs: at(0.5),
+    p95GapMs: at(0.95),
+    worstGapMs: +sorted[sorted.length - 1].toFixed(1),
+    // A gap over 32ms means at least one frame was missed.
+    droppedFrames: sorted.filter((g) => g > 32).length,
   };
 });
 
