@@ -8,7 +8,10 @@ import { MastodonClient } from './mastodon';
 import { ThreadsClient } from './threads';
 import { initBlueskyOAuth, restoreBlueskyOAuthSession, maybeSilentReauth } from './bluesky-oauth';
 import { listAccounts, getDecryptedCredentials } from '$lib/db';
-import { Agent } from '@atproto/api';
+// Type-only: this module never constructs an Agent, it only passes them
+// around. A value import here put the whole SDK in every route that
+// initialises a client, which is all of them.
+import type { Agent } from '@atproto/api';
 import type { Account, Platform } from '$lib/types';
 
 export interface ClientEntry {

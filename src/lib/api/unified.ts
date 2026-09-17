@@ -1,8 +1,27 @@
-import { AppBskyFeedDefs } from '@atproto/api';
+import type { AppBskyFeedDefs } from '@atproto/api';
 import type { mastodon } from 'masto';
+
 import type { UnifiedPost, FeedItem, CrosspostGroup, Filters, Platform } from '$lib/types';
 import type { ThreadsPost } from '$lib/api/threads';
 import { fingerprint, similarity, ShingleIndex } from '$lib/api/near-duplicate';
+
+/**
+ * Whether a feed item's `reason` is a repost.
+ *
+ * A local guard rather than AppBskyFeedDefs.isReasonRepost, which is the only
+ * value this module took from @atproto/api. That single value import pulled
+ * the whole SDK -- 221 KB gzipped with zod, multiformats and jose behind it --
+ * into the static closure of every route that renders a post, for one $type
+ * string comparison. The type import above costs nothing at runtime.
+ *
+ * The discriminant is part of the lexicon and is what the SDK checks too, so
+ * this cannot drift without the wire format itself changing.
+ */
+const REASON_REPOST = 'app.bsky.feed.defs#reasonRepost';
+
+function isReasonRepost(v: unknown): v is AppBskyFeedDefs.ReasonRepost {
+  return !!v && typeof v === 'object' && (v as { $type?: unknown }).$type === REASON_REPOST;
+}
 
 type PlatformPost = AppBskyFeedDefs.FeedViewPost | mastodon.v1.Status | ThreadsPost;
 
@@ -87,7 +106,7 @@ export function normalizePost(post: PlatformPost, platform: Platform): UnifiedPo
       reply?: { parent: { uri: string } };
     };
     // For reposts: use the repost time (when it appeared in feed), not original post time
-    const feedDate = AppBskyFeedDefs.isReasonRepost(item.reason)
+    const feedDate = isReasonRepost(item.reason)
       ? (item.reason.indexedAt ?? record.createdAt)
       : record.createdAt;
 
@@ -105,8 +124,8 @@ export function normalizePost(post: PlatformPost, platform: Platform): UnifiedPo
       repostCount: p.repostCount,
       likeCount: p.likeCount,
       replyParentUri: record.reply?.parent.uri,
-      isRepost: AppBskyFeedDefs.isReasonRepost(item.reason),
-      repostAuthor: AppBskyFeedDefs.isReasonRepost(item.reason)
+      isRepost: isReasonRepost(item.reason),
+      repostAuthor: isReasonRepost(item.reason)
         ? { handle: item.reason.by.handle, displayName: item.reason.by.displayName }
         : undefined,
       embeds: p.embed,

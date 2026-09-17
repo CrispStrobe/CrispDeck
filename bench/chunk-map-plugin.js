@@ -11,11 +11,19 @@
 // Opt-in via BENCH_CHUNK_MAP=1 so ordinary builds do not pay for it.
 import { writeFileSync } from 'node:fs';
 
-export function chunkMap(outFile = 'chunk-map.json') {
+/**
+ * @param {string} prefix
+ * @returns {import('vite').Plugin}
+ */
+export function chunkMap(prefix = 'chunk-map') {
   return {
     name: 'bench-chunk-map',
     apply: 'build',
-    generateBundle(_options, bundle) {
+    generateBundle(/** @type {any} */ options, /** @type {any} */ bundle) {
+      // SvelteKit runs Rollup twice, client then server. Writing both to one
+      // path let the server build overwrite the client's, which is how
+      // html2canvas appeared as 400 KB of weight that no client chunk carried.
+      const side = /(^|\/)server(\/|$)/.test(options.dir ?? '') ? 'server' : 'client';
       const chunks = [];
       const packageTotals = new Map();
 
@@ -34,15 +42,19 @@ export function chunkMap(outFile = 'chunk-map.json') {
         }
         const top = [...byPkg].sort((a, b) => b[1] - a[1]).slice(0, 6)
           .map(([pkg, bytes]) => ({ pkg, bytes }));
-        chunks.push({ file, bytes: c.code.length, top });
+        chunks.push({ file, bytes: c.code.length, top, allPkgs: [...byPkg.keys()] });
       }
 
       // A package appearing in more than one chunk is either a deliberate
       // shared split or duplicated weight; the count is what distinguishes them.
+      //
+      // Counted over every package in the chunk, not the per-chunk top 6 --
+      // that truncation reported `chunks: 0` for packages that were plainly
+      // present, jose and lru-cache among them.
       const chunksPerPkg = new Map();
       for (const c of chunks)
-        for (const t of c.top)
-          chunksPerPkg.set(t.pkg, (chunksPerPkg.get(t.pkg) ?? 0) + 1);
+        for (const pkg of c.allPkgs)
+          chunksPerPkg.set(pkg, (chunksPerPkg.get(pkg) ?? 0) + 1);
 
       const packages = [...packageTotals]
         .sort((a, b) => b[1] - a[1])
@@ -50,7 +62,8 @@ export function chunkMap(outFile = 'chunk-map.json') {
         .map(([pkg, bytes]) => ({ pkg, bytes, chunks: chunksPerPkg.get(pkg) ?? 0 }));
 
       chunks.sort((a, b) => b.bytes - a.bytes);
-      writeFileSync(outFile, JSON.stringify({ packages, chunks: chunks.slice(0, 15) }, null, 2));
+      const slim = chunks.slice(0, 15).map(({ allPkgs, ...c }) => c);
+      writeFileSync(`${prefix}.${side}.json`, JSON.stringify({ side, packages, chunks: slim }, null, 2));
     }
   };
 }
