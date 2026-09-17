@@ -41,7 +41,7 @@ page.on('pageerror', (e) => pageErrors.push(String(e)));
 // first, so a catch-all added after the feed handler takes precedence over it
 // and aborts the very requests the benchmark depends on — which is exactly
 // what happened: no posts, and a 30-second timeout with no explanation.
-await page.route('**', (route) => {
+const routeHandler = (route) => {
   const url = route.request().url();
   const feed = url.match(/^https:\/\/bench\.invalid\/feed-(\d+)\.xml/);
   if (feed) {
@@ -51,31 +51,59 @@ await page.route('**', (route) => {
   }
   // Nothing else should reach the network from a benchmark.
   return url.startsWith(BASE) ? route.continue() : route.abort();
-});
+};
+
+/** Seed the account and columns a deck needs before it will render anything. */
+async function seed(p, columns) {
+  await p.evaluate(() => new Promise((res, rej) => {
+    const rq = indexedDB.open('crispdeck', 1);
+    rq.onsuccess = () => {
+      const tx = rq.result.transaction('accounts', 'readwrite');
+      tx.objectStore('accounts').put({ id: 1, platform: 'bluesky', handle: 'bench.example',
+        display_name: 'Bench', did: 'did:plc:bench', credentials: '{}', is_primary: 1 });
+      tx.oncomplete = () => res(true); tx.onerror = () => rej(tx.error);
+    };
+    rq.onerror = () => rej(rq.error);
+  }));
+  await p.evaluate(([n]) => {
+    const cols = Array.from({ length: n }, (_, i) => ({
+      id: `bench-${i}`, title: `Bench ${i}`, type: 'rss',
+      query: `https://bench.invalid/feed-${i}.xml`, width: 380,
+    }));
+    localStorage.setItem('crispdeck-deck-columns', JSON.stringify(cols));
+  }, [columns]);
+}
+
+/**
+ * Time to the first post, on a fresh profile, repeated.
+ *
+ * A single sample of this is not worth reporting. The same build measured
+ * 1163ms and 756ms on two runs of the same shared runner -- a 35% spread,
+ * comfortably wider than the change it was supposed to be evidencing. The
+ * median of several passes is a number a before/after can rest on.
+ */
+async function timeToFirstPost() {
+  const ctx = await browser.newContext();
+  const p = await ctx.newPage();
+  await p.route('**', routeHandler);
+  await p.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  await seed(p, COLUMNS);
+  const t = Date.now();
+  await p.goto(`${BASE}/deck`, { waitUntil: 'load' });
+  await p.waitForSelector('[data-post-uri]', { timeout: 30000 });
+  const ms = Date.now() - t;
+  await ctx.close();
+  return ms;
+}
+
+await page.route('**', routeHandler);
 
 await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(300);
 
 // The deck shows an empty state without an account, so seed one; RSS columns
 // do not use it, but the page will not render columns without it.
-await page.evaluate(() => new Promise((res, rej) => {
-  const rq = indexedDB.open('crispdeck', 1);
-  rq.onsuccess = () => {
-    const tx = rq.result.transaction('accounts', 'readwrite');
-    tx.objectStore('accounts').put({ id: 1, platform: 'bluesky', handle: 'bench.example',
-      display_name: 'Bench', did: 'did:plc:bench', credentials: '{}', is_primary: 1 });
-    tx.oncomplete = () => res(true); tx.onerror = () => rej(tx.error);
-  };
-  rq.onerror = () => rej(rq.error);
-}));
-
-await page.evaluate(([n]) => {
-  const columns = Array.from({ length: n }, (_, i) => ({
-    id: `bench-${i}`, title: `Bench ${i}`, type: 'rss',
-    query: `https://bench.invalid/feed-${i}.xml`, width: 380,
-  }));
-  localStorage.setItem('crispdeck-deck-columns', JSON.stringify(columns));
-}, [COLUMNS]);
+await seed(page, COLUMNS);
 
 await page.addInitScript(() => {
   window.__long = [];
@@ -233,6 +261,12 @@ async function shellPaint(throttled) {
 
 const shell = { coldFcpMs: await shellPaint(false), throttledFcpMs: await shellPaint(true) };
 
+const REPEATS = Number(process.env.BENCH_REPEATS ?? 5);
+const firstPostRuns = [];
+for (let i = 0; i < REPEATS; i++) firstPostRuns.push(await timeToFirstPost());
+const sortedRuns = [...firstPostRuns].sort((a, b) => a - b);
+const firstPostMedianMs = sortedRuns[Math.floor(sortedRuns.length / 2)];
+
 await browser.close();
 
 const result = {
@@ -241,6 +275,8 @@ const result = {
   postsRendered: stats.posts,
   domNodes: stats.nodes,
   firstPostMs,
+  firstPostMedianMs,
+  firstPostRuns,
   settleMs,
   longTasks: long.length,
   worstLongTaskMs: long.length ? Math.max(...long) : 0,
