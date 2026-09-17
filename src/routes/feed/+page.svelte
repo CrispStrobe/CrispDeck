@@ -134,10 +134,28 @@
     return pos ? { key: pos.lastSeenUri, offset: pos.scrollY ?? 0 } : null;
   }
 
-  /** Put the reader back where they were, once the feed has posts to anchor to. */
+  /**
+   * Put the reader back where they were, once the feed has posts to anchor to.
+   *
+   * The anchored post may sit past the render cap, in which case it is not in
+   * the DOM and restoreAnchor would search for something that does not exist.
+   * Raise the cap far enough to include it first — a reader returning to a
+   * position deep in the feed has already paid for those rows once.
+   */
   function restorePosition() {
     const el = scrollContainer();
-    if (el) restoreAnchor(el, savedAnchor());
+    if (!el) return;
+    const anchor = savedAnchor();
+    if (anchor) {
+      // Index into the ungrouped list: a row's key is the URI of its first
+      // post either way, so this finds the right position without needing
+      // detection to have run over the whole feed.
+      const idx = sorted.findIndex((post) => post.uri === anchor.key);
+      if (idx >= renderLimit) {
+        renderLimit = Math.ceil((idx + 1) / RENDER_PAGE) * RENDER_PAGE + RENDER_PAGE;
+      }
+    }
+    restoreAnchor(el, anchor);
   }
 
   onMount(async () => {
@@ -435,7 +453,11 @@
     if (!scrollSentinel) return;
     observer?.disconnect();
     observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && !loadingMore && hasMoreContent) {
+      if (!entries[0].isIntersecting) return;
+      // Show what is already loaded before asking the network for more.
+      if (hasUnrendered) {
+        renderLimit += RENDER_PAGE;
+      } else if (!loadingMore && hasMoreContent) {
         loadMore();
       }
     }, { rootMargin: '600px' });
@@ -567,6 +589,7 @@
    */
   async function enterView() {
     posts = [];
+    renderLimit = RENDER_PAGE;
     newPostsAvailable = 0;
     const cached = getCached<UnifiedPost[]>('feed-' + viewKey);
     if (cached) {
@@ -671,7 +694,48 @@
       ? rankForYou(filtered, affinityMap)
       : sortPosts(filtered, filters.sortBy)
   );
-  const finalFeed = $derived(detectCrossposts(sorted, identityPairs.size > 0 ? identityPairs : undefined));
+  const RENDER_PAGE = 30;
+  let renderLimit = $state(RENDER_PAGE);
+  /**
+   * Crosspost detection runs over the rows being rendered, not the whole feed.
+   *
+   * It compares every Bluesky post against every Mastodon one with
+   * Jaro-Winkler, so the work is the product of the two counts: on a 400-post
+   * timeline that is 35,511 full string comparisons and about seven seconds of
+   * blocked main thread. Over the ~30 rows actually on screen it is a few
+   * hundred comparisons.
+   *
+   * There is no cheap way to skip a pair. A character-count ceiling on
+   * Jaro-Winkler is exact and was tried; it rejected none of those 35,511
+   * pairs, because two unrelated English sentences share most of their
+   * characters. The number of comparisons is the thing to cut, not their cost.
+   *
+   * The reader cannot see a grouping for a post that is not displayed, so
+   * detecting over the rendered slice shows them the same thing. As the cap
+   * lifts, detection re-runs over the larger slice and later pairs group then.
+   */
+  const visibleFeed = $derived(
+    detectCrossposts(
+      sorted.slice(0, renderLimit),
+      identityPairs.size > 0 ? identityPairs : undefined,
+    ),
+  );
+  const hasUnrendered = $derived(sorted.length > renderLimit);
+
+  /**
+   * How many rows are built into the DOM.
+   *
+   * The feed used to render every post it held. Four hundred cached posts is
+   * 36,000 DOM nodes and a single seven-and-a-half second task on the main
+   * thread, during which nothing responds — then scrolling ran at about
+   * 100ms a frame. content-visibility already skips *painting* what is
+   * offscreen, but the nodes still have to be created, and creating them is
+   * where that time went.
+   *
+   * Deck columns have capped their rows this way all along; the feed simply
+   * never did. The cap lifts as the reader approaches the end, so an
+   * uninterrupted scroll still reaches everything.
+   */
   const hasMoreContent = $derived(Object.values(cursors).some(c => !!c));
   const isLoading = $derived(loading || loadingMore);
 
@@ -945,7 +1009,7 @@
           <SkeletonPost />
         {/each}
       </div>
-    {:else if finalFeed.length === 0}
+    {:else if visibleFeed.length === 0}
       <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
         <Inbox size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
         <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">
@@ -960,7 +1024,7 @@
       </div>
     {:else}
       <div class="space-y-3">
-        {#each finalFeed as item (isCrosspostGroup(item) ? item.id : item.uri)}
+        {#each visibleFeed as item (isCrosspostGroup(item) ? item.id : item.uri)}
           <!-- data-feed-key is what the reading position anchors to; feed-item
                lets the browser skip layout and paint for offscreen posts. -->
           <div class="feed-item" data-feed-key={isCrosspostGroup(item) ? item.id : item.uri}>
@@ -989,7 +1053,7 @@
             <Loader2 size={24} class="text-[var(--color-text-muted)] animate-spin mx-auto" />
             <p class="text-xs text-[var(--color-text-muted)] mt-2">{i18n.t.feed.loadingMore}</p>
           </DelayedSpinner>
-        {:else if hasMoreContent}
+        {:else if hasUnrendered || hasMoreContent}
           <p class="text-xs text-[var(--color-text-muted)]">{i18n.t.feed.scrollMore}</p>
         {:else}
           <p class="text-xs text-[var(--color-text-muted)]">{i18n.t.feed.endOfFeed}</p>
