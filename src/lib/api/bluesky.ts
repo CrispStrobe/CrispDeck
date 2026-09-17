@@ -1,4 +1,4 @@
-import { BskyAgent, type AppBskyFeedDefs } from '@atproto/api';
+import type { BskyAgent, AppBskyFeedDefs } from '@atproto/api';
 
 const PUBLIC_API = 'https://public.api.bsky.app';
 const AUTH_API = 'https://bsky.social';
@@ -56,8 +56,10 @@ export async function resolvePdsEndpoint(handleOrDid: string): Promise<string> {
  * - Authenticated: posting, likes, follows — uses user's resolved PDS (or bsky.social)
  */
 export class BlueskyClient {
-  private publicAgent: BskyAgent;
+  private publicAgent: BskyAgent | null = null;
   private authAgent: BskyAgent | null = null;
+  private Agent: typeof BskyAgent | null = null;
+  private agentsReady: Promise<void> | null = null;
   private loggedIn = false;
   private handle: string;
   private appPassword: string | null;
@@ -67,11 +69,51 @@ export class BlueskyClient {
     this.handle = handle;
     this.appPassword = appPassword ?? null;
     this.pdsUrl = pdsUrl ?? null;
-    this.publicAgent = new BskyAgent({ service: PUBLIC_API });
-    if (this.appPassword) {
-      // Auth agent created lazily in login() after PDS resolution
-      this.authAgent = new BskyAgent({ service: pdsUrl ?? AUTH_API });
+  }
+
+  /**
+   * Load the SDK and build the agents.
+   *
+   * The constructor used to do this, which made @atproto/api a static import
+   * of this module and so of every route that talks to Bluesky -- 221 KB
+   * gzipped, with zod, multiformats and jose behind it, downloaded before any
+   * of those routes could render. Loading it here moves that off the critical
+   * path: the page renders while the SDK arrives.
+   *
+   * Idempotent, and safe to call concurrently -- the promise is cached, so
+   * simultaneous callers share one import and one pair of agents.
+   */
+  private ensureAgents(): Promise<void> {
+    if (this.agentsReady) return this.agentsReady;
+    this.agentsReady = import('@atproto/api').then(({ BskyAgent }) => {
+      this.Agent = BskyAgent;
+      this.publicAgent = new BskyAgent({ service: PUBLIC_API });
+      if (this.appPassword && !this.authAgent) {
+        // Re-created in login() once the PDS is resolved.
+        this.authAgent = new BskyAgent({ service: this.pdsUrl ?? AUTH_API });
+      }
+    });
+    return this.agentsReady;
+  }
+
+  /**
+   * Await before calling the synchronous getAgent().
+   *
+   * Callers that go through client-factory never need this -- it awaits ready()
+   * when it builds the client, which is why getAgent() could stay synchronous
+   * at its ~30 call sites.
+   */
+  async ready(): Promise<this> {
+    await this.ensureAgents();
+    return this;
+  }
+
+  /** The public agent, with a useful error instead of a crash if unprepared. */
+  private get pub(): BskyAgent {
+    if (!this.publicAgent) {
+      throw new Error('BlueskyClient used before its agents loaded — await ready() first');
     }
+    return this.publicAgent;
   }
 
   /** Create a read-only client (no app password needed) */
@@ -80,13 +122,14 @@ export class BlueskyClient {
   }
 
   async login(authFactorToken?: string): Promise<void> {
+    await this.ensureAgents();
     if (this.loggedIn || !this.authAgent || !this.appPassword) return;
 
     // Resolve PDS if not already known
     if (!this.pdsUrl) {
       this.pdsUrl = await resolvePdsEndpoint(this.handle);
       // Re-create auth agent with resolved PDS
-      this.authAgent = new BskyAgent({ service: this.pdsUrl });
+      this.authAgent = new this.Agent!({ service: this.pdsUrl });
     }
 
     await this.authAgent.login({
@@ -97,9 +140,21 @@ export class BlueskyClient {
     this.loggedIn = true;
   }
 
-  /** Get the authenticated agent (for writing). Throws if not configured. */
+  /**
+   * The authenticated agent, for writing. Throws if unavailable.
+   *
+   * Stays synchronous because every caller reaches it through client-factory
+   * or straight after an awaited login(), both of which have already loaded
+   * the SDK. The two failure cases are distinguished deliberately: before the
+   * agents load lazily this could only mean "no app password", and reusing
+   * that message for "not loaded yet" would send the reader looking for
+   * missing credentials that are present.
+   */
   getAgent(): BskyAgent {
-    if (!this.authAgent) throw new Error('No app password configured — read-only client');
+    if (!this.appPassword) throw new Error('No app password configured — read-only client');
+    if (!this.authAgent) {
+      throw new Error('BlueskyClient used before its agents loaded — await ready() first');
+    }
     return this.authAgent;
   }
 
@@ -124,14 +179,16 @@ export class BlueskyClient {
   // ── Read operations (public API, no auth needed) ───────────────────────
 
   async getProfile(actor?: string) {
-    const resp = await this.publicAgent.api.app.bsky.actor.getProfile({
+    await this.ensureAgents();
+    const resp = await this.pub.api.app.bsky.actor.getProfile({
       actor: actor ?? this.handle,
     });
     return resp.data;
   }
 
   async getAuthorFeed(actor: string, cursor?: string, filter: string = 'posts_with_replies') {
-    const resp = await this.publicAgent.api.app.bsky.feed.getAuthorFeed({
+    await this.ensureAgents();
+    const resp = await this.pub.api.app.bsky.feed.getAuthorFeed({
       actor, limit: 50, cursor, filter,
     });
     return { feed: resp.data.feed, cursor: resp.data.cursor };
@@ -139,7 +196,8 @@ export class BlueskyClient {
 
   /** Get followers of an actor (public API) */
   async getFollowers(actor: string, cursor?: string) {
-    const resp = await this.publicAgent.api.app.bsky.graph.getFollowers({
+    await this.ensureAgents();
+    const resp = await this.pub.api.app.bsky.graph.getFollowers({
       actor, cursor, limit: 50,
     });
     return { followers: resp.data.followers, cursor: resp.data.cursor };
@@ -147,7 +205,8 @@ export class BlueskyClient {
 
   /** Get a post thread (parent chain + replies) */
   async getPostThread(uri: string, depth: number = 6) {
-    const resp = await this.publicAgent.api.app.bsky.feed.getPostThread({
+    await this.ensureAgents();
+    const resp = await this.pub.api.app.bsky.feed.getPostThread({
       uri, depth, parentHeight: 10,
     });
     return resp.data.thread;
@@ -155,6 +214,7 @@ export class BlueskyClient {
 
   /** Get the home timeline (posts from people you follow). Requires auth. */
   async getTimeline(cursor?: string, limit: number = 50) {
+    await this.ensureAgents();
     await this.login();
     if (!this.authAgent) throw new Error('Auth required for timeline');
     const resp = await this.authAgent.api.app.bsky.feed.getTimeline({
@@ -164,9 +224,10 @@ export class BlueskyClient {
   }
 
   async searchPosts(query: string, cursor?: string) {
+    await this.ensureAgents();
     // Search requires auth on some endpoints
     await this.login();
-    const agent = this.authAgent ?? this.publicAgent;
+    const agent = this.authAgent ?? this.pub;
     const resp = await agent.api.app.bsky.feed.searchPosts({
       q: query, limit: 50, cursor,
     });
@@ -174,7 +235,8 @@ export class BlueskyClient {
   }
 
   async searchActors(term: string) {
-    const resp = await this.publicAgent.api.app.bsky.actor.searchActors({
+    await this.ensureAgents();
+    const resp = await this.pub.api.app.bsky.actor.searchActors({
       term, limit: 8,
     });
     return resp.data.actors;
@@ -183,8 +245,9 @@ export class BlueskyClient {
   // ── Authenticated operations (require login) ──────────────────────────
 
   async getActorLikes(actor: string, cursor?: string) {
+    await this.ensureAgents();
     await this.login();
-    const agent = this.authAgent ?? this.publicAgent;
+    const agent = this.authAgent ?? this.pub;
     const resp = await agent.api.app.bsky.feed.getActorLikes({
       actor, limit: 50, cursor,
     });
@@ -192,8 +255,9 @@ export class BlueskyClient {
   }
 
   async getFollows(actor: string, cursor?: string) {
+    await this.ensureAgents();
     await this.login();
-    const agent = this.authAgent ?? this.publicAgent;
+    const agent = this.authAgent ?? this.pub;
     const resp = await agent.api.app.bsky.graph.getFollows({
       actor, cursor, limit: 100,
     });
@@ -203,30 +267,35 @@ export class BlueskyClient {
   // ── Write operations (like, repost, reply) ─────────────────────────────
 
   async like(uri: string, cid: string) {
+    await this.ensureAgents();
     await this.login();
     if (!this.authAgent) throw new Error('Auth required');
     return this.authAgent.like(uri, cid);
   }
 
   async unlike(likeUri: string) {
+    await this.ensureAgents();
     await this.login();
     if (!this.authAgent) throw new Error('Auth required');
     return this.authAgent.deleteLike(likeUri);
   }
 
   async repost(uri: string, cid: string) {
+    await this.ensureAgents();
     await this.login();
     if (!this.authAgent) throw new Error('Auth required');
     return this.authAgent.repost(uri, cid);
   }
 
   async unrepost(repostUri: string) {
+    await this.ensureAgents();
     await this.login();
     if (!this.authAgent) throw new Error('Auth required');
     return this.authAgent.deleteRepost(repostUri);
   }
 
   async getNotifications(cursor?: string) {
+    await this.ensureAgents();
     await this.login();
     if (!this.authAgent) throw new Error('Auth required');
     const resp = await this.authAgent.api.app.bsky.notification.listNotifications({
@@ -239,6 +308,7 @@ export class BlueskyClient {
 
   /** Pin a post to your Bluesky profile (visible to all users) */
   async pinToProfile(postUri: string): Promise<void> {
+    await this.ensureAgents();
     const { agent, did } = await this.requireAuth();
     // Fetch current profile record to preserve other fields
     const { data } = await agent.api.com.atproto.repo.getRecord({
@@ -254,6 +324,7 @@ export class BlueskyClient {
 
   /** Upload a video to Bluesky via video.bsky.app */
   async uploadVideo(file: File, onProgress?: (status: string) => void): Promise<any> {
+    await this.ensureAgents();
     if (!this.authAgent) throw new Error('Auth required for video upload');
 
     // 1. Get the service auth token for video.bsky.app
@@ -322,6 +393,7 @@ export class BlueskyClient {
 
   /** Unpin profile post */
   async unpinFromProfile(): Promise<void> {
+    await this.ensureAgents();
     const { agent, did } = await this.requireAuth();
     const { data } = await agent.api.com.atproto.repo.getRecord({
       repo: did, collection: 'app.bsky.actor.profile', rkey: 'self',
@@ -338,8 +410,9 @@ export class BlueskyClient {
 
   /** Get all lists created by an actor. */
   async getLists(actor?: string, cursor?: string) {
+    await this.ensureAgents();
     await this.login();
-    const agent = this.authAgent ?? this.publicAgent;
+    const agent = this.authAgent ?? this.pub;
     const did = actor ?? agent.session?.did ?? this.handle;
     const resp = await agent.api.app.bsky.graph.getLists({ actor: did, cursor, limit: 50 });
     return { lists: resp.data.lists, cursor: resp.data.cursor };
@@ -347,22 +420,25 @@ export class BlueskyClient {
 
   /** Get a single list by URI. */
   async getList(listUri: string, cursor?: string) {
+    await this.ensureAgents();
     await this.login();
-    const agent = this.authAgent ?? this.publicAgent;
+    const agent = this.authAgent ?? this.pub;
     const resp = await agent.api.app.bsky.graph.getList({ list: listUri, cursor, limit: 50 });
     return { list: resp.data.list, items: resp.data.items, cursor: resp.data.cursor };
   }
 
   /** Get the feed for a list (posts by members). */
   async getListFeed(listUri: string, cursor?: string) {
+    await this.ensureAgents();
     await this.login();
-    const agent = this.authAgent ?? this.publicAgent;
+    const agent = this.authAgent ?? this.pub;
     const resp = await agent.api.app.bsky.feed.getListFeed({ list: listUri, cursor, limit: 50 });
     return { feed: resp.data.feed, cursor: resp.data.cursor };
   }
 
   /** Get all lists the logged-in user is muting. */
   async getListMutes(cursor?: string) {
+    await this.ensureAgents();
     await this.login();
     if (!this.authAgent) throw new Error('Auth required');
     const resp = await this.authAgent.api.app.bsky.graph.getListMutes({ cursor, limit: 50 });
@@ -371,6 +447,7 @@ export class BlueskyClient {
 
   /** Get all lists the logged-in user is blocking. */
   async getListBlocks(cursor?: string) {
+    await this.ensureAgents();
     await this.login();
     if (!this.authAgent) throw new Error('Auth required');
     const resp = await this.authAgent.api.app.bsky.graph.getListBlocks({ cursor, limit: 50 });

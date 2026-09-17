@@ -10,13 +10,8 @@
  * - Sessions stored in IndexedDB, persist across reloads
  */
 
-import {
-  BrowserOAuthClient,
-  TokenRefreshError,
-  TokenRevokedError,
-  TokenInvalidError,
-} from '@atproto/oauth-client-browser';
-import { Agent } from '@atproto/api';
+import type { BrowserOAuthClient } from '@atproto/oauth-client-browser';
+import type { Agent } from '@atproto/api';
 import { isTauri } from '$lib/platform';
 // The very document served at this deployment's /client-metadata.json — one
 // source of truth for the deployed client's identity. The origin lives in the
@@ -26,6 +21,30 @@ import { isTauri } from '$lib/platform';
 // would land the user back on that other deployment after signing in.
 import clientMetadataJson from '../../../static/client-metadata.json';
 import type { OAuthClientMetadataInput } from '@atproto/oauth-types';
+
+/**
+ * The OAuth stack and the AT Protocol SDK, loaded on demand.
+ *
+ * Both were static imports, which put roughly 221 KB gzipped -- the SDK plus
+ * zod, multiformats, jose and the OAuth client -- into the static closure of
+ * every route that initialises a client, which is all of them. None of it is
+ * needed to render a page; it is needed to make a request.
+ *
+ * The module handles are cached, so concurrent callers share one import.
+ */
+type OAuthModule = typeof import('@atproto/oauth-client-browser');
+let oauthModule: OAuthModule | null = null;
+async function loadOAuthModule(): Promise<OAuthModule> {
+  if (!oauthModule) oauthModule = await import('@atproto/oauth-client-browser');
+  return oauthModule;
+}
+
+type AtpModule = typeof import('@atproto/api');
+let atpModule: AtpModule | null = null;
+async function loadAtp(): Promise<AtpModule> {
+  if (!atpModule) atpModule = await import('@atproto/api');
+  return atpModule;
+}
 
 /**
  * A JSON import widens every literal — `string[]` where the schema wants a
@@ -96,6 +115,7 @@ async function createOAuthClient(): Promise<BrowserOAuthClient> {
     // Note the library will bounce a `localhost` page to `127.0.0.1` on init:
     // AT Protocol's loopback client is defined in terms of the IP, not the
     // name. Browse the dev server on 127.0.0.1 to avoid the hop.
+    const { BrowserOAuthClient } = await loadOAuthModule();
     return new BrowserOAuthClient({ handleResolver: HANDLE_RESOLVER });
   }
 
@@ -105,6 +125,7 @@ async function createOAuthClient(): Promise<BrowserOAuthClient> {
   // restoreBlueskyOAuthSession() goes through here, and making client creation
   // depend on the network would stop a cached PWA from resuming its session
   // offline.
+  const { BrowserOAuthClient } = await loadOAuthModule();
   return new BrowserOAuthClient({
     clientMetadata: DEPLOYED_CLIENT_METADATA,
     handleResolver: HANDLE_RESOLVER,
@@ -152,6 +173,7 @@ export async function initBlueskyOAuth(): Promise<{
     const result = await client.init();
 
     if (result?.session) {
+      const { Agent } = await loadAtp();
       const agent = new Agent(result.session);
       return {
         did: result.session.did,
@@ -184,12 +206,28 @@ export const resumeBlueskyOAuthSession = initBlueskyOAuth;
  * the tokens in IndexedDB are still good and a retry will succeed.
  */
 export function isSessionDeadError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+
+  // instanceof against the cached module. Every path that reaches here has
+  // already built an OAuth client, so the module is loaded.
+  const m = oauthModule;
+  if (
+    m &&
+    (err instanceof m.TokenRefreshError ||
+      err instanceof m.TokenRevokedError ||
+      err instanceof m.TokenInvalidError)
+  ) {
+    return true;
+  }
+
+  // AuthMethodUnsatisfiableError is not re-exported by the package index, so
+  // it was always matched by name; the other three are listed as a fallback
+  // for the case where this is somehow reached before the module loads.
   return (
-    err instanceof TokenRefreshError ||
-    err instanceof TokenRevokedError ||
-    err instanceof TokenInvalidError ||
-    // Not re-exported by the package index, so match by name
-    (err instanceof Error && err.name === 'AuthMethodUnsatisfiableError')
+    err.name === 'AuthMethodUnsatisfiableError' ||
+    err.name === 'TokenRefreshError' ||
+    err.name === 'TokenRevokedError' ||
+    err.name === 'TokenInvalidError'
   );
 }
 
@@ -227,6 +265,7 @@ export async function restoreBlueskyOAuthSession(did: string): Promise<OAuthRest
     if (delay) await new Promise((r) => setTimeout(r, delay));
     try {
       const session = await client.restore(did);
+      const { Agent } = await loadAtp();
       return { status: 'ok', did: session.did, agent: new Agent(session) };
     } catch (e) {
       if (isSessionDeadError(e)) {

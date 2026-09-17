@@ -1,4 +1,7 @@
-import { RichText, BskyAgent, type BlobRef } from '@atproto/api';
+// BskyAgent was imported here and never used. RichText is loaded on demand:
+// it was the only value this module took from the SDK, and taking it
+// statically put all 221 KB gzipped of it in the compose route's closure.
+import type { BlobRef } from '@atproto/api';
 import type { BlueskyClient } from '$lib/api/bluesky';
 import type { MastodonClient } from '$lib/api/mastodon';
 import type { ThreadsClient } from '$lib/api/threads';
@@ -48,6 +51,7 @@ export async function postToBluesky(
     const agent = client.getAgent();
 
     // Use RichText to auto-detect facets (mentions, links, tags)
+    const { RichText } = await import('@atproto/api');
     const rt = new RichText({ text: options.text });
     await rt.detectFacets(agent);
 
@@ -374,6 +378,7 @@ export async function postThreadToBluesky(
 
   for (let i = 0; i < parts.length; i++) {
     try {
+      const { RichText } = await import('@atproto/api');
       const rt = new RichText({ text: parts[i] });
       await rt.detectFacets(agent);
 

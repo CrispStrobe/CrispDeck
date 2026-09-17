@@ -22,11 +22,13 @@ describe('BlueskyClient.uploadVideo', () => {
 
   it('throws when no auth agent', async () => {
     client = BlueskyClient.readOnly('test.bsky.social');
+    await client.ready();
     await expect(client.uploadVideo(mockFile)).rejects.toThrow('Auth required for video upload');
   });
 
   it('constructs correct upload URL with DID and filename', async () => {
     client = new BlueskyClient('test.bsky.social', 'pass123');
+    await client.ready();
     // Mock the auth agent's session and getServiceAuth
     const agent = client.getAgent();
     Object.defineProperty(agent, 'session', { value: { did: 'did:plc:abc123' }, writable: true, configurable: true });
@@ -59,6 +61,7 @@ describe('BlueskyClient.uploadVideo', () => {
 
   it('handles direct blob response (no jobId)', async () => {
     client = new BlueskyClient('test.bsky.social', 'pass123');
+    await client.ready();
     const agent = client.getAgent();
     Object.defineProperty(agent, 'session', { value: { did: 'did:plc:abc123' }, writable: true, configurable: true });
     (agent.api.com.atproto.server as any).getServiceAuth = vi.fn().mockResolvedValue({
@@ -77,6 +80,7 @@ describe('BlueskyClient.uploadVideo', () => {
 
   it('handles job polling until JOB_STATE_COMPLETED', async () => {
     client = new BlueskyClient('test.bsky.social', 'pass123');
+    await client.ready();
     const agent = client.getAgent();
     Object.defineProperty(agent, 'session', { value: { did: 'did:plc:abc123' }, writable: true, configurable: true });
     (agent.api.com.atproto.server as any).getServiceAuth = vi.fn().mockResolvedValue({
@@ -122,6 +126,7 @@ describe('BlueskyClient.uploadVideo', () => {
 
   it('throws on JOB_STATE_FAILED', async () => {
     client = new BlueskyClient('test.bsky.social', 'pass123');
+    await client.ready();
     const agent = client.getAgent();
     Object.defineProperty(agent, 'session', { value: { did: 'did:plc:abc123' }, writable: true, configurable: true });
     (agent.api.com.atproto.server as any).getServiceAuth = vi.fn().mockResolvedValue({
@@ -150,6 +155,7 @@ describe('BlueskyClient.uploadVideo', () => {
 
   it('throws on upload HTTP error', async () => {
     client = new BlueskyClient('test.bsky.social', 'pass123');
+    await client.ready();
     const agent = client.getAgent();
     Object.defineProperty(agent, 'session', { value: { did: 'did:plc:abc123' }, writable: true, configurable: true });
     (agent.api.com.atproto.server as any).getServiceAuth = vi.fn().mockResolvedValue({
@@ -167,6 +173,7 @@ describe('BlueskyClient.uploadVideo', () => {
 
   it('throws on timeout after max polling attempts', async () => {
     client = new BlueskyClient('test.bsky.social', 'pass123');
+    await client.ready();
     const agent = client.getAgent();
     Object.defineProperty(agent, 'session', { value: { did: 'did:plc:abc123' }, writable: true, configurable: true });
     (agent.api.com.atproto.server as any).getServiceAuth = vi.fn().mockResolvedValue({

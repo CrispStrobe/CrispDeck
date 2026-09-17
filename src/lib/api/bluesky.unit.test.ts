@@ -41,11 +41,19 @@ describe('BlueskyClient', () => {
       expect(client.isAuthenticated()).toBe(false);
     });
 
-    it('getAgent returns agent (before login, for construction)', () => {
+    it('getAgent returns the auth agent once ready, still before login', async () => {
       const client = new BlueskyClient('alice.bsky.social', 'fake-password');
-      // getAgent should return the auth agent even before login
-      const agent = client.getAgent();
-      expect(agent).toBeTruthy();
+      await client.ready();
+      expect(client.getAgent()).toBeTruthy();
+    });
+
+    it('getAgent says the agents are not loaded, not that credentials are missing', () => {
+      // The constructor used to build the agent, so the only way getAgent
+      // could fail was a missing app password. It can now also be called
+      // before the SDK has loaded, and pointing that case at the credentials
+      // message would send the reader hunting for a password that is present.
+      const client = new BlueskyClient('alice.bsky.social', 'fake-password');
+      expect(() => client.getAgent()).toThrow(/await ready\(\)/);
     });
   });
 
