@@ -1,4 +1,4 @@
-import { corsFor, preflight } from '../_lib/cors';
+import { corsFor, preflight } from '../_lib/cors.js';
 /**
  * Store / remove web push subscriptions.
  * Uses Vercel Blob for persistence (requires BLOB_READ_WRITE_TOKEN env var).

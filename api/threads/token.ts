@@ -1,4 +1,4 @@
-import { corsFor, preflight } from '../_lib/cors';
+import { corsFor, preflight } from '../_lib/cors.js';
 /**
  * Vercel serverless function: Threads OAuth token exchange.
  *

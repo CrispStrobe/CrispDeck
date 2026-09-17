@@ -13,6 +13,12 @@
  * feed publishing have to call these functions cross-origin or not work at all.
  *
  * ALLOWED_ORIGINS (comma-separated) extends the list without a deploy.
+ *
+ * Importers must write `from '../_lib/cors.js'`, with the extension, even
+ * though this file is .ts. These functions run as Node ESM, where a bare
+ * specifier without an extension does not resolve, and the failure surfaces
+ * only in production as FUNCTION_INVOCATION_FAILED — the TypeScript check
+ * passes either way, because moduleResolution is "bundler".
  */
 
 const DEFAULT_ALLOWED = [

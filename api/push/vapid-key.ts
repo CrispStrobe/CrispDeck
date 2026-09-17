@@ -1,4 +1,4 @@
-import { corsFor, preflight } from '../_lib/cors';
+import { corsFor, preflight } from '../_lib/cors.js';
 /**
  * Returns the VAPID public key from environment variables.
  * Clients use this to subscribe to web push notifications.
