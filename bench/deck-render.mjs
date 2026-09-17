@@ -186,6 +186,53 @@ const scroll = await page.evaluate(async () => {
 });
 
 const long = (await page.evaluate(() => window.__long)) ?? [];
+
+/**
+ * When does the app shell first paint, on a cold cache and a real network?
+ *
+ * The measurements above run against localhost, where bundle weight is very
+ * nearly free -- moving 221 KB off every route's critical path changed
+ * firstPostMs from 1195ms to 1163ms there, which is noise. That says nothing
+ * about the change and everything about the link. On a throttled connection
+ * the same bytes are about a second, and first paint is gated on them,
+ * because index.html is nearly empty under adapter-static: nothing renders
+ * until the entry and the route chunk have arrived and run.
+ *
+ * Deliberately measured with no columns seeded. This is the shell, not the
+ * data -- what the user sees before anything has been fetched.
+ */
+async function shellPaint(throttled) {
+  const ctx = await browser.newContext();
+  const p = await ctx.newPage();
+  const cdp = await ctx.newCDPSession(p);
+  await cdp.send('Network.enable');
+  // Without this the second pass reads a warm cache and reports the cost of
+  // parsing bytes that are already local, which is not the question.
+  await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
+  if (throttled) {
+    await cdp.send('Network.emulateNetworkConditions', {
+      offline: false,
+      latency: 150,
+      downloadThroughput: (1.6 * 1024 * 1024) / 8,  // ~1.6 Mbps
+      uploadThroughput: (750 * 1024) / 8
+    });
+  }
+  await p.route('**://bench.invalid/**', (r) => r.abort());
+  await p.goto(`${BASE}/deck`, { waitUntil: 'load' });
+  const fcp = await p.evaluate(() => new Promise((res) => {
+    const done = (e) => res(e ? Math.round(e.startTime) : null);
+    const seen = performance.getEntriesByName('first-contentful-paint')[0];
+    if (seen) return done(seen);
+    new PerformanceObserver((list, obs) => { obs.disconnect(); done(list.getEntries()[0]); })
+      .observe({ type: 'paint', buffered: true });
+    setTimeout(() => res(null), 20000);
+  }));
+  await ctx.close();
+  return fcp;
+}
+
+const shell = { coldFcpMs: await shellPaint(false), throttledFcpMs: await shellPaint(true) };
+
 await browser.close();
 
 const result = {
@@ -198,6 +245,7 @@ const result = {
   longTasks: long.length,
   worstLongTaskMs: long.length ? Math.max(...long) : 0,
   scroll,
+  shell,
   pageErrors: pageErrors.length,
 };
 console.log(JSON.stringify(result, null, 2));

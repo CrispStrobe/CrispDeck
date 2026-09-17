@@ -128,6 +128,8 @@ jobs:
             const r = require("./bench-result.json");
             const fail = [];
             if (r.pageErrors > 0) fail.push(`${r.pageErrors} page errors`);
+            if (!r.shell || r.shell.throttledFcpMs == null)
+              fail.push("shell paint not measured");
             if (!r.scroll || r.scroll.skipped)
               fail.push(`scroll not measured: ${r.scroll ? r.scroll.skipped : "null"}`);
             // Not an equality check: DeckColumn caps rendering per column, so
