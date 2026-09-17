@@ -281,10 +281,13 @@ export function getFeedDefinition(id: string): FeedDefinition | null {
 
 // ── Network publishing ──────────────────────────────────────────────────────
 
-/** The API base for the feed storage server (same origin on Vercel) */
-const FEED_API_BASE = typeof window !== 'undefined'
-  ? `${window.location.origin}/api/feed`
-  : '/api/feed';
+/**
+ * The API base for the feed storage server.
+ *
+ * Through apiUrl, so the GitHub Pages build reaches the functions on Vercel
+ * rather than asking github.io for an /api it does not have.
+ */
+const FEED_API_BASE = apiUrl('/api/feed');
 
 let rkeyCounter = 0;
 

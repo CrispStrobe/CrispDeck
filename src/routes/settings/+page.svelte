@@ -558,7 +558,10 @@
     threadsLoading = true;
     error = '';
 
-    const redirectUri = `${window.location.origin}/oauth/threads-callback`;
+    // Includes the mount point: on a project-page deployment the app lives
+    // under /<repo>/, and an origin-only callback points at a path that
+    // does not exist there.
+    const redirectUri = `${window.location.origin}${base}/oauth/threads-callback`;
     const state = crypto.randomUUID();
     localStorage.setItem('crispdeck-threads-oauth-state', state);
 
@@ -983,7 +986,7 @@
             <p class="text-xs text-[var(--color-text-muted)]">
               {#if !threadsProxyAvailable}Connect your Threads account using your own Meta Developer App credentials. {:else}Use your own Meta Developer App. {/if}Create one at
               <a href="https://developers.facebook.com" target="_blank" rel="noopener" class="underline">developers.facebook.com</a>
-              with the Threads API product enabled. Add <code class="text-[10px] bg-[var(--color-bg)] px-1 rounded">{typeof window !== 'undefined' ? window.location.origin : ''}/oauth/threads-callback</code> as a redirect URI.
+              with the Threads API product enabled. Add <code class="text-[10px] bg-[var(--color-bg)] px-1 rounded">{typeof window !== 'undefined' ? window.location.origin : ''}{base}/oauth/threads-callback</code> as a redirect URI.
             </p>
             <div>
               <label for="threads-client-id" class="block text-sm text-[var(--color-text-muted)] mb-1">{i18n.t.settings.appId}</label>

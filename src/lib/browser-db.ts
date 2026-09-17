@@ -1,3 +1,4 @@
+import { base } from '$app/paths';
 /**
  * Browser-side database using IndexedDB.
  * Mirrors the Rust/SQLite backend so the app works fully on Vercel.
@@ -532,7 +533,9 @@ export async function startMastodonOAuth(instanceUrl: string): Promise<{
   redirect_uri: string;
 }> {
   const instance = instanceUrl.replace(/\/$/, '');
-  const redirectUri = `${window.location.origin}/oauth/callback`;
+  // The instance stores this at registration, so getting it wrong bakes a
+  // dead callback into the registered app rather than failing loudly.
+  const redirectUri = `${window.location.origin}${base}/oauth/callback`;
 
   const resp = await fetch(`${instance}/api/v1/apps`, {
     method: 'POST',

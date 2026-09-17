@@ -43,16 +43,36 @@ function feed(n: number, salt = ''): UnifiedPost[] {
 }
 
 describe('detectCrossposts at feed scale', () => {
-  it('stays well inside a frame budget for a large timeline', () => {
+  /**
+   * A fixed unit of work, measured in the same process, so the budget below
+   * is expressed in units of this machine rather than milliseconds.
+   *
+   * A wall-clock budget is not a property of the code. This suite runs on a
+   * shared box where load average swings between 1 and 40, and an absolute
+   * 250ms threshold failed at 290ms purely because something else was
+   * compiling — it measures the machine, and then someone raises the number
+   * until it stops complaining, which measures nothing at all.
+   */
+  function referenceMs(): number {
+    const t = performance.now();
+    let acc = 0;
+    for (let i = 0; i < 2_000_000; i++) acc += Math.sqrt(i % 1000);
+    if (acc < 0) throw new Error('unreachable');
+    return Math.max(performance.now() - t, 0.5);
+  }
+
+  it('costs a bounded multiple of a fixed workload, on any machine', () => {
     // Comparing every Bluesky post against every Mastodon one with
-    // Jaro-Winkler took about seven seconds here, and was 85% of the app's
-    // CPU. The shingle index means unrelated posts never become candidates.
+    // Jaro-Winkler took roughly 7,000ms here and was 85% of the app's CPU.
+    // The shingle index means unrelated posts never become candidates.
     const posts = feed(400);
+    const reference = referenceMs();
     const t = performance.now();
     const items = detectCrossposts(posts);
     const ms = performance.now() - t;
     expect(items).toHaveLength(400);
-    expect(ms, `took ${ms.toFixed(0)}ms`).toBeLessThan(250);
+    expect(ms / reference, `${ms.toFixed(0)}ms against a ${reference.toFixed(0)}ms reference`)
+      .toBeLessThan(25);
   });
 
   it('keeps the work per post bounded as the feed grows', () => {
@@ -80,12 +100,14 @@ describe('detectCrossposts at feed scale', () => {
     expect(at800 / Math.max(at200, 1)).toBeLessThan(2.5);
   });
 
-  it('stays inside budget at twice the size', () => {
+  it('stays within the same multiple at twice the size', () => {
     const posts = feed(800, 'big');
+    const reference = referenceMs();
     const t = performance.now();
     detectCrossposts(posts);
     const ms = performance.now() - t;
-    expect(ms, `took ${ms.toFixed(0)}ms`).toBeLessThan(400);
+    expect(ms / reference, `${ms.toFixed(0)}ms against a ${reference.toFixed(0)}ms reference`)
+      .toBeLessThan(40);
   });
 
   it('still finds a crosspost buried in a large timeline', () => {
