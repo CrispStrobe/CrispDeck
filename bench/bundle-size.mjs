@@ -110,27 +110,10 @@ try {
 } catch { /* no sync output; skip the per-route table */ }
 routes.sort((a, b) => b.extraGzip - a.extraGzip);
 
-// Name the big chunks. A hashed filename says nothing; a marker string from
-// the package inside it says what to go and look at.
-const MARKERS = [
-  ['@atproto/api', /AtpAgent|com\.atproto\.repo\.createRecord/],
-  ['masto', /masto|\/api\/v1\/statuses/],
-  ['@lucide/svelte', /lucide/i],
-  ['dompurify', /DOMPurify/],
-  ['zod', /ZodError|invalid_type/],
-  ['multiformats / cbor', /multiformats|dag-cbor|CID\.parse/],
-  ['jose / crypto', /jwk|dpop|createLocalJWKSet/i]
-];
-function identify(rel) {
-  const src = readFileSync(byRel.get(rel), 'utf8');
-  return MARKERS.filter(([, re]) => re.test(src)).map(([n]) => n);
-}
-
 const biggest = js
   .map((f) => ({ file: relative(ROOT, f).replace(/\\/g, '/'), gzip: gz(f) }))
   .sort((a, b) => b.gzip - a.gzip)
-  .slice(0, 12)
-  .map((c) => ({ ...c, contains: identify(c.file) }));
+  .slice(0, 12);
 
 console.log(JSON.stringify({
   entryGzip: entryBytes,

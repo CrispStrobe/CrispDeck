@@ -5,6 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 // Read version + git hash for About page
 import { readFileSync, writeFileSync } from "fs";
 import { execSync } from "child_process";
+import { chunkMap } from './bench/chunk-map-plugin.js';
 const pkg = JSON.parse(readFileSync("./package.json", "utf8"));
 let gitHash = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? '';
 if (!gitHash) try { gitHash = execSync('git rev-parse --short HEAD').toString().trim(); } catch {}
@@ -25,7 +26,13 @@ function swVersionPlugin() {
 }
 
 export default defineConfig({
-  plugins: [sveltekit(), tailwindcss(), swVersionPlugin()],
+  plugins: [
+    sveltekit(),
+    tailwindcss(),
+    swVersionPlugin(),
+    // Off unless asked for: it writes a build report, not app output.
+    ...(process.env.BENCH_CHUNK_MAP ? [chunkMap()] : [])
+  ],
   define: {
     __VERSION__: JSON.stringify(pkg.version),
     __GIT_HASH__: JSON.stringify(gitHash),

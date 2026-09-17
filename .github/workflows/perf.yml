@@ -47,7 +47,7 @@ jobs:
 
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npx svelte-kit sync && npx vite build
+      - run: npx svelte-kit sync && BENCH_CHUNK_MAP=1 npx vite build
 
       - name: Bundle weight
         run: |
@@ -68,7 +68,7 @@ jobs:
               console.log("Largest chunks:");
               console.log("");
               for (const c of b.biggestChunks)
-                console.log(`- \`${c.file}\` — ${kb(c.gzip)}${c.contains.length ? " — " + c.contains.join(", ") : ""}`);
+                console.log(`- \`${c.file}\` — ${kb(c.gzip)}`);
               if (b.routes && b.routes.length) {
                 console.log("");
                 console.log("Cost to visit a route, on top of the entry:");
@@ -77,6 +77,16 @@ jobs:
                 console.log("|---|---|");
                 for (const r of b.routes.slice(0, 15)) console.log(`| \`${r.route}\` | ${kb(r.extraGzip)} |`);
               }
+            '
+            echo ""
+            echo "Bytes by package (pre-gzip, after tree-shaking), and how many chunks each lands in:"
+            echo ""
+            echo "| package | bytes | chunks |"
+            echo "|---|---|---|"
+            node -e '
+              const m = require("./chunk-map.json");
+              for (const p of m.packages.slice(0, 15))
+                console.log(`| \`${p.pkg}\` | ${(p.bytes / 1024).toFixed(1)} KB | ${p.chunks} |`);
             '
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -150,4 +160,5 @@ jobs:
           path: |
             bench-result.json
             bundle-size.json
+            chunk-map.json
           retention-days: 7
