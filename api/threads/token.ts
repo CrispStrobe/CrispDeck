@@ -1,3 +1,4 @@
+import { corsFor, preflight } from '../_lib/cors';
 /**
  * Vercel serverless function: Threads OAuth token exchange.
  *
@@ -12,12 +13,6 @@
 const THREADS_TOKEN_URL = 'https://graph.threads.net/oauth/access_token';
 const THREADS_API_BASE = 'https://graph.threads.net/v1.0';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Content-Type': 'application/json',
-};
 
 export async function POST(request: Request) {
   const clientId = process.env.THREADS_CLIENT_ID;
@@ -26,7 +21,7 @@ export async function POST(request: Request) {
   if (!clientId || !clientSecret) {
     return new Response(JSON.stringify({
       error: 'Threads API not configured. Set THREADS_CLIENT_ID and THREADS_CLIENT_SECRET in Vercel environment variables.',
-    }), { status: 503, headers: corsHeaders });
+    }), { status: 503, headers: corsFor(request, 'POST, OPTIONS') });
   }
 
   const body = await request.json();
@@ -36,7 +31,7 @@ export async function POST(request: Request) {
     // Action: exchange code for short-lived token, then immediately get long-lived token
     if (action === 'exchange' || !action) {
       if (!code || !redirect_uri) {
-        return new Response(JSON.stringify({ error: 'Missing code or redirect_uri' }), { status: 400, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'Missing code or redirect_uri' }), { status: 400, headers: corsFor(request, 'POST, OPTIONS') });
       }
 
       // Step 1: Exchange code for short-lived token
@@ -56,7 +51,7 @@ export async function POST(request: Request) {
         const err = await tokenResp.json().catch(() => ({}));
         return new Response(JSON.stringify({
           error: err.error_message || `Token exchange failed: ${tokenResp.statusText}`,
-        }), { status: tokenResp.status, headers: corsHeaders });
+        }), { status: tokenResp.status, headers: corsFor(request, 'POST, OPTIONS') });
       }
 
       // Parse response as text first to preserve large user_id precision
@@ -81,7 +76,7 @@ export async function POST(request: Request) {
           token_type: 'bearer',
           user_id: safeUserId,
           long_lived: false,
-        }), { status: 200, headers: corsHeaders });
+        }), { status: 200, headers: corsFor(request, 'POST, OPTIONS') });
       }
 
       const longLived = await longLivedResp.json();
@@ -92,13 +87,13 @@ export async function POST(request: Request) {
         expires_in: longLived.expires_in,
         user_id: safeUserId,
         long_lived: true,
-      }), { status: 200, headers: corsHeaders });
+      }), { status: 200, headers: corsFor(request, 'POST, OPTIONS') });
     }
 
     // Action: refresh a long-lived token
     if (action === 'refresh') {
       if (!access_token) {
-        return new Response(JSON.stringify({ error: 'Missing access_token' }), { status: 400, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'Missing access_token' }), { status: 400, headers: corsFor(request, 'POST, OPTIONS') });
       }
 
       const refreshResp = await fetch(
@@ -113,7 +108,7 @@ export async function POST(request: Request) {
         const err = await refreshResp.json().catch(() => ({}));
         return new Response(JSON.stringify({
           error: err.error_message || `Token refresh failed: ${refreshResp.statusText}`,
-        }), { status: refreshResp.status, headers: corsHeaders });
+        }), { status: refreshResp.status, headers: corsFor(request, 'POST, OPTIONS') });
       }
 
       const refreshed = await refreshResp.json();
@@ -121,15 +116,15 @@ export async function POST(request: Request) {
         access_token: refreshed.access_token,
         token_type: 'bearer',
         expires_in: refreshed.expires_in,
-      }), { status: 200, headers: corsHeaders });
+      }), { status: 200, headers: corsFor(request, 'POST, OPTIONS') });
     }
 
-    return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), { status: 400, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), { status: 400, headers: corsFor(request, 'POST, OPTIONS') });
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: corsFor(request, 'POST, OPTIONS') });
   }
 }
 
-export function OPTIONS() {
-  return new Response(null, { status: 200, headers: corsHeaders });
+export function OPTIONS(request: Request) {
+  return preflight(request, 'POST, OPTIONS');
 }

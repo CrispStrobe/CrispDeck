@@ -1,3 +1,4 @@
+import { corsFor, preflight } from '../_lib/cors';
 /**
  * Vercel serverless function: Resolve Threads repost permalink to original post.
  *
@@ -6,19 +7,13 @@
  * This endpoint follows the redirect and returns the original author + shortcode.
  */
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Content-Type': 'application/json',
-};
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const permalink = url.searchParams.get('url');
 
   if (!permalink) {
-    return new Response(JSON.stringify({ error: 'Missing url parameter' }), { status: 400, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: 'Missing url parameter' }), { status: 400, headers: corsFor(request, 'GET, OPTIONS') });
   }
 
   try {
@@ -26,12 +21,12 @@ export async function GET(request: Request) {
     const location = resp.headers.get('location');
 
     if (!location) {
-      return new Response(JSON.stringify({ resolved: false, original_url: permalink }), { status: 200, headers: corsHeaders });
+      return new Response(JSON.stringify({ resolved: false, original_url: permalink }), { status: 200, headers: corsFor(request, 'GET, OPTIONS') });
     }
 
     const match = location.match(/threads\.com\/@([^/]+)\/post\/([^/?#]+)/);
     if (!match) {
-      return new Response(JSON.stringify({ resolved: false, original_url: location }), { status: 200, headers: corsHeaders });
+      return new Response(JSON.stringify({ resolved: false, original_url: location }), { status: 200, headers: corsFor(request, 'GET, OPTIONS') });
     }
 
     return new Response(JSON.stringify({
@@ -39,12 +34,12 @@ export async function GET(request: Request) {
       original_url: location,
       original_author: match[1],
       original_shortcode: match[2],
-    }), { status: 200, headers: corsHeaders });
+    }), { status: 200, headers: corsFor(request, 'GET, OPTIONS') });
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: corsFor(request, 'GET, OPTIONS') });
   }
 }
 
-export function OPTIONS() {
-  return new Response(null, { status: 200, headers: corsHeaders });
+export function OPTIONS(request: Request) {
+  return preflight(request, 'GET, OPTIONS');
 }

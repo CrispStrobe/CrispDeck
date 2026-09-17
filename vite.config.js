@@ -29,6 +29,10 @@ export default defineConfig({
   define: {
     __VERSION__: JSON.stringify(pkg.version),
     __GIT_HASH__: JSON.stringify(gitHash),
+    // Origin serving CrispDeck's own /api/* functions. Empty means
+    // same-origin, which is right for Vercel, the dev server and Tauri.
+    // The GitHub Pages workflow sets it, because Pages has no functions.
+    __API_ORIGIN__: JSON.stringify(process.env.PUBLIC_API_ORIGIN ?? ''),
   },
 
   build: {

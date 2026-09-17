@@ -1,3 +1,4 @@
+import { apiUrl } from '$lib/api-origin';
 /**
  * Visual Bluesky feed builder — rule engine and query compiler.
  *

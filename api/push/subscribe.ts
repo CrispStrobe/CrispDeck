@@ -1,3 +1,4 @@
+import { corsFor, preflight } from '../_lib/cors';
 /**
  * Store / remove web push subscriptions.
  * Uses Vercel Blob for persistence (requires BLOB_READ_WRITE_TOKEN env var).
@@ -10,7 +11,7 @@ export async function POST(request: Request) {
   if (!subscription?.endpoint) {
     return new Response(JSON.stringify({ error: 'Invalid subscription' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' },
+      headers: corsFor(request, 'POST, DELETE, OPTIONS'),
     });
   }
 
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
 
   return new Response(JSON.stringify({ ok: true }), {
     status: 200,
-    headers: { 'Content-Type': 'application/json' },
+    headers: corsFor(request, 'POST, DELETE, OPTIONS'),
   });
 }
 
@@ -47,6 +48,10 @@ export async function DELETE(request: Request) {
 
   return new Response(JSON.stringify({ ok: true }), {
     status: 200,
-    headers: { 'Content-Type': 'application/json' },
+    headers: corsFor(request, 'POST, DELETE, OPTIONS'),
   });
+}
+
+export function OPTIONS(request: Request) {
+  return preflight(request, 'POST, DELETE, OPTIONS');
 }

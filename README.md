@@ -292,10 +292,28 @@ timeline, feeds, posting. Everything backed by a function in `api/` does not:
 | Feature | Vercel | Pages |
 | --- | --- | --- |
 | Bluesky + Mastodon sign-in, reading, posting | yes | yes |
-| Threads sign-in (`api/threads` token exchange) | yes | no |
-| Web push notifications (`api/push`) | yes | no |
-| Publishing a custom feed (`api/feed`) | yes | no |
+| Web push notifications (`api/push`) | yes | yes, via Vercel |
+| Publishing a custom feed (`api/feed`) | yes | yes, via Vercel |
+| Threads sign-in (`api/threads` token exchange) | yes | needs a registered callback |
 | Hosting a feed generator (`api/xrpc`) | yes | no |
+
+The Pages build sets `PUBLIC_API_ORIGIN` so its `/api/*` calls go to the
+Vercel deployment, and `api/_lib/cors.ts` allowlists the Pages origin so the
+browser permits them. `apiUrl()` in `src/lib/api-origin.ts` is the single
+place that decides; every other deployment leaves it empty and stays
+same-origin.
+
+Two things that still differ:
+
+- **Threads sign-in** additionally needs
+  `https://<owner>.github.io/<repo>/oauth/threads-callback` registered as a
+  valid OAuth redirect URI in the Meta developer app. Meta rejects a callback
+  it has not been told about, and no amount of CORS changes that — it is a
+  console setting, not code.
+- **Hosting a feed generator** cannot work from Pages at all: Bluesky resolves
+  the generator at its own `did:web` origin and calls `getFeedSkeleton` there,
+  which requires a server. Feeds published from Pages are stored on Vercel and
+  served by Vercel, which is the working arrangement.
 
 A project site is served under `/<repo>/` rather than at the origin root, so
 the Pages build sets `BASE_PATH` and every internal link goes through `base`

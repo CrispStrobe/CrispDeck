@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { apiUrl } from '$lib/api-origin';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import {
@@ -158,7 +159,7 @@
     try {
       const sub = await getPushSubscription();
       webPushSubscribed = sub !== null;
-      const resp = await fetch('/api/push/vapid-key');
+      const resp = await fetch(apiUrl('/api/push/vapid-key'));
       vapidKeyAvailable = resp.ok;
     } catch {}
 
@@ -2123,7 +2124,7 @@
                 webPushError = '';
                 try {
                   await unsubscribeWebPush();
-                  await fetch('/api/push/subscribe', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: 'default' }) });
+                  await fetch(apiUrl('/api/push/subscribe'), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: 'default' }) });
                   webPushSubscribed = false;
                 } catch (e) { webPushError = String(e); }
                 webPushLoading = false;
@@ -2142,11 +2143,11 @@
               webPushLoading = true;
               webPushError = '';
               try {
-                const resp = await fetch('/api/push/vapid-key');
+                const resp = await fetch(apiUrl('/api/push/vapid-key'));
                 const { key } = await resp.json();
                 const sub = await subscribeWebPush(key);
                 if (sub) {
-                  await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub, userId: 'default' }) });
+                  await fetch(apiUrl('/api/push/subscribe'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub, userId: 'default' }) });
                   webPushSubscribed = true;
                 }
               } catch (e) { webPushError = String(e); }

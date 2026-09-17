@@ -16,6 +16,7 @@ declare global {
    */
   const __VERSION__: string;
   const __GIT_HASH__: string;
+  const __API_ORIGIN__: string;
 }
 
 export {};

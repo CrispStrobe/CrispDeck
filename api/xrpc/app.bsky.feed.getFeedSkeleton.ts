@@ -44,6 +44,13 @@ async function getQueryForRkey(rkey: string): Promise<string | null> {
   }
 }
 
+/**
+ * Deliberately wildcard CORS: this endpoint is not called by our app. It is
+ * part of the AT Protocol feed generator contract and is fetched by Bluesky's
+ * own infrastructure and by any client resolving the feed, none of which are
+ * on an origin we could enumerate. Restricting it to an allowlist would break
+ * the feed for everyone but us.
+ */
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',

@@ -8,12 +8,12 @@
 # committed: the files in the repository stay correct for Vercel, whose OAuth
 # client identity is registered against that origin.
 #
-# What this mirror cannot do: anything backed by a serverless function, since
-# Pages serves static files only. That means Threads sign-in (the token
-# exchange in api/threads), web push (api/push), publishing a custom feed
-# (api/feed), and hosting a feed generator (api/xrpc). Bluesky and Mastodon —
-# sign-in, timeline, posting — work fully, because they talk to their own
-# servers directly from the browser. See README for the full list.
+# Pages serves static files only, so this build has no /api/* of its own. Those
+# calls go to the Vercel deployment instead (PUBLIC_API_ORIGIN below), which
+# allowlists this origin for CORS — so web push and feed publishing work here
+# too. Two things still cannot: hosting a feed generator, which has to answer
+# at its own origin, and Threads sign-in, which additionally needs this
+# origin's callback URL registered in the Meta developer app. See README.
 
 name: Pages
 
@@ -66,6 +66,10 @@ jobs:
       - run: npx vite build
         env:
           BASE_PATH: ${{ steps.where.outputs.base }}
+          # Pages serves static files only, so this build's /api/* calls go to
+          # the Vercel deployment instead. api/_lib/cors.ts allowlists this
+          # origin so the browser permits them.
+          PUBLIC_API_ORIGIN: https://crispdeck.vercel.app
 
       - name: Add the SPA fallback and stop Jekyll touching the build
         run: |

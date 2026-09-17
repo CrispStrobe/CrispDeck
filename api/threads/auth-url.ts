@@ -1,3 +1,4 @@
+import { corsFor, preflight } from '../_lib/cors';
 /**
  * Vercel serverless function: Generate Threads OAuth authorization URL.
  *
@@ -10,12 +11,6 @@
 
 const THREADS_AUTH_URL = 'https://threads.net/oauth/authorize';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Content-Type': 'application/json',
-};
 
 export async function GET(request: Request) {
   const clientId = process.env.THREADS_CLIENT_ID;
@@ -24,7 +19,7 @@ export async function GET(request: Request) {
     return new Response(JSON.stringify({
       error: 'Threads API not configured. Set THREADS_CLIENT_ID in Vercel environment variables.',
       configured: false,
-    }), { status: 503, headers: corsHeaders });
+    }), { status: 503, headers: corsFor(request, 'GET, OPTIONS') });
   }
 
   const url = new URL(request.url);
@@ -32,7 +27,7 @@ export async function GET(request: Request) {
   const state = url.searchParams.get('state');
 
   if (!redirectUri || !state) {
-    return new Response(JSON.stringify({ error: 'Missing redirect_uri or state' }), { status: 400, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: 'Missing redirect_uri or state' }), { status: 400, headers: corsFor(request, 'GET, OPTIONS') });
   }
 
   const params = new URLSearchParams({
@@ -46,9 +41,9 @@ export async function GET(request: Request) {
   return new Response(JSON.stringify({
     auth_url: `${THREADS_AUTH_URL}?${params.toString()}`,
     configured: true,
-  }), { status: 200, headers: corsHeaders });
+  }), { status: 200, headers: corsFor(request, 'GET, OPTIONS') });
 }
 
-export function OPTIONS() {
-  return new Response(null, { status: 200, headers: corsHeaders });
+export function OPTIONS(request: Request) {
+  return preflight(request, 'GET, OPTIONS');
 }

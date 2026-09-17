@@ -1,3 +1,4 @@
+import { corsFor, preflight } from '../_lib/cors';
 /**
  * Vercel serverless function: Store a feed definition in Vercel Blob.
  *
@@ -9,19 +10,13 @@
  * Env vars required: BLOB_READ_WRITE_TOKEN (auto-set by Vercel Blob)
  */
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Content-Type': 'application/json',
-};
 
 export async function POST(request: Request) {
   const body = await request.json();
   const { rkey, query, name, description, userDid } = body ?? {};
 
   if (!rkey || !query || !userDid) {
-    return new Response(JSON.stringify({ error: 'Missing required fields: rkey, query, userDid' }), { status: 400, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: 'Missing required fields: rkey, query, userDid' }), { status: 400, headers: corsFor(request, 'POST, OPTIONS') });
   }
 
   try {
@@ -41,12 +36,12 @@ export async function POST(request: Request) {
       addRandomSuffix: false,
     });
 
-    return new Response(JSON.stringify({ ok: true, url: blob.url }), { status: 200, headers: corsHeaders });
+    return new Response(JSON.stringify({ ok: true, url: blob.url }), { status: 200, headers: corsFor(request, 'POST, OPTIONS') });
   } catch (e) {
-    return new Response(JSON.stringify({ error: 'Failed to store feed definition', detail: String(e) }), { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: 'Failed to store feed definition', detail: String(e) }), { status: 500, headers: corsFor(request, 'POST, OPTIONS') });
   }
 }
 
-export function OPTIONS() {
-  return new Response(null, { status: 200, headers: corsHeaders });
+export function OPTIONS(request: Request) {
+  return preflight(request, 'POST, OPTIONS');
 }

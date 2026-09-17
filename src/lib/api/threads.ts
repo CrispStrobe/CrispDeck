@@ -1,3 +1,4 @@
+import { apiUrl } from '$lib/api-origin';
 /**
  * Threads API client — wraps Meta's official Threads API (Graph API).
  *
@@ -295,7 +296,7 @@ export class ThreadsClient {
       // Fallback: resolve via permalink redirect (server-side)
       if (!post.permalink) return post;
       try {
-        const resp = await fetch(`/api/threads/resolve-repost?url=${encodeURIComponent(post.permalink)}`);
+        const resp = await fetch(apiUrl(`/api/threads/resolve-repost?url=${encodeURIComponent(post.permalink)}`));
         if (!resp.ok) return post;
         const data = await resp.json();
         if (!data.resolved || !data.original_author) return post;
@@ -620,7 +621,7 @@ export function setThreadsConfig(config: ThreadsConfig): void {
 export async function getProxyAuthUrl(redirectUri: string, state: string): Promise<string | null> {
   try {
     const resp = await fetch(
-      `/api/threads/auth-url?redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`,
+      apiUrl(`/api/threads/auth-url?redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`),
     );
     if (!resp.ok) return null;
     const data = await resp.json();
@@ -639,7 +640,7 @@ export async function proxyExchangeToken(
   code: string,
   redirectUri: string,
 ): Promise<{ access_token: string; user_id: string; long_lived: boolean }> {
-  const resp = await fetch('/api/threads/token', {
+  const resp = await fetch(apiUrl('/api/threads/token'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ code, redirect_uri: redirectUri, action: 'exchange' }),
@@ -659,7 +660,7 @@ export async function proxyExchangeToken(
 export async function proxyRefreshToken(
   accessToken: string,
 ): Promise<{ access_token: string; expires_in: number }> {
-  const resp = await fetch('/api/threads/token', {
+  const resp = await fetch(apiUrl('/api/threads/token'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ access_token: accessToken, action: 'refresh' }),
@@ -681,7 +682,7 @@ export async function isThreadsAvailable(): Promise<boolean> {
   if (config?.client_id && config?.client_secret) return true;
   // Check if proxy is configured
   try {
-    const resp = await fetch('/api/threads/auth-url?redirect_uri=check&state=check');
+    const resp = await fetch(apiUrl('/api/threads/auth-url?redirect_uri=check&state=check'));
     if (!resp.ok) return false;
     const data = await resp.json();
     return data.configured === true;

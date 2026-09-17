@@ -6,6 +6,10 @@
  * happens client-side (localStorage/IndexedDB are per-browser).
  */
 
+/**
+ * Deliberately wildcard CORS: Meta's servers call this webhook, and a
+ * server-to-server request carries no Origin header to match against.
+ */
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
