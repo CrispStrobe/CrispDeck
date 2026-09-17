@@ -117,22 +117,31 @@ const stats = await page.evaluate(() => {
 // the measurement's floor rather than the deck's cost. Sampling frame
 // timestamps during a continuous scroll measures dropped frames instead.
 const scroll = await page.evaluate(async () => {
-  // Report why rather than returning null: a silent null looks the same as
-  // "the deck scrolls perfectly", and the first run of this returned one.
-  const candidates = [...document.querySelectorAll('.overflow-y-auto')];
-  const el = candidates.find((e) => e.querySelector('[data-feed-key]'));
+  // Walk UP from a row to its own scroll container, rather than taking the
+  // first `.overflow-y-auto` in document order. That selector matched the
+  // layout's <main>, which wraps the whole deck and only ever scrolls
+  // horizontally -- it reported scrollHeight === clientHeight === 720, the
+  // measurement skipped itself, and a skip reads exactly like a healthy deck.
+  const row = document.querySelector('[data-feed-key]');
+  if (!row) return { skipped: 'no keyed rows rendered' };
+
+  let el = null;
+  for (let n = row.parentElement; n; n = n.parentElement) {
+    const oy = getComputedStyle(n).overflowY;
+    if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight - n.clientHeight > 0) {
+      el = n;
+      break;
+    }
+  }
   if (!el) {
-    return { skipped: 'no scrollable column contains a keyed row',
-             scrollContainers: candidates.length,
-             keyedRows: document.querySelectorAll('[data-feed-key]').length };
+    const p = row.parentElement;
+    return { skipped: 'no scrollable ancestor overflows',
+             parentScrollHeight: p && p.scrollHeight,
+             parentClientHeight: p && p.clientHeight };
   }
 
   const gaps = [];
   const distance = el.scrollHeight - el.clientHeight;
-  if (distance <= 0) {
-    return { skipped: 'column does not overflow',
-             scrollHeight: el.scrollHeight, clientHeight: el.clientHeight };
-  }
 
   await new Promise((done) => {
     let last = performance.now();

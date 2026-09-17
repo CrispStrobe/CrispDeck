@@ -65,7 +65,7 @@ jobs:
         id: bench
         env:
           BENCH_COLUMNS: ${{ github.event.inputs.columns || '8' }}
-          BENCH_ITEMS: ${{ github.event.inputs.items || '30' }}
+          BENCH_ITEMS: ${{ github.event.inputs.items || '50' }}
         run: |
           # pipefail, or tee's exit status hides a failed benchmark and the job
           # reports success while having measured nothing.
