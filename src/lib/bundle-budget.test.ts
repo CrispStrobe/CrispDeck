@@ -19,8 +19,10 @@ function report(over: Partial<Record<string, unknown>> = {}) {
     entryGzip: 67_000,
     entryPackages: ['svelte', '@sveltejs/kit'],
     routes: [
-      { route: '/deck', extraGzip: 72_000, eagerPackages: ['@lucide/svelte', 'dompurify'] },
-      { route: '/feed', extraGzip: 56_000, eagerPackages: ['dompurify'] }
+      // Packages that are legitimately static — deliberately not ones the
+      // budget requires to stay lazy, or the baseline fixture would fail.
+      { route: '/deck', extraGzip: 72_000, eagerPackages: ['@lucide/svelte', 'clsx'] },
+      { route: '/feed', extraGzip: 56_000, eagerPackages: ['clsx'] }
     ],
     ...over
   };
@@ -60,7 +62,7 @@ describe('bundle budget guard', () => {
 
   it('fails when the heaviest route exceeds its ceiling', () => {
     const failures = checkBudget(
-      report({ routes: [{ route: '/deck', extraGzip: 300_000, eagerPackages: ['dompurify'] }] }),
+      report({ routes: [{ route: '/deck', extraGzip: 300_000, eagerPackages: ['clsx'] }] }),
       BUDGET
     );
     expect(failures.some((f: string) => f.includes('/deck') && f.includes('budget'))).toBe(true);

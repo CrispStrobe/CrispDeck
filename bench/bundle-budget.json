@@ -7,7 +7,14 @@
     "module puts one straight back on the critical path of every route that",
     "touches that module, and nothing else in CI would notice. @atproto/api",
     "and the packages it drags in were 221 KB gzipped on all 32 routes.",
-    "Raising a name out of this list is a decision, not a fix."
+    "Raising a name out of this list is a decision, not a fix.",
+    "",
+    "dompurify and html2canvas were already loaded dynamically before any of",
+    "this, and nothing was stopping that from being undone. sanitize.ts loads",
+    "DOMPurify on demand and preloads it from the layout -- the same shape the",
+    "AT Protocol SDK now uses -- and falls back to stripping all tags until it",
+    "arrives, so making it static would look harmless and cost every visitor",
+    "99 KB."
   ],
   "mustStayLazy": [
     "@atproto/api",
@@ -17,7 +24,8 @@
     "@atproto/oauth-client-browser",
     "zod",
     "jose",
-    "html2canvas"
+    "html2canvas",
+    "dompurify"
   ],
 
   "//maxRouteGzip": [
