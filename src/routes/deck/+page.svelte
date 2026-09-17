@@ -579,7 +579,10 @@
         try {
           const items = await fetchFeed(col.query);
           const feedTitle = col.title.replace(/^RSS: /, '');
-          posts.push(...items.slice(0, 30).map(item => rssItemToPost(item, feedTitle)));
+          // 50, matching what a Bluesky or Mastodon column loads. At 30 an RSS
+          // column could never reach the render cap, so it behaved differently
+          // from every other column type for no stated reason.
+          posts.push(...items.slice(0, 50).map(item => rssItemToPost(item, feedTitle)));
         } catch (e) {
           console.error(`Failed to fetch RSS ${col.query}:`, e);
         }

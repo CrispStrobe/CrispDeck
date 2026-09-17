@@ -117,13 +117,22 @@ const stats = await page.evaluate(() => {
 // the measurement's floor rather than the deck's cost. Sampling frame
 // timestamps during a continuous scroll measures dropped frames instead.
 const scroll = await page.evaluate(async () => {
-  const el = [...document.querySelectorAll('.overflow-y-auto')]
-    .find((e) => e.querySelector('[data-feed-key]'));
-  if (!el) return null;
+  // Report why rather than returning null: a silent null looks the same as
+  // "the deck scrolls perfectly", and the first run of this returned one.
+  const candidates = [...document.querySelectorAll('.overflow-y-auto')];
+  const el = candidates.find((e) => e.querySelector('[data-feed-key]'));
+  if (!el) {
+    return { skipped: 'no scrollable column contains a keyed row',
+             scrollContainers: candidates.length,
+             keyedRows: document.querySelectorAll('[data-feed-key]').length };
+  }
 
   const gaps = [];
   const distance = el.scrollHeight - el.clientHeight;
-  if (distance <= 0) return null;
+  if (distance <= 0) {
+    return { skipped: 'column does not overflow',
+             scrollHeight: el.scrollHeight, clientHeight: el.clientHeight };
+  }
 
   await new Promise((done) => {
     let last = performance.now();
