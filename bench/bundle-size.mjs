@@ -91,6 +91,33 @@ function closureOf(rel, stop) {
   return seen;
 }
 
+// Which chunks carry which package, from the Rollup report if it was written.
+//
+// A route's weight alone cannot say whether a regression is one heavy
+// dependency creeping back onto the critical path or a hundred small honest
+// additions. Naming the packages in each closure makes the difference
+// checkable, which is what the CI guard needs.
+const chunksByPkg = new Map();
+try {
+  const map = JSON.parse(readFileSync('chunk-map.client.json', 'utf8'));
+  for (const c of map.chunks ?? []) {
+    for (const t of c.top ?? []) {
+      if (!chunksByPkg.has(t.pkg)) chunksByPkg.set(t.pkg, new Set());
+      chunksByPkg.get(t.pkg).add(c.file);
+    }
+  }
+} catch { /* built without BENCH_CHUNK_MAP; routes are reported unnamed */ }
+
+/** Third-party packages found in a closure, heaviest concern first. */
+function packagesIn(closure) {
+  const found = [];
+  for (const [pkg, files] of chunksByPkg) {
+    if (pkg === '(app)') continue;
+    if ([...files].some((f) => closure.has(f))) found.push(pkg);
+  }
+  return found.sort();
+}
+
 const routes = [];
 try {
   const dir = '.svelte-kit/generated/client/nodes';
@@ -104,8 +131,11 @@ try {
     const chunk = [...byRel.keys()].find((r) =>
       new RegExp(`^_app/immutable/nodes/${idx}\\.[^/]+\\.js$`).test(r));
     if (!chunk) continue;
-    const extra = [...closureOf(chunk, entry)].reduce((n, r) => n + gz(byRel.get(r)), 0);
-    routes.push({ route, node: Number(idx), extraGzip: extra });
+    const closure = closureOf(chunk, entry);
+    const extra = [...closure].reduce((n, r) => n + gz(byRel.get(r)), 0);
+    routes.push({
+      route, node: Number(idx), extraGzip: extra, eagerPackages: packagesIn(closure)
+    });
   }
 } catch { /* no sync output; skip the per-route table */ }
 routes.sort((a, b) => b.extraGzip - a.extraGzip);
@@ -123,5 +153,6 @@ console.log(JSON.stringify({
   cssGzip: total(css),
   rawBytes: js.reduce((n, f) => n + statSync(f).size, 0),
   biggestChunks: biggest,
+  entryPackages: packagesIn(entry),
   routes
 }, null, 2));

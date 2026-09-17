@@ -1,0 +1,36 @@
+{
+  "//": "Budgets for what a visitor downloads. Enforced by the Perf workflow.",
+
+  "//mustStayLazy": [
+    "Packages that must not appear in any route's static closure. Each was",
+    "deliberately moved to a dynamic import; a single value import in a shared",
+    "module puts one straight back on the critical path of every route that",
+    "touches that module, and nothing else in CI would notice. @atproto/api",
+    "and the packages it drags in were 221 KB gzipped on all 32 routes.",
+    "Raising a name out of this list is a decision, not a fix."
+  ],
+  "mustStayLazy": [
+    "@atproto/api",
+    "@atproto/lexicon",
+    "@atproto/syntax",
+    "@atproto/oauth-client",
+    "@atproto/oauth-client-browser",
+    "zod",
+    "jose",
+    "html2canvas"
+  ],
+
+  "//maxRouteGzip": [
+    "Ceiling on one route's download over the entry, in bytes. The heaviest",
+    "route measured 71 KB when this was set; the headroom is for ordinary",
+    "growth, not for a dependency returning to the critical path, which the",
+    "list above catches on its own."
+  ],
+  "maxRouteGzip": 122880,
+
+  "//maxEntryGzip": [
+    "Ceiling on the entry every visitor pays before anything renders.",
+    "Measured at 66.3 KB when this was set."
+  ],
+  "maxEntryGzip": 92160
+}

@@ -95,6 +95,9 @@ jobs:
             '
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Bundle budget
+        run: node bench/check-budget.mjs bundle-size.json bench/bundle-budget.json
+
       - name: Serve the build
         run: |
           npx vite preview --port 4173 &
@@ -167,6 +170,7 @@ jobs:
           path: |
             bench-result.json
             bundle-size.json
+            bench/bundle-budget.json
             chunk-map.client.json
             chunk-map.server.json
           retention-days: 7
