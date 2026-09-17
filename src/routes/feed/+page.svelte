@@ -82,6 +82,28 @@
   let clientEntries: Map<number, ClientEntry> = new Map();
   let identityPairs: Set<string> = $state(new Set());
   let affinityMap: Map<string, number> = $state(new Map());
+  let affinityPromise: Promise<void> | null = null;
+
+  /**
+   * Read interaction history for the For You ranking, once.
+   *
+   * Memoised on the promise rather than the result so two rapid switches into
+   * For You share one read; cleared on failure so a transient IndexedDB error
+   * does not disable the feature for the rest of the session.
+   */
+  function loadAffinity(): Promise<void> {
+    affinityPromise ??= (async () => {
+      const [liked, reposted, replied] = await Promise.all([
+        searchArchive({ type: 'like', limit: 500 }),
+        searchArchive({ type: 'repost', limit: 500 }),
+        searchArchive({ type: 'reply', limit: 500 }),
+      ]);
+      affinityMap = buildAffinityMap(liked, reposted, replied);
+    })().catch(() => {
+      affinityPromise = null; // the archive may not exist yet
+    });
+    return affinityPromise;
+  }
 
   // Infinite scroll
   let scrollSentinel: HTMLDivElement | undefined = $state();
@@ -190,14 +212,11 @@
         const ids = await listIdentities({ confirmed_only: true });
         identityPairs = buildIdentityPairs(ids);
       } catch { /* non-critical */ }
-      try {
-        const [liked, reposted, replied] = await Promise.all([
-          searchArchive({ type: 'like', limit: 500 }),
-          searchArchive({ type: 'repost', limit: 500 }),
-          searchArchive({ type: 'reply', limit: 500 }),
-        ]);
-        affinityMap = buildAffinityMap(liked, reposted, replied);
-      } catch { /* archive may not exist yet */ }
+      // Affinity is loaded when For You is first opened, not here. It reads
+      // 1,500 records out of IndexedDB and is used by nothing else — the feed
+      // always starts in timeline mode, so on most loads that work was thrown
+      // away, on the path between opening the app and seeing a post.
+      loadAffinity();
       // Start Jetstream if enabled
       if (localStorage.getItem('crispdeck-live-counters') === 'true') {
         jetstream.setEnabled(true);
@@ -570,6 +589,9 @@
     if (mode === feedMode && mode !== 'custom') return;
     feedMode = mode;
     if (mode !== 'custom') customFeed = null;
+    // Ranked mode needs the affinity map to rank anything; every other mode
+    // never touches it.
+    if (mode === 'for-you') await loadAffinity();
     await enterView();
   }
 
