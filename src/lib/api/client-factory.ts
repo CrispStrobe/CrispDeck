@@ -13,7 +13,26 @@ import { listAccounts, getDecryptedCredentials } from '$lib/db';
 // initialises a client, which is all of them.
 import type { Agent } from '@atproto/api';
 import { prefetchAtprotoSdk, prefetchOAuthSdk } from './atproto-sdk';
+import { browser } from '$app/environment';
 import type { Account, Platform } from '$lib/types';
+
+/**
+ * Start fetching the AT Protocol SDK as this module is evaluated.
+ *
+ * The SDK is a dynamic import so it stays off the critical path of routes that
+ * never make a request. The cost is losing the parallel fetch a static import
+ * gets from modulepreload: 963ms to first post before, 1314ms after.
+ *
+ * Prefetching from inside initAllClients() recovered only 47ms of that, because
+ * by the time anything calls it the route chunk has already loaded, rendered
+ * and mounted. Module evaluation is the earliest point that is still specific
+ * to routes that talk to a social platform -- it runs the moment the route
+ * chunk executes, in parallel with everything the component then does.
+ *
+ * Browser only: during prerender this would pull the SDK into the Node build
+ * for no reason.
+ */
+if (browser) prefetchAtprotoSdk();
 
 export interface ClientEntry {
   accountId: number;
@@ -46,18 +65,6 @@ let _cacheTtl = 300000; // 5 minutes; shortened when an OAuth restore failed tra
 export async function initAllClients(): Promise<{ accounts: Account[]; clients: Map<number, ClientEntry> }> {
   const now = Date.now();
   if (_cachedResult && now - _cacheTime < _cacheTtl) return _cachedResult;
-
-  // Start the SDK download before the account read, not after it.
-  //
-  // It is a dynamic import so it stays out of the critical path of routes that
-  // never make a request. The cost of that is losing the parallel fetch a
-  // static import gets from modulepreload -- measured at 963ms to first post
-  // before, 1314ms after, medians of five. Kicking it off here overlaps the
-  // download with the IndexedDB read and the render that follow, which is the
-  // parallelism back without the bytes returning to the critical path.
-  //
-  // Not awaited: nothing here needs it yet.
-  prefetchAtprotoSdk();
 
   const accounts = await listAccounts();
 
