@@ -2,7 +2,7 @@ import { AppBskyFeedDefs } from '@atproto/api';
 import type { mastodon } from 'masto';
 import type { UnifiedPost, FeedItem, CrosspostGroup, Filters, Platform } from '$lib/types';
 import type { ThreadsPost } from '$lib/api/threads';
-import { jaroWinkler } from '$lib/utils/string';
+import { fingerprint, similarity, ShingleIndex } from '$lib/api/near-duplicate';
 
 type PlatformPost = AppBskyFeedDefs.FeedViewPost | mastodon.v1.Status | ThreadsPost;
 
@@ -194,67 +194,60 @@ export function detectCrossposts(posts: UnifiedPost[], identityPairs?: Set<strin
   const cacheKey = `${posts.length}:${h}`;
   if (_crosspostCache && _crosspostCache.key === cacheKey) return _crosspostCache.result;
 
-  const DEFAULT_THRESHOLD = 0.9;
-  const IDENTITY_THRESHOLD = 0.7;
+  /**
+   * How much of the shorter post has to appear, word-run for word-run, in the
+   * longer one.
+   *
+   * Scored against src/lib/api/crosspost-corpus.ts, where real crosspost
+   * shapes land between 0.75 and 1.00 and unrelated pairs between 0.00 and
+   * 0.50. 0.65 sits in that gap with room on both sides.
+   *
+   * A confirmed same-person pairing is evidence, so it lowers the bar — but
+   * only a little. Two different posts by one author are still two posts, and
+   * the worst near-miss in the corpus, a pair sharing only a sign-off, scores
+   * 0.50 and stays below both numbers.
+   */
+  const DEFAULT_THRESHOLD = 0.65;
+  const IDENTITY_THRESHOLD = 0.55;
   const TIME_WINDOW_MS = 24 * 60 * 60 * 1000;
   const feedItems: FeedItem[] = [];
   const processedUris = new Set<string>();
 
-  // Pre-compute timestamps to avoid repeated Date parsing
   const timestamps = new Map<string, number>();
-  for (const p of posts) {
-    timestamps.set(p.uri, new Date(p.createdAt).getTime());
-  }
+  for (const p of posts) timestamps.set(p.uri, new Date(p.createdAt).getTime());
 
-  // Build cross-platform index: only compare posts from different platforms
-  const byPlatform = new Map<string, UnifiedPost[]>();
-  for (const p of posts) {
-    const arr = byPlatform.get(p.platform);
-    if (arr) arr.push(p);
-    else byPlatform.set(p.platform, [p]);
-  }
+  // One fingerprint per post, reused by every comparison it takes part in.
+  const prints = posts.map((p) => fingerprint(p.text));
+  // The index is what removes the quadratic term: a post is only scored
+  // against posts sharing a run of three words, and unrelated posts share
+  // none, so they never become candidates at all.
+  const index = new ShingleIndex(prints);
 
-  // Collect posts from OTHER platforms for each post
-  const otherPlatformPosts = new Map<string, UnifiedPost[]>();
-  for (const [platform, platformPosts] of byPlatform) {
-    const others: UnifiedPost[] = [];
-    for (const [otherPlatform, otherPosts] of byPlatform) {
-      if (otherPlatform !== platform) others.push(...otherPosts);
-    }
-    otherPlatformPosts.set(platform, others);
-  }
-
-  for (const post1 of posts) {
+  for (let i = 0; i < posts.length; i++) {
+    const post1 = posts[i];
     if (processedUris.has(post1.uri)) continue;
 
     const t1 = timestamps.get(post1.uri)!;
-    const len1 = post1.text.length;
-    const candidates = otherPlatformPosts.get(post1.platform) ?? [];
-
     let bestMatch: UnifiedPost | null = null;
     let bestScore = 0;
     let bestIsIdentityMatch = false;
 
-    for (const post2 of candidates) {
+    for (const j of index.candidates(prints[i])) {
+      if (j === i) continue;
+      const post2 = posts[j];
+      // A crosspost is the same text on a *different* network.
+      if (post2.platform === post1.platform) continue;
       if (processedUris.has(post2.uri)) continue;
+      if (Math.abs(t1 - timestamps.get(post2.uri)!) >= TIME_WINDOW_MS) continue;
 
-      // Time window filter
-      const t2 = timestamps.get(post2.uri)!;
-      if (Math.abs(t1 - t2) >= TIME_WINDOW_MS) continue;
-
-      // Text length filter: texts with >50% length difference are unlikely crossposts
-      const len2 = post2.text.length;
-      if (len1 > 5 && len2 > 5 && Math.abs(len1 - len2) / Math.max(len1, len2) > 0.5) continue;
-
-      const score = jaroWinkler(post1.text, post2.text);
+      const score = similarity(prints[i], prints[j]);
       if (score > bestScore) {
         bestScore = score;
         bestMatch = post2;
         bestIsIdentityMatch = identityPairs
           ? areIdentityMatched(post1.author.handle, post2.author.handle, identityPairs)
           : false;
-        // Early exit on near-identical match
-        if (score > 0.97) break;
+        if (score >= 1) break; // nothing can beat a full containment
       }
     }
 

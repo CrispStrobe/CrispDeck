@@ -233,7 +233,7 @@
     try {
       // Try Mastodon server-side translation first (free, private)
       if (post.platform === 'mastodon') {
-        const raw = post.raw as any;
+        const raw = (post.raw ?? {}) as any;
         const statusId = raw?.id ?? raw?.reblog?.id;
         const instanceUrl = raw?.uri ? new URL(raw.uri).origin : null;
         if (statusId && instanceUrl) {
@@ -341,7 +341,7 @@
       });
       if (resp.ok) {
         const updated = await resp.json();
-        (post.raw as any).poll = updated;
+        ((post.raw ?? {}) as any).poll = updated;
         toast.success(i18n.t.post.voteRecorded);
       } else {
         const errText = await resp.text().catch(() => resp.statusText);
@@ -456,7 +456,7 @@
 
   function getExternalProfileUrl(p: UnifiedPost): string {
     if (p.platform === 'mastodon') {
-      const raw = p.raw as any;
+      const raw = (p.raw ?? {}) as any;
       const account = raw.reblog ? raw.reblog.account : raw.account;
       return account?.url ?? '#';
     }
@@ -465,7 +465,7 @@
 
   function getThreadUrl(p: UnifiedPost): string {
     if (p.platform === 'mastodon') {
-      const raw = p.raw as any;
+      const raw = (p.raw ?? {}) as any;
       const id = raw.reblog?.id ?? raw.id ?? '';
       return `${base}/thread?id=${id}&platform=mastodon`;
     }
@@ -477,7 +477,7 @@
 
   function getPostUrl(p: UnifiedPost): string {
     if (p.platform === 'mastodon') {
-      const raw = p.raw as any;
+      const raw = (p.raw ?? {}) as any;
       return (raw.reblog ? raw.reblog.url : p.uri) || p.uri;
     }
     const rkey = p.uri.split('/').pop();
@@ -486,14 +486,14 @@
 
   function getMastodonHtml(): string {
     if (post.platform !== 'mastodon') return '';
-    const raw = post.raw as any;
+    const raw = (post.raw ?? {}) as any;
     return (raw.reblog ? raw.reblog.content : raw.content) ?? '';
   }
 
   /** Render Bluesky post text with facets (mentions, links, hashtags) as HTML */
   function getBskyHtml(): string {
     if (post.platform !== 'bluesky') return '';
-    const raw = post.raw as any;
+    const raw = (post.raw ?? {}) as any;
     const record = raw?.post?.record;
     const text: string = record?.text ?? post.text;
     const facets: any[] = record?.facets;
@@ -600,7 +600,7 @@
 
   function getMastodonMedia(): any[] {
     if (post.platform !== 'mastodon' && post.platform !== 'threads') return [];
-    const raw = post.raw as any;
+    const raw = (post.raw ?? {}) as any;
     const target = raw.reblog ?? raw;
     // Handle both camelCase (masto library) and snake_case (raw fetch)
     const sources = [
@@ -687,13 +687,13 @@
 
   function getThreadsQuote(): any | null {
     if (post.platform !== 'threads') return null;
-    const raw = post.raw as any;
+    const raw = (post.raw ?? {}) as any;
     return raw.quoted_post ?? null;
   }
 
   function getMastodonCard(): any | null {
     if (post.platform !== 'mastodon') return null;
-    const raw = post.raw as any;
+    const raw = (post.raw ?? {}) as any;
     const target = raw.reblog ?? raw;
     const card = target.card ?? target.preview_card;
     if (!card || !card.url) return null;
@@ -803,7 +803,7 @@
   // Labels on Bluesky posts
   const postLabels = $derived.by(() => {
     if (post.platform !== 'bluesky') return [];
-    const raw = post.raw as any;
+    const raw = (post.raw ?? {}) as any;
     const labels = raw?.post?.labels ?? raw?.labels ?? [];
     return labels.filter((l: any) => !l.neg).map((l: any) => l.val);
   });
