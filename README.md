@@ -292,7 +292,7 @@ timeline, feeds, posting. Everything backed by a function in `api/` does not:
 | Feature | Vercel | Pages |
 | --- | --- | --- |
 | Bluesky + Mastodon sign-in, reading, posting | yes | yes |
-| Web push notifications (`api/push`) | yes | yes, via Vercel |
+| Web push notifications (`api/push`) | not implemented | not implemented |
 | Publishing a custom feed (`api/feed`) | yes | yes, via Vercel |
 | Threads sign-in (`api/threads` token exchange) | yes | needs a registered callback |
 | Hosting a feed generator (`api/xrpc`) | yes | no |
@@ -302,6 +302,14 @@ Vercel deployment, and `api/_lib/cors.ts` allowlists the Pages origin so the
 browser permits them. `apiUrl()` in `src/lib/api-origin.ts` is the single
 place that decides; every other deployment leaves it empty and stays
 same-origin.
+
+**Web push is deliberately not enabled.** `api/push/send.ts` is a stub, and
+the settings page correctly reports "VAPID keys not configured". Setting VAPID
+keys would flip that to "Push notifications active" without any notification
+ever being sent. Delivering a push while the app is closed requires a server
+that can poll the user's networks, which requires their credentials leaving the
+device — the opposite of what the privacy policy promises. Notifying while the
+app is open already works and needs none of it.
 
 Two things that still differ:
 
