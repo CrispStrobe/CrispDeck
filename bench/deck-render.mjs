@@ -100,8 +100,22 @@ try {
   await browser.close();
   process.exit(1);
 }
-await page.waitForTimeout(3000);
-const settleMs = Date.now() - t0;
+const firstPostMs = Date.now() - t0;
+
+// Wait for the post count to stop growing rather than sleeping a fixed
+// amount. The fixed 3000ms sleep this replaces was the bulk of the number it
+// produced -- a "settle" of 4263ms was 3000ms of sleep plus 1263ms of deck,
+// so the metric moved by a third of what the deck actually did.
+let settleMs = firstPostMs;
+{
+  let last = -1, stableFor = 0;
+  while (stableFor < 500 && Date.now() - t0 < 30000) {
+    await page.waitForTimeout(100);
+    const n = await page.evaluate(() => document.querySelectorAll('[data-post-uri]').length);
+    if (n === last) stableFor += 100;
+    else { last = n; stableFor = 0; settleMs = Date.now() - t0; }
+  }
+}
 
 const stats = await page.evaluate(() => {
   const cols = [...document.querySelectorAll('[data-post-uri]')];
@@ -179,6 +193,7 @@ const result = {
   itemsPerColumn: ITEMS,
   postsRendered: stats.posts,
   domNodes: stats.nodes,
+  firstPostMs,
   settleMs,
   longTasks: long.length,
   worstLongTaskMs: long.length ? Math.max(...long) : 0,

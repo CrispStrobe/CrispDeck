@@ -18,7 +18,7 @@ on:
         default: '8'
       items:
         description: 'Items per column'
-        default: '30'
+        default: '50'
   push:
     branches: [main]
     paths:
@@ -48,6 +48,28 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npx svelte-kit sync && npx vite build
+
+      - name: Bundle weight
+        run: |
+          set -o pipefail
+          node bench/bundle-size.mjs build | tee bundle-size.json
+          {
+            echo "### Bundle weight (gzipped)"
+            echo
+            node -e '
+              const b = require("./bundle-size.json");
+              const kb = (n) => (n / 1024).toFixed(1) + " KB";
+              console.log("| | gzip |");
+              console.log("|---|---|");
+              console.log(`| entry (every visitor pays this) | **${kb(b.entryGzip)}** across ${b.entryModules} modules |`);
+              console.log(`| all JS | ${kb(b.allJsGzip)} across ${b.jsFiles} files |`);
+              console.log(`| CSS | ${kb(b.cssGzip)} |`);
+              console.log("");
+              console.log("Largest chunks:");
+              console.log("");
+              for (const c of b.biggestChunks) console.log(`- \`${c.file}\` — ${kb(c.gzip)}`);
+            '
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Serve the build
         run: |
@@ -116,5 +138,7 @@ jobs:
         if: always()
         with:
           name: deck-bench
-          path: bench-result.json
+          path: |
+            bench-result.json
+            bundle-size.json
           retention-days: 7
