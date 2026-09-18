@@ -6,88 +6,20 @@ import { describe, it, expect } from 'vitest';
 
 // ── Replicate embed helpers from Post.svelte ──────────────────────────────
 
-function getBskyImages(embeds: any): any[] {
-  if (!embeds) return [];
-  const embed = embeds as any;
-  if (embed.$type === 'app.bsky.embed.images#view' && embed.images) {
-    return embed.images;
-  }
-  if (embed.$type === 'app.bsky.embed.recordWithMedia#view' && embed.media) {
-    if (embed.media.$type === 'app.bsky.embed.images#view' && embed.media.images) {
-      return embed.media.images;
-    }
-  }
-  return [];
-}
+// The accessors under test now live in a module, so this exercises the same
+// code Post.svelte renders from rather than a copy of it.
+import {
+  getBskyImages, getBskyExternal, getBskyQuote, getBskyVideo,
+  getMastodonMedia as mastodonMedia, getMastodonCard as mastodonCard,
+} from './post-embeds';
 
-function getBskyExternal(embeds: any): any | null {
-  if (!embeds) return null;
-  const embed = embeds as any;
-  if (embed.$type === 'app.bsky.embed.external#view' && embed.external) {
-    return embed.external;
-  }
-  if (embed.$type === 'app.bsky.embed.recordWithMedia#view' && embed.media) {
-    if (embed.media.$type === 'app.bsky.embed.external#view' && embed.media.external) {
-      return embed.media.external;
-    }
-  }
-  return null;
-}
-
-function getBskyQuote(embeds: any): any | null {
-  if (!embeds) return null;
-  const embed = embeds as any;
-  if (embed.$type === 'app.bsky.embed.record#view' && embed.record) {
-    if (embed.record.$type === 'app.bsky.embed.record#viewRecord') {
-      return embed.record;
-    }
-  }
-  if (embed.$type === 'app.bsky.embed.recordWithMedia#view' && embed.record) {
-    const rec = embed.record?.record;
-    if (rec?.$type === 'app.bsky.embed.record#viewRecord') {
-      return rec;
-    }
-  }
-  return null;
-}
-
-function getBskyVideo(embeds: any): any | null {
-  if (!embeds) return null;
-  const embed = embeds as any;
-  if (embed.$type === 'app.bsky.embed.video#view') return embed;
-  if (embed.$type === 'app.bsky.embed.recordWithMedia#view' && embed.media) {
-    if (embed.media.$type === 'app.bsky.embed.video#view') return embed.media;
-  }
-  return null;
-}
-
-function getMastodonMedia(raw: any): any[] {
-  const target = raw.reblog ?? raw;
-  const sources = [
-    target.mediaAttachments ?? target.media_attachments,
-  ];
-  for (const source of sources) {
-    if (Array.isArray(source) && source.length > 0) {
-      return source.filter((item: any) => item && item.type === 'image').map((item: any) => ({
-        ...item,
-        previewUrl: item.previewUrl ?? item.preview_url,
-        remoteUrl: item.remoteUrl ?? item.remote_url,
-      }));
-    }
-  }
-  return [];
-}
-
-function getMastodonCard(raw: any): any | null {
-  const target = raw.reblog ?? raw;
-  const card = target.card ?? target.preview_card;
-  if (!card || !card.url) return null;
-  const media = target.mediaAttachments ?? target.media_attachments ?? [];
-  if (Array.isArray(media) && media.length > 0) return null;
-  return { ...card, provider_name: card.provider_name ?? card.providerName };
-}
-
-// ── Tests ─────────────────────────────────────────────────────────────────
+/**
+ * The local copies these replaced had drifted: getMastodonMedia ignored
+ * post.embeds as a source and kept only `type === 'image'`, where the component
+ * also accepts video and gifv. Shims keep the existing call sites readable.
+ */
+const getMastodonMedia = (raw: any) => mastodonMedia(undefined, raw);
+const getMastodonCard = (raw: any) => mastodonCard(raw);
 
 describe('getBskyImages', () => {
   it('returns empty for null embeds', () => {
@@ -275,15 +207,31 @@ describe('getMastodonMedia', () => {
     expect(result[0].previewUrl).toBe('https://example.com/small.jpg');
   });
 
-  it('filters non-image types', () => {
+  /**
+   * The previous local copy of this asserted images only, and passed — while
+   * Post.svelte has rendered video and gifv for some time. Pinned to what the
+   * component actually does.
+   */
+  it('keeps image, video and gifv, and drops everything else', () => {
     const raw = {
       media_attachments: [
         { type: 'image', url: 'img.jpg' },
         { type: 'video', url: 'vid.mp4' },
         { type: 'gifv', url: 'gif.mp4' },
+        { type: 'audio', url: 'sound.mp3' },
+        { type: 'unknown', url: 'what.bin' },
       ],
     };
-    expect(getMastodonMedia(raw)).toHaveLength(1);
+    const kinds = getMastodonMedia(raw).map((m: any) => m.type);
+    expect(kinds).toEqual(['image', 'video', 'gifv']);
+  });
+
+  it('prefers embeds over the raw attachments when both are present', () => {
+    const fromEmbeds = mastodonMedia(
+      [{ type: 'image', url: 'from-embeds.jpg' }],
+      { media_attachments: [{ type: 'image', url: 'from-raw.jpg' }] },
+    );
+    expect(fromEmbeds[0].url).toBe('from-embeds.jpg');
   });
 
   it('handles reblog media', () => {
