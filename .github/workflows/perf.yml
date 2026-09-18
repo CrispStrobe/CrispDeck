@@ -171,6 +171,7 @@ jobs:
             bench-result.json
             bundle-size.json
             bench/bundle-budget.json
+            icon-split.json
             chunk-map.client.json
             chunk-map.server.json
           retention-days: 7

@@ -25,13 +25,35 @@ function swVersionPlugin() {
   };
 }
 
+/** @type {Array<{icon: string, inShell: boolean, importers: number}>} */
+const iconDecisions = [];
+
+/** Writes what manualChunks decided, so a no-op is distinguishable from a no-run. */
+function iconDecisionReport() {
+  return {
+    name: 'bench-icon-decisions',
+    apply: 'build',
+    closeBundle() {
+      if (!process.env.BENCH_CHUNK_MAP) return;
+      const shell = iconDecisions.filter((d) => d.inShell).length;
+      writeFileSync('icon-split.json', JSON.stringify({
+        ran: iconDecisions.length > 0,
+        icons: iconDecisions.length,
+        shell,
+        route: iconDecisions.length - shell,
+        sample: iconDecisions.slice(0, 8)
+      }, null, 2));
+    }
+  };
+}
+
 export default defineConfig({
   plugins: [
     sveltekit(),
     tailwindcss(),
     swVersionPlugin(),
     // Off unless asked for: it writes a build report, not app output.
-    ...(process.env.BENCH_CHUNK_MAP ? [chunkMap()] : [])
+    ...(process.env.BENCH_CHUNK_MAP ? [chunkMap(), iconDecisionReport()] : [])
   ],
   define: {
     __VERSION__: JSON.stringify(pkg.version),
@@ -70,6 +92,12 @@ export default defineConfig({
             if (!isIcon) return 'vendor-icons-shell'; // shared base component
             const importers = getModuleInfo(id)?.importers ?? [];
             const inShell = importers.some((i) => /routes[/\\]\+layout\.svelte/.test(i));
+            // Diagnostic: SvelteKit emits chunks as [hash].js with no [name],
+            // so a manualChunks name never reaches a filename and there is no
+            // way to tell from the output whether this function ran at all.
+            if (process.env.BENCH_CHUNK_MAP) {
+              iconDecisions.push({ icon: id.replace(/^.*[/\\]/, ''), inShell, importers: importers.length });
+            }
             return inShell ? 'vendor-icons-shell' : 'vendor-icons-route';
           }
         },
