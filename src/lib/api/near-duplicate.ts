@@ -20,6 +20,9 @@
  * words in the same order.
  */
 
+/** Words per shingle. Texts shorter than this cannot form one. */
+export const SHINGLE_SIZE = 3;
+
 /** Words, with everything that legitimately differs between networks removed. */
 export function normalizeForCompare(text: string): string[] {
   return text
@@ -39,11 +42,13 @@ export function normalizeForCompare(text: string): string[] {
  * Overlapping runs of [k] words.
  *
  * Short texts have no k-word run, so they fall back to their words. That makes
- * "Good morning!" match any other "Good morning!", which is correct as far as
- * the text goes — the author and time checks are what stop it grouping two
- * unrelated people saying the same small thing.
+ * "Good morning!" match any other "Good morning!", and — because containment
+ * divides by the SMALLER set — it also makes "thanks" a full match for "thanks
+ * everyone". On its own that is not enough to call something a crosspost, so
+ * callers must check `usedWordFallback` and require the two posts to be by the
+ * same person before grouping on a score from this path. See detectCrossposts.
  */
-export function shingles(tokens: string[], k = 3): Set<string> {
+export function shingles(tokens: string[], k = SHINGLE_SIZE): Set<string> {
   if (tokens.length < k) return new Set(tokens);
   const out = new Set<string>();
   for (let i = 0; i + k <= tokens.length; i++) out.add(tokens.slice(i, i + k).join(' '));
@@ -73,9 +78,21 @@ export interface Fingerprint {
   tokenCount: number;
 }
 
-export function fingerprint(text: string, k = 3): Fingerprint {
+export function fingerprint(text: string, k = SHINGLE_SIZE): Fingerprint {
   const tokens = normalizeForCompare(text);
   return { shingles: shingles(tokens, k), tokenCount: tokens.length };
+}
+
+/**
+ * True when the text was too short to form a shingle, so its "shingles" are
+ * really just its words.
+ *
+ * A score against such a text says only that one post's words appear in the
+ * other — "gm" is fully contained in "gm all". Grouping on that alone merges
+ * unrelated people's small talk, so it needs corroboration from the author.
+ */
+export function usedWordFallback(fp: Fingerprint, k = SHINGLE_SIZE): boolean {
+  return fp.tokenCount < k;
 }
 
 export function similarity(a: Fingerprint, b: Fingerprint): number {
