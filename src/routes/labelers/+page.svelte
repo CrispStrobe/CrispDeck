@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { swallow } from '$lib/debug';
   import { onMount } from 'svelte';
   import type { ClientEntry } from '$lib/api/client-factory';
   import { Tag, Loader2, Plus, X, Shield, Eye, EyeOff, AlertTriangle } from '@lucide/svelte';
@@ -145,7 +146,7 @@
               isSubscribed: labelers.some(l => l.did === actor.did),
             });
           }
-        } catch {}
+        } catch (e) { swallow('labelers.searchLabelers', e); }
       }
       searchResults = results;
     } catch (e) {

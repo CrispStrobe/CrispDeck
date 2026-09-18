@@ -12,7 +12,7 @@
  *   - listeners are indexed by post URI, so a matching event notifies the one
  *     post it concerns rather than every mounted Post component.
  */
-import { matchRawEvent, type CountUpdate } from './jetstream-filter';
+import { matchRawEvent, SubjectIndex, type CountUpdate } from './jetstream-filter';
 
 export type { CountUpdate };
 
@@ -29,6 +29,8 @@ class JetstreamClient {
   /** Listeners registered through the untargeted subscribe() API. */
   private listeners = new Set<CountListener>();
   private watchedUris = new Set<string>();
+  /** Maps like/repost records back to their subject so deletes can decrement. */
+  private subjects = new SubjectIndex();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private enabled = false;
   private workerConnected = false;
@@ -88,7 +90,7 @@ class JetstreamClient {
       this.ws = new WebSocket(`${JETSTREAM_URL}?${params}`);
 
       this.ws.onmessage = (event) => {
-        const update = matchRawEvent(event.data as string, this.isWatched);
+        const update = matchRawEvent(event.data as string, this.isWatched, this.subjects);
         if (update) this.dispatch(update);
       };
 
@@ -154,6 +156,7 @@ class JetstreamClient {
   /** Clear all watched posts */
   clearWatched() {
     this.watchedUris.clear();
+    this.subjects.clear();
     this.worker?.postMessage({ type: 'clear' });
   }
 
@@ -208,7 +211,7 @@ class JetstreamClient {
 
   /** Feed a raw message through the pipeline. Exposed for tests. */
   handleRawMessage(raw: string) {
-    const update = matchRawEvent(raw, this.isWatched);
+    const update = matchRawEvent(raw, this.isWatched, this.subjects);
     if (update) this.dispatch(update);
   }
 }

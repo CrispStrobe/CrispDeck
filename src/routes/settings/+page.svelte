@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { swallow } from '$lib/debug';
   import { onMount } from 'svelte';
   import {
     listAccounts, addAccount as dbAddAccount, deleteAccount as dbDeleteAccount,
@@ -121,7 +122,7 @@
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         crispasrAvailable = await invoke('asr_available') as boolean;
-      } catch {}
+      } catch (e) { swallow('settings.saveSttEngine', e); }
     }
   });
 
@@ -1123,7 +1124,7 @@
         <button
           onclick={() => {
             if (newFeedUrl.trim()) {
-              try { addFeed(newFeedUrl.trim()); rssFeeds = listFeeds(); newFeedUrl = ''; } catch {}
+              try { addFeed(newFeedUrl.trim()); rssFeeds = listFeeds(); newFeedUrl = ''; } catch (e) { swallow('settings.file', e); }
             }
           }}
           disabled={!newFeedUrl.trim()}

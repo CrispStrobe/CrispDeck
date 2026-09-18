@@ -1,3 +1,4 @@
+import { swallow } from '$lib/debug';
 /**
  * Push notification scaffold.
  *
@@ -51,7 +52,7 @@ export async function getPermission(): Promise<NotificationPermission> {
     try {
       const { isPermissionGranted } = await import(/* @vite-ignore */ '@tauri-apps/plugin-notification');
       return (await isPermissionGranted()) ? 'granted' : 'default';
-    } catch {}
+    } catch (e) { swallow('push-notifications.getPermission', e); }
   }
 
   if (typeof Notification !== 'undefined') {
@@ -69,7 +70,7 @@ export async function notify(title: string, body: string, icon?: string): Promis
       const { sendNotification } = await import(/* @vite-ignore */ '@tauri-apps/plugin-notification');
       sendNotification({ title, body });
       return;
-    } catch {}
+    } catch (e) { swallow('push-notifications.notify', e); }
   }
 
   if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {

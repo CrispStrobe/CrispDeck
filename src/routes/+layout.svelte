@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { swallow } from '$lib/debug';
   import { pollWhenVisible } from '$lib/poll';
   import '../app.css';
   import { page } from '$app/state';
@@ -67,7 +68,7 @@
             const proxyHeaders = { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' };
             const r = await (entry.oauthAgent as any).api.chat.bsky.convo.listConvos({ limit: 50 }, { headers: proxyHeaders });
             count += (r.data.convos ?? []).reduce((s: number, c: any) => s + (c.unreadCount ?? 0), 0);
-          } catch {}
+          } catch (e) { swallow('layout.checkUnreadMessages', e); }
         } else if (acct.platform === 'mastodon') {
           const { MastodonClient } = await import('$lib/api/mastodon');
           const masto = entry.client as InstanceType<typeof MastodonClient>;
@@ -76,12 +77,12 @@
             try {
               const resp = await fetch(`${masto.getInstanceUrl()}/api/v1/conversations?limit=40`, { headers: { Authorization: `Bearer ${token}` } });
               if (resp.ok) { const convos = await resp.json(); count += convos.filter((c: any) => c.unread).length; }
-            } catch {}
+            } catch (e) { swallow('layout.checkUnreadMessages', e); }
           }
         }
       }
       unreadMessages = count;
-    } catch {}
+    } catch (e) { swallow('layout.checkUnreadMessages', e); }
   }
 
   function handleGlobalKeydown(e: KeyboardEvent) {

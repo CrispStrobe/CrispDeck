@@ -1,5 +1,12 @@
 /**
- * A/B benchmark: optimized detectCrossposts vs the original O(n^2) version.
+ * A/B benchmark: current detectCrossposts vs the original version.
+ *
+ * NOTE: these no longer compute the same groupings. The original used
+ * Jaro-Winkler over full post text (thresholds 0.9/0.7); the current one uses
+ * trigram containment (0.8/0.6), which is both more accurate and far cheaper —
+ * see scripts/experiments/crosspost-similarity.test.ts. This measures cost
+ * only. Wall-clock numbers from a loaded machine are not trustworthy; prefer
+ * scripts/experiments/crosspost-work.test.ts, which counts operations.
  *
  *   npx vitest bench src/lib/api/unified.crosspost.bench.ts
  *

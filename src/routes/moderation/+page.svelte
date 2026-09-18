@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { swallow } from '$lib/debug';
   import { onMount } from 'svelte';
   import type { ClientEntry } from '$lib/api/client-factory';
   import { Shield, Loader2, Ban, VolumeX, UserX } from '@lucide/svelte';
@@ -76,7 +77,7 @@
           for (const m of mutes.data.mutes) {
             allMuted.push({ platform: 'bluesky', handle: m.handle, displayName: m.displayName, avatar: m.avatar, did: m.did, type: 'mute' });
           }
-        } catch {}
+        } catch (e) { swallow('moderation.loadModerationLists', e); }
       } else {
         const masto = entry.client as MastodonClient;
         const token = masto.getAccessToken();
@@ -96,7 +97,7 @@
               allMuted.push({ platform: 'mastodon', handle: `@${a.acct}`, displayName: a.display_name, avatar: a.avatar, id: a.id, type: 'mute' });
             }
           }
-        } catch {}
+        } catch (e) { swallow('moderation.loadModerationLists', e); }
       }
     }
 
@@ -124,7 +125,7 @@
             listItemCount: l.listItemCount,
             subscribed: !!l.viewer?.muted || !!l.viewer?.blocked,
           }));
-      } catch {}
+      } catch (e) { swallow('moderation.lists', e); }
       break;
     }
   }

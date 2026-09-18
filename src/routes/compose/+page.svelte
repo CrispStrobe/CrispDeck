@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { swallow } from '$lib/debug';
   import { onMount } from 'svelte';
   import { logCrosspost, saveDraft as dbSaveDraft, listDrafts, deleteDraft as dbDeleteDraft } from '$lib/db';
   import type { ClientEntry } from '$lib/api/client-factory';
@@ -186,7 +187,7 @@
               if (data.cw) { contentWarning = data.cw; showCW = true; }
               autoSaveRestoredFrom = data.savedAt ?? 'earlier';
             }
-          } catch {}
+          } catch (e) { swallow('compose.clearAutoSave', e); }
         }
       }
     } catch (e) {
@@ -428,7 +429,7 @@
             error = 'CrispASR not available in this build. Switch to "Browser" engine in Settings.';
             return;
           }
-        } catch {}
+        } catch (e) { swallow('compose.toggleDictation', e); }
       } else if (engine === 'crispasr') {
         error = 'CrispASR requires the desktop app. Switch to "Browser" engine in Settings.';
         return;

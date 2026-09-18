@@ -6,7 +6,7 @@
 import type { UnifiedPost, Platform } from './types';
 
 const DB_NAME = 'crispdeck-archive';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'posts';
 
 export type ArchiveType = 'post' | 'like' | 'repost' | 'reply';
@@ -27,19 +27,61 @@ export interface ArchivedPost {
   indexedAt: string;
 }
 
+/**
+ * Cached connection.
+ *
+ * Every archive call used to open its own IDBDatabase and never close it, so a
+ * session accumulated one connection per search — and an open connection blocks
+ * any later version upgrade. One shared connection avoids both.
+ */
+let dbPromise: Promise<IDBDatabase> | null = null;
+
 function openArchiveDB(): Promise<IDBDatabase> {
+  if (!dbPromise) {
+    dbPromise = openArchiveDBUncached().catch((e) => {
+      dbPromise = null; // let the next call retry
+      throw e;
+    });
+  }
+  return dbPromise;
+}
+
+/** Drop the cached connection (used when the database is deleted or reset). */
+export function closeArchiveDB(): void {
+  const pending = dbPromise;
+  dbPromise = null;
+  pending?.then((db) => db.close()).catch(() => {});
+}
+
+function openArchiveDBUncached(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onerror = () => reject(req.error);
     req.onsuccess = () => resolve(req.result);
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (event) => {
       const db = req.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        const store = db.createObjectStore(STORE_NAME, { keyPath: 'uri' });
-        store.createIndex('platform', 'platform', { unique: false });
-        store.createIndex('type', 'type', { unique: false });
-        store.createIndex('authorHandle', 'authorHandle', { unique: false });
-        store.createIndex('createdAt', 'createdAt', { unique: false });
+      const txn = req.transaction!;
+      const store = db.objectStoreNames.contains(STORE_NAME)
+        ? txn.objectStore(STORE_NAME)
+        : (() => {
+            const s = db.createObjectStore(STORE_NAME, { keyPath: 'uri' });
+            s.createIndex('platform', 'platform', { unique: false });
+            s.createIndex('type', 'type', { unique: false });
+            s.createIndex('authorHandle', 'authorHandle', { unique: false });
+            s.createIndex('createdAt', 'createdAt', { unique: false });
+            return s;
+          })();
+
+      // v2: compound indexes so a search can walk newest-first within a type or
+      // platform and stop at the limit, instead of reading the whole store.
+      // IndexedDB backfills these for existing records automatically.
+      if ((event.oldVersion ?? 0) < 2) {
+        if (!store.indexNames.contains('type_createdAt')) {
+          store.createIndex('type_createdAt', ['type', 'createdAt'], { unique: false });
+        }
+        if (!store.indexNames.contains('platform_createdAt')) {
+          store.createIndex('platform_createdAt', ['platform', 'createdAt'], { unique: false });
+        }
       }
     };
   });
@@ -116,7 +158,81 @@ export async function getArchiveStats(): Promise<{
   };
 }
 
-/** Search the archive */
+/**
+ * Order used by searchArchive: newest first, ties broken by uri ascending.
+ *
+ * The tie-break is explicit because results no longer always arrive in object
+ * store key order. A full getAll() returns records by primary key (uri), and a
+ * stable sort left equal timestamps in that order; cursor reads don't, so the
+ * comparator has to say so rather than rely on the read path.
+ */
+function byNewest(a: ArchivedPost, b: ArchivedPost): number {
+  const t = b.createdAt.localeCompare(a.createdAt);
+  return t !== 0 ? t : a.uri.localeCompare(b.uri);
+}
+
+/** Read every record in the store. */
+function getAllRecords(db: IDBDatabase): Promise<ArchivedPost[]> {
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/**
+ * Walk a compound [field, createdAt] index newest-first, keeping records that
+ * pass `accept`, and stop once `limit` are collected.
+ *
+ * Collection continues past the limit while the timestamp is unchanged, so a
+ * run of identical timestamps at the boundary is resolved by the comparator
+ * rather than by where the cursor happened to stop.
+ */
+function collectFromIndex(
+  db: IDBDatabase,
+  indexName: string,
+  value: string,
+  limit: number,
+  accept: (p: ArchivedPost) => boolean
+): Promise<ArchivedPost[]> {
+  return new Promise((resolve, reject) => {
+    const index = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).index(indexName);
+    // Whole range for this key. In IndexedDB key ordering a shorter array sorts
+    // before any longer array sharing its prefix, and arrays sort above every
+    // string — so [value] is below [value, <any string>] and [value, []] is
+    // above all of them, whatever createdAt happens to contain.
+    const range = IDBKeyRange.bound([value], [value, []]);
+    const out: ArchivedPost[] = [];
+    const req = index.openCursor(range, 'prev');
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const cursor = req.result;
+      if (!cursor) { resolve(out); return; }
+      const record = cursor.value as ArchivedPost;
+      if (accept(record)) {
+        if (out.length >= limit && record.createdAt !== out[out.length - 1].createdAt) {
+          resolve(out); return;
+        }
+        out.push(record);
+      }
+      cursor.continue();
+    };
+  });
+}
+
+/**
+ * Search the archive.
+ *
+ * This used to read the entire store with getAll() and filter in JS, with the
+ * limit applied last — so the feed's three calls on mount each deserialised
+ * every archived post to use 500 of them, and got slower the longer the archive
+ * grew. The store's indexes were never used.
+ *
+ * Now the most selective equality filter picks an index. With a limit, a
+ * compound [field, createdAt] index is walked newest-first and stops early;
+ * without one, the index narrows the read before filtering. A search with no
+ * equality filter still has to scan, which is unavoidable for a substring query.
+ */
 export async function searchArchive(params: {
   query?: string;
   platform?: Platform;
@@ -128,32 +244,60 @@ export async function searchArchive(params: {
   limit?: number;
 }): Promise<ArchivedPost[]> {
   const db = await openArchiveDB();
-  const all = await new Promise<ArchivedPost[]>((resolve, reject) => {
-    const req = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll();
+
+  // Every filter except the one chosen as the index key.
+  const makeAccept = (skip: 'type' | 'platform' | 'author' | null) => (p: ArchivedPost) => {
+    if (skip !== 'platform' && params.platform && p.platform !== params.platform) return false;
+    if (skip !== 'type' && params.type && p.type !== params.type) return false;
+    if (skip !== 'author' && params.author) {
+      const a = params.author.toLowerCase();
+      if (!p.authorHandle.toLowerCase().includes(a) && !p.authorName.toLowerCase().includes(a)) return false;
+    }
+    if (params.dateFrom && p.createdAt < params.dateFrom) return false;
+    if (params.dateTo && p.createdAt > params.dateTo) return false;
+    if (params.hasMedia && !p.hasMedia) return false;
+    if (params.query) {
+      const q = params.query.toLowerCase();
+      if (!p.text.toLowerCase().includes(q) && !p.authorHandle.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  };
+
+  // Fast path: an equality filter plus a limit can stop early.
+  if (params.limit && params.limit > 0) {
+    if (params.type) {
+      const rows = await collectFromIndex(db, 'type_createdAt', params.type, params.limit, makeAccept('type'));
+      return rows.sort(byNewest).slice(0, params.limit);
+    }
+    if (params.platform) {
+      const rows = await collectFromIndex(db, 'platform_createdAt', params.platform, params.limit, makeAccept('platform'));
+      return rows.sort(byNewest).slice(0, params.limit);
+    }
+  }
+
+  // Otherwise narrow the read with a plain index where we can.
+  let rows: ArchivedPost[];
+  let skip: 'type' | 'platform' | null = null;
+  if (params.type) {
+    rows = await getAllByIndex(db, 'type', params.type);
+    skip = 'type';
+  } else if (params.platform) {
+    rows = await getAllByIndex(db, 'platform', params.platform);
+    skip = 'platform';
+  } else {
+    rows = await getAllRecords(db);
+  }
+
+  const results = rows.filter(makeAccept(skip)).sort(byNewest);
+  return params.limit ? results.slice(0, params.limit) : results;
+}
+
+function getAllByIndex(db: IDBDatabase, indexName: string, key: IDBValidKey): Promise<ArchivedPost[]> {
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).index(indexName).getAll(key);
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
-
-  let results = all;
-
-  if (params.platform) results = results.filter(p => p.platform === params.platform);
-  if (params.type) results = results.filter(p => p.type === params.type);
-  if (params.author) {
-    const a = params.author.toLowerCase();
-    results = results.filter(p => p.authorHandle.toLowerCase().includes(a) || p.authorName.toLowerCase().includes(a));
-  }
-  if (params.dateFrom) results = results.filter(p => p.createdAt >= params.dateFrom!);
-  if (params.dateTo) results = results.filter(p => p.createdAt <= params.dateTo!);
-  if (params.hasMedia) results = results.filter(p => p.hasMedia);
-  if (params.query) {
-    const q = params.query.toLowerCase();
-    results = results.filter(p => p.text.toLowerCase().includes(q) || p.authorHandle.toLowerCase().includes(q));
-  }
-
-  // Sort newest first
-  results.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-
-  return params.limit ? results.slice(0, params.limit) : results;
 }
 
 /** Clear the entire archive */

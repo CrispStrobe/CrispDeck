@@ -5,6 +5,7 @@
  */
 
 import { isTauri } from './platform';
+import { bumpClientCache } from './api/client-cache';
 import * as browserDb from './browser-db';
 import type {
   Account,
@@ -39,6 +40,7 @@ export async function addAccount(params: {
   credentials: string;
   is_primary?: boolean;
 }): Promise<Account> {
+  bumpClientCache();
   if (!isTauri()) return browserDb.addAccount(params);
   return invoke<Account>('db_add_account', params);
 }
@@ -49,11 +51,13 @@ export async function updateAccount(params: {
   avatar_url?: string;
   is_primary?: boolean;
 }): Promise<void> {
+  bumpClientCache();
   if (!isTauri()) return browserDb.updateAccount(params);
   return invoke('db_update_account', params);
 }
 
 export async function deleteAccount(id: number): Promise<void> {
+  bumpClientCache();
   if (!isTauri()) return browserDb.deleteAccount(id);
   return invoke('db_delete_account', { id });
 }

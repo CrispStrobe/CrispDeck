@@ -1,10 +1,12 @@
 <script lang="ts">
+  import { swallow } from '$lib/debug';
   import { pollWhenVisible } from '$lib/poll';
   import { onMount } from 'svelte';
   import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal, RefreshCw } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import Post from '$lib/components/Post.svelte';
   import CrosspostGroup from '$lib/components/CrosspostGroup.svelte';
+  import VirtualList from '$lib/components/VirtualList.svelte';
   import AdvancedFilters from '$lib/components/AdvancedFilters.svelte';
   // Type-only: the concrete classes reach this page through client-factory,
   // which is imported dynamically below. Importing them as values would pull
@@ -125,9 +127,9 @@
             // pulling a full 40-status page just to count what's new.
             const statuses = await masto.getHomeTimeline(undefined, { limit: 10 });
             count += statuses.filter((s: any) => s.createdAt > newestDate || s.created_at > newestDate).length;
-          } catch {}
+          } catch (e) { swallow('feed.checkForNewPosts', e); }
         }
-      } catch {}
+      } catch (e) { swallow('feed.checkForNewPosts', e); }
     }
     newPostsAvailable = count; // Replace, don't accumulate
 
@@ -166,7 +168,7 @@
             .filter(p => !newestDate || p.createdAt > newestDate);
           newPosts.push(...newer);
         }
-      } catch {}
+      } catch (e) { swallow('feed.loadNewPosts', e); }
     }
 
     if (newPosts.length > 0) {
@@ -560,24 +562,29 @@
         {/if}
       </div>
     {:else}
-      <div class="space-y-3">
-        {#each finalFeed as item (isCrosspostGroup(item) ? item.id : item.uri)}
-          {#if isCrosspostGroup(item)}
-            <CrosspostGroup group={item} {hideMedia} />
-          {:else}
-            {#if multiAccount && item.sourceAccount}
+      <!--
+        Windowed: only the posts near the viewport are mounted. The gap between
+        posts is padding on each row rather than space-y on the container, so the
+        measured height of a row includes it and the spacers stay accurate.
+      -->
+      <VirtualList items={finalFeed} key={(entry) => (isCrosspostGroup(entry) ? entry.id : entry.uri)}>
+        {#snippet item(entry)}
+          <div class="pb-3">
+            {#if isCrosspostGroup(entry)}
+              <CrosspostGroup group={entry} {hideMedia} />
+            {:else if multiAccount && entry.sourceAccount}
               <div class="relative">
                 <span class="absolute -top-1 right-2 text-[9px] px-1.5 py-0.5 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-muted)] z-10">
-                  via {item.sourceAccount.split('.')[0]}
+                  via {entry.sourceAccount.split('.')[0]}
                 </span>
-                <Post post={item} {hideMedia} onlike={handleLike} onboost={handleBoost} onreply={handleReply} onquote={handleQuote} />
+                <Post post={entry} {hideMedia} onlike={handleLike} onboost={handleBoost} onreply={handleReply} onquote={handleQuote} />
               </div>
             {:else}
-              <Post post={item} {hideMedia} onlike={handleLike} onboost={handleBoost} onreply={handleReply} onquote={handleQuote} />
+              <Post post={entry} {hideMedia} onlike={handleLike} onboost={handleBoost} onreply={handleReply} onquote={handleQuote} />
             {/if}
-          {/if}
-        {/each}
-      </div>
+          </div>
+        {/snippet}
+      </VirtualList>
 
       <!-- Infinite scroll sentinel + loading indicator -->
       <div bind:this={scrollSentinel} class="py-6 text-center">

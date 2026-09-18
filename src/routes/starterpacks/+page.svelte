@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { swallow } from '$lib/debug';
   import { onMount } from 'svelte';
   import type { ClientEntry } from '$lib/api/client-factory';
   import { Package, Loader2, UserPlus, Users, ExternalLink } from '@lucide/svelte';
@@ -89,10 +90,10 @@
                   allPacks.push(pack);
                 }
               }
-            } catch {}
+            } catch (e) { swallow('starterpacks.mentions', e); }
           }
         }
-      } catch {}
+      } catch (e) { swallow('starterpacks.mentions', e); }
 
       // Strategy 2: Search actors and fetch their starter packs
       const actors = await bskyClient.searchActors(searchQuery);
@@ -106,7 +107,7 @@
               allPacks.push(pack);
             }
           }
-        } catch {}
+        } catch (e) { swallow('starterpacks.mentions', e); }
       }
 
       // Strategy 3: Direct handle lookup
@@ -121,7 +122,7 @@
               allPacks.push(pack);
             }
           }
-        } catch {}
+        } catch (e) { swallow('starterpacks.mentions', e); }
       }
 
       // Sort by relevance: packs whose name/desc matches the query rank first, then by member count

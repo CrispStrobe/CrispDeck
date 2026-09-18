@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { swallow } from '$lib/debug';
   import { onMount } from 'svelte';
   import type { ClientEntry } from '$lib/api/client-factory';
   import { List, Plus, Loader2, Trash2, Rss } from '@lucide/svelte';
@@ -65,7 +66,7 @@
               headers: { Authorization: `Bearer ${token}` },
             });
             if (resp.ok) mastoLists = await resp.json();
-          } catch {}
+          } catch (e) { swallow('lists.loadLists', e); }
         }
       } else {
         try {
@@ -76,7 +77,7 @@
           // Load user's own lists
           const listResp = await agent.api.app.bsky.graph.getLists({ actor: acct!.handle, limit: 50 });
           bskyLists = (listResp.data.lists ?? []) as unknown as BskyList[];
-        } catch {}
+        } catch (e) { swallow('lists.loadLists', e); }
       }
     }
   }
@@ -101,7 +102,7 @@
           const { snakeToCamel } = await import('$lib/api/mastodon');
           listPosts = sortPosts(raw.map((s: any) => normalizePost(s, 'mastodon')), 'newest');
         }
-      } catch {}
+      } catch (e) { swallow('lists.selectMastoList', e); }
       break;
     }
     loadingPosts = false;
@@ -118,7 +119,7 @@
         const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
         const resp = await agent.api.app.bsky.feed.getFeed({ feed: feed.uri, limit: 50 });
         listPosts = sortPosts(resp.data.feed.map(p => normalizePost(p, 'bluesky')), 'newest');
-      } catch {}
+      } catch (e) { swallow('lists.selectBskyFeed', e); }
       break;
     }
     loadingPosts = false;
@@ -135,7 +136,7 @@
         const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
         const resp = await agent.api.app.bsky.feed.getListFeed({ list: list.uri, limit: 50 });
         listPosts = sortPosts(resp.data.feed.map(p => normalizePost(p, 'bluesky')), 'newest');
-      } catch {}
+      } catch (e) { swallow('lists.selectBskyList', e); }
       break;
     }
     loadingPosts = false;
@@ -152,7 +153,7 @@
         const data = await resp.json();
         feedSearchResults = (data.feeds ?? []) as unknown as BskyFeed[];
       }
-    } catch {}
+    } catch (e) { swallow('lists.searchFeeds', e); }
     searchingFeeds = false;
   }
 

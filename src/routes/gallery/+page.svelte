@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { swallow } from '$lib/debug';
   import { onMount } from 'svelte';
   import type { ClientEntry } from '$lib/api/client-factory';
   // Type-only: the concrete clients arrive via client-factory, which is
@@ -36,7 +37,7 @@
       accounts = result.accounts;
       clientEntries = result.clients;
       await loadMedia();
-    } catch {} finally { loading = false; }
+    } catch (e) { swallow('gallery:L40', e); } finally { loading = false; }
   });
 
   async function loadMedia() {
@@ -57,7 +58,7 @@
           const statuses = await client.getAccountStatuses(a.id);
           posts.push(...statuses.map(s => normalizePost(s, 'mastodon')));
         }
-      } catch {}
+      } catch (e) { swallow('gallery.loadMedia', e); }
     }
 
     // Extract media from posts

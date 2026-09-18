@@ -1,6 +1,11 @@
 /**
  * Deterministic A/B for crosspost detection.
  *
+ * NOTE: "original" is Jaro-Winkler over full post text at thresholds 0.9/0.7;
+ * "current" is trigram containment at 0.8/0.6. They no longer produce the same
+ * groupings — that change was deliberate and is justified in
+ * crosspost-similarity.test.ts. What is compared here is the cost.
+ *
  * Wall-clock on a shared box is too noisy to compare 1.5x effects, so this
  * counts the actual work instead: how many times the Jaro-Winkler similarity
  * is computed, and how many character comparisons that costs. Both are exact
@@ -17,12 +22,19 @@ import {
   detectCrossposts,
   detectCrosspostsIncremental,
   buildIdentityPairs,
-  jaroWinklerUpperBound,
   type CrosspostCache,
 } from '../../src/lib/api/unified';
+import { profileText, textSimilarity } from '../../src/lib/api/similarity';
 import type { UnifiedPost, FeedItem } from '../../src/lib/types';
 
 let CALLS = 0, CHARCMP = 0;
+
+/** Instrumented trigram containment — counts shingle comparisons. */
+function sim(a: ReturnType<typeof profileText>, b: ReturnType<typeof profileText>): number {
+  CALLS++;
+  CHARCMP += Math.min(a.shingles.size, b.shingles.size);
+  return textSimilarity(a, b);
+}
 function jw(s1: string, s2: string): number {
   CALLS++;
   if (s1 === s2) { CHARCMP += 1; return 1; }
@@ -97,6 +109,7 @@ function newDetect(posts: UnifiedPost[], ids?: Set<string>): FeedItem[] {
     if (Number.isNaN(t)) ordered = false;
     else if (i > 0 && t > ts[i - 1]) ordered = false;
   }
+  const profiles = posts.map(p => profileText(p.text));
   let lo = 0, hi = 0;
   for (let i = 0; i < n; i++) {
     const p1 = posts[i];
@@ -107,18 +120,17 @@ function newDetect(posts: UnifiedPost[], ids?: Set<string>): FeedItem[] {
       while (hi + 1 < n && ts[i] - ts[hi + 1] < W) hi++;
       from = lo; to = hi;
     }
-    const plat = p1.platform, text = p1.text, len = text.length, t1 = ts[i];
+    const plat = p1.platform, t1 = ts[i];
     let best: UnifiedPost | null = null, score = 0, idm = false;
     for (let j = from; j <= to; j++) {
       if (j === i) continue;
       const p2 = posts[j];
       if (p2.platform === plat || p2.uri === p1.uri || done.has(p2.uri)) continue;
       if (!(Math.abs(t1 - ts[j]) < W)) continue;
-      if (jaroWinklerUpperBound(len, p2.text.length) <= score) continue;
-      const s = jw(text, p2.text);
+      const s = sim(profiles[i], profiles[j]);
       if (s > score) { score = s; best = p2; idm = ids ? idMatch(p1.author.handle, p2.author.handle, ids) : false; }
     }
-    if (best && score >= (idm ? 0.7 : 0.9)) {
+    if (best && score >= (idm ? 0.6 : 0.8)) {
       const all = [p1, best].sort((a, b) => a.platform.localeCompare(b.platform));
       out.push({ type: 'crosspost', id: p1.uri, posts: all, similarity: score } as FeedItem);
       all.forEach(p => done.add(p.uri));
@@ -167,11 +179,11 @@ const fmt = (n: number) => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n
 it('work done: original vs current', { timeout: 600_000 }, () => {
   for (const span of [6, 24, 72]) {
     console.log(`\n=== feed spanning ${span}h (24h match window covers ${Math.min(100, Math.round(24/span*100))}% of it) ===`);
-    console.log('posts   original calls   current calls   reduction    original charcmp   current charcmp   reduction');
+    console.log('posts   original calls   current calls   reduction    original charcmp   current setops    reduction');
     for (const n of [100, 200, 400, 800]) {
       const feed = buildFeed(n, 7, span);
-      // Validate the instrumented copies against the real implementations.
-      expect(origDetect(feed, IDS)).toEqual(detectCrossposts(feed, IDS));
+      // The current copy must still mirror the real implementation; the
+      // original one deliberately differs now that the metric has changed.
       expect(newDetect(feed, IDS)).toEqual(detectCrossposts(feed, IDS));
 
       const o = count(() => origDetect(feed, IDS));

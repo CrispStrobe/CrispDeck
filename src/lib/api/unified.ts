@@ -16,6 +16,7 @@ export function isReasonRepost(v: unknown): v is AppBskyFeedDefs.ReasonRepost {
 }
 import type { mastodon } from 'masto';
 import type { UnifiedPost, FeedItem, CrosspostGroup, Platform } from '$lib/types';
+import { profileText, textSimilarity, type TextProfile } from './similarity';
 
 type PlatformPost = AppBskyFeedDefs.FeedViewPost | mastodon.v1.Status;
 
@@ -94,84 +95,6 @@ export function normalizePost(post: PlatformPost, platform: Platform): UnifiedPo
 }
 
 /**
- * Jaro-Winkler similarity (pure JS, no dependency needed for this)
- *
- * Scratch buffers live at module scope: crosspost detection calls this a large
- * number of times, and allocating two arrays per call dominated its cost.
- */
-let jwScratch1 = new Uint8Array(512);
-let jwScratch2 = new Uint8Array(512);
-
-function jaroWinkler(s1: string, s2: string): number {
-  if (s1 === s2) return 1;
-  const len1 = s1.length, len2 = s2.length;
-  if (len1 === 0 || len2 === 0) return 0;
-
-  if (jwScratch1.length < len1) jwScratch1 = new Uint8Array(len1 * 2);
-  if (jwScratch2.length < len2) jwScratch2 = new Uint8Array(len2 * 2);
-  const s1Matches = jwScratch1, s2Matches = jwScratch2;
-  s1Matches.fill(0, 0, len1);
-  s2Matches.fill(0, 0, len2);
-
-  const matchWindow = Math.max(0, Math.floor(Math.max(len1, len2) / 2) - 1);
-
-  let matches = 0, transpositions = 0;
-
-  for (let i = 0; i < len1; i++) {
-    const start = Math.max(0, i - matchWindow);
-    const end = Math.min(i + matchWindow + 1, len2);
-    const c1 = s1.charCodeAt(i);
-    for (let j = start; j < end; j++) {
-      if (s2Matches[j] || c1 !== s2.charCodeAt(j)) continue;
-      s1Matches[i] = 1;
-      s2Matches[j] = 1;
-      matches++;
-      break;
-    }
-  }
-
-  if (matches === 0) return 0;
-
-  let k = 0;
-  for (let i = 0; i < len1; i++) {
-    if (!s1Matches[i]) continue;
-    while (!s2Matches[k]) k++;
-    if (s1.charCodeAt(i) !== s2.charCodeAt(k)) transpositions++;
-    k++;
-  }
-
-  const jaro = (matches / len1 + matches / len2 + (matches - transpositions / 2) / matches) / 3;
-
-  let prefix = 0;
-  const maxPrefix = Math.min(4, Math.min(len1, len2));
-  for (let i = 0; i < maxPrefix; i++) {
-    if (s1.charCodeAt(i) === s2.charCodeAt(i)) prefix++;
-    else break;
-  }
-
-  return jaro + prefix * 0.1 * (1 - jaro);
-}
-
-/**
- * Tight upper bound on jaroWinkler(a, b) knowable from lengths alone.
- *
- * The best case is every character of the shorter string matching with no
- * transpositions, giving jaro <= (2 + r) / 3 where r = minLen / maxLen, plus a
- * full four-character prefix bonus, giving jw <= jaro + 0.4 * (1 - jaro).
- * Substituting gives jw <= 0.8 + 0.2 * r.
- *
- * Pruning against this bound is admissible: it only ever discards a candidate
- * that provably cannot outscore the incumbent best match, so detectCrossposts
- * returns exactly what an exhaustive comparison would.
- */
-export function jaroWinklerUpperBound(len1: number, len2: number): number {
-  if (len1 === 0 && len2 === 0) return 1; // two empty strings are identical
-  if (len1 === 0 || len2 === 0) return 0;
-  const r = len1 < len2 ? len1 / len2 : len2 / len1;
-  return 0.8 + 0.2 * r;
-}
-
-/**
  * Build a lookup set from confirmed identities: pairs of handles that are the same person.
  * Returns a Set of "handleA<>handleB" keys (sorted so order doesn't matter).
  */
@@ -199,21 +122,24 @@ function areIdentityMatched(handle1: string, handle2: string, identityPairs: Set
 
 /**
  * Detect crossposted content between platforms.
- * When identityPairs is provided, uses a lower similarity threshold (0.7)
- * for posts by authors confirmed to be the same person.
+ * When identityPairs is provided, uses a lower similarity threshold for posts
+ * by authors confirmed to be the same person.
  *
  * Comparison is pairwise, but three things keep it off the hot path:
  *   - a single-platform feed can't contain crossposts at all, so it exits early;
  *   - timestamps are parsed once up front rather than once per pair, and when
  *     the feed is in time order (what sortPosts produces) the 24h candidate
  *     window is a contiguous index range tracked by two monotone pointers;
- *   - each pair is checked against a length-derived upper bound before the
- *     full similarity is computed.
- * None of these change the result — see jaroWinklerUpperBound.
+ *   - each post's trigram set is built once, so a pair costs a set
+ *     intersection over a handful of shingles rather than a character-level
+ *     pass over two whole posts.
  */
 export function detectCrossposts(posts: UnifiedPost[], identityPairs?: Set<string>): FeedItem[] {
-  const DEFAULT_THRESHOLD = 0.9;
-  const IDENTITY_THRESHOLD = 0.7;
+  // Thresholds are for containment over word trigrams (see ./similarity), not
+  // the character-level metric this used to use, so they are not comparable to
+  // the old 0.9/0.7 numbers.
+  const DEFAULT_THRESHOLD = 0.8;
+  const IDENTITY_THRESHOLD = 0.6;
   const TIME_WINDOW_MS = 24 * 60 * 60 * 1000;
   const feedItems: FeedItem[] = [];
   const processedUris = new Set<string>();
@@ -250,6 +176,10 @@ export function detectCrossposts(posts: UnifiedPost[], identityPairs?: Set<strin
     else if (i > 0 && t > ts[i - 1]) timeOrdered = false;
   }
 
+  // One trigram set per post, reused across every pair it takes part in.
+  const profiles: TextProfile[] = new Array(n);
+  for (let i = 0; i < n; i++) profiles[i] = profileText(posts[i].text);
+
   // Both pointers only ever move forward, so maintaining them costs O(n) total.
   let lo = 0, hi = 0;
 
@@ -266,8 +196,7 @@ export function detectCrossposts(posts: UnifiedPost[], identityPairs?: Set<strin
     }
 
     const platform1 = post1.platform;
-    const text1 = post1.text;
-    const len1 = text1.length;
+    const profile1 = profiles[i];
     const t1 = ts[i];
 
     let bestMatch: UnifiedPost | null = null;
@@ -281,9 +210,8 @@ export function detectCrossposts(posts: UnifiedPost[], identityPairs?: Set<strin
       if (post2.uri === post1.uri) continue;
       if (processedUris.has(post2.uri)) continue;
       if (!(Math.abs(t1 - ts[j]) < TIME_WINDOW_MS)) continue;
-      if (jaroWinklerUpperBound(len1, post2.text.length) <= bestScore) continue;
 
-      const score = jaroWinkler(text1, post2.text);
+      const score = textSimilarity(profile1, profiles[j]);
       if (score > bestScore) {
         bestScore = score;
         bestMatch = post2;

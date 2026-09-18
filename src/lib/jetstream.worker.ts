@@ -4,7 +4,7 @@
  * Holds the firehose connection and does the filtering off the main thread, so
  * the UI only ever sees the few events that concern posts on screen.
  */
-import { matchRawEvent, type CountUpdate } from './jetstream-filter';
+import { matchRawEvent, SubjectIndex, type CountUpdate } from './jetstream-filter';
 
 const JETSTREAM_URL = 'wss://jetstream2.us-east.bsky.network/subscribe';
 
@@ -12,6 +12,8 @@ let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let enabled = false;
 const watched = new Set<string>();
+// Maps like/repost records back to their subject so deletes can decrement.
+const subjects = new SubjectIndex();
 
 const isWatched = (uri: string) => watched.has(uri);
 
@@ -30,7 +32,7 @@ function connect() {
     ws.onopen = () => post({ type: 'status', connected: true });
 
     ws.onmessage = (event: MessageEvent) => {
-      const update = matchRawEvent(event.data as string, isWatched);
+      const update = matchRawEvent(event.data as string, isWatched, subjects);
       if (update) post({ type: 'update', update });
     };
 
@@ -62,7 +64,7 @@ self.onmessage = (e: MessageEvent) => {
   switch (msg?.type) {
     case 'watch': watched.add(msg.uri); break;
     case 'unwatch': watched.delete(msg.uri); break;
-    case 'clear': watched.clear(); break;
+    case 'clear': watched.clear(); subjects.clear(); break;
     case 'setEnabled':
       enabled = msg.enabled;
       if (enabled) connect();

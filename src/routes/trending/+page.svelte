@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { swallow } from '$lib/debug';
   import { onMount } from 'svelte';
   import type { ClientEntry } from '$lib/api/client-factory';
   import { TrendingUp, Loader2, Hash, Link2, Rss } from '@lucide/svelte';
@@ -95,7 +96,7 @@
               link: `https://bsky.app/search?q=${encodeURIComponent(s.tag)}`,
             }));
         }
-      } catch {}
+      } catch (e) { swallow('trending.loadBskyTrending', e); }
     }
   }
 

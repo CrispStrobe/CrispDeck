@@ -4,10 +4,12 @@
  */
 
 import { BlueskyClient } from './bluesky';
+import { swallow } from '$lib/debug';
 import { MastodonClient } from './mastodon';
 import { ThreadsClient } from './threads';
 import { initBlueskyOAuth } from './bluesky-oauth';
 import { listAccounts, getDecryptedCredentials } from '$lib/db';
+import { clientCacheGeneration } from './client-cache';
 import { Agent } from '@atproto/api';
 import type { Account, Platform } from '$lib/types';
 
@@ -20,12 +22,49 @@ export interface ClientEntry {
   oauthAgent?: Agent;
 }
 
+export interface InitAllClientsResult {
+  accounts: Account[];
+  clients: Map<number, ClientEntry>;
+}
+
+/**
+ * Building the client set means resuming the Bluesky OAuth session and
+ * decrypting each account's credentials. That was repeated on every route mount
+ * and every 60s from the layout's unread poll, always producing the same
+ * clients. The result is cached and reused.
+ *
+ * The cache is dropped when accounts change (db.ts bumps the generation on
+ * add/update/delete) and after TTL_MS, so a session that has been revoked
+ * elsewhere is re-resumed rather than held forever.
+ */
+const TTL_MS = 5 * 60 * 1000;
+
+let cache: { generation: number; at: number; result: InitAllClientsResult } | null = null;
+
+/** Drop the cached clients; the next call rebuilds them. */
+export function invalidateClients(): void {
+  cache = null;
+}
+
 /**
  * Initialize clients for all accounts.
  * For Bluesky: tries OAuth session first, falls back to app password.
  * For Mastodon: uses access token.
+ *
+ * Pass { force: true } to bypass the cache (e.g. after re-authenticating).
  */
-export async function initAllClients(): Promise<{ accounts: Account[]; clients: Map<number, ClientEntry> }> {
+export async function initAllClients(options?: { force?: boolean }): Promise<InitAllClientsResult> {
+  if (!options?.force && cache &&
+      cache.generation === clientCacheGeneration() &&
+      Date.now() - cache.at < TTL_MS) {
+    return cache.result;
+  }
+  const built = await buildAllClients();
+  cache = { generation: clientCacheGeneration(), at: Date.now(), result: built };
+  return built;
+}
+
+async function buildAllClients(): Promise<InitAllClientsResult> {
   const accounts = await listAccounts();
   const clients = new Map<number, ClientEntry>();
 
@@ -33,7 +72,7 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
   let oauthSession: { did: string; agent: Agent } | null = null;
   try {
     oauthSession = await initBlueskyOAuth();
-  } catch {}
+  } catch (e) { swallow('client-factory.buildAllClients', e); }
 
   for (const acct of accounts) {
     try {
@@ -108,7 +147,7 @@ export function getBskyAgent(clients: Map<number, ClientEntry>): Agent | null {
   for (const entry of clients.values()) {
     if (entry.platform === 'bluesky') {
       if (entry.oauthAgent) return entry.oauthAgent;
-      try { return (entry.client as BlueskyClient).getAgent(); } catch {}
+      try { return (entry.client as BlueskyClient).getAgent(); } catch (e) { swallow('client-factory.getBskyAgent', e); }
     }
   }
   return null;
