@@ -127,23 +127,79 @@ describe('buildFilterMatcher — matching', () => {
   });
 
   /**
-   * Known limitation, pinned rather than endorsed: whole_word wraps the keyword
-   * in \b...\b, and a word boundary cannot exist between two non-word
-   * characters. So a whole-word keyword that starts or ends with punctuation
-   * matches nothing at all — "c++" as a whole word never fires, while the same
-   * keyword as a substring does. Worth revisiting; changing it changes what
-   * people's existing filters hide.
+   * whole_word used to wrap the keyword in \b...\b. A word boundary cannot
+   * exist between two non-word characters, so a keyword starting or ending with
+   * punctuation matched nothing at all — "c++" as a whole word never fired.
+   * The boundary is now required only on an edge where the keyword has a word
+   * character, which is Mastodon's own rule.
    */
-  it('whole_word keywords bounded by punctuation match nothing', () => {
-    const wholeWord = buildFilterMatcher([filter({
+  it('whole_word matches a keyword that ends in punctuation', () => {
+    const match = buildFilterMatcher([filter({
       id: 'i2', keywords: [{ id: 'k', keyword: 'c++', whole_word: true }],
     })], 'home');
-    expect(wholeWord('I write c++ daily')).toBeNull();
+    expect(match('I write c++ daily')).not.toBeNull();
+    expect(match('I write c daily')).toBeNull();
+  });
 
-    const substring = buildFilterMatcher([filter({
-      id: 'i3', keywords: [{ id: 'k', keyword: 'c++', whole_word: false }],
+  it('whole_word matches a keyword that starts with punctuation', () => {
+    const match = buildFilterMatcher([filter({
+      id: 'i3', keywords: [{ id: 'k', keyword: '$AAPL', whole_word: true }],
     })], 'home');
-    expect(substring('I write c++ daily')).not.toBeNull();
+    expect(match('buying $AAPL today')).not.toBeNull();
+    // The keyword still has to be present in full.
+    expect(match('buying AAPL today')).toBeNull();
+    // Its leading edge is '$', a non-word character, so nothing is required of
+    // what precedes it — unlike the trailing 'L', which is still guarded.
+    expect(match('ticker:$AAPL')).not.toBeNull();
+    expect(match('$AAPLX')).toBeNull();
+  });
+
+  it('still refuses to match inside a longer word on a guarded edge', () => {
+    const match = buildFilterMatcher([filter({
+      id: 'i4', keywords: [{ id: 'k', keyword: 'cat', whole_word: true }],
+    })], 'home');
+    expect(match('the cat sat')).not.toBeNull();
+    expect(match('concatenate')).toBeNull();
+    expect(match('cats')).toBeNull();
+    expect(match('bobcat')).toBeNull();
+  });
+
+  it('finds a later occurrence when the first is inside a word', () => {
+    const match = buildFilterMatcher([filter({
+      id: 'i5', keywords: [{ id: 'k', keyword: 'cat', whole_word: true }],
+    })], 'home');
+    expect(match('concatenate, then the cat')).not.toBeNull();
+  });
+
+  it('matches at the very start and very end of the text', () => {
+    const match = buildFilterMatcher([filter({
+      id: 'i6', keywords: [{ id: 'k', keyword: 'cat', whole_word: true }],
+    })], 'home');
+    expect(match('cat')).not.toBeNull();
+    expect(match('cat sat')).not.toBeNull();
+    expect(match('the cat')).not.toBeNull();
+  });
+
+  it('treats non-latin scripts as word characters', () => {
+    const match = buildFilterMatcher([filter({
+      id: 'i7', keywords: [{ id: 'k', keyword: 'テスト', whole_word: true }],
+    })], 'home');
+    expect(match('これは テスト です')).not.toBeNull();
+    expect(match('テストケース')).toBeNull();  // inside a longer run of word chars
+  });
+
+  it('is case-insensitive for whole words too', () => {
+    const match = buildFilterMatcher([filter({
+      id: 'i8', keywords: [{ id: 'k', keyword: 'Spoiler', whole_word: true }],
+    })], 'home');
+    expect(match('a SPOILER here')).not.toBeNull();
+  });
+
+  it('an empty keyword matches nothing rather than everything', () => {
+    const match = buildFilterMatcher([filter({
+      id: 'i9', keywords: [{ id: 'k', keyword: '', whole_word: true }],
+    })], 'home');
+    expect(match('any text at all')).toBeNull();
   });
 });
 
