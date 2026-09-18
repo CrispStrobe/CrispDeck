@@ -2,13 +2,7 @@
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import Archive from '@lucide/svelte/icons/archive';
-  import Search from '@lucide/svelte/icons/search';
-  import Loader2 from '@lucide/svelte/icons/loader-2';
-  import Download from '@lucide/svelte/icons/download';
-  import Trash2 from '@lucide/svelte/icons/trash-2';
-  import Database from '@lucide/svelte/icons/database';
-  import RefreshCw from '@lucide/svelte/icons/refresh-cw';
+  import { Archive, Search, Loader2, Download, Trash2, Database, RefreshCw } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';

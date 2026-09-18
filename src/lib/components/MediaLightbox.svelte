@@ -1,10 +1,7 @@
 <script lang="ts">
   import { i18n } from '$lib/i18n.svelte';
   import { untrack } from 'svelte';
-  import X from '@lucide/svelte/icons/x';
-  import ChevronLeft from '@lucide/svelte/icons/chevron-left';
-  import ChevronRight from '@lucide/svelte/icons/chevron-right';
-  import ExternalLink from '@lucide/svelte/icons/external-link';
+  import { X, ChevronLeft, ChevronRight, ExternalLink } from '@lucide/svelte';
   import { haptic } from '$lib/haptics';
 
   export interface LightboxItem {

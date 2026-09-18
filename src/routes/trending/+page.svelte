@@ -3,11 +3,7 @@
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, getBskyClient, getMastoClient, type ClientEntry } from '$lib/api/client-factory';
-  import TrendingUp from '@lucide/svelte/icons/trending-up';
-  import Loader2 from '@lucide/svelte/icons/loader-2';
-  import Hash from '@lucide/svelte/icons/hash';
-  import Link2 from '@lucide/svelte/icons/link-2';
-  import Rss from '@lucide/svelte/icons/rss';
+  import { TrendingUp, Loader2, Hash, Link2, Rss } from '@lucide/svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import { normalizePost, sortPosts } from '$lib/api/unified';

@@ -1,7 +1,6 @@
 <script lang="ts">
   import { i18n } from '$lib/i18n.svelte';
-  import X from '@lucide/svelte/icons/x';
-  import Mic from '@lucide/svelte/icons/mic';
+  import { X, Mic } from '@lucide/svelte';
   import { onMount } from 'svelte';
 
   let { show = $bindable(false) }: { show: boolean } = $props();

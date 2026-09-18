@@ -15,24 +15,11 @@
   import Post from '$lib/components/Post.svelte';
   import type { UnifiedPost, Account } from '$lib/types';
   import type { Agent } from '@atproto/api';
-  import Wand2 from '@lucide/svelte/icons/wand-2';
-  import Plus from '@lucide/svelte/icons/plus';
-  import Trash2 from '@lucide/svelte/icons/trash-2';
-  import Play from '@lucide/svelte/icons/play';
-  import Save from '@lucide/svelte/icons/save';
-  import Loader2 from '@lucide/svelte/icons/loader-2';
-  import X from '@lucide/svelte/icons/x';
-  import Search from '@lucide/svelte/icons/search';
-  import ChevronDown from '@lucide/svelte/icons/chevron-down';
-  import Eye from '@lucide/svelte/icons/eye';
-  import EyeOff from '@lucide/svelte/icons/eye-off';
-  import Columns3 from '@lucide/svelte/icons/columns-3';
-  import Copy from '@lucide/svelte/icons/copy';
-  import FileText from '@lucide/svelte/icons/file-text';
-  import GripVertical from '@lucide/svelte/icons/grip-vertical';
-  import Upload from '@lucide/svelte/icons/upload';
-  import CloudOff from '@lucide/svelte/icons/cloud-off';
-  import ExternalLink from '@lucide/svelte/icons/external-link';
+  import {
+    Wand2, Plus, Trash2, Play, Save, Loader2, X, Search,
+    ChevronDown, Eye, EyeOff, Columns3, Copy, FileText, GripVertical,
+    Upload, CloudOff, ExternalLink,
+  } from '@lucide/svelte';
 
   let accounts: Account[] = $state([]);
   let clientEntries: Map<number, ClientEntry> = new Map();

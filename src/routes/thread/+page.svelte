@@ -2,11 +2,7 @@
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import MessageCircle from '@lucide/svelte/icons/message-circle';
-  import Loader2 from '@lucide/svelte/icons/loader-2';
-  import ArrowLeft from '@lucide/svelte/icons/arrow-left';
-  import BookOpen from '@lucide/svelte/icons/book-open';
-  import Share2 from '@lucide/svelte/icons/share-2';
+  import { MessageCircle, Loader2, ArrowLeft, BookOpen, Share2 } from '@lucide/svelte';
   import { goto } from '$app/navigation';
   import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';

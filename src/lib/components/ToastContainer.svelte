@@ -1,11 +1,7 @@
 <script lang="ts">
   import { i18n } from '$lib/i18n.svelte';
   import { getToasts, dismissToast, type ToastType } from '$lib/toast.svelte';
-  import X from '@lucide/svelte/icons/x';
-  import CheckCircle from '@lucide/svelte/icons/check-circle';
-  import AlertCircle from '@lucide/svelte/icons/alert-circle';
-  import Info from '@lucide/svelte/icons/info';
-  import AlertTriangle from '@lucide/svelte/icons/alert-triangle';
+  import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from '@lucide/svelte';
 
   const iconMap: Record<ToastType, typeof CheckCircle> = {
     success: CheckCircle,

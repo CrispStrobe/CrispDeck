@@ -1,7 +1,7 @@
 <script lang="ts">
   import { i18n } from '$lib/i18n.svelte';
   import { base } from '$app/paths';
-  import ChevronUp from '@lucide/svelte/icons/chevron-up';
+  import { ChevronUp } from '@lucide/svelte';
   import type { Account } from '$lib/types';
 
   let {

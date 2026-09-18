@@ -2,12 +2,7 @@
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import User from '@lucide/svelte/icons/user';
-  import Loader2 from '@lucide/svelte/icons/loader-2';
-  import UserPlus from '@lucide/svelte/icons/user-plus';
-  import UserMinus from '@lucide/svelte/icons/user-minus';
-  import Ban from '@lucide/svelte/icons/ban';
-  import ArrowLeft from '@lucide/svelte/icons/arrow-left';
+  import { User, Loader2, UserPlus, UserMinus, Ban, ArrowLeft } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';

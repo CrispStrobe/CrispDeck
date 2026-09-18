@@ -4,9 +4,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { completeMastodonOAuth, addAccount, listAccounts } from '$lib/db';
-  import Loader2 from '@lucide/svelte/icons/loader-2';
-  import Check from '@lucide/svelte/icons/check';
-  import AlertTriangle from '@lucide/svelte/icons/alert-triangle';
+  import { Loader2, Check, AlertTriangle } from '@lucide/svelte';
 
   let status: 'loading' | 'success' | 'error' = $state('loading');
   let errorMsg = $state('');

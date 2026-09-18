@@ -1,8 +1,7 @@
 <script lang="ts">
   import { i18n } from '$lib/i18n.svelte';
   import { base } from '$app/paths';
-  import AlertTriangle from '@lucide/svelte/icons/alert-triangle';
-  import RefreshCw from '@lucide/svelte/icons/refresh-cw';
+  import { AlertTriangle, RefreshCw } from '@lucide/svelte';
 
   let { children }: { children: any } = $props();
 

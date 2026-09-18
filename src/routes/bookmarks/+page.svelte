@@ -1,10 +1,7 @@
 <script lang="ts">
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
-  import Bookmark from '@lucide/svelte/icons/bookmark';
-  import Loader2 from '@lucide/svelte/icons/loader-2';
-  import Inbox from '@lucide/svelte/icons/inbox';
-  import RefreshCw from '@lucide/svelte/icons/refresh-cw';
+  import { Bookmark, Loader2, Inbox, RefreshCw } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { listBookmarks, importPlatformBookmarks } from '$lib/bookmarks';
   import { getAllBlueskyBookmarks } from '$lib/api/bluesky-bookmarks';

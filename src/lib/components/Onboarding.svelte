@@ -1,6 +1,5 @@
 <script lang="ts">
-  import ArrowLeft from '@lucide/svelte/icons/arrow-left';
-  import Loader2 from '@lucide/svelte/icons/loader-2';
+  import { ArrowLeft, Loader2 } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { isTauri } from '$lib/platform';
   import { OAUTH_UNAVAILABLE_IN_APP } from '$lib/api/bluesky-oauth';

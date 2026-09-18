@@ -1,12 +1,7 @@
 <script lang="ts">
   import { i18n } from '$lib/i18n.svelte';
   import { untrack } from 'svelte';
-  import ImageIcon from '@lucide/svelte/icons/image';
-  import MessageSquareOff from '@lucide/svelte/icons/message-square-off';
-  import Heart from '@lucide/svelte/icons/heart';
-  import Repeat from '@lucide/svelte/icons/repeat';
-  import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
-  import ChevronDown from '@lucide/svelte/icons/chevron-down';
+  import { ImageIcon, MessageSquareOff, Heart, Repeat, SlidersHorizontal, ChevronDown } from '@lucide/svelte';
   import type { Filters } from '$lib/types';
 
   let { filters, onchange, startOpen = false }: {

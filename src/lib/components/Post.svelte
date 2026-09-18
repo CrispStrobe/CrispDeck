@@ -1,24 +1,7 @@
 <script lang="ts">
   import { i18n } from '$lib/i18n.svelte';
   import { base } from '$app/paths';
-  import Heart from '@lucide/svelte/icons/heart';
-  import Repeat from '@lucide/svelte/icons/repeat';
-  import MessageCircle from '@lucide/svelte/icons/message-circle';
-  import Quote from '@lucide/svelte/icons/quote';
-  import Bookmark from '@lucide/svelte/icons/bookmark';
-  import Share from '@lucide/svelte/icons/share';
-  import Flag from '@lucide/svelte/icons/flag';
-  import Languages from '@lucide/svelte/icons/languages';
-  import Camera from '@lucide/svelte/icons/camera';
-  import Loader2 from '@lucide/svelte/icons/loader-2';
-  import Volume2 from '@lucide/svelte/icons/volume-2';
-  import VolumeOff from '@lucide/svelte/icons/volume-off';
-  import BarChart3 from '@lucide/svelte/icons/bar-chart-3';
-  import UserPlus from '@lucide/svelte/icons/user-plus';
-  import UserCheck from '@lucide/svelte/icons/user-check';
-  import Pin from '@lucide/svelte/icons/pin';
-  import ListPlus from '@lucide/svelte/icons/list-plus';
-  import XIcon from '@lucide/svelte/icons/x';
+  import { Heart, Repeat, MessageCircle, Quote, Bookmark, Share, Flag, Languages, Camera, Loader2, Volume2, VolumeOff, BarChart3, UserPlus, UserCheck, Pin, ListPlus, X as XIcon } from '@lucide/svelte';
   import { goto } from '$app/navigation';
   import { isPinned, pinPost, unpinPost } from '$lib/pinned-posts';
   import { addBookmark, removeBookmark, isBookmarked } from '$lib/bookmarks';

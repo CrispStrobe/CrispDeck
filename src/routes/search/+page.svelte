@@ -2,16 +2,7 @@
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import Search from '@lucide/svelte/icons/search';
-  import Loader2 from '@lucide/svelte/icons/loader-2';
-  import Inbox from '@lucide/svelte/icons/inbox';
-  import HelpCircle from '@lucide/svelte/icons/help-circle';
-  import Image from '@lucide/svelte/icons/image';
-  import User from '@lucide/svelte/icons/user';
-  import Calendar from '@lucide/svelte/icons/calendar';
-  import Bookmark from '@lucide/svelte/icons/bookmark';
-  import BookmarkCheck from '@lucide/svelte/icons/bookmark-check';
-  import X from '@lucide/svelte/icons/x';
+  import { Search, Loader2, Inbox, HelpCircle, Image, User, Calendar, Bookmark, BookmarkCheck, X } from '@lucide/svelte';
   import { listSavedSearches, saveSearch, deleteSavedSearch, isSaved, type SavedSearch } from '$lib/saved-searches';
   import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';

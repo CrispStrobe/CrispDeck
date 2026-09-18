@@ -2,13 +2,7 @@
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import Package from '@lucide/svelte/icons/package';
-  import Loader2 from '@lucide/svelte/icons/loader-2';
-  import UserPlus from '@lucide/svelte/icons/user-plus';
-  import Users from '@lucide/svelte/icons/users';
-  import ExternalLink from '@lucide/svelte/icons/external-link';
-  import Plus from '@lucide/svelte/icons/plus';
-  import Trash2 from '@lucide/svelte/icons/trash-2';
+  import { Package, Loader2, UserPlus, Users, ExternalLink, Plus, Trash2 } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { publishStarterPack, type StarterPackDraft } from '$lib/starter-pack-creator';

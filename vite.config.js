@@ -47,28 +47,12 @@ export default defineConfig({
     cssMinify: 'lightningcss',
     rollupOptions: {
       output: {
-        /**
-         * @param {string} id
-         * @param {{ getModuleInfo: (id: string) => { importers?: readonly string[] } | null }} ctx
-         */
-        manualChunks(id, { getModuleInfo }) {
+        /** @param {string} id */
+        manualChunks(id) {
           // Split large vendor dependencies into separate cacheable chunks
           if (id.includes('node_modules/@atproto')) return 'vendor-atproto';
           if (id.includes('node_modules/masto')) return 'vendor-masto';
-
-          // Icons are one module each and are imported by deep path, so an
-          // icon's importers are the components that use it. Letting Rollup
-          // place them freely scattered 112 modules across 74 chunks, which
-          // cost more in per-chunk overhead and requests than the icons
-          // weigh. Two groups instead: what the shell paints with, and the
-          // rest, which no longer rides into the entry behind it.
-          if (/node_modules[/\\]@lucide[/\\]svelte[/\\]/.test(id)) {
-            const isIcon = /[/\\]icons[/\\][\w-]+\.js$/.test(id);
-            if (!isIcon) return 'vendor-icons-shell'; // shared base component
-            const importers = getModuleInfo(id)?.importers ?? [];
-            const inShell = importers.some((i) => /routes[/\\]\+layout\.svelte/.test(i));
-            return inShell ? 'vendor-icons-shell' : 'vendor-icons-route';
-          }
+          if (id.includes('node_modules/@lucide')) return 'vendor-icons';
         },
       },
     },

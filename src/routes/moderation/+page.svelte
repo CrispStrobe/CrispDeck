@@ -2,11 +2,7 @@
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import Shield from '@lucide/svelte/icons/shield';
-  import Loader2 from '@lucide/svelte/icons/loader-2';
-  import Ban from '@lucide/svelte/icons/ban';
-  import VolumeX from '@lucide/svelte/icons/volume-x';
-  import UserX from '@lucide/svelte/icons/user-x';
+  import { Shield, Loader2, Ban, VolumeX, UserX } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { toast } from '$lib/toast.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';

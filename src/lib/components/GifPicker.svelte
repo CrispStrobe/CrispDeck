@@ -1,8 +1,6 @@
 <script lang="ts">
   import { i18n } from '$lib/i18n.svelte';
-  import Loader2 from '@lucide/svelte/icons/loader-2';
-  import X from '@lucide/svelte/icons/x';
-  import Search from '@lucide/svelte/icons/search';
+  import { Loader2, X, Search } from '@lucide/svelte';
 
   let { onselect }: { onselect: (gif: { url: string; preview: string; width: number; height: number; title: string }) => void } = $props();
 

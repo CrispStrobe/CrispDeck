@@ -2,9 +2,7 @@
   import { base } from '$app/paths';
   import { onMount, onDestroy } from 'svelte';
   import { initAllClients, invalidateClientCache, type ClientEntry } from '$lib/api/client-factory';
-  import Columns3 from '@lucide/svelte/icons/columns-3';
-  import Plus from '@lucide/svelte/icons/plus';
-  import Loader2 from '@lucide/svelte/icons/loader-2';
+  import { Columns3, Plus, Loader2 } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { haptic } from '$lib/haptics';
   import DelayedSpinner from '$lib/components/DelayedSpinner.svelte';
