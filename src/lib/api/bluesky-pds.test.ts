@@ -5,7 +5,11 @@
 import { describe, it, expect } from 'vitest';
 import { resolvePdsEndpoint } from './bluesky';
 
-describe('resolvePdsEndpoint', () => {
+// These hit third-party servers (mastodon.social, bsky.app, plc.directory), so
+// they can fail on transient latency rather than on a real regression. Retried
+// and given a generous timeout so a slow response doesn't read as a breakage;
+// a genuine failure still fails all attempts.
+describe('resolvePdsEndpoint', { retry: 2, timeout: 30_000 }, () => {
   it('resolves bsky.app to a PDS endpoint', async () => {
     const pds = await resolvePdsEndpoint('bsky.app');
     expect(pds).toMatch(/^https:\/\//);

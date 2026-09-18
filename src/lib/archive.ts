@@ -106,6 +106,87 @@ export function toArchiveRecord(post: UnifiedPost, type: ArchiveType): ArchivedP
   };
 }
 
+/**
+ * Maximum records kept. The archive grows with every sync and was only ever
+ * emptied wholesale by the user, so a heavy account could push IndexedDB into
+ * the hundreds of megabytes — and browsers evict IndexedDB under storage
+ * pressure a whole database at a time, so the failure mode is losing the lot
+ * rather than merely being slow. Oldest records are dropped past the cap.
+ */
+export const DEFAULT_ARCHIVE_CAP = 20_000;
+
+export function getArchiveCap(): number {
+  try {
+    const raw = localStorage.getItem('crispdeck-archive-cap');
+    const n = raw ? parseInt(raw, 10) : NaN;
+    if (Number.isFinite(n) && n > 0) return n;
+  } catch {
+    // storage blocked; fall through to the default
+  }
+  return DEFAULT_ARCHIVE_CAP;
+}
+
+function countRecords(db: IDBDatabase): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).count();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/**
+ * Drop the oldest records until at most `cap` remain.
+ *
+ * Walks the createdAt index forwards (oldest first) and deletes through the
+ * cursor, so only the records actually being removed are read.
+ * Returns how many were deleted.
+ */
+export async function pruneArchive(cap = getArchiveCap()): Promise<number> {
+  const db = await openArchiveDB();
+  const total = await countRecords(db);
+  const excess = total - cap;
+  if (excess <= 0) return 0;
+
+  return new Promise((resolve, reject) => {
+    const txn = db.transaction(STORE_NAME, 'readwrite');
+    const index = txn.objectStore(STORE_NAME).index('createdAt');
+    let removed = 0;
+    const req = index.openCursor(null, 'next');
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const cursor = req.result;
+      if (!cursor || removed >= excess) return;
+      cursor.delete();
+      removed++;
+      cursor.continue();
+    };
+    txn.oncomplete = () => resolve(removed);
+    txn.onerror = () => reject(txn.error);
+  });
+}
+
+/** How much room the archive is taking, for the archive page to show. */
+export async function getArchiveUsage(): Promise<{
+  records: number;
+  cap: number;
+  usageBytes: number | null;
+  quotaBytes: number | null;
+}> {
+  const db = await openArchiveDB();
+  const records = await countRecords(db);
+  let usageBytes: number | null = null;
+  let quotaBytes: number | null = null;
+  try {
+    // Origin-wide, not archive-specific — the browser exposes nothing finer.
+    const estimate = await navigator.storage?.estimate?.();
+    usageBytes = estimate?.usage ?? null;
+    quotaBytes = estimate?.quota ?? null;
+  } catch {
+    // Storage API unavailable or blocked.
+  }
+  return { records, cap: getArchiveCap(), usageBytes, quotaBytes };
+}
+
 /** Add posts to the archive (upsert — won't duplicate) */
 export async function archivePosts(posts: UnifiedPost[], type: ArchiveType): Promise<number> {
   const db = await openArchiveDB();
@@ -119,13 +200,48 @@ export async function archivePosts(posts: UnifiedPost[], type: ArchiveType): Pro
     added++;
   }
 
-  return new Promise((resolve, reject) => {
-    txn.oncomplete = () => resolve(added);
+  await new Promise<void>((resolve, reject) => {
+    txn.oncomplete = () => resolve();
     txn.onerror = () => reject(txn.error);
+  });
+
+  // Keep the store bounded rather than letting it grow until the browser
+  // evicts the whole database.
+  await pruneArchive();
+  return added;
+}
+
+/** Count rows matching one index key, without materialising them. */
+function countByIndex(db: IDBDatabase, indexName: string, key: IDBValidKey): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).index(indexName).count(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
   });
 }
 
-/** Get archive stats */
+/** First or last value of an index, via a single-step cursor. */
+function edgeByIndex(
+  db: IDBDatabase,
+  indexName: string,
+  direction: 'next' | 'prev'
+): Promise<ArchivedPost | null> {
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME)
+      .index(indexName).openCursor(null, direction);
+    req.onsuccess = () => resolve((req.result?.value as ArchivedPost) ?? null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/**
+ * Get archive stats.
+ *
+ * Counted through the indexes rather than by reading every record — this is
+ * called on the archive page, and materialising the whole store (each record
+ * carrying the full raw API payload) to produce a handful of numbers got
+ * steadily more expensive as the archive grew.
+ */
 export async function getArchiveStats(): Promise<{
   total: number;
   byType: Record<ArchiveType, number>;
@@ -133,28 +249,30 @@ export async function getArchiveStats(): Promise<{
   dateRange: { oldest: string; newest: string } | null;
 }> {
   const db = await openArchiveDB();
-  const all = await new Promise<ArchivedPost[]>((resolve, reject) => {
-    const req = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
 
-  const byType: Record<string, number> = { post: 0, like: 0, repost: 0, reply: 0 };
-  const byPlatform: Record<string, number> = { bluesky: 0, mastodon: 0 };
-  let oldest = '', newest = '';
+  const types: ArchiveType[] = ['post', 'like', 'repost', 'reply'];
+  const platforms: Platform[] = ['bluesky', 'mastodon', 'threads'];
 
-  for (const p of all) {
-    byType[p.type] = (byType[p.type] ?? 0) + 1;
-    byPlatform[p.platform] = (byPlatform[p.platform] ?? 0) + 1;
-    if (!oldest || p.createdAt < oldest) oldest = p.createdAt;
-    if (!newest || p.createdAt > newest) newest = p.createdAt;
-  }
+  const [total, typeCounts, platformCounts, oldestRow, newestRow] = await Promise.all([
+    countRecords(db),
+    Promise.all(types.map((t) => countByIndex(db, 'type', t))),
+    Promise.all(platforms.map((p) => countByIndex(db, 'platform', p))),
+    edgeByIndex(db, 'createdAt', 'next'),
+    edgeByIndex(db, 'createdAt', 'prev'),
+  ]);
+
+  const byType = {} as Record<ArchiveType, number>;
+  types.forEach((t, i) => { byType[t] = typeCounts[i]; });
+  const byPlatform = {} as Record<Platform, number>;
+  platforms.forEach((p, i) => { byPlatform[p] = platformCounts[i]; });
 
   return {
-    total: all.length,
-    byType: byType as Record<ArchiveType, number>,
-    byPlatform: byPlatform as Record<Platform, number>,
-    dateRange: all.length > 0 ? { oldest, newest } : null,
+    total,
+    byType,
+    byPlatform,
+    dateRange: oldestRow && newestRow
+      ? { oldest: oldestRow.createdAt, newest: newestRow.createdAt }
+      : null,
   };
 }
 

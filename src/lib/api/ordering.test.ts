@@ -8,7 +8,11 @@ import { MastodonClient } from './mastodon';
 import { normalizePost, sortPosts, filterPosts, detectCrossposts } from './unified';
 import type { UnifiedPost } from '$lib/types';
 
-describe('Feed ordering (live API)', () => {
+// These hit third-party servers (mastodon.social, bsky.app, plc.directory), so
+// they can fail on transient latency rather than on a real regression. Retried
+// and given a generous timeout so a slow response doesn't read as a breakage;
+// a genuine failure still fails all attempts.
+describe('Feed ordering (live API)', { retry: 2, timeout: 30_000 }, () => {
   it('Bluesky feed posts are correctly ordered after sortPosts', async () => {
     const client = BlueskyClient.readOnly('bsky.app');
     const { feed } = await client.getAuthorFeed('bsky.app');

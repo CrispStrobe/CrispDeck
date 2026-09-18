@@ -1,6 +1,7 @@
 <script lang="ts">
   import { swallow } from '$lib/debug';
   import { pollWhenVisible } from '$lib/poll';
+  import { RequestQueue } from '$lib/request-queue';
   import { onMount } from 'svelte';
   import type { ClientEntry } from '$lib/api/client-factory';
   import { Columns3, Plus, Loader2 } from '@lucide/svelte';
@@ -112,7 +113,23 @@
     localStorage.setItem('crispdeck-deck-columns', JSON.stringify(columns));
   }
 
-  async function loadColumn(col: DeckColumnConfig) {
+  /**
+   * Every column loads at once — on mount, on manual refresh, and every three
+   * minutes — and each one fans out across every account on its platform. That
+   * burst is what the rate limiters see. The queue caps how many columns are
+   * in flight, and keys on the column id so a refresh landing on top of a
+   * running load joins it instead of starting a second one.
+   */
+  const columnQueue = new RequestQueue(3);
+
+  function loadColumn(col: DeckColumnConfig) {
+    // Mark it busy now rather than when the queue reaches it, so a column
+    // waiting for a slot still shows its spinner.
+    columnLoading[col.id] = true;
+    return columnQueue.run(`deck-col:${col.id}`, () => fetchColumn(col));
+  }
+
+  async function fetchColumn(col: DeckColumnConfig) {
     columnLoading[col.id] = true;
     const posts: UnifiedPost[] = [];
 

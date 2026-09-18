@@ -17,6 +17,7 @@
 <script lang="ts" generics="T">
   import { onMount, untrack, type Snippet } from 'svelte';
   import { computeWindow, HeightCache } from '$lib/virtual-list';
+  import { findScrollParent } from '$lib/scroll';
 
   let {
     items,
@@ -40,16 +41,6 @@
   /** The element that actually scrolls; null means the window does. */
   let scroller: HTMLElement | null = null;
 
-  /** Nearest ancestor that scrolls vertically, or null for the window. */
-  function findScroller(from: HTMLElement): HTMLElement | null {
-    let node = from.parentElement;
-    while (node && node !== document.body && node !== document.documentElement) {
-      const overflowY = getComputedStyle(node).overflowY;
-      if (overflowY === 'auto' || overflowY === 'scroll') return node;
-      node = node.parentElement;
-    }
-    return null;
-  }
   let viewportTop = $state(0);
   let viewportHeight = $state(0);
   /** Bumped whenever a measurement changes, to re-run the window. */
@@ -81,7 +72,7 @@
   }
 
   onMount(() => {
-    if (container) scroller = findScroller(container);
+    scroller = findScrollParent(container);
     readViewport();
 
     let queued = false;

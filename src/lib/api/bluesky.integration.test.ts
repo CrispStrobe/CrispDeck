@@ -7,7 +7,11 @@ import { describe, it, expect } from 'vitest';
 import { BlueskyClient } from './bluesky';
 import { normalizePost } from './unified';
 
-describe('BlueskyClient (live API)', () => {
+// These hit third-party servers (mastodon.social, bsky.app, plc.directory), so
+// they can fail on transient latency rather than on a real regression. Retried
+// and given a generous timeout so a slow response doesn't read as a breakage;
+// a genuine failure still fails all attempts.
+describe('BlueskyClient (live API)', { retry: 2, timeout: 30_000 }, () => {
   const client = BlueskyClient.readOnly('bsky.app');
 
   it('fetches a public profile', async () => {

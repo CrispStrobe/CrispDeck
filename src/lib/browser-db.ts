@@ -1,7 +1,8 @@
 /**
  * Browser-side database using IndexedDB.
  * Mirrors the Rust/SQLite backend so the app works fully on Vercel.
- * Credentials are stored with Web Crypto AES-GCM encryption.
+ * Credentials are stored with Web Crypto AES-GCM encryption — see getCryptoKey
+ * for what that does and does not protect against in a browser.
  */
 
 import type {
@@ -102,9 +103,28 @@ function now(): string {
 
 const CRYPTO_KEY_NAME = 'crispdeck-key';
 
+/**
+ * Derive the credential key.
+ *
+ * IMPORTANT — this is obfuscation, not a security boundary. The seed lives in
+ * localStorage, the ciphertext lives in IndexedDB, and both are same-origin:
+ * anything that can read one can read the other, so any script running on the
+ * page can decrypt every stored credential. It raises the bar against casual
+ * inspection of a profile directory; it stops nothing else.
+ *
+ * What actually limits the damage is what gets stored. Prefer OAuth, where the
+ * token is scoped and can be revoked from the account it belongs to (Bluesky
+ * uses OAuth already). A Mastodon app token or a Bluesky app password stored
+ * here is a long-lived credential and is the real exposure.
+ *
+ * The desktop build does better — Tauri holds a machine-bound Argon2 key, so
+ * the ciphertext is not readable by a different user or a copied profile.
+ *
+ * (The PBKDF2 stretching below buys nothing: stretching defends low-entropy
+ * passphrases, and the seed is a random UUID. It is kept only so existing
+ * stored credentials stay readable.)
+ */
 async function getCryptoKey(): Promise<CryptoKey> {
-  // Derive a stable key from a fixed passphrase stored in localStorage.
-  // Less secure than Tauri's machine-bound Argon2 key, but functional for web.
   let seed = localStorage.getItem(CRYPTO_KEY_NAME);
   if (!seed) {
     seed = crypto.randomUUID();

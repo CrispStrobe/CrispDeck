@@ -6,7 +6,11 @@ import { describe, it, expect } from 'vitest';
 
 const PUBLIC_API = 'https://public.api.bsky.app';
 
-describe('Bluesky public API — live', () => {
+// These hit third-party servers (mastodon.social, bsky.app, plc.directory), so
+// they can fail on transient latency rather than on a real regression. Retried
+// and given a generous timeout so a slow response doesn't read as a breakage;
+// a genuine failure still fails all attempts.
+describe('Bluesky public API — live', { retry: 2, timeout: 30_000 }, () => {
   it('trending topics returns data', async () => {
     const resp = await fetch(`${PUBLIC_API}/xrpc/app.bsky.unspecced.getTrendingTopics?limit=10`);
     expect(resp.ok).toBe(true);

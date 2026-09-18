@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { X, RefreshCw, Loader2, GripVertical, Heart, Repeat, UserPlus, MessageCircle, AtSign, Bell, Quote, ChevronDown, ChevronUp } from '@lucide/svelte';
   import Post from '$lib/components/Post.svelte';
+  import VirtualList from '$lib/components/VirtualList.svelte';
   import type { UnifiedPost } from '$lib/types';
   import type { NotificationGroup } from '$lib/notification-grouping';
   import { i18n } from '$lib/i18n.svelte';
@@ -247,9 +248,19 @@
     {:else if filteredPosts.length === 0}
       <p class="text-center py-8 text-xs text-[var(--color-text-muted)]">{filterText ? 'No matches' : 'No posts'}</p>
     {:else}
-      {#each filteredPosts as post (post.uri)}
-        <Post {post} {onlike} {onboost} />
-      {/each}
+      <!--
+        Windowed like the main feed. A column is its own scroll container, and
+        VirtualList finds it, so this needs no extra wiring. Spacing is padding
+        on the row rather than space-y on the container, so a row's measured
+        height includes the gap.
+      -->
+      <VirtualList items={filteredPosts} key={(p) => p.uri} estimate={160}>
+        {#snippet item(post)}
+          <div class="pb-2">
+            <Post {post} {onlike} {onboost} />
+          </div>
+        {/snippet}
+      </VirtualList>
     {/if}
   </div>
 

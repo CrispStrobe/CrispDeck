@@ -1,6 +1,7 @@
 <script lang="ts">
   import { swallow } from '$lib/debug';
   import { pollWhenVisible } from '$lib/poll';
+  import { isAtScrollTop } from '$lib/scroll';
   import { onMount } from 'svelte';
   import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal, RefreshCw } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
@@ -59,6 +60,7 @@
 
   // Pull-to-refresh
   let pullStartY = 0;
+  let feedRoot = $state<HTMLElement | null>(null);
   let pullDistance = $state(0);
   let isPulling = $state(false);
   let pullRefreshing = $state(false);
@@ -403,7 +405,11 @@
   const isLoading = $derived(loading || loadingMore);
 
   function onTouchStart(e: TouchEvent) {
-    if (window.scrollY === 0) {
+    // Ask the scroll parent, not the window. The app shell sets
+    // `overflow: hidden` on html/body and scrolls an inner <main>, so
+    // window.scrollY is permanently 0 — this gate was always open, and any
+    // downward drag anywhere in the feed triggered a full reload.
+    if (isAtScrollTop(feedRoot)) {
       pullStartY = e.touches[0].clientY;
       isPulling = true;
     }
@@ -430,7 +436,7 @@
 
 <svelte:head><title>CrispDeck — Feed</title><meta name="description" content="Your unified Mastodon + Bluesky timeline" /></svelte:head>
 
-<div class="p-6" role="feed" aria-label="Social feed" ontouchstart={onTouchStart} ontouchmove={onTouchMove} ontouchend={onTouchEnd}>
+<div class="p-6" role="feed" aria-label="Social feed" bind:this={feedRoot} ontouchstart={onTouchStart} ontouchmove={onTouchMove} ontouchend={onTouchEnd}>
   <div class="flex items-center justify-between mb-4">
     <div class="flex items-center gap-2">
       <Rss size={24} />

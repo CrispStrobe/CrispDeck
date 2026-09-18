@@ -9,7 +9,7 @@
   import type { BlueskyClient } from '$lib/api/bluesky';
   import type { MastodonClient } from '$lib/api/mastodon';
   import { normalizePost } from '$lib/api/unified';
-  import { archivePosts, searchArchive, getArchiveStats, clearArchive, type ArchivedPost, type ArchiveType } from '$lib/archive';
+  import { archivePosts, searchArchive, getArchiveStats, getArchiveUsage, clearArchive, type ArchivedPost, type ArchiveType } from '$lib/archive';
   import { exportAsJson, exportAsCsv, exportAsMarkdown } from '$lib/utils/export';
   import Post from '$lib/components/Post.svelte';
   import type { Account, UnifiedPost, Platform } from '$lib/types';
@@ -23,6 +23,16 @@
 
   // Archive stats
   let stats = $state({ total: 0, byType: { post: 0, like: 0, repost: 0, reply: 0 }, byPlatform: { bluesky: 0, mastodon: 0 }, dateRange: null as { oldest: string; newest: string } | null });
+  // Storage footprint — the archive is capped, and eviction takes the whole
+  // database, so it's worth showing how close it is to the browser's quota.
+  let usage = $state<{ records: number; cap: number; usageBytes: number | null; quotaBytes: number | null } | null>(null);
+
+  function formatBytes(n: number): string {
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+    if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  }
 
   // Search
   let query = $state('');
@@ -38,6 +48,7 @@
       accounts = result.accounts;
       clientEntries = result.clients;
       stats = await getArchiveStats();
+      usage = await getArchiveUsage();
 
       // Auto-refresh: if archive exists and accounts are configured, append new posts
       if (stats.total > 0 && accounts.length > 0) {
@@ -104,6 +115,7 @@
 
     buildProgress = added > 0 ? `Added ${added} new posts.` : 'Archive is up to date.';
     stats = await getArchiveStats();
+    usage = await getArchiveUsage();
     building = false;
     // Clear progress message after a moment
     setTimeout(() => { if (!building) buildProgress = ''; }, 3000);
@@ -180,6 +192,7 @@
 
     buildProgress = `Done! ${total} items archived.`;
     stats = await getArchiveStats();
+    usage = await getArchiveUsage();
     building = false;
   }
 
@@ -197,6 +210,7 @@
     if (confirm('Delete entire archive? This cannot be undone.')) {
       await clearArchive();
       stats = await getArchiveStats();
+      usage = await getArchiveUsage();
       results = [];
     }
   }
@@ -287,6 +301,19 @@
           <span class="text-sm">{stats.byPlatform.mastodon}</span>
         </div>
         <div class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.archive.byPlatform}</div>
+      </div>
+      <div class="bg-[var(--color-surface)] p-3 rounded-lg border border-[var(--color-border)] text-center">
+        <div class="text-lg font-bold text-[var(--color-text)]">
+          {usage?.usageBytes != null ? formatBytes(usage.usageBytes) : '—'}
+        </div>
+        <div class="text-[10px] text-[var(--color-text-muted)]">
+          Storage used{#if usage?.quotaBytes}
+            · {Math.round((usage.usageBytes ?? 0) / usage.quotaBytes * 100)}% of quota
+          {/if}
+          {#if usage && usage.records >= usage.cap}
+            <span class="text-[var(--color-warning,#d97706)]">· at {usage.cap} cap, oldest dropped</span>
+          {/if}
+        </div>
       </div>
       <div class="bg-[var(--color-surface)] p-3 rounded-lg border border-[var(--color-border)] text-center">
         {#if stats.dateRange}
