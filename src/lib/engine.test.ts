@@ -1,121 +1,86 @@
 /**
- * Tests for TTS/STT engine selection and localStorage persistence.
- * @vitest-environment jsdom
+ * TTS/STT engine selection.
+ *
+ * Previously asserted against localStorage directly, so it could not fail when
+ * the settings page or the compose dictation changed. Now exercises
+ * $lib/settings, which both of those use.
  */
+// @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest';
+import {
+  getTtsEngine, setTtsEngine, getSttEngine, setSttEngine,
+  SPEECH_ENGINES, type SpeechEngine,
+} from './settings';
 
-describe('TTS/STT engine settings', () => {
-  beforeEach(() => {
-    localStorage.clear();
+beforeEach(() => localStorage.clear());
+
+describe('TTS engine', () => {
+  it('defaults to auto', () => {
+    expect(getTtsEngine()).toBe('auto');
   });
 
-  describe('TTS engine', () => {
-    it('defaults to auto when not set', () => {
-      expect(localStorage.getItem('crispdeck-tts-engine')).toBeNull();
-      const engine = localStorage.getItem('crispdeck-tts-engine') ?? 'auto';
-      expect(engine).toBe('auto');
-    });
-
-    it('persists crispasr choice', () => {
-      localStorage.setItem('crispdeck-tts-engine', 'crispasr');
-      expect(localStorage.getItem('crispdeck-tts-engine')).toBe('crispasr');
-    });
-
-    it('persists browser choice', () => {
-      localStorage.setItem('crispdeck-tts-engine', 'browser');
-      expect(localStorage.getItem('crispdeck-tts-engine')).toBe('browser');
-    });
-
-    it('TTS model persists independently', () => {
-      localStorage.setItem('crispdeck-tts-model', 'kokoro');
-      localStorage.setItem('crispdeck-tts-engine', 'browser');
-      expect(localStorage.getItem('crispdeck-tts-model')).toBe('kokoro');
-      expect(localStorage.getItem('crispdeck-tts-engine')).toBe('browser');
-    });
+  it('round-trips each engine', () => {
+    for (const engine of SPEECH_ENGINES) {
+      setTtsEngine(engine);
+      expect(getTtsEngine()).toBe(engine);
+    }
   });
 
-  describe('STT engine', () => {
-    it('defaults to auto when not set', () => {
-      const engine = localStorage.getItem('crispdeck-stt-engine') ?? 'auto';
-      expect(engine).toBe('auto');
-    });
-
-    it('persists crispasr choice', () => {
-      localStorage.setItem('crispdeck-stt-engine', 'crispasr');
-      expect(localStorage.getItem('crispdeck-stt-engine')).toBe('crispasr');
-    });
-
-    it('persists browser choice', () => {
-      localStorage.setItem('crispdeck-stt-engine', 'browser');
-      expect(localStorage.getItem('crispdeck-stt-engine')).toBe('browser');
-    });
-
-    it('STT model persists independently', () => {
-      localStorage.setItem('crispdeck-stt-model', 'whisper');
-      localStorage.setItem('crispdeck-stt-engine', 'crispasr');
-      expect(localStorage.getItem('crispdeck-stt-model')).toBe('whisper');
-      expect(localStorage.getItem('crispdeck-stt-engine')).toBe('crispasr');
-    });
+  it('writes the key the settings page reads', () => {
+    setTtsEngine('crispasr');
+    expect(localStorage.getItem('crispdeck-tts-engine')).toBe('crispasr');
   });
 
-  describe('engine selection logic', () => {
-    it('auto + no Tauri = browser path', () => {
-      const engine = localStorage.getItem('crispdeck-tts-engine') ?? 'auto';
-      const hasTauri = typeof (globalThis as any).__TAURI_INTERNALS__ !== 'undefined';
-      // In test env, no Tauri — auto should resolve to browser
-      if (engine === 'auto' && !hasTauri) {
-        // This is the expected path in tests
-        expect(true).toBe(true);
-      }
-    });
+  it('falls back to auto for an unknown value', () => {
+    localStorage.setItem('crispdeck-tts-engine', 'festival');
+    expect(getTtsEngine()).toBe('auto');
+  });
+});
 
-    it('browser engine skips Tauri check entirely', () => {
-      localStorage.setItem('crispdeck-stt-engine', 'browser');
-      const engine = localStorage.getItem('crispdeck-stt-engine');
-      // When engine is 'browser', we should never try invoke('asr_available')
-      expect(engine).toBe('browser');
-    });
-
-    it('crispasr engine without Tauri should error', () => {
-      localStorage.setItem('crispdeck-stt-engine', 'crispasr');
-      const engine = localStorage.getItem('crispdeck-stt-engine');
-      const hasTauri = typeof (globalThis as any).__TAURI_INTERNALS__ !== 'undefined';
-      // In test env (no Tauri), crispasr should produce an error
-      if (engine === 'crispasr' && !hasTauri) {
-        expect(true).toBe(true); // error path is expected
-      }
-    });
+describe('STT engine', () => {
+  it('defaults to auto', () => {
+    expect(getSttEngine()).toBe('auto');
   });
 
-  describe('streaming-capable models', () => {
-    // These are the models that CrispASR supports for streaming ASR
-    const streamingModels = ['whisper', 'moonshine-streaming', 'voxtral4b', 'kyutai-stt'];
-    const nonStreamingModels = ['parakeet', 'canary', 'qwen3', 'sensevoice', 'omniasr'];
+  it('round-trips each engine', () => {
+    for (const engine of SPEECH_ENGINES) {
+      setSttEngine(engine);
+      expect(getSttEngine()).toBe(engine);
+    }
+  });
 
-    it('streaming models list is non-empty', () => {
-      expect(streamingModels.length).toBeGreaterThan(0);
-    });
+  it('writes the key compose reads for dictation', () => {
+    setSttEngine('browser');
+    expect(localStorage.getItem('crispdeck-stt-engine')).toBe('browser');
+  });
 
-    it('whisper supports streaming', () => {
-      expect(streamingModels).toContain('whisper');
-    });
+  it('falls back to auto for an unknown value', () => {
+    localStorage.setItem('crispdeck-stt-engine', 'sphinx');
+    expect(getSttEngine()).toBe('auto');
+  });
+});
 
-    it('moonshine-streaming supports streaming', () => {
-      expect(streamingModels).toContain('moonshine-streaming');
-    });
+describe('the two engines are independent', () => {
+  it('setting one does not move the other', () => {
+    setTtsEngine('crispasr');
+    setSttEngine('browser');
+    expect(getTtsEngine()).toBe('crispasr');
+    expect(getSttEngine()).toBe('browser');
+  });
+});
 
-    it('voxtral4b supports streaming', () => {
-      expect(streamingModels).toContain('voxtral4b');
+describe('storage failures', () => {
+  it('reading falls back to the default rather than throwing', () => {
+    const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      get() { throw new Error('blocked'); },
     });
-
-    it('parakeet does not support streaming', () => {
-      expect(streamingModels).not.toContain('parakeet');
-    });
-
-    it('streaming and non-streaming sets are disjoint', () => {
-      for (const m of nonStreamingModels) {
-        expect(streamingModels).not.toContain(m);
-      }
-    });
+    try {
+      expect(getTtsEngine()).toBe('auto');
+      expect(() => setTtsEngine('browser')).not.toThrow();
+    } finally {
+      if (original) Object.defineProperty(globalThis, 'localStorage', original);
+    }
   });
 });

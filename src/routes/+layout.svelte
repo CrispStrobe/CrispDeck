@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { getTheme, setTheme, nextTheme } from '$lib/settings';
   import { base } from '$app/paths';
   import { routePath } from '$lib/routes';
   import '../app.css';
@@ -38,9 +39,9 @@
   let theme = $state<'dark' | 'oled' | 'light'>('dark');
 
   function toggleTheme() {
-    theme = theme === 'dark' ? 'oled' : theme === 'oled' ? 'light' : 'dark';
+    theme = nextTheme(theme);
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('crispdeck-theme', theme);
+    setTheme(theme);
   }
   let showShortcuts = $state(false);
   let offline = $state(false);
@@ -107,8 +108,8 @@
     }
 
     // Restore theme
-    const saved = localStorage.getItem('crispdeck-theme') as 'dark' | 'oled' | 'light' | null;
-    if (saved) { theme = saved; document.documentElement.setAttribute('data-theme', saved); }
+    theme = getTheme();
+    document.documentElement.setAttribute('data-theme', theme);
 
     // Restore display preferences
     const root = document.documentElement;

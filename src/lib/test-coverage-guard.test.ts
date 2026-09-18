@@ -54,7 +54,6 @@ const ACCEPTED = new Set([
   'src/lib/deck.test.ts',
   'src/lib/delayed-spinner.test.ts',
   'src/lib/engagement-history.test.ts',
-  'src/lib/engine.test.ts',
   'src/lib/fixes.test.ts',
   'src/lib/homepage.test.ts',
   'src/lib/layout.test.ts',
@@ -66,7 +65,6 @@ const ACCEPTED = new Set([
   'src/lib/scroll-lock.test.ts',
   'src/lib/search-operators.test.ts',
   'src/lib/streaming-columns.test.ts',
-  'src/lib/theme.test.ts',
 ]);
 
 describe('tests exercise application code', () => {

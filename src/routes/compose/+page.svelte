@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { getSttEngine } from '$lib/settings';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { logCrosspost, saveDraft as dbSaveDraft, listDrafts, deleteDraft as dbDeleteDraft } from '$lib/db';
@@ -470,7 +471,7 @@
       return;
     }
 
-    const engine = localStorage.getItem('crispdeck-stt-engine') ?? 'auto';
+    const engine = getSttEngine();
 
     // CrispASR path (desktop/mobile with Tauri)
     if (engine !== 'browser') {
