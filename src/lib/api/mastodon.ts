@@ -63,9 +63,9 @@ export class MastodonClient {
   }
 
   /** Get home timeline (posts from people you follow). Requires auth. */
-  async getHomeTimeline(cursor?: string): Promise<MastodonPost[]> {
+  async getHomeTimeline(cursor?: string, options?: { limit?: number }): Promise<MastodonPost[]> {
     if (!this.accessToken) throw new Error('Auth required for home timeline');
-    const params = new URLSearchParams({ limit: '40' });
+    const params = new URLSearchParams({ limit: String(options?.limit ?? 40) });
     if (cursor) params.set('max_id', cursor);
     const response = await fetch(`${this.instanceUrl}/api/v1/timelines/home?${params.toString()}`, {
       headers: { Authorization: `Bearer ${this.accessToken}` },

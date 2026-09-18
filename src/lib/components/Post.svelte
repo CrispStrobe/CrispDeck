@@ -37,11 +37,10 @@
     pinned = isPinned(post.uri);
     hideEngagement = localStorage.getItem('crispdeck-hide-engagement') === 'true';
 
-    // Subscribe to real-time count updates for this post
+    // Subscribe to real-time count updates for this post. watch() indexes the
+    // listener by URI, so an event only wakes the post it belongs to.
     if (post.platform === 'bluesky') {
-      jetstream.watchPost(post.uri);
-      unsubJetstream = jetstream.subscribe((update) => {
-        if (update.uri !== post.uri) return;
+      unsubJetstream = jetstream.watch(post.uri, (update) => {
         if (update.type === 'like') localLikeCount += update.delta;
         if (update.type === 'repost') localBoostCount += update.delta;
       });
@@ -49,9 +48,6 @@
   });
 
   onDestroy(() => {
-    if (post.platform === 'bluesky') {
-      jetstream.unwatchPost(post.uri);
-    }
     unsubJetstream?.();
   });
 
@@ -506,7 +502,7 @@
     <div class="relative group/avatar">
       <a href={getProfileUrl(post)}>
         {#if post.author.avatar}
-          <img loading="lazy" src={post.author.avatar} alt="" class="w-10 h-10 rounded-full bg-[var(--color-surface-hover)]" />
+          <img loading="lazy" decoding="async" src={post.author.avatar} alt="" class="w-10 h-10 rounded-full bg-[var(--color-surface-hover)]" />
         {:else}
           <div class="w-10 h-10 rounded-full bg-[var(--color-surface-hover)] flex items-center justify-center text-xs text-[var(--color-text-muted)]">
             {post.author.handle.charAt(0).toUpperCase()}
@@ -562,7 +558,7 @@
         <div class="grid grid-cols-2 gap-2 pt-2">
           {#each bskyImages as image}
             <a href={image.fullsize} target="_blank" rel="noopener noreferrer">
-              <img loading="lazy" src={image.thumb} alt={image.alt || ''} class="rounded-md w-full aspect-video object-cover" />
+              <img loading="lazy" decoding="async" src={image.thumb} alt={image.alt || ''} class="rounded-md w-full aspect-video object-cover" />
             </a>
           {/each}
         </div>
@@ -572,7 +568,7 @@
       {#if bskyExternal}
         <a href={bskyExternal.uri} target="_blank" rel="noopener noreferrer" class="mt-2 block border border-[var(--color-border)] rounded-lg overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
           {#if bskyExternal.thumb}
-            <img loading="lazy" src={bskyExternal.thumb} alt="" class="w-full h-32 object-cover" />
+            <img loading="lazy" decoding="async" src={bskyExternal.thumb} alt="" class="w-full h-32 object-cover" />
           {/if}
           <div class="p-3">
             <p class="text-xs text-[var(--color-text-muted)]">{new URL(bskyExternal.uri).hostname}</p>
@@ -589,7 +585,7 @@
         <div class="mt-2 border border-[var(--color-border)] rounded-lg p-3 bg-[var(--color-bg)]">
           <div class="flex items-center gap-2 mb-1">
             {#if bskyQuote.author?.avatar}
-              <img loading="lazy" src={bskyQuote.author.avatar} alt="" class="w-4 h-4 rounded-full" />
+              <img loading="lazy" decoding="async" src={bskyQuote.author.avatar} alt="" class="w-4 h-4 rounded-full" />
             {/if}
             <span class="text-xs font-medium">{bskyQuote.author?.displayName || bskyQuote.author?.handle}</span>
             <span class="text-[10px] text-[var(--color-text-muted)]">@{bskyQuote.author?.handle}</span>
@@ -598,12 +594,12 @@
           {#if bskyQuote.embeds?.[0]}
             {@const qEmbed = bskyQuote.embeds[0]}
             {#if qEmbed.$type === 'app.bsky.embed.images#view' && qEmbed.images?.[0]}
-              <img loading="lazy" src={qEmbed.images[0].thumb} alt={qEmbed.images[0].alt || ''} class="mt-1.5 rounded w-full h-24 object-cover" />
+              <img loading="lazy" decoding="async" src={qEmbed.images[0].thumb} alt={qEmbed.images[0].alt || ''} class="mt-1.5 rounded w-full h-24 object-cover" />
             {/if}
             {#if qEmbed.$type === 'app.bsky.embed.external#view' && qEmbed.external}
               <div class="mt-1.5 flex items-center gap-2 text-[10px] text-[var(--color-text-muted)]">
                 {#if qEmbed.external.thumb}
-                  <img loading="lazy" src={qEmbed.external.thumb} alt="" class="w-10 h-10 rounded object-cover" />
+                  <img loading="lazy" decoding="async" src={qEmbed.external.thumb} alt="" class="w-10 h-10 rounded object-cover" />
                 {/if}
                 <div class="min-w-0">
                   <p class="font-medium truncate">{qEmbed.external.title}</p>
@@ -620,7 +616,7 @@
         <div class="mt-2 rounded-lg overflow-hidden border border-[var(--color-border)]">
           {#if bskyVideo.thumbnail}
             <div class="relative">
-              <img loading="lazy" src={bskyVideo.thumbnail} alt={bskyVideo.alt || 'Video'} class="w-full aspect-video object-cover" />
+              <img loading="lazy" decoding="async" src={bskyVideo.thumbnail} alt={bskyVideo.alt || 'Video'} class="w-full aspect-video object-cover" />
               <div class="absolute inset-0 flex items-center justify-center">
                 <div class="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center">
                   <svg class="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
@@ -641,7 +637,7 @@
             {@const imageUrl = attachment.previewUrl || attachment.url || attachment.remoteUrl}
             {#if imageUrl}
               <a href={attachment.url || imageUrl} target="_blank" rel="noopener noreferrer">
-                <img loading="lazy" src={imageUrl} alt={attachment.description || `Image ${i + 1}`} class="rounded-md w-full aspect-video object-cover bg-[var(--color-surface-hover)]" />
+                <img loading="lazy" decoding="async" src={imageUrl} alt={attachment.description || `Image ${i + 1}`} class="rounded-md w-full aspect-video object-cover bg-[var(--color-surface-hover)]" />
               </a>
             {/if}
           {/each}
@@ -652,7 +648,7 @@
       {#if mastodonCard}
         <a href={mastodonCard.url} target="_blank" rel="noopener noreferrer" class="mt-2 block border border-[var(--color-border)] rounded-lg overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
           {#if mastodonCard.image}
-            <img loading="lazy" src={mastodonCard.image} alt="" class="w-full h-32 object-cover" />
+            <img loading="lazy" decoding="async" src={mastodonCard.image} alt="" class="w-full h-32 object-cover" />
           {/if}
           <div class="p-3">
             <p class="text-xs text-[var(--color-text-muted)]">{mastodonCard.provider_name || new URL(mastodonCard.url).hostname}</p>

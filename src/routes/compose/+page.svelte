@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { logCrosspost, saveDraft as dbSaveDraft, listDrafts, deleteDraft as dbDeleteDraft } from '$lib/db';
-  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
+  import type { ClientEntry } from '$lib/api/client-factory';
   import { PenSquare, Send, Loader2, X, ImagePlus, AlertTriangle, Check, BarChart3, Shield, Mic, MicOff, Sparkles, Clock } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import AccountPicker from '$lib/components/AccountPicker.svelte';
@@ -9,9 +9,15 @@
   import EmojiPicker from '$lib/components/EmojiPicker.svelte';
   import GifPicker from '$lib/components/GifPicker.svelte';
   import { listTemplates, saveTemplate, deleteTemplate, type PostTemplate } from '$lib/templates';
-  import { BlueskyClient } from '$lib/api/bluesky';
-  import { MastodonClient } from '$lib/api/mastodon';
-  import { crosspostThread, graphemeLength, type PostResult, type ComposeOptions, type ThreadGate, type PollOptions } from '$lib/compose/adapter';
+  // Type-only: the concrete clients arrive via client-factory, which is
+  // imported dynamically below so the @atproto/api lexicons stay off this
+  // route's entry chunk and out of the first-paint path.
+  import type { BlueskyClient } from '$lib/api/bluesky';
+  import type { MastodonClient } from '$lib/api/mastodon';
+  import { graphemeLength } from '$lib/compose/text';
+  // crosspostThread pulls @atproto/api; it is only needed once the user posts,
+  // so it loads on submit rather than blocking the editor's first paint.
+  import type { PostResult, ComposeOptions, ThreadGate, PollOptions } from '$lib/compose/adapter';
   import { splitForPlatform, planThread, type ThreadPlan } from '$lib/compose/thread';
   import { validateMediaFile, createPreviewUrl, revokePreviewUrl } from '$lib/compose/media';
   import { tryVoiceCommand, looksLikeCommand } from '$lib/voice-commands';
@@ -128,6 +134,7 @@
 
   onMount(async () => {
     try {
+      const { initAllClients } = await import('$lib/api/client-factory');
       const result = await initAllClients();
       accounts = result.accounts;
       clientEntries = result.clients;
@@ -297,6 +304,7 @@
     };
 
     try {
+      const { crosspostThread } = await import('$lib/compose/adapter');
       results = await crosspostThread(targets, options);
 
       // Log to crosspost history
@@ -656,7 +664,7 @@
             {#each mediaPreviews as preview, i}
               <div class="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
                 <div class="relative aspect-video">
-                  <img loading="lazy" src={preview} alt={altTexts[i] || ''} class="w-full h-full object-cover" />
+                  <img loading="lazy" decoding="async" src={preview} alt={altTexts[i] || ''} class="w-full h-full object-cover" />
                   <button
                     onclick={() => removeMedia(i)}
                     class="absolute top-1 right-1 p-1 bg-black/70 rounded-full text-white hover:bg-black"

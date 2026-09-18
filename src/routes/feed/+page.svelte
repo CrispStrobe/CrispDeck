@@ -1,15 +1,20 @@
 <script lang="ts">
+  import { pollWhenVisible } from '$lib/poll';
   import { onMount } from 'svelte';
   import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal, RefreshCw } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import Post from '$lib/components/Post.svelte';
   import CrosspostGroup from '$lib/components/CrosspostGroup.svelte';
   import AdvancedFilters from '$lib/components/AdvancedFilters.svelte';
-  import { BlueskyClient } from '$lib/api/bluesky';
-  import { MastodonClient } from '$lib/api/mastodon';
+  // Type-only: the concrete classes reach this page through client-factory,
+  // which is imported dynamically below. Importing them as values would pull
+  // the @atproto/api lexicons (~1 MB raw / 229 KB gzip) into this route's
+  // entry chunk and block first paint on them.
+  import type { BlueskyClient } from '$lib/api/bluesky';
+  import type { MastodonClient } from '$lib/api/mastodon';
   import { notifyNewPosts, getPermission } from '$lib/push-notifications';
-  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { normalizePost, filterPosts, sortPosts, detectCrossposts, buildIdentityPairs } from '$lib/api/unified';
+  import type { ClientEntry } from '$lib/api/client-factory';
+  import { normalizePost, filterPosts, sortPosts, detectCrosspostsIncremental, buildIdentityPairs, isCrosspostGroup, type CrosspostCache } from '$lib/api/unified';
   import { listIdentities } from '$lib/db';
   import type { UnifiedPost, FeedItem, Filters, Account, Platform, CrosspostGroup as CrosspostGroupType } from '$lib/types';
   import { buildAffinityMap, rankForYou } from '$lib/for-you';
@@ -60,6 +65,7 @@
 
   onMount(async () => {
     try {
+      const { initAllClients } = await import('$lib/api/client-factory');
       const result = await initAllClients();
       accounts = result.accounts;
       clientEntries = result.clients;
@@ -90,8 +96,8 @@
     }
 
     // Poll for new posts every 60 seconds
-    const pollInterval = setInterval(checkForNewPosts, 60000);
-    return () => { observer?.disconnect(); clearInterval(pollInterval); };
+    const stopPolling = pollWhenVisible(checkForNewPosts, 60000);
+    return () => { observer?.disconnect(); stopPolling(); };
   });
 
   let newPostsAvailable = $state(0);
@@ -115,7 +121,9 @@
         } else if (acct.platform === 'mastodon') {
           const masto = entry.client as MastodonClient;
           try {
-            const statuses = await masto.getHomeTimeline();
+            // Only the newest few matter here — this runs every minute and was
+            // pulling a full 40-status page just to count what's new.
+            const statuses = await masto.getHomeTimeline(undefined, { limit: 10 });
             count += statuses.filter((s: any) => s.createdAt > newestDate || s.created_at > newestDate).length;
           } catch {}
         }
@@ -364,10 +372,6 @@
     filters = { ...filters, ...newFilters };
   }
 
-  function isCrosspostGroup(item: FeedItem): item is CrosspostGroupType {
-    return 'type' in item && item.type === 'crosspost';
-  }
-
   const platformFiltered = $derived(
     platformFilter === 'all' ? posts : posts.filter(p => p.platform === platformFilter)
   );
@@ -377,7 +381,22 @@
       ? rankForYou(filtered, affinityMap)
       : sortPosts(filtered, filters.sortBy)
   );
-  const finalFeed = $derived(detectCrossposts(sorted, identityPairs.size > 0 ? identityPairs : undefined));
+  // Crosspost detection is pairwise, so re-running it over the whole feed on
+  // every infinite-scroll append gets expensive fast. The incremental form
+  // keeps the groups already computed for the part of the feed that new
+  // (older) posts can't reach, and only recomputes the tail. It returns exactly
+  // what detectCrossposts would, falling back to a full pass when the feed is
+  // replaced rather than appended to.
+  let crosspostCache: CrosspostCache | null = null;
+  const finalFeed = $derived.by(() => {
+    const result = detectCrosspostsIncremental(
+      sorted,
+      identityPairs.size > 0 ? identityPairs : undefined,
+      crosspostCache
+    );
+    crosspostCache = result.cache;
+    return result.items;
+  });
   const hasMoreContent = $derived(Object.values(cursors).some(c => !!c));
   const isLoading = $derived(loading || loadingMore);
 

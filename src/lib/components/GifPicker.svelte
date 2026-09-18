@@ -116,7 +116,7 @@
                   src={gif.preview}
                   alt={gif.title}
                   class="w-full aspect-video object-cover"
-                  loading="lazy"
+                  loading="lazy" decoding="async"
                 />
               </button>
             {/each}

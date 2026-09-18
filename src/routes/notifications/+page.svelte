@@ -1,10 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
+  import type { ClientEntry } from '$lib/api/client-factory';
   import { Bell, Heart, Repeat, UserPlus, MessageCircle, AtSign, Loader2, Quote, ChevronDown, ChevronUp } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
-  import { BlueskyClient } from '$lib/api/bluesky';
-  import { MastodonClient } from '$lib/api/mastodon';
+  // Type-only: the concrete clients arrive via client-factory, which is
+  // imported dynamically below so the @atproto/api lexicons stay off this
+  // route's entry chunk and out of the first-paint path.
+  import type { BlueskyClient } from '$lib/api/bluesky';
+  import type { MastodonClient } from '$lib/api/mastodon';
   import type { Account } from '$lib/types';
   import { groupNotifications, type UnifiedNotification, type NotificationGroup } from '$lib/notification-grouping';
 
@@ -18,6 +21,7 @@
 
   onMount(async () => {
     try {
+      const { initAllClients } = await import('$lib/api/client-factory');
       const result = await initAllClients();
       accounts = result.accounts;
       clientEntries = result.clients;
@@ -198,7 +202,7 @@
                     {#each group.actors.slice(0, MAX_AVATARS) as actor}
                       {#if actor.avatar}
                         <a href="/profile?handle={encodeURIComponent(actor.handle)}&platform={actor.platform}" title={actor.displayName || actor.handle}>
-                          <img loading="lazy" src={actor.avatar} alt="" class="w-7 h-7 rounded-full border-2 border-[var(--color-bg)]" />
+                          <img loading="lazy" decoding="async" src={actor.avatar} alt="" class="w-7 h-7 rounded-full border-2 border-[var(--color-bg)]" />
                         </a>
                       {/if}
                     {/each}
@@ -210,7 +214,7 @@
                   </div>
                 {:else if group.actors[0]?.avatar}
                   <a href="/profile?handle={encodeURIComponent(group.actors[0].handle)}&platform={group.actors[0].platform}">
-                    <img loading="lazy" src={group.actors[0].avatar} alt="" class="w-8 h-8 rounded-full flex-shrink-0" />
+                    <img loading="lazy" decoding="async" src={group.actors[0].avatar} alt="" class="w-8 h-8 rounded-full flex-shrink-0" />
                   </a>
                 {/if}
               </div>
@@ -275,7 +279,7 @@
                   class="flex items-center gap-2 p-1.5 rounded hover:bg-[var(--color-bg)] transition-colors"
                 >
                   {#if actor.avatar}
-                    <img loading="lazy" src={actor.avatar} alt="" class="w-5 h-5 rounded-full" />
+                    <img loading="lazy" decoding="async" src={actor.avatar} alt="" class="w-5 h-5 rounded-full" />
                   {/if}
                   <span class="text-xs font-medium">{actor.displayName || actor.handle}</span>
                   <span class="text-[10px] text-[var(--color-text-muted)]">@{actor.handle}</span>

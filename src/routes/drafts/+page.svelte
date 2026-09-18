@@ -1,12 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { listDrafts, deleteDraft as dbDeleteDraft, saveDraft as dbSaveDraft } from '$lib/db';
-  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
+  import type { ClientEntry } from '$lib/api/client-factory';
   import { FileText, Trash2, Clock, Send, Loader2, Edit3, Calendar, Eye } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
-  import { BlueskyClient } from '$lib/api/bluesky';
-  import { MastodonClient } from '$lib/api/mastodon';
-  import { crosspostThread, type PostResult } from '$lib/compose/adapter';
+  // Type-only: the concrete clients arrive via client-factory, which is
+  // imported dynamically below so the @atproto/api lexicons stay off this
+  // route's entry chunk and out of the first-paint path.
+  import type { BlueskyClient } from '$lib/api/bluesky';
+  import type { MastodonClient } from '$lib/api/mastodon';
+  import type { PostResult } from '$lib/compose/adapter';
   import { splitForPlatform } from '$lib/compose/thread';
   import type { Draft, Account, Platform } from '$lib/types';
 
@@ -26,6 +29,7 @@
 
   onMount(async () => {
     try {
+      const { initAllClients } = await import('$lib/api/client-factory');
       const [draftList, result] = await Promise.all([listDrafts(), initAllClients()]);
       drafts = draftList;
       accounts = result.accounts;
@@ -39,7 +43,12 @@
   });
 
   function checkScheduledDrafts() {
-    // Check every 30 seconds for drafts that are past their scheduled time
+    // Check every 30 seconds for drafts that are past their scheduled time.
+    //
+    // Deliberately NOT gated on visibility like the other polls: a scheduled
+    // post should go out at its scheduled time, and pausing in a background tab
+    // would hold it until the user came back. The loop itself costs nothing —
+    // it only touches the network when a draft is actually due.
     const interval = setInterval(async () => {
       const now = new Date();
       for (const draft of drafts) {
@@ -77,6 +86,7 @@
     }
 
     try {
+      const { crosspostThread } = await import('$lib/compose/adapter');
       results = await crosspostThread(targets, {
         visibility: (draft.visibility as any) ?? 'public',
         contentWarning: draft.content_warning ?? undefined,

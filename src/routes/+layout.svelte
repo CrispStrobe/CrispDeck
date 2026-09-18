@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pollWhenVisible } from '$lib/poll';
   import '../app.css';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
@@ -45,12 +46,12 @@
     bookmarkCount = await getBookmarkCount();
     // Check unread messages on load
     checkUnreadMessages();
-    // Refresh counts periodically
-    const interval = setInterval(async () => {
+    // Refresh counts periodically. This re-initialises every client and lists
+    // conversations for each account, so it only runs while the tab is in front.
+    return pollWhenVisible(async () => {
       bookmarkCount = await getBookmarkCount();
       checkUnreadMessages();
-    }, 30000);
-    return () => clearInterval(interval);
+    }, 60000);
   });
 
   async function checkUnreadMessages() {

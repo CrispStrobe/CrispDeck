@@ -1,4 +1,7 @@
-import { RichText, BskyAgent } from '@atproto/api';
+import { RichText } from '@atproto/api';
+// Re-exported for existing callers; import from './text' directly to avoid
+// pulling @atproto/api into a chunk that only needs to count characters.
+export { graphemeLength, getCharLimit } from './text';
 import type { BlueskyClient } from '$lib/api/bluesky';
 import type { MastodonClient } from '$lib/api/mastodon';
 import type { ThreadsClient } from '$lib/api/threads';
@@ -517,17 +520,4 @@ export async function crosspostThread(
   return results;
 }
 
-/** Get the character limit for a platform */
-export function getCharLimit(platform: Platform): number {
-  if (platform === 'bluesky') return 300;
-  return 500; // mastodon + threads
-}
 
-/** Count graphemes (what Bluesky uses for character counting) */
-export function graphemeLength(text: string): number {
-  if (typeof Intl !== 'undefined' && Intl.Segmenter) {
-    const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
-    return [...segmenter.segment(text)].length;
-  }
-  return [...text].length;
-}

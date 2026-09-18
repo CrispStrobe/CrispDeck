@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "sveltekit",
-  "buildCommand": "npx svelte-kit sync && npx vite build",
+  "buildCommand": "npx svelte-kit sync && rm -rf build && npx vite build",
   "outputDirectory": "build",
   "headers": [
     {

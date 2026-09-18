@@ -1,12 +1,16 @@
 <script lang="ts">
+  import { pollWhenVisible } from '$lib/poll';
   import { onMount } from 'svelte';
-  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
+  import type { ClientEntry } from '$lib/api/client-factory';
   import { Columns3, Plus, Loader2 } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import DeckColumn from '$lib/components/deck/DeckColumn.svelte';
   import type { ColumnType } from '$lib/components/deck/DeckColumn.svelte';
-  import { BlueskyClient } from '$lib/api/bluesky';
-  import { MastodonClient } from '$lib/api/mastodon';
+  // Type-only: the concrete clients arrive via client-factory, which is
+  // imported dynamically below so the @atproto/api lexicons stay off this
+  // route's entry chunk and out of the first-paint path.
+  import type { BlueskyClient } from '$lib/api/bluesky';
+  import type { MastodonClient } from '$lib/api/mastodon';
   import { ThreadsClient } from '$lib/api/threads';
   import { normalizePost, sortPosts } from '$lib/api/unified';
   import type { UnifiedPost, Account } from '$lib/types';
@@ -73,6 +77,7 @@
 
   onMount(async () => {
     try {
+      const { initAllClients } = await import('$lib/api/client-factory');
       const result = await initAllClients();
       accounts = result.accounts;
       clientEntries = result.clients;
@@ -95,11 +100,11 @@
       loading = false;
     }
 
-    // Auto-refresh every 3 minutes (not 2 — less aggressive)
-    const interval = setInterval(() => {
+    // Auto-refresh every 3 minutes (not 2 — less aggressive). Reloading every
+    // column is the heaviest poll in the app, so it pauses with the tab.
+    return pollWhenVisible(() => {
       columns.forEach(col => loadColumn(col));
     }, 180000);
-    return () => clearInterval(interval);
   });
 
   function saveColumns() {

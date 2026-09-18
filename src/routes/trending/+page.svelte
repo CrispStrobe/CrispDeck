@@ -1,9 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { initAllClients, getBskyClient, getMastoClient, type ClientEntry } from '$lib/api/client-factory';
+  import type { ClientEntry } from '$lib/api/client-factory';
   import { TrendingUp, Loader2, Hash, Link2, Rss } from '@lucide/svelte';
-  import { BlueskyClient } from '$lib/api/bluesky';
-  import { MastodonClient } from '$lib/api/mastodon';
+  // Type-only: the concrete clients arrive via client-factory, which is
+  // imported dynamically below so the @atproto/api lexicons stay off this
+  // route's entry chunk and out of the first-paint path.
+  import type { BlueskyClient } from '$lib/api/bluesky';
+  import type { MastodonClient } from '$lib/api/mastodon';
   import { normalizePost, sortPosts } from '$lib/api/unified';
   import Post from '$lib/components/Post.svelte';
   import type { Account, UnifiedPost } from '$lib/types';
@@ -39,6 +42,8 @@
 
   onMount(async () => {
     try {
+      const { initAllClients, getBskyClient, getMastoClient } =
+        await import('$lib/api/client-factory');
       const result = await initAllClients();
       clientEntries = result.clients;
 
@@ -257,7 +262,7 @@
         {#each filteredLinks as link}
           <a href={link.url} target="_blank" rel="noopener noreferrer" class="flex gap-3 p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] hover:border-[var(--color-mastodon)] transition-colors">
             {#if link.image}
-              <img loading="lazy" src={link.image} alt="" class="w-20 h-14 rounded object-cover flex-shrink-0" />
+              <img loading="lazy" decoding="async" src={link.image} alt="" class="w-20 h-14 rounded object-cover flex-shrink-0" />
             {/if}
             <div class="flex-1 min-w-0">
               <h3 class="text-sm font-medium line-clamp-1">{link.title}</h3>

@@ -1,12 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
+  import type { ClientEntry } from '$lib/api/client-factory';
   import { MessageSquare, Loader2, Send, ArrowLeft } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
-  import { BlueskyClient } from '$lib/api/bluesky';
-  import { MastodonClient } from '$lib/api/mastodon';
-  import { resumeBlueskyOAuthSession } from '$lib/api/bluesky-oauth';
-  import { Agent } from '@atproto/api';
+  // Type-only: the concrete clients arrive via client-factory, which is
+  // imported dynamically below so the @atproto/api lexicons stay off this
+  // route's entry chunk and out of the first-paint path.
+  import type { BlueskyClient } from '$lib/api/bluesky';
+  import type { MastodonClient } from '$lib/api/mastodon';
+
   import type { Account, Platform } from '$lib/types';
 
   interface Conversation {
@@ -43,6 +45,7 @@
 
   onMount(async () => {
     try {
+      const { initAllClients } = await import('$lib/api/client-factory');
       const result = await initAllClients();
       accounts = result.accounts;
       clientEntries = result.clients;
@@ -64,7 +67,7 @@
       if (acct.platform === 'bluesky') {
         // Try OAuth agent from client-factory first, fall back to resumeBlueskyOAuthSession
         const oauthAgent = entry.oauthAgent;
-        const oauthSession = oauthAgent ? { agent: oauthAgent, did: acct.did } : await resumeBlueskyOAuthSession();
+        const oauthSession = oauthAgent ? { agent: oauthAgent, did: acct.did } : await (await import('$lib/api/bluesky-oauth')).resumeBlueskyOAuthSession();
         if (oauthSession) {
           try {
             const proxyHeaders = { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' };
@@ -145,7 +148,7 @@
 
     try {
       if (convo.platform === 'bluesky') {
-        const oauthSession = await resumeBlueskyOAuthSession();
+        const oauthSession = await (await import('$lib/api/bluesky-oauth')).resumeBlueskyOAuthSession();
         if (!oauthSession) {
           messages = [{ id: 'note', text: 'Bluesky DMs require OAuth. Reconnect your account with OAuth in Settings.', sender: { handle: 'system' }, createdAt: new Date().toISOString(), isOurs: false }];
         } else {
@@ -226,7 +229,7 @@
     sending = true;
     try {
       if (selectedConvo.platform === 'bluesky') {
-        const oauthSession = await resumeBlueskyOAuthSession();
+        const oauthSession = await (await import('$lib/api/bluesky-oauth')).resumeBlueskyOAuthSession();
         if (!oauthSession) throw new Error('Bluesky DMs require OAuth — reconnect your account with OAuth in Settings');
         const proxyHeaders = { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' };
         await (oauthSession.agent as any).api.chat.bsky.convo.sendMessage(
@@ -341,7 +344,7 @@
               class="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[var(--color-surface-hover)] transition-colors border-b border-[var(--color-border)] {selectedConvo?.id === convo.id ? 'bg-[var(--color-surface)]' : ''}"
             >
               {#if convo.participant.avatar}
-                <img loading="lazy" src={convo.participant.avatar} alt="" class="w-10 h-10 rounded-full flex-shrink-0" />
+                <img loading="lazy" decoding="async" src={convo.participant.avatar} alt="" class="w-10 h-10 rounded-full flex-shrink-0" />
               {:else}
                 <div class="w-10 h-10 rounded-full bg-[var(--color-surface-hover)] flex-shrink-0"></div>
               {/if}
@@ -368,7 +371,7 @@
           <!-- Header -->
           <div class="flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border)]">
             {#if selectedConvo.participant.avatar}
-              <img loading="lazy" src={selectedConvo.participant.avatar} alt="" class="w-8 h-8 rounded-full" />
+              <img loading="lazy" decoding="async" src={selectedConvo.participant.avatar} alt="" class="w-8 h-8 rounded-full" />
             {/if}
             <div>
               <p class="text-sm font-medium">{selectedConvo.participant.displayName || selectedConvo.participant.handle}</p>

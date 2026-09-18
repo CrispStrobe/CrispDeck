@@ -1,9 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
+  import type { ClientEntry } from '$lib/api/client-factory';
   import { Tag, Loader2, Plus, X, Shield, Eye, EyeOff, AlertTriangle } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
-  import { BlueskyClient } from '$lib/api/bluesky';
+  // Type-only: the concrete clients arrive via client-factory, which is
+  // imported dynamically below so the @atproto/api lexicons stay off this
+  // route's entry chunk and out of the first-paint path.
+  import type { BlueskyClient } from '$lib/api/bluesky';
   import type { Account } from '$lib/types';
 
   interface LabelerInfo {
@@ -42,6 +45,7 @@
 
   onMount(async () => {
     try {
+      const { initAllClients } = await import('$lib/api/client-factory');
       const result = await initAllClients();
       accounts = result.accounts;
       clientEntries = result.clients;
@@ -240,7 +244,7 @@
             <div class="flex items-start justify-between">
               <div class="flex items-center gap-3">
                 {#if labeler.avatar}
-                  <img loading="lazy" src={labeler.avatar} alt="" class="w-10 h-10 rounded-full" />
+                  <img loading="lazy" decoding="async" src={labeler.avatar} alt="" class="w-10 h-10 rounded-full" />
                 {/if}
                 <div>
                   <h3 class="text-sm font-medium">{labeler.displayName || labeler.handle}</h3>
@@ -285,7 +289,7 @@
           <div class="flex items-start justify-between p-4">
             <div class="flex items-center gap-3">
               {#if labeler.avatar}
-                <img loading="lazy" src={labeler.avatar} alt="" class="w-10 h-10 rounded-full" />
+                <img loading="lazy" decoding="async" src={labeler.avatar} alt="" class="w-10 h-10 rounded-full" />
               {/if}
               <div>
                 <h3 class="text-sm font-medium">{labeler.displayName || labeler.handle}</h3>

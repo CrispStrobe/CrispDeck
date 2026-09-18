@@ -1,8 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { BlueskyClient } from '$lib/api/bluesky';
-  import { MastodonClient } from '$lib/api/mastodon';
+  import type { ClientEntry } from '$lib/api/client-factory';
+  // Type-only: the concrete clients arrive via client-factory, which is
+  // imported dynamically below so the @atproto/api lexicons stay off this
+  // route's entry chunk and out of the first-paint path.
+  import type { BlueskyClient } from '$lib/api/bluesky';
+  import type { MastodonClient } from '$lib/api/mastodon';
   import { normalizePost } from '$lib/api/unified';
   import { i18n } from '$lib/i18n.svelte';
   import { Image, Loader2, Video, Link2, X, ChevronLeft, ChevronRight } from '@lucide/svelte';
@@ -28,6 +31,7 @@
 
   onMount(async () => {
     try {
+      const { initAllClients } = await import('$lib/api/client-factory');
       const result = await initAllClients();
       accounts = result.accounts;
       clientEntries = result.clients;
@@ -144,7 +148,7 @@
           onclick={() => openLightbox(idx)}
           class="w-full break-inside-avoid rounded-lg overflow-hidden border border-[var(--color-border)] hover:border-[var(--color-primary)] transition-colors bg-[var(--color-surface)] block text-left"
         >
-          <img loading="lazy" src={item.thumb} alt={item.alt} class="w-full object-cover" />
+          <img loading="lazy" decoding="async" src={item.thumb} alt={item.alt} class="w-full object-cover" />
           {#if item.type === 'video'}
             <div class="absolute inset-0 flex items-center justify-center">
               <div class="w-10 h-10 bg-black/50 rounded-full flex items-center justify-center"><Video size={16} class="text-white" /></div>

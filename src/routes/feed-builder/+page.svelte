@@ -1,8 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { initAllClients, getBskyAgent, type ClientEntry } from '$lib/api/client-factory';
+  import type { ClientEntry } from '$lib/api/client-factory';
   import { normalizePost, sortPosts } from '$lib/api/unified';
-  import { BlueskyClient } from '$lib/api/bluesky';
+  // Type-only: the concrete clients arrive via client-factory, which is
+  // imported dynamically below so the @atproto/api lexicons stay off this
+  // route's entry chunk and out of the first-paint path.
+  import type { BlueskyClient } from '$lib/api/bluesky';
   import {
     createFeedDefinition, createRule, compileQuery, describeFeed,
     getRuleLabel, getRulePlaceholder, RULE_TYPES,
@@ -42,6 +45,7 @@
 
   onMount(async () => {
     try {
+      const { initAllClients } = await import('$lib/api/client-factory');
       const result = await initAllClients();
       accounts = result.accounts;
       clientEntries = result.clients;

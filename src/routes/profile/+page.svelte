@@ -1,10 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
+  import type { ClientEntry } from '$lib/api/client-factory';
   import { User, Loader2, UserPlus, UserMinus, Ban, ArrowLeft } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
-  import { BlueskyClient } from '$lib/api/bluesky';
-  import { MastodonClient } from '$lib/api/mastodon';
+  // Type-only: the concrete clients arrive via client-factory, which is
+  // imported dynamically below so the @atproto/api lexicons stay off this
+  // route's entry chunk and out of the first-paint path.
+  import type { BlueskyClient } from '$lib/api/bluesky';
+  import type { MastodonClient } from '$lib/api/mastodon';
   import { normalizePost, sortPosts } from '$lib/api/unified';
   import Post from '$lib/components/Post.svelte';
   import type { UnifiedPost, Account, Platform } from '$lib/types';
@@ -40,6 +43,7 @@
     }
 
     try {
+      const { initAllClients } = await import('$lib/api/client-factory');
       const result = await initAllClients();
       accounts = result.accounts;
       clientEntries = result.clients;
@@ -67,7 +71,8 @@
     const client = getClient();
     if (!client && platform === 'bluesky') {
       // Use read-only client for public profiles
-      const readOnly = BlueskyClient.readOnly(handle);
+      const { BlueskyClient: Bsky } = await import('$lib/api/bluesky');
+      const readOnly = Bsky.readOnly(handle);
       profile = await readOnly.getProfile(handle);
       const { feed } = await readOnly.getAuthorFeed(handle);
       posts = sortPosts(feed.map(p => normalizePost(p, 'bluesky')), 'newest');
@@ -160,7 +165,8 @@
     const client = getClient();
     try {
       if (platform === 'bluesky') {
-        const bsky = (client as BlueskyClient) ?? BlueskyClient.readOnly(handle);
+        const bsky = (client as BlueskyClient)
+          ?? (await import('$lib/api/bluesky')).BlueskyClient.readOnly(handle);
         if (tab === 'followers') {
           const resp = await bsky.getFollowers(handle, cursor);
           const newItems = resp.followers.map((f: any) => ({ handle: f.handle, displayName: f.displayName, avatar: f.avatar }));
@@ -297,7 +303,7 @@
     <!-- Profile header -->
     <div class="flex items-start gap-4 mb-6">
       {#if profile.avatar}
-        <img loading="lazy" src={profile.avatar} alt="" class="w-20 h-20 rounded-full border-4 border-[var(--color-bg)] {profile.banner ? '-mt-12' : ''}" />
+        <img loading="lazy" decoding="async" src={profile.avatar} alt="" class="w-20 h-20 rounded-full border-4 border-[var(--color-bg)] {profile.banner ? '-mt-12' : ''}" />
       {:else}
         <div class="w-20 h-20 rounded-full bg-[var(--color-surface-hover)] flex items-center justify-center text-2xl">
           <User size={32} />
@@ -379,7 +385,7 @@
           {#each list as user}
             <a href="/profile?handle={encodeURIComponent(user.handle)}&platform={platform}" class="flex items-center gap-3 p-2.5 rounded-lg hover:bg-[var(--color-surface-hover)] transition-colors">
               {#if user.avatar}
-                <img loading="lazy" src={user.avatar} alt="" class="w-9 h-9 rounded-full" />
+                <img loading="lazy" decoding="async" src={user.avatar} alt="" class="w-9 h-9 rounded-full" />
               {:else}
                 <div class="w-9 h-9 rounded-full bg-[var(--color-surface-hover)]"></div>
               {/if}
@@ -420,7 +426,7 @@
                 src={item.thumb || item.url}
                 alt={item.alt || ''}
                 class="w-full h-full object-cover"
-                loading="lazy"
+                loading="lazy" decoding="async"
               />
               {#if item.type === 'video'}
                 <div class="absolute inset-0 flex items-center justify-center">

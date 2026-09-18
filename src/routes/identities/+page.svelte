@@ -6,11 +6,14 @@
     linkToIdentity, confirmIdentity, addTag as dbAddTag, removeTag as dbRemoveTag,
     cacheFollows, detectIdentities
   } from '$lib/db';
-  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
+  import type { ClientEntry } from '$lib/api/client-factory';
   import { Users, ScanSearch, Loader2, Check, X, Plus, Tag, Trash2, Link2 } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
-  import { BlueskyClient } from '$lib/api/bluesky';
-  import { MastodonClient } from '$lib/api/mastodon';
+  // Type-only: the concrete clients arrive via client-factory, which is
+  // imported dynamically below so the @atproto/api lexicons stay off this
+  // route's entry chunk and out of the first-paint path.
+  import type { BlueskyClient } from '$lib/api/bluesky';
+  import type { MastodonClient } from '$lib/api/mastodon';
   import type { Account, Identity, IdentityCandidate, FollowEntry } from '$lib/types';
 
   let accounts: Account[] = $state([]);
@@ -32,6 +35,7 @@
 
   onMount(async () => {
     try {
+      const { initAllClients } = await import('$lib/api/client-factory');
       const result = await initAllClients();
       accounts = result.accounts;
       clientEntries = result.clients;
@@ -366,7 +370,7 @@
               <div class="flex items-center gap-3">
                 <div class="w-2 h-full rounded-full bg-[var(--color-bluesky)] flex-shrink-0"></div>
                 {#if candidate.bluesky_avatar}
-                  <img loading="lazy" src={candidate.bluesky_avatar} alt="" class="w-10 h-10 rounded-full" />
+                  <img loading="lazy" decoding="async" src={candidate.bluesky_avatar} alt="" class="w-10 h-10 rounded-full" />
                 {:else}
                   <div class="w-10 h-10 rounded-full bg-[var(--color-bluesky)]/20 flex items-center justify-center text-xs">BS</div>
                 {/if}
@@ -380,7 +384,7 @@
               <div class="flex items-center gap-3">
                 <div class="w-2 h-full rounded-full bg-[var(--color-mastodon)] flex-shrink-0"></div>
                 {#if candidate.mastodon_avatar}
-                  <img loading="lazy" src={candidate.mastodon_avatar} alt="" class="w-10 h-10 rounded-full" />
+                  <img loading="lazy" decoding="async" src={candidate.mastodon_avatar} alt="" class="w-10 h-10 rounded-full" />
                 {:else}
                   <div class="w-10 h-10 rounded-full bg-[var(--color-mastodon)]/20 flex items-center justify-center text-xs">M</div>
                 {/if}
@@ -457,7 +461,7 @@
                   style="background: var(--color-{link.platform})"
                 ></div>
                 {#if link.avatar_url}
-                  <img loading="lazy" src={link.avatar_url} alt="" class="w-6 h-6 rounded-full" />
+                  <img loading="lazy" decoding="async" src={link.avatar_url} alt="" class="w-6 h-6 rounded-full" />
                 {/if}
                 <div class="min-w-0 flex-1">
                   <p class="text-xs font-medium truncate">{link.display_name || link.handle}</p>

@@ -1,10 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
+  import type { ClientEntry } from '$lib/api/client-factory';
   import { Shield, Loader2, Ban, VolumeX, UserX } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
-  import { BlueskyClient } from '$lib/api/bluesky';
-  import { MastodonClient } from '$lib/api/mastodon';
+  // Type-only: the concrete clients arrive via client-factory, which is
+  // imported dynamically below so the @atproto/api lexicons stay off this
+  // route's entry chunk and out of the first-paint path.
+  import type { BlueskyClient } from '$lib/api/bluesky';
+  import type { MastodonClient } from '$lib/api/mastodon';
   import type { Account, Platform } from '$lib/types';
 
   interface BlockedAccount {
@@ -40,6 +43,7 @@
 
   onMount(async () => {
     try {
+      const { initAllClients } = await import('$lib/api/client-factory');
       const result = await initAllClients();
       accounts = result.accounts;
       clientEntries = result.clients;
@@ -233,7 +237,7 @@
             <div class="flex items-start justify-between">
               <div class="flex items-center gap-3">
                 {#if list.avatar}
-                  <img loading="lazy" src={list.avatar} alt="" class="w-10 h-10 rounded-lg" />
+                  <img loading="lazy" decoding="async" src={list.avatar} alt="" class="w-10 h-10 rounded-lg" />
                 {/if}
                 <div>
                   <h3 class="text-sm font-medium">{list.name}</h3>
@@ -267,7 +271,7 @@
             <div class="flex items-center gap-3">
               <span class="w-2 h-2 rounded-full" style="background: var(--color-{item.platform})"></span>
               {#if item.avatar}
-                <img loading="lazy" src={item.avatar} alt="" class="w-8 h-8 rounded-full" />
+                <img loading="lazy" decoding="async" src={item.avatar} alt="" class="w-8 h-8 rounded-full" />
               {:else}
                 <div class="w-8 h-8 rounded-full bg-[var(--color-surface-hover)]"></div>
               {/if}

@@ -1,9 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
+  import type { ClientEntry } from '$lib/api/client-factory';
   import { Package, Loader2, UserPlus, Users, ExternalLink } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
-  import { BlueskyClient } from '$lib/api/bluesky';
+  // Type-only: the concrete clients arrive via client-factory, which is
+  // imported dynamically below so the @atproto/api lexicons stay off this
+  // route's entry chunk and out of the first-paint path.
+  import type { BlueskyClient } from '$lib/api/bluesky';
   import type { Account } from '$lib/types';
 
   interface StarterPack {
@@ -29,6 +32,7 @@
 
   onMount(async () => {
     try {
+      const { initAllClients } = await import('$lib/api/client-factory');
       const result = await initAllClients();
       accounts = result.accounts;
       clientEntries = result.clients;
@@ -212,7 +216,7 @@
           <a href={getPackUrl(pack)} target="_blank" rel="noopener noreferrer" class="p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] hover:border-[var(--color-bluesky)] transition-colors">
             <div class="flex items-start gap-3">
               {#if pack.creator.avatar}
-                <img loading="lazy" src={pack.creator.avatar} alt="" class="w-8 h-8 rounded-full" />
+                <img loading="lazy" decoding="async" src={pack.creator.avatar} alt="" class="w-8 h-8 rounded-full" />
               {/if}
               <div class="flex-1 min-w-0">
                 <h3 class="font-medium text-sm">{pack.record.name}</h3>

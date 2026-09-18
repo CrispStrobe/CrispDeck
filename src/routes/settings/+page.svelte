@@ -6,7 +6,7 @@
     completeMastodonOAuth as dbCompleteOAuth
   } from '$lib/db';
   import { Settings, Plus, Trash2, Star, ExternalLink, Loader2, Shield, Download, Upload, EyeOff } from '@lucide/svelte';
-  import { startBlueskyOAuth } from '$lib/api/bluesky-oauth';
+
   import { i18n, type Language } from '$lib/i18n.svelte';
   import { requestPermission, getPermission, isSupported as notifSupported } from '$lib/push-notifications';
   import { getTranslateConfig, setTranslateConfig, type TranslateProvider } from '$lib/translate';
@@ -229,6 +229,9 @@
     error = '';
     try {
       const handle = bskyHandle.trim().replace(/^@/, '');
+      // Loaded on demand: the OAuth client pulls @atproto/api, and settings is
+      // mostly toggles that shouldn't wait on it.
+      const { startBlueskyOAuth } = await import('$lib/api/bluesky-oauth');
       await startBlueskyOAuth(handle);
       // This redirects — execution stops here
     } catch (e) {
@@ -527,7 +530,7 @@
           <div class="flex items-center justify-between p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
             <div class="flex items-center gap-3">
               {#if account.avatar_url}
-                <img loading="lazy" src={account.avatar_url} alt="" class="w-8 h-8 rounded-full" />
+                <img loading="lazy" decoding="async" src={account.avatar_url} alt="" class="w-8 h-8 rounded-full" />
               {:else}
                 <div class="w-8 h-8 rounded-full bg-[var(--color-bluesky)]/20 flex items-center justify-center text-xs">BS</div>
               {/if}
@@ -622,7 +625,7 @@
           <div class="flex items-center justify-between p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
             <div class="flex items-center gap-3">
               {#if account.avatar_url}
-                <img loading="lazy" src={account.avatar_url} alt="" class="w-8 h-8 rounded-full" />
+                <img loading="lazy" decoding="async" src={account.avatar_url} alt="" class="w-8 h-8 rounded-full" />
               {:else}
                 <div class="w-8 h-8 rounded-full bg-[var(--color-mastodon)]/20 flex items-center justify-center text-xs">M</div>
               {/if}
@@ -764,7 +767,7 @@
           <div class="flex items-center justify-between p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
             <div class="flex items-center gap-3">
               {#if account.avatar_url}
-                <img loading="lazy" src={account.avatar_url} alt="" class="w-8 h-8 rounded-full" />
+                <img loading="lazy" decoding="async" src={account.avatar_url} alt="" class="w-8 h-8 rounded-full" />
               {:else}
                 <div class="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-xs">T</div>
               {/if}

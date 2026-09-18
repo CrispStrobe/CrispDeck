@@ -203,7 +203,7 @@
                   <div class="flex -space-x-1.5 mb-1">
                     {#each group.actors.slice(0, 3) as actor}
                       {#if actor.avatar}
-                        <img loading="lazy" src={actor.avatar} alt="" class="w-5 h-5 rounded-full border border-[var(--color-bg)]" />
+                        <img loading="lazy" decoding="async" src={actor.avatar} alt="" class="w-5 h-5 rounded-full border border-[var(--color-bg)]" />
                       {/if}
                     {/each}
                     {#if group.actors.length > 3}
@@ -219,7 +219,7 @@
                   </button>
                 {:else}
                   {#if group.actors[0]?.avatar}
-                    <img loading="lazy" src={group.actors[0].avatar} alt="" class="w-5 h-5 rounded-full inline mr-1 align-text-bottom" />
+                    <img loading="lazy" decoding="async" src={group.actors[0].avatar} alt="" class="w-5 h-5 rounded-full inline mr-1 align-text-bottom" />
                   {/if}
                   <span class="font-semibold">{group.actors[0]?.displayName || group.actors[0]?.handle}</span>
                   <span class="text-[var(--color-text-muted)]"> {getNotifActionText(group.type, 1)}</span>
@@ -232,7 +232,7 @@
                 <div class="mt-1 space-y-0.5">
                   {#each group.actors as actor}
                     <div class="flex items-center gap-1 text-[10px] py-0.5">
-                      {#if actor.avatar}<img loading="lazy" src={actor.avatar} alt="" class="w-4 h-4 rounded-full" />{/if}
+                      {#if actor.avatar}<img loading="lazy" decoding="async" src={actor.avatar} alt="" class="w-4 h-4 rounded-full" />{/if}
                       <span>{actor.displayName || actor.handle}</span>
                       <span class="w-1.5 h-1.5 rounded-full ml-auto" style="background: var(--color-{actor.platform})"></span>
                     </div>

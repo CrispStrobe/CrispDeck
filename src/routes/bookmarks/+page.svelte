@@ -3,9 +3,12 @@
   import { Bookmark, Loader2, Inbox, RefreshCw } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { listBookmarks, importPlatformBookmarks } from '$lib/bookmarks';
-  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { BlueskyClient } from '$lib/api/bluesky';
-  import { MastodonClient } from '$lib/api/mastodon';
+  import type { ClientEntry } from '$lib/api/client-factory';
+  // Type-only: the concrete clients arrive via client-factory, which is
+  // imported dynamically below so the @atproto/api lexicons stay off this
+  // route's entry chunk and out of the first-paint path.
+  import type { BlueskyClient } from '$lib/api/bluesky';
+  import type { MastodonClient } from '$lib/api/mastodon';
   import { normalizePost } from '$lib/api/unified';
   import Post from '$lib/components/Post.svelte';
   import type { UnifiedPost, Account } from '$lib/types';
@@ -19,6 +22,7 @@
 
   onMount(async () => {
     try {
+      const { initAllClients } = await import('$lib/api/client-factory');
       const result = await initAllClients();
       accounts = result.accounts;
       clientEntries = result.clients;
