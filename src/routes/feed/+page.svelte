@@ -762,7 +762,12 @@
   const isLoading = $derived(loading || loadingMore);
 
   function onTouchStart(e: TouchEvent) {
-    if (window.scrollY === 0) {
+    // Ask the element that actually scrolls. html/body are `overflow: hidden`
+    // and #main-content carries the scrollbar, so window.scrollY is always 0 —
+    // this gate was permanently open, and any downward drag, however deep in
+    // the feed, armed a pull-to-refresh and reloaded the timeline.
+    const el = scrollContainer();
+    if ((el ? el.scrollTop : window.scrollY) <= 0) {
       pullStartY = e.touches[0].clientY;
       isPulling = true;
     }
