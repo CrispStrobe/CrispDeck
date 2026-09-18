@@ -4,6 +4,7 @@
  */
 
 import type { UnifiedPost, Platform } from './types';
+import { trimRawForArchive } from './archive-raw';
 
 const DB_NAME = 'crispdeck-archive';
 const DB_VERSION = 2;
@@ -101,7 +102,9 @@ export function toArchiveRecord(post: UnifiedPost, type: ArchiveType): ArchivedP
     repostCount: post.repostCount ?? 0,
     replyCount: post.replyCount ?? 0,
     hasMedia: !!(post.embeds && (Array.isArray(post.embeds) ? (post.embeds as unknown[]).length > 0 : true)),
-    raw: post.raw,
+    // Only the fields the UI reads back — the full payload dominated record
+    // size. See archive-raw.ts.
+    raw: trimRawForArchive(post.raw, post.platform),
     indexedAt: new Date().toISOString(),
   };
 }

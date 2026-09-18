@@ -2,7 +2,18 @@
  * Tests for the i18n translation service.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { translations } from './i18n.svelte';
+// Language packs are separate modules now (loaded on demand at runtime); the
+// tests import them all directly, since bundling isn't what they're checking.
+import en from './i18n/en';
+import de from './i18n/de';
+import fr from './i18n/fr';
+import es from './i18n/es';
+import ja from './i18n/ja';
+import pt from './i18n/pt';
+import zh from './i18n/zh';
+import ar from './i18n/ar';
+
+const translations: Record<string, any> = { en, de, fr, es, ja, pt, zh, ar };
 
 // Note: We can't test the reactive TranslationService directly (Svelte 5 runes
 // require a compiler), but we can test the translation data and structure.

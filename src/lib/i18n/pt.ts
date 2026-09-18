@@ -1,0 +1,72 @@
+/**
+ * Portuguese strings. Partial: anything missing falls back to English.
+ * Loaded on demand — see ../i18n.svelte.ts.
+ */
+const pt: Record<string, any> = {
+  nav: {
+    dashboard: 'Painel', feed: 'Feed', deck: 'Deck', compose: 'Escrever',
+    drafts: 'Rascunhos', notifications: 'Notificações', messages: 'Mensagens',
+    bookmarks: 'Favoritos', lists: 'Listas & Feeds', feedBuilder: 'Construtor de Feeds', starterPacks: 'Starter Packs',
+    identities: 'Identidades', search: 'Buscar', trending: 'Tendências',
+    archive: 'Arquivo', labelers: 'Rotuladores', instance: 'Info da instância',
+    moderation: 'Moderação', analytics: 'Análise', settings: 'Configurações',
+    post: 'Publicar', alerts: 'Alertas', dms: 'DMs',
+  },
+  app: { name: 'CrispDeck', subtitle: 'Mastodon + Bluesky', collapse: 'Recolher', expand: 'Expandir' },
+  compose: {
+    title: 'Escrever', placeholder: 'O que está pensando? Digite @ para mencionar...',
+    post: 'Publicar', postThread: 'Publicar thread', posting: 'Publicando...',
+    saveDraft: 'Salvar rascunho', selectAccount: 'Selecione pelo menos uma conta.',
+    replyingTo: 'Respondendo a', quoting: 'Citando', cw: 'AC',
+    cwPlaceholder: 'Aviso de conteúdo...', preview: 'Prévia',
+    altTextPlaceholder: 'Descreva esta imagem para acessibilidade...',
+    anyoneCanReply: 'Qualquer um pode responder', mentionedOnly: 'Apenas mencionados',
+    followersOnly: 'Apenas seguidores', noReplies: 'Sem respostas',
+    public: 'Público', unlisted: 'Não listado', followersOnlyVis: 'Apenas seguidores', direct: 'Direto',
+    postToAccounts: 'para {count} contas', draftSaved: 'Rascunho salvo',
+    editingDraft: 'Editando rascunho #{id}', discardDraft: 'Descartar rascunho',
+    tpl: 'Modelo', saveTemplate: '+ Salvar como modelo', noTemplates: 'Sem modelos',
+    pollMastodon: 'Enquete (Mastodon)', addOption: '+ Adicionar opção',
+    multipleChoice: 'Múltipla escolha', hour1: '1 hora', hours6: '6 horas',
+    hours24: '24 horas', days3: '3 dias', days7: '7 dias',
+  },
+  post: {
+    reply: 'Responder', boost: 'Compartilhar', quote: 'Citar', like: 'Curtir',
+    bookmark: 'Favoritar', removeBookmark: 'Remover favorito', copyLink: 'Copiar link',
+    copied: 'Copiado!', report: 'Denunciar', translate: 'Traduzir',
+    hideTranslation: 'Ocultar tradução', shareAsImage: 'Compartilhar como imagem',
+    repostedBy: 'Compartilhado por', contentHidden: 'Conteúdo oculto:',
+    showAnyway: 'Mostrar mesmo assim', contentWarning: 'Aviso de conteúdo:',
+    show: 'Mostrar', votes: 'votos', closed: 'Encerrada', voted: 'Votado', open: 'Aberta',
+    translatedFrom: 'Traduzido de {lang}', sharedVia: 'compartilhado via CrispDeck',
+  },
+  feed: {
+    title: 'Feed', timeline: 'Linha do tempo', myPosts: 'Meus posts', all: 'Todos',
+    noAccounts: 'Nenhuma conta conectada', addAccountsFirst: 'Adicione contas nas Configurações.',
+    loadingTimeline: 'Carregando linha do tempo...', loadingYourPosts: 'Carregando seus posts...',
+    noPostsMatch: 'Nenhum post corresponde', noPostsFound: 'Nenhum post encontrado',
+    loadingMore: 'Carregando mais...', scrollMore: 'Role para mais', endOfFeed: 'Fim do feed',
+    posts: '{count} posts', filtersSort: 'Filtros & Ordem', hideMedia: 'Ocultar mídia',
+    newPosts: '{count} novo(s) post(s) — clique para atualizar',
+  },
+  settings: {
+    title: 'Configurações', preferences: 'Preferências', language: 'Idioma',
+    translateTarget: 'Idioma de tradução', altTextMode: 'Texto alternativo obrigatório',
+    altTextOff: 'Desativado', altTextWarn: 'Avisar se ausente', altTextRequire: 'Obrigatório para todas',
+    blueskyAccounts: 'Contas Bluesky', mastodonAccounts: 'Contas Mastodon',
+    add: 'Adicionar', cancel: 'Cancelar', primary: 'principal',
+    oauthRecommended: 'OAuth (recomendado)', appPassword: 'Senha de app',
+    handle: 'Handle', connectOAuth: 'Conectar com OAuth', addAccount: 'Adicionar conta',
+    noBluesky: 'Nenhuma conta Bluesky.', noMastodon: 'Nenhuma conta Mastodon.',
+    instance: 'Instância', authorizeOAuth: 'Autorizar com OAuth',
+    handlePlaceholder: 'seu-handle.bsky.social', instancePlaceholder: 'mastodon.social',
+    appPasswordPlaceholder: 'xxxx-xxxx-xxxx-xxxx',
+    appPasswordHint: 'Senhas de app não suportam DMs.',
+    oauthHint: 'OAuth dá acesso completo incluindo DMs.',
+    waitingAuth: 'Aguardando autorização...', authHint: 'Autorize o app no navegador.',
+    setupIncomplete: 'configuração incompleta — excluir e readicionar',
+  },
+  common: { dismiss: 'fechar', loading: 'Carregando...', error: 'Erro', postedTo: 'Publicado em {platform}', view: 'Ver', bluesky: 'Bluesky', mastodon: 'Mastodon', threads: 'Threads' },
+};
+
+export default pt;

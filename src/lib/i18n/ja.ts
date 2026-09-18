@@ -1,0 +1,73 @@
+/**
+ * Japanese strings. Partial: anything missing falls back to English.
+ * Loaded on demand — see ../i18n.svelte.ts.
+ */
+const ja: Record<string, any> = {
+  nav: {
+    dashboard: 'ダッシュボード', feed: 'フィード', deck: 'デッキ', compose: '作成',
+    drafts: '下書き', notifications: '通知', messages: 'メッセージ',
+    bookmarks: 'ブックマーク', lists: 'リスト＆フィード', feedBuilder: 'フィードビルダー', starterPacks: 'スターターパック',
+    identities: 'アイデンティティ', search: '検索', trending: 'トレンド',
+    archive: 'アーカイブ', labelers: 'ラベラー', instance: 'インスタンス情報',
+    moderation: 'モデレーション', analytics: '分析', settings: '設定',
+    post: '投稿', alerts: 'アラート', dms: 'DM',
+  },
+  app: { name: 'CrispDeck', subtitle: 'Mastodon + Bluesky', collapse: '折りたたむ', expand: '展開' },
+  compose: {
+    title: '作成', placeholder: '何を考えていますか？@で誰かをメンション...',
+    post: '投稿', postThread: 'スレッド投稿', posting: '投稿中...',
+    saveDraft: '下書きを保存', selectAccount: 'アカウントを少なくとも1つ選択してください。',
+    replyingTo: '返信先', quoting: '引用', cw: 'CW',
+    cwPlaceholder: 'コンテンツ警告...', preview: 'プレビュー',
+    altTextPlaceholder: 'この画像をアクセシビリティのために説明...',
+    anyoneCanReply: '誰でも返信可', mentionedOnly: 'メンションされた人のみ',
+    followersOnly: 'フォロワーのみ', noReplies: '返信不可',
+    public: '公開', unlisted: '未収載', followersOnlyVis: 'フォロワーのみ', direct: 'ダイレクト',
+    postToAccounts: '{count}アカウントに', draftSaved: '下書きを保存しました',
+    editingDraft: '下書き #{id} を編集中', discardDraft: '下書きを破棄',
+    tpl: 'テンプレ', saveTemplate: '+ テンプレートとして保存', noTemplates: 'テンプレートなし',
+    pollMastodon: 'アンケート (Mastodon)', addOption: '+ 選択肢を追加',
+    multipleChoice: '複数選択', hour1: '1時間', hours6: '6時間',
+    hours24: '24時間', days3: '3日', days7: '7日',
+  },
+  post: {
+    reply: '返信', boost: 'ブースト', quote: '引用', like: 'いいね',
+    bookmark: 'ブックマーク', removeBookmark: 'ブックマーク解除', copyLink: 'リンクをコピー',
+    copied: 'コピーしました！', report: '報告', translate: '翻訳',
+    hideTranslation: '翻訳を非表示', shareAsImage: '画像として共有',
+    repostedBy: 'がリポスト', contentHidden: 'コンテンツ非表示：',
+    showAnyway: 'それでも表示', contentWarning: 'コンテンツ警告：',
+    show: '表示', votes: '票', closed: '終了', voted: '投票済み', open: '受付中',
+    translatedFrom: '{lang}から翻訳',
+    sharedVia: 'CrispDeckで共有',
+  },
+  feed: {
+    title: 'フィード', timeline: 'タイムライン', myPosts: '自分の投稿', all: 'すべて',
+    noAccounts: 'アカウント未接続', addAccountsFirst: '設定でアカウントを追加してください。',
+    loadingTimeline: 'タイムラインを読み込み中...', loadingYourPosts: '投稿を読み込み中...',
+    noPostsMatch: 'フィルターに一致する投稿なし', noPostsFound: '投稿が見つかりません',
+    loadingMore: 'もっと読み込み中...', scrollMore: 'スクロールで続きを表示', endOfFeed: 'フィードの終わり',
+    posts: '{count}件の投稿', filtersSort: 'フィルター＆並べ替え', hideMedia: 'メディアを非表示',
+    newPosts: '{count}件の新しい投稿 — クリックで更新',
+  },
+  settings: {
+    title: '設定', preferences: '環境設定', language: '言語',
+    translateTarget: '翻訳先言語', altTextMode: '代替テキストの要件',
+    altTextOff: 'オフ（任意）', altTextWarn: '未記入時に警告', altTextRequire: '全画像に必須',
+    blueskyAccounts: 'Blueskyアカウント', mastodonAccounts: 'Mastodonアカウント',
+    add: '追加', cancel: 'キャンセル', primary: 'メイン',
+    oauthRecommended: 'OAuth（推奨）', appPassword: 'アプリパスワード',
+    handle: 'ハンドル', connectOAuth: 'OAuthで接続', addAccount: 'アカウント追加',
+    noBluesky: 'Blueskyアカウント未接続。', noMastodon: 'Mastodonアカウント未接続。',
+    instance: 'インスタンス', authorizeOAuth: 'OAuthで認証',
+    handlePlaceholder: 'あなたのhandle.bsky.social', instancePlaceholder: 'mastodon.social',
+    appPasswordPlaceholder: 'xxxx-xxxx-xxxx-xxxx',
+    appPasswordHint: 'アプリパスワードはDMに対応していません。',
+    oauthHint: 'OAuthはDMを含む完全なアクセスを提供します。',
+    waitingAuth: '認証待ち...', authHint: 'ブラウザでアプリを認証してください。',
+    setupIncomplete: '設定未完了 — 削除して再追加してください',
+  },
+  common: { dismiss: '閉じる', loading: '読み込み中...', error: 'エラー', postedTo: '{platform}に投稿', view: '表示', bluesky: 'Bluesky', mastodon: 'Mastodon', threads: 'Threads' },
+};
+
+export default ja;

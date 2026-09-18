@@ -1,0 +1,72 @@
+/**
+ * Chinese strings. Partial: anything missing falls back to English.
+ * Loaded on demand — see ../i18n.svelte.ts.
+ */
+const zh: Record<string, any> = {
+  nav: {
+    dashboard: '仪表板', feed: '信息流', deck: '多栏', compose: '撰写',
+    drafts: '草稿', notifications: '通知', messages: '消息',
+    bookmarks: '书签', lists: '列表与信息源', feedBuilder: '信息源构建器', starterPacks: '入门包',
+    identities: '身份', search: '搜索', trending: '趋势',
+    archive: '归档', labelers: '标签者', instance: '实例信息',
+    moderation: '管理', analytics: '分析', settings: '设置',
+    post: '发布', alerts: '提醒', dms: '私信',
+  },
+  app: { name: 'CrispDeck', subtitle: 'Mastodon + Bluesky', collapse: '折叠', expand: '展开' },
+  compose: {
+    title: '撰写', placeholder: '有什么想说的？输入@来提及...',
+    post: '发布', postThread: '发布串', posting: '发布中...',
+    saveDraft: '保存草稿', selectAccount: '请至少选择一个账户。',
+    replyingTo: '回复', quoting: '引用', cw: '内容警告',
+    cwPlaceholder: '内容警告...', preview: '预览',
+    altTextPlaceholder: '为无障碍描述此图片...',
+    anyoneCanReply: '任何人可回复', mentionedOnly: '仅被提及者',
+    followersOnly: '仅关注者', noReplies: '禁止回复',
+    public: '公开', unlisted: '不列出', followersOnlyVis: '仅关注者', direct: '私信',
+    postToAccounts: '发到{count}个账户', draftSaved: '草稿已保存',
+    editingDraft: '编辑草稿 #{id}', discardDraft: '丢弃草稿',
+    tpl: '模板', saveTemplate: '+ 保存为模板', noTemplates: '无模板',
+    pollMastodon: '投票 (Mastodon)', addOption: '+ 添加选项',
+    multipleChoice: '多选', hour1: '1小时', hours6: '6小时',
+    hours24: '24小时', days3: '3天', days7: '7天',
+  },
+  post: {
+    reply: '回复', boost: '转发', quote: '引用', like: '喜欢',
+    bookmark: '书签', removeBookmark: '取消书签', copyLink: '复制链接',
+    copied: '已复制！', report: '举报', translate: '翻译',
+    hideTranslation: '隐藏翻译', shareAsImage: '分享为图片',
+    repostedBy: '转发自', contentHidden: '内容已隐藏：',
+    showAnyway: '仍然显示', contentWarning: '内容警告：',
+    show: '显示', votes: '票', closed: '已结束', voted: '已投票', open: '进行中',
+    translatedFrom: '翻译自{lang}', sharedVia: '通过CrispDeck分享',
+  },
+  feed: {
+    title: '信息流', timeline: '时间线', myPosts: '我的帖子', all: '全部',
+    noAccounts: '未连接账户', addAccountsFirst: '请先在设置中添加账户。',
+    loadingTimeline: '正在加载时间线...', loadingYourPosts: '正在加载您的帖子...',
+    noPostsMatch: '没有匹配的帖子', noPostsFound: '未找到帖子',
+    loadingMore: '加载更多...', scrollMore: '滚动查看更多', endOfFeed: '已到底部',
+    posts: '{count}条帖子', filtersSort: '筛选与排序', hideMedia: '隐藏媒体',
+    newPosts: '{count}条新帖子 — 点击刷新',
+  },
+  settings: {
+    title: '设置', preferences: '偏好', language: '语言',
+    translateTarget: '翻译目标语言', altTextMode: '替代文本要求',
+    altTextOff: '关闭（可选）', altTextWarn: '缺少时警告', altTextRequire: '所有图片必填',
+    blueskyAccounts: 'Bluesky账户', mastodonAccounts: 'Mastodon账户',
+    add: '添加', cancel: '取消', primary: '主要',
+    oauthRecommended: 'OAuth（推荐）', appPassword: '应用密码',
+    handle: '用户名', connectOAuth: '通过OAuth连接', addAccount: '添加账户',
+    noBluesky: '未连接Bluesky账户。', noMastodon: '未连接Mastodon账户。',
+    instance: '实例', authorizeOAuth: '通过OAuth授权',
+    handlePlaceholder: '你的handle.bsky.social', instancePlaceholder: 'mastodon.social',
+    appPasswordPlaceholder: 'xxxx-xxxx-xxxx-xxxx',
+    appPasswordHint: '应用密码不支持私信。',
+    oauthHint: 'OAuth提供包括私信在内的完整访问权限。',
+    waitingAuth: '等待授权...', authHint: '请在浏览器中授权应用。',
+    setupIncomplete: '设置未完成 — 删除后重新添加',
+  },
+  common: { dismiss: '关闭', loading: '加载中...', error: '错误', postedTo: '已发布到{platform}', view: '查看', bluesky: 'Bluesky', mastodon: 'Mastodon', threads: 'Threads' },
+};
+
+export default zh;
