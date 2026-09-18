@@ -47,12 +47,31 @@ export default defineConfig({
     cssMinify: 'lightningcss',
     rollupOptions: {
       output: {
-        /** @param {string} id */
-        manualChunks(id) {
+        /**
+         * @param {string} id
+         * @param {{ getModuleInfo: (id: string) => { importers?: readonly string[] } | null }} ctx
+         */
+        manualChunks(id, { getModuleInfo }) {
           // Split large vendor dependencies into separate cacheable chunks
           if (id.includes('node_modules/@atproto')) return 'vendor-atproto';
           if (id.includes('node_modules/masto')) return 'vendor-masto';
-          if (id.includes('node_modules/@lucide')) return 'vendor-icons';
+
+          // Icons are one module per icon, and the old rule put all of them in
+          // a single chunk. The root layout's navigation needs 23 of them, so
+          // that one chunk was pulled into the entry -- and with it the other
+          // 89 icons, measured, that only individual routes use. Every visitor
+          // downloaded the icons for pages they had not opened.
+          //
+          // Split by who imports them instead of by a hardcoded list of names:
+          // a list would drift the moment someone adds an icon to the layout,
+          // and it would drift silently, because the icon would still render.
+          if (/node_modules[/\\]@lucide[/\\]svelte[/\\]/.test(id)) {
+            const isIcon = /[/\\]icons[/\\][\w-]+\.js$/.test(id);
+            if (!isIcon) return 'vendor-icons-shell'; // shared base component
+            const importers = getModuleInfo(id)?.importers ?? [];
+            const inShell = importers.some((i) => /routes[/\\]\+layout\.svelte/.test(i));
+            return inShell ? 'vendor-icons-shell' : 'vendor-icons-route';
+          }
         },
       },
     },
