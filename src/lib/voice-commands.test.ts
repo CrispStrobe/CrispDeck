@@ -139,3 +139,57 @@ describe('voice commands', () => {
     });
   });
 });
+
+/**
+ * The scroll and home commands both assumed the window was the thing that
+ * moves. It isn't: html/body are `overflow: hidden` and the shell scrolls
+ * #main-content, and the app is served under /<repo>/ on the Pages mirror.
+ * Both commands were silently doing nothing useful.
+ */
+describe('commands act on the right target', () => {
+  function withMainContent(fn: (el: HTMLElement) => void) {
+    const el = document.createElement('div');
+    el.id = 'main-content';
+    el.scrollTo = vi.fn() as any;
+    el.scrollBy = vi.fn() as any;
+    document.body.appendChild(el);
+    try { fn(el); } finally { el.remove(); }
+  }
+
+  const byPhrase = (phrase: string) =>
+    commands.find((c) => c.phrases.includes(phrase))!;
+
+  it('"scroll up" scrolls the scroll container, not the window', () => {
+    withMainContent((el) => {
+      const windowScrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+      byPhrase('scroll up').action();
+      expect(el.scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
+      expect(windowScrollTo).not.toHaveBeenCalled();
+      windowScrollTo.mockRestore();
+    });
+  });
+
+  it('"scroll down" scrolls the scroll container, not the window', () => {
+    withMainContent((el) => {
+      const windowScrollBy = vi.spyOn(window, 'scrollBy').mockImplementation(() => {});
+      byPhrase('scroll down').action();
+      expect(el.scrollBy).toHaveBeenCalledWith({ top: 500, behavior: 'smooth' });
+      expect(windowScrollBy).not.toHaveBeenCalled();
+      windowScrollBy.mockRestore();
+    });
+  });
+
+  it('falls back to the window when there is no scroll container', () => {
+    const windowScrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    byPhrase('scroll up').action();
+    expect(windowScrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
+    windowScrollTo.mockRestore();
+  });
+
+  it('every navigation command routes through base', () => {
+    // base is '' in tests, so a correctly-built path is '' or starts with '/'.
+    // What matters is that no command hardcodes a path the mount point ignores.
+    const src = commands.map((c) => c.action.toString());
+    expect(src.filter((s) => /goto\(\s*['"`]\//.test(s))).toEqual([]);
+  });
+});

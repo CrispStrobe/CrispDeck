@@ -12,6 +12,18 @@ import { base } from '$app/paths';
 
 import { goto } from '$app/navigation';
 
+/**
+ * The element that actually scrolls.
+ *
+ * html/body are `overflow: hidden` and the shell puts the scrollbar on
+ * #main-content, so window.scrollTo/scrollBy move nothing — the scroll
+ * commands below were silently doing nothing at all.
+ */
+function scroller(): { scrollTo: typeof window.scrollTo; scrollBy: typeof window.scrollBy } {
+  const el = typeof document !== 'undefined' ? document.getElementById('main-content') : null;
+  return el ?? window;
+}
+
 export interface VoiceCommand {
   /** Trigger phrases (lowercase, any match fires) */
   phrases: string[];
@@ -80,19 +92,20 @@ export const commands: VoiceCommand[] = [
   },
   {
     phrases: ['go home', 'go to dashboard', 'home', 'startseite', 'übersicht'],
-    action: () => goto('/'),
+    // base is '' on the root deployment and '/<repo>' on the Pages mirror.
+    action: () => goto(base || '/'),
     description: 'Go to dashboard',
   },
 
   // Actions
   {
     phrases: ['scroll up', 'go up', 'nach oben'],
-    action: () => window.scrollTo({ top: 0, behavior: 'smooth' }),
+    action: () => scroller().scrollTo({ top: 0, behavior: 'smooth' }),
     description: 'Scroll to top',
   },
   {
     phrases: ['scroll down', 'go down', 'nach unten'],
-    action: () => window.scrollBy({ top: 500, behavior: 'smooth' }),
+    action: () => scroller().scrollBy({ top: 500, behavior: 'smooth' }),
     description: 'Scroll down',
   },
   {
