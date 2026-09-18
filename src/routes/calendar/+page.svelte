@@ -4,7 +4,10 @@
   import { searchArchive } from '$lib/archive';
   import { listDrafts } from '$lib/db';
   import { i18n } from '$lib/i18n.svelte';
-  import { Calendar, ChevronLeft, ChevronRight, Loader2 } from '@lucide/svelte';
+  import Calendar from '@lucide/svelte/icons/calendar';
+  import ChevronLeft from '@lucide/svelte/icons/chevron-left';
+  import ChevronRight from '@lucide/svelte/icons/chevron-right';
+  import Loader2 from '@lucide/svelte/icons/loader-2';
   import type { Draft } from '$lib/types';
 
   interface CalendarPost {

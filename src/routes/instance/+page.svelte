@@ -2,7 +2,14 @@
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { Server, Loader2, Users, MessageCircle, Shield, Mail, ExternalLink, Globe } from '@lucide/svelte';
+  import Server from '@lucide/svelte/icons/server';
+  import Loader2 from '@lucide/svelte/icons/loader-2';
+  import Users from '@lucide/svelte/icons/users';
+  import MessageCircle from '@lucide/svelte/icons/message-circle';
+  import Shield from '@lucide/svelte/icons/shield';
+  import Mail from '@lucide/svelte/icons/mail';
+  import ExternalLink from '@lucide/svelte/icons/external-link';
+  import Globe from '@lucide/svelte/icons/globe';
   import { i18n } from '$lib/i18n.svelte';
   import { MastodonClient } from '$lib/api/mastodon';
   import { sanitizeHtml } from '$lib/sanitize';

@@ -3,7 +3,11 @@
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { List, Plus, Loader2, Trash2, Rss } from '@lucide/svelte';
+  import List from '@lucide/svelte/icons/list';
+  import Plus from '@lucide/svelte/icons/plus';
+  import Loader2 from '@lucide/svelte/icons/loader-2';
+  import Trash2 from '@lucide/svelte/icons/trash-2';
+  import Rss from '@lucide/svelte/icons/rss';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import { normalizePost, sortPosts } from '$lib/api/unified';

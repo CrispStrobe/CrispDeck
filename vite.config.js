@@ -25,35 +25,13 @@ function swVersionPlugin() {
   };
 }
 
-/** @type {Array<{icon: string, inShell: boolean, importers: number}>} */
-const iconDecisions = [];
-
-/** Writes what manualChunks decided, so a no-op is distinguishable from a no-run. */
-function iconDecisionReport() {
-  return {
-    name: 'bench-icon-decisions',
-    apply: 'build',
-    closeBundle() {
-      if (!process.env.BENCH_CHUNK_MAP) return;
-      const shell = iconDecisions.filter((d) => d.inShell).length;
-      writeFileSync('icon-split.json', JSON.stringify({
-        ran: iconDecisions.length > 0,
-        icons: iconDecisions.length,
-        shell,
-        route: iconDecisions.length - shell,
-        sample: iconDecisions.slice(0, 8)
-      }, null, 2));
-    }
-  };
-}
-
 export default defineConfig({
   plugins: [
     sveltekit(),
     tailwindcss(),
     swVersionPlugin(),
     // Off unless asked for: it writes a build report, not app output.
-    ...(process.env.BENCH_CHUNK_MAP ? [chunkMap(), iconDecisionReport()] : [])
+    ...(process.env.BENCH_CHUNK_MAP ? [chunkMap()] : [])
   ],
   define: {
     __VERSION__: JSON.stringify(pkg.version),
@@ -69,37 +47,17 @@ export default defineConfig({
     cssMinify: 'lightningcss',
     rollupOptions: {
       output: {
-        /**
-         * @param {string} id
-         * @param {{ getModuleInfo: (id: string) => { importers?: readonly string[] } | null }} ctx
-         */
-        manualChunks(id, { getModuleInfo }) {
+        /** @param {string} id */
+        manualChunks(id) {
           // Split large vendor dependencies into separate cacheable chunks
           if (id.includes('node_modules/@atproto')) return 'vendor-atproto';
           if (id.includes('node_modules/masto')) return 'vendor-masto';
 
-          // Icons are one module per icon, and the old rule put all of them in
-          // a single chunk. The root layout's navigation needs 23 of them, so
-          // that one chunk was pulled into the entry -- and with it the other
-          // 89 icons, measured, that only individual routes use. Every visitor
-          // downloaded the icons for pages they had not opened.
-          //
-          // Split by who imports them instead of by a hardcoded list of names:
-          // a list would drift the moment someone adds an icon to the layout,
-          // and it would drift silently, because the icon would still render.
-          if (/node_modules[/\\]@lucide[/\\]svelte[/\\]/.test(id)) {
-            const isIcon = /[/\\]icons[/\\][\w-]+\.js$/.test(id);
-            if (!isIcon) return 'vendor-icons-shell'; // shared base component
-            const importers = getModuleInfo(id)?.importers ?? [];
-            const inShell = importers.some((i) => /routes[/\\]\+layout\.svelte/.test(i));
-            // Diagnostic: SvelteKit emits chunks as [hash].js with no [name],
-            // so a manualChunks name never reaches a filename and there is no
-            // way to tell from the output whether this function ran at all.
-            if (process.env.BENCH_CHUNK_MAP) {
-              iconDecisions.push({ icon: id.replace(/^.*[/\\]/, ''), inShell, importers: importers.length });
-            }
-            return inShell ? 'vendor-icons-shell' : 'vendor-icons-route';
-          }
+          // No rule for @lucide/svelte on purpose. Icons are imported by deep
+          // path now (`@lucide/svelte/icons/home`), so each one is reached
+          // only by the components that use it and Rollup places it with
+          // them. Grouping them by hand is what put all 112 in one chunk and
+          // dragged the whole set into the entry behind the layout's 23.
         },
       },
     },

@@ -2,7 +2,14 @@
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { Tag, Loader2, Plus, X, Shield, Eye, EyeOff, AlertTriangle } from '@lucide/svelte';
+  import Tag from '@lucide/svelte/icons/tag';
+  import Loader2 from '@lucide/svelte/icons/loader-2';
+  import Plus from '@lucide/svelte/icons/plus';
+  import X from '@lucide/svelte/icons/x';
+  import Shield from '@lucide/svelte/icons/shield';
+  import Eye from '@lucide/svelte/icons/eye';
+  import EyeOff from '@lucide/svelte/icons/eye-off';
+  import AlertTriangle from '@lucide/svelte/icons/alert-triangle';
   import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import type { Account } from '$lib/types';

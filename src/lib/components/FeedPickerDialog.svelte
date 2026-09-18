@@ -12,7 +12,11 @@
    * keep a URI field at the bottom for the rare person who really does have one
    * — removing the escape hatch would be a different kind of wrong.
    */
-  import { Search, Loader2, Hash, Users, X } from '@lucide/svelte';
+  import Search from '@lucide/svelte/icons/search';
+  import Loader2 from '@lucide/svelte/icons/loader-2';
+  import Hash from '@lucide/svelte/icons/hash';
+  import Users from '@lucide/svelte/icons/users';
+  import X from '@lucide/svelte/icons/x';
   import { i18n } from '$lib/i18n.svelte';
   import { listSavedFeeds, searchFeedGenerators, type FeedChoice } from '$lib/bluesky-feeds';
 

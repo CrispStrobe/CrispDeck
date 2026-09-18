@@ -2,7 +2,10 @@
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { Clock, Loader2, CheckCircle, Rss } from '@lucide/svelte';
+  import Clock from '@lucide/svelte/icons/clock';
+  import Loader2 from '@lucide/svelte/icons/loader-2';
+  import CheckCircle from '@lucide/svelte/icons/check-circle';
+  import Rss from '@lucide/svelte/icons/rss';
   import { i18n } from '$lib/i18n.svelte';
   import Post from '$lib/components/Post.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';

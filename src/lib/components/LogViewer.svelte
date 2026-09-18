@@ -1,5 +1,10 @@
 <script lang="ts">
-  import { X, RefreshCw, Trash2, Download, Search, ArrowDown } from '@lucide/svelte';
+  import X from '@lucide/svelte/icons/x';
+  import RefreshCw from '@lucide/svelte/icons/refresh-cw';
+  import Trash2 from '@lucide/svelte/icons/trash-2';
+  import Download from '@lucide/svelte/icons/download';
+  import Search from '@lucide/svelte/icons/search';
+  import ArrowDown from '@lucide/svelte/icons/arrow-down';
   import { getLogs, clearLogs, getLogCount, type LogEntry } from '$lib/debug-log';
 
   let { show = $bindable(false) }: { show: boolean } = $props();

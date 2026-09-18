@@ -1,6 +1,6 @@
 <script lang="ts">
   import { i18n } from '$lib/i18n.svelte';
-  import { Shield } from '@lucide/svelte';
+  import Shield from '@lucide/svelte/icons/shield';
 
   const p = $derived(i18n.t.privacy);
   // Shown only in a translation. The English text is the one that was drafted

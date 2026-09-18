@@ -7,7 +7,16 @@
     updateAccount as dbUpdateAccount, startMastodonOAuth as dbStartOAuth,
     completeMastodonOAuth as dbCompleteOAuth, getDecryptedCredentials
   } from '$lib/db';
-  import { Settings, Plus, Trash2, Star, ExternalLink, Loader2, Shield, Download, Upload, EyeOff } from '@lucide/svelte';
+  import Settings from '@lucide/svelte/icons/settings';
+  import Plus from '@lucide/svelte/icons/plus';
+  import Trash2 from '@lucide/svelte/icons/trash-2';
+  import Star from '@lucide/svelte/icons/star';
+  import ExternalLink from '@lucide/svelte/icons/external-link';
+  import Loader2 from '@lucide/svelte/icons/loader-2';
+  import Shield from '@lucide/svelte/icons/shield';
+  import Download from '@lucide/svelte/icons/download';
+  import Upload from '@lucide/svelte/icons/upload';
+  import EyeOff from '@lucide/svelte/icons/eye-off';
   import { startBlueskyOAuth, OAUTH_UNAVAILABLE_IN_APP } from '$lib/api/bluesky-oauth';
   import { isTauri as isTauriRuntime } from '$lib/platform';
   import { goto } from '$app/navigation';

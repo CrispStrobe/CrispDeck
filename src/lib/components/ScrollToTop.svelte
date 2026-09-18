@@ -1,6 +1,6 @@
 <script lang="ts">
   import { i18n } from '$lib/i18n.svelte';
-  import { ArrowUp } from '@lucide/svelte';
+  import ArrowUp from '@lucide/svelte/icons/arrow-up';
   import { onMount } from 'svelte';
 
   let visible = $state(false);

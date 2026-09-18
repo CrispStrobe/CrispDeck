@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { X, Send, Loader2, ImagePlus, PenSquare } from '@lucide/svelte';
+  import X from '@lucide/svelte/icons/x';
+  import Send from '@lucide/svelte/icons/send';
+  import Loader2 from '@lucide/svelte/icons/loader-2';
+  import ImagePlus from '@lucide/svelte/icons/image-plus';
+  import PenSquare from '@lucide/svelte/icons/pen-square';
   import { i18n } from '$lib/i18n.svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import AccountPicker from '$lib/components/AccountPicker.svelte';

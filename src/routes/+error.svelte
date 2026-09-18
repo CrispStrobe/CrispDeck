@@ -2,7 +2,9 @@
   import { i18n } from '$lib/i18n.svelte';
   import { base } from '$app/paths';
   import { page } from '$app/state';
-  import { Home, ArrowLeft, Search } from '@lucide/svelte';
+  import Home from '@lucide/svelte/icons/home';
+  import ArrowLeft from '@lucide/svelte/icons/arrow-left';
+  import Search from '@lucide/svelte/icons/search';
 </script>
 
 <svelte:head><title>CrispDeck — {page.status}</title></svelte:head>

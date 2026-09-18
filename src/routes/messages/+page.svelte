@@ -1,7 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { MessageSquare, Loader2, Send, ArrowLeft } from '@lucide/svelte';
+  import MessageSquare from '@lucide/svelte/icons/message-square';
+  import Loader2 from '@lucide/svelte/icons/loader-2';
+  import Send from '@lucide/svelte/icons/send';
+  import ArrowLeft from '@lucide/svelte/icons/arrow-left';
   import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';

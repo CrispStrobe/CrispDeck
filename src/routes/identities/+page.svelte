@@ -7,7 +7,15 @@
     cacheFollows, detectIdentities
   } from '$lib/db';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { Users, ScanSearch, Loader2, Check, X, Plus, Tag, Trash2, Link2 } from '@lucide/svelte';
+  import Users from '@lucide/svelte/icons/users';
+  import ScanSearch from '@lucide/svelte/icons/scan-search';
+  import Loader2 from '@lucide/svelte/icons/loader-2';
+  import Check from '@lucide/svelte/icons/check';
+  import X from '@lucide/svelte/icons/x';
+  import Plus from '@lucide/svelte/icons/plus';
+  import Tag from '@lucide/svelte/icons/tag';
+  import Trash2 from '@lucide/svelte/icons/trash-2';
+  import Link2 from '@lucide/svelte/icons/link-2';
   import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';

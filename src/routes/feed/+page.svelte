@@ -1,7 +1,20 @@
 <script lang="ts">
   import { base } from '$app/paths';
   import { onMount, onDestroy } from 'svelte';
-  import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal, RefreshCw, ChevronDown, Hash, Users, Search, Pin, PinOff } from '@lucide/svelte';
+  import Rss from '@lucide/svelte/icons/rss';
+  import Loader2 from '@lucide/svelte/icons/loader-2';
+  import Inbox from '@lucide/svelte/icons/inbox';
+  import EyeOff from '@lucide/svelte/icons/eye-off';
+  import User from '@lucide/svelte/icons/user';
+  import Globe from '@lucide/svelte/icons/globe';
+  import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
+  import RefreshCw from '@lucide/svelte/icons/refresh-cw';
+  import ChevronDown from '@lucide/svelte/icons/chevron-down';
+  import Hash from '@lucide/svelte/icons/hash';
+  import Users from '@lucide/svelte/icons/users';
+  import Search from '@lucide/svelte/icons/search';
+  import Pin from '@lucide/svelte/icons/pin';
+  import PinOff from '@lucide/svelte/icons/pin-off';
   import { i18n } from '$lib/i18n.svelte';
   import DelayedSpinner from '$lib/components/DelayedSpinner.svelte';
   import Post from '$lib/components/Post.svelte';

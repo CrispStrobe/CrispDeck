@@ -3,7 +3,14 @@
   import { onMount } from 'svelte';
   import { listDrafts, deleteDraft as dbDeleteDraft, saveDraft as dbSaveDraft } from '$lib/db';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { FileText, Trash2, Clock, Send, Loader2, Edit3, Calendar, Eye } from '@lucide/svelte';
+  import FileText from '@lucide/svelte/icons/file-text';
+  import Trash2 from '@lucide/svelte/icons/trash-2';
+  import Clock from '@lucide/svelte/icons/clock';
+  import Send from '@lucide/svelte/icons/send';
+  import Loader2 from '@lucide/svelte/icons/loader-2';
+  import Edit3 from '@lucide/svelte/icons/edit-3';
+  import Calendar from '@lucide/svelte/icons/calendar';
+  import Eye from '@lucide/svelte/icons/eye';
   import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';

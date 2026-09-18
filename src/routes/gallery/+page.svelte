@@ -6,7 +6,10 @@
   import { MastodonClient } from '$lib/api/mastodon';
   import { normalizePost } from '$lib/api/unified';
   import { i18n } from '$lib/i18n.svelte';
-  import { Image, Loader2, Video, Link2 } from '@lucide/svelte';
+  import Image from '@lucide/svelte/icons/image';
+  import Loader2 from '@lucide/svelte/icons/loader-2';
+  import Video from '@lucide/svelte/icons/video';
+  import Link2 from '@lucide/svelte/icons/link-2';
   import MediaLightbox from '$lib/components/MediaLightbox.svelte';
   import type { UnifiedPost, Account } from '$lib/types';
 

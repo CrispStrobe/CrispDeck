@@ -2,7 +2,16 @@
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { BarChart3, Heart, Repeat, MessageCircle, Clock, TrendingUp, Download, Loader2, ChevronDown, Percent } from '@lucide/svelte';
+  import BarChart3 from '@lucide/svelte/icons/bar-chart-3';
+  import Heart from '@lucide/svelte/icons/heart';
+  import Repeat from '@lucide/svelte/icons/repeat';
+  import MessageCircle from '@lucide/svelte/icons/message-circle';
+  import Clock from '@lucide/svelte/icons/clock';
+  import TrendingUp from '@lucide/svelte/icons/trending-up';
+  import Download from '@lucide/svelte/icons/download';
+  import Loader2 from '@lucide/svelte/icons/loader-2';
+  import ChevronDown from '@lucide/svelte/icons/chevron-down';
+  import Percent from '@lucide/svelte/icons/percent';
   import { i18n } from '$lib/i18n.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';

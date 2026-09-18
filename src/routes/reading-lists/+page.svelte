@@ -6,7 +6,11 @@
     deleteReadingList, removePostFromList, type ReadingList,
   } from '$lib/reading-lists';
   import { i18n } from '$lib/i18n.svelte';
-  import { BookOpen, Plus, Trash2, X, Loader2 } from '@lucide/svelte';
+  import BookOpen from '@lucide/svelte/icons/book-open';
+  import Plus from '@lucide/svelte/icons/plus';
+  import Trash2 from '@lucide/svelte/icons/trash-2';
+  import X from '@lucide/svelte/icons/x';
+  import Loader2 from '@lucide/svelte/icons/loader-2';
 
   let lists: ReadingList[] = $state([]);
   let showNewForm = $state(false);

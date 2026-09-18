@@ -6,7 +6,9 @@
   import { addAccount, updateAccount, listAccounts } from '$lib/db';
   import { initBlueskyOAuth, wasSilentReauthAttempt, clearSilentReauthFlag, OAUTH_RETURN_TO_KEY } from '$lib/api/bluesky-oauth';
   import { invalidateClientCache } from '$lib/api/client-factory';
-  import { Loader2, Check, AlertTriangle } from '@lucide/svelte';
+  import Loader2 from '@lucide/svelte/icons/loader-2';
+  import Check from '@lucide/svelte/icons/check';
+  import AlertTriangle from '@lucide/svelte/icons/alert-triangle';
 
   let status: 'loading' | 'success' | 'error' = $state('loading');
   let errorMsg = $state('');

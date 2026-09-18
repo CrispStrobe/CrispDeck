@@ -1,7 +1,11 @@
 <script lang="ts">
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
-  import { Info, ExternalLink, Search, Shield, ScrollText } from '@lucide/svelte';
+  import Info from '@lucide/svelte/icons/info';
+  import ExternalLink from '@lucide/svelte/icons/external-link';
+  import Search from '@lucide/svelte/icons/search';
+  import Shield from '@lucide/svelte/icons/shield';
+  import ScrollText from '@lucide/svelte/icons/scroll-text';
   import { i18n } from '$lib/i18n.svelte';
   import LogViewer from '$lib/components/LogViewer.svelte';
 
