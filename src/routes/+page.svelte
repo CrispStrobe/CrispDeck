@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { cleanInstanceUrl, buildInstanceUrl, cleanBskyHandle, markFirstRunComplete } from '$lib/onboarding';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
@@ -66,7 +67,7 @@
   }
 
   async function connectBlueskyPassword(handle: string, password: string) {
-    const cleanHandle = handle.replace(/^@/, '');
+    const cleanHandle = cleanBskyHandle(handle);
     const { BlueskyClient } = await import('$lib/api/bluesky');
     const testClient = new BlueskyClient(cleanHandle, password);
     await testClient.login();
@@ -80,7 +81,7 @@
       credentials: JSON.stringify({ app_password: password }),
       is_primary: true,
     });
-    localStorage.setItem('crispdeck-first-run-complete', 'true');
+    markFirstRunComplete();
     goto(`${base}/feed`);
   }
 
@@ -94,8 +95,7 @@
   }
 
   async function connectMastodon(instanceUrl: string) {
-    const instance = instanceUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
-    const url = `https://${instance}`;
+    const url = buildInstanceUrl(cleanInstanceUrl(instanceUrl));
     const oauthState = await dbStartOAuth(url);
     localStorage.setItem('crispdeck-oauth-state', JSON.stringify({
       instance_url: url,
@@ -103,7 +103,7 @@
       client_secret: oauthState.client_secret,
       redirect_uri: oauthState.redirect_uri,
     }));
-    localStorage.setItem('crispdeck-first-run-complete', 'true');
+    markFirstRunComplete();
     window.location.href = oauthState.auth_url;
   }
 

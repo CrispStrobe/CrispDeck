@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatDate } from '$lib/time-format';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
@@ -223,9 +224,7 @@
     exportAsMarkdown(results.map(archiveToUnified), 'archive');
   }
 
-  function formatDate(d: string) {
-    return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  }
+
 </script>
 
 <svelte:head><title>CrispDeck — Archive</title><meta name="description" content="Local archive of your posts and likes" /></svelte:head>

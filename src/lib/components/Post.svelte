@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as embeds from '$lib/components/post-embeds';
   import { hasAltText } from '$lib/alt-text';
+  import { formatDate, relativeTime } from '$lib/time-format';
   import { i18n } from '$lib/i18n.svelte';
   import { base } from '$app/paths';
   import { Heart, Repeat, MessageCircle, Quote, Bookmark, Share, Flag, Languages, Camera, Loader2, Volume2, VolumeOff, BarChart3, UserPlus, UserCheck, Pin, ListPlus, X as XIcon } from '@lucide/svelte';
@@ -432,24 +433,7 @@
     onboost(post);
   }
 
-  function formatDate(dateString?: string): string {
-    if (!dateString) return '—';
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return '—';
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  }
 
-  function relativeTime(dateString?: string): string {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return '';
-    const diff = Date.now() - date.getTime();
-    if (diff < 60000) return 'now';
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
-    if (diff < 604800000) return `${Math.floor(diff / 86400000)}d`;
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  }
 
   function getProfileUrl(p: UnifiedPost): string {
     const h = encodeURIComponent(p.author.handle);
