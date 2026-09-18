@@ -27,6 +27,12 @@ export function chunkMap(prefix = 'chunk-map') {
       const chunks = [];
       const packageTotals = new Map();
 
+      // Distinct modules per package, not just bytes. For a package that is
+      // one module per export -- an icon set, say -- the module count is the
+      // question: 23 of them in the entry is the layout's navigation, 107 is
+      // every icon in the app shipped to someone who opened one page.
+      const modulesPerPkg = new Map();
+
       for (const [file, c] of Object.entries(bundle)) {
         if (c.type !== 'chunk') continue;
         const byPkg = new Map();
@@ -39,6 +45,10 @@ export function chunkMap(prefix = 'chunk-map') {
           const pkg = m ? m[1] : '(app)';
           byPkg.set(pkg, (byPkg.get(pkg) ?? 0) + n);
           packageTotals.set(pkg, (packageTotals.get(pkg) ?? 0) + n);
+          if (!modulesPerPkg.has(pkg)) modulesPerPkg.set(pkg, new Map());
+          const per = modulesPerPkg.get(pkg);
+          if (!per.has(file)) per.set(file, new Set());
+          per.get(file).add(id.replace(/^.*node_modules\//, ''));
         }
         const top = [...byPkg].sort((a, b) => b[1] - a[1]).slice(0, 6)
           .map(([pkg, bytes]) => ({ pkg, bytes }));
@@ -59,7 +69,13 @@ export function chunkMap(prefix = 'chunk-map') {
       const packages = [...packageTotals]
         .sort((a, b) => b[1] - a[1])
         .slice(0, 25)
-        .map(([pkg, bytes]) => ({ pkg, bytes, chunks: chunksPerPkg.get(pkg) ?? 0 }));
+        .map(([pkg, bytes]) => {
+          const per = modulesPerPkg.get(pkg) ?? new Map();
+          const byChunk = [...per].map(([file, ids]) => ({ file, modules: ids.size }))
+            .sort((a, b) => b.modules - a.modules);
+          const total = byChunk.reduce((n, c) => n + c.modules, 0);
+          return { pkg, bytes, chunks: chunksPerPkg.get(pkg) ?? 0, modules: total, byChunk };
+        });
 
       chunks.sort((a, b) => b.bytes - a.bytes);
       const slim = chunks.slice(0, 15).map(({ allPkgs, ...c }) => c);
