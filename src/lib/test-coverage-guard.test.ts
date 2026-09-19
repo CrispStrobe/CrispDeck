@@ -49,11 +49,9 @@ function exercisesAppCode(src: string): boolean {
 const ACCEPTED = new Set([
   'src/lib/api/bluesky.live.test.ts',
   'src/lib/api/bluesky.pds.unit.test.ts',
-  'src/lib/archive.test.ts',
   'src/lib/deck-keyboard.test.ts',
   'src/lib/deck.test.ts',
   'src/lib/delayed-spinner.test.ts',
-  'src/lib/engagement-history.test.ts',
   'src/lib/fixes.test.ts',
   'src/lib/homepage.test.ts',
   'src/lib/layout.test.ts',
