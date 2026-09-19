@@ -11,9 +11,24 @@ A unified Mastodon + Bluesky + Threads social media client with:
 
 **Tech stack**: SvelteKit 2, Svelte 5 (runes), Tailwind CSS 4, Vite 6, Tauri 2, TypeScript + Rust, Vitest
 
-## Current State (2026-07-04)
+## Current State (2026-09-19)
 
-v1.2.0+ — 1,498 unit tests across 104 files + 29 Playwright E2E tests, 29 pages, 20 deck column types, CI fully green, live at https://crispdeck.vercel.app. Post-v1.2.0: account switcher, multi-select, quick add-to-list, 6 perf optimizations (parallel crossposting/uploads/column-loads, normalize caches, session-scoped prefs). See CHANGELOG.md.
+v1.2.0+ — 1,783 unit tests across 131 files + Playwright E2E tests, 29 pages, 20 deck column types, CI fully green, live at https://crispdeck.vercel.app. Post-v1.2.0: account switcher, multi-select, quick add-to-list, 6 perf optimizations (parallel crossposting/uploads/column-loads, normalize caches, session-scoped prefs). See CHANGELOG.md.
+
+Recent reliability work (2026-09-18/19), merged as PRs #1–#5:
+
+- **#1/#2** four silent-failure bugs — unlike never decremented the count,
+  pull-to-refresh was always armed, voice commands were no-ops, short posts
+  from different people merged as crossposts. Plus the `whole_word` muted-word
+  filter (punctuation edges, non-Latin scripts) and archive search dropping
+  its filters.
+- **#3** 53 swallowed errors routed to `swallow()` and the in-app log viewer;
+  22 of 23 fixture-only test files rebound to the code they claim to cover,
+  pinned by `test-coverage-guard.test.ts`.
+- **#4** like/repost no longer lie: the optimistic update is reverted when the
+  request fails. Found two more on the way — `haptic()` could throw out of an
+  event handler, and an unavailable IndexedDB aborted Post's entire `onMount`.
+- **#5** completes item 171 below.
 
 **License**: AGPL-3.0-only
 
@@ -1534,14 +1549,24 @@ Column chrome in mature deck clients was polished over years. Several ergonomic 
 The app is feature-rich (20 column types, 1,520+ tests, streaming, keyboard nav, density modes, shareable collections, Bluesky lists API). Diminishing returns on new features. Focus shifts to reliability, real-world usage, and honest PWA support.
 
 ### 171. Systematic silent-error audit
-- **Status**: Not started
+- **Status**: Done (2026-09-19, PRs #3 and #5)
 - **Effort**: Medium
 - **Priority**: Must-have
 - **Description**: ~40 empty `catch {}` blocks outside Post.svelte (in API clients, feed page, deck page, settings) silently swallow errors. Users hit failures with no feedback.
-- [ ] Audit every `catch {}` and `catch (e) { console.error(...) }` in the codebase
-- [ ] Replace with `toast.error()` or `toast.warning()` for user-visible operations (API calls, saves, syncs)
-- [ ] Keep silent catches only for truly ignorable operations (feature detection, optional preloads)
-- [ ] Add error boundary fallbacks where appropriate
+- [x] Audit every `catch {}` and `catch (e) { console.error(...) }` in the codebase
+- [x] Replace with `toast.error()` or `toast.warning()` for user-visible operations (API calls, saves, syncs)
+- [x] Keep silent catches only for truly ignorable operations (feature detection, optional preloads)
+- [x] Add error boundary fallbacks where appropriate
+- **Outcome**: no `console.error`/`console.warn` remains in `src/` outside
+  `debug-log.ts`, and no empty `catch {}` outside tests. Both are pinned by
+  guards (`no-silent-failures.test.ts`, `swallow.test.ts`) rather than left to
+  review, since this is exactly the kind of thing that creeps back one catch
+  block at a time. Per-account loops that used to end with "Archive is up to
+  date" while an account had failed now count the failures and say so.
+- **Also found**: `pushMutedWordToServer` wrote the Bluesky preferences
+  document wholesale via `putPreferences`, which would have discarded the
+  account's saved feeds, labelers and every other muted word. It had no
+  callers, so nobody lost data. Now uses the SDK's `addMutedWord`.
 - **Key files**: `src/lib/api/mastodon.ts`, `src/lib/api/bluesky.ts`, `src/lib/api/bluesky-oauth.ts`, `src/lib/api/client-factory.ts`, `src/routes/feed/+page.svelte`, `src/routes/deck/+page.svelte`
 
 ### 172. Offline-first PWA with cached feed
@@ -1610,6 +1635,37 @@ The app is feature-rich (20 column types, 1,520+ tests, streaming, keyboard nav,
 - [ ] `git tag v1.2.1 && git push --tags` to trigger release builds
 - [ ] Verify CI, release binaries, Vercel deploy
 - Contents: account switcher, poll voting fix, 6 perf optimizations, a11y fixes, Bluesky lists API, error toasts, offline cache module, page-error helpers, 15 new E2E tests
+
+### 178. Lighthouse in the Perf CI job
+- **Status**: Done (2026-09-19)
+- **Effort**: Small
+- **Priority**: Nice-to-have
+- **Description**: The Perf workflow measured deck rendering and bundle weight
+  but nothing about the page a first-time visitor actually gets.
+- [x] Run Lighthouse against the preview the job already serves, reusing
+      Playwright's Chromium rather than installing a second browser
+- [x] `bench/check-lighthouse.mjs` + `bench/lighthouse-budget.json`, gated
+- [x] Scores and metrics in the job summary; report kept as an artifact
+- **Thresholds came from measurement, not aspiration**: four runs of one
+  unchanged build scored performance 99, 99, 95, 97, while accessibility,
+  best-practices and SEO returned 100 every time. So the three stable
+  categories are gated near 100 and performance gets a floor (0.8) well below
+  the noise — it catches a collapse, and is explicitly not a target. A guard
+  that fails at random gets ignored, which costs more than it is worth.
+- **Key files**: `.github/workflows/perf.yml`, `bench/check-lighthouse.mjs`,
+  `bench/lighthouse-budget.json`, `src/lib/lighthouse-budget.test.ts`
+
+### Branch cleanup (2026-09-19)
+
+Four stale remote branches deleted. Three were fully merged
+(`fix/scroll-gate-and-unlike-counts` `31fa781`,
+`fix/surface-swallowed-errors` `a4edd35`, `test/component-mounting`
+`225c5bf`). The fourth, `perf/bundle-and-hot-paths` `a7ac9f4`, was built on a
+base `main` is now 275 commits past: its 96-file diff was mostly main's newer
+work being absent rather than new content, and every feature it named
+(incremental crosspost detection, index-driven archive search, client caching,
+the Jetstream worker, per-language i18n, settings extraction, working unlike
+counts) is in main already. SHAs recorded here in case anything is wanted back.
 
 ### What to skip (and why)
 
