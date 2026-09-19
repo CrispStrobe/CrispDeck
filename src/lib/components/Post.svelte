@@ -19,6 +19,7 @@
   import MediaLightbox from '$lib/components/MediaLightbox.svelte';
   import { haptic } from '$lib/haptics';
   import { toast } from '$lib/toast.svelte';
+  import { swallow } from '$lib/debug-log';
   import type { LightboxItem } from '$lib/components/MediaLightbox.svelte';
 
   // Session-scoped post preferences singleton — reads localStorage once, never re-reads
@@ -44,8 +45,9 @@
     post: UnifiedPost;
     hideMedia?: boolean;
     compact?: boolean;
-    onlike?: (post: UnifiedPost) => void;
-    onboost?: (post: UnifiedPost) => void;
+    /** May reject to signal the action failed; the optimistic update is then reverted. */
+    onlike?: (post: UnifiedPost) => void | Promise<void>;
+    onboost?: (post: UnifiedPost) => void | Promise<void>;
     onreply?: (post: UnifiedPost) => void;
     onquote?: (post: UnifiedPost) => void;
     onfollow?: (post: UnifiedPost, following: boolean) => void;
@@ -410,21 +412,54 @@
   const localLikeCount = $derived(Math.max(0, (post.likeCount ?? 0) + likeDelta));
   const localBoostCount = $derived(Math.max(0, (post.repostCount ?? 0) + boostDelta));
 
+  /**
+   * Like, optimistically — and put it back if the network disagrees.
+   *
+   * The heart fills, the count moves and the phone buzzes before the request
+   * is made, which is right: waiting on a round trip to acknowledge a tap feels
+   * broken. What was missing is the other half. The call was fired and not
+   * awaited, so a failure left the post looking liked when it was not, and the
+   * only trace was a console line the user was never going to see.
+   */
   async function handleLike() {
     if (!onlike) return;
+    const previouslyLiked = liked;
+    const applied = !liked ? 1 : -1;
+
     liked = !liked;
-    likeDelta += liked ? 1 : -1;
+    likeDelta += applied;
     haptic('light');
     if (liked) { likeAnimating = true; setTimeout(() => likeAnimating = false, 600); }
-    onlike(post);
+
+    try {
+      await onlike(post);
+    } catch (e) {
+      liked = previouslyLiked;
+      likeDelta -= applied;
+      likeAnimating = false;
+      toast.error(i18n.t.post.likeFailed);
+      swallow('Post.handleLike', e);
+    }
   }
 
+  /** Repost, with the same optimistic-then-revert contract as handleLike. */
   async function handleBoost() {
     if (!onboost) return;
+    const previouslyBoosted = boosted;
+    const applied = !boosted ? 1 : -1;
+
     boosted = !boosted;
-    boostDelta += boosted ? 1 : -1;
+    boostDelta += applied;
     haptic('medium');
-    onboost(post);
+
+    try {
+      await onboost(post);
+    } catch (e) {
+      boosted = previouslyBoosted;
+      boostDelta -= applied;
+      toast.error(i18n.t.post.boostFailed);
+      swallow('Post.handleBoost', e);
+    }
   }
 
 

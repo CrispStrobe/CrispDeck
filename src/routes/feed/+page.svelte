@@ -626,6 +626,7 @@
   }
 
   async function handleLike(post: UnifiedPost) {
+    let lastError: unknown;
     for (const [, entry] of clientEntries) {
       if (entry.platform !== post.platform) continue;
       try {
@@ -643,12 +644,16 @@
         }
         return;
       } catch (e) {
-        console.error('Like failed:', e);
+        lastError = e;
       }
     }
+    // Nothing succeeded: tell the caller, so the optimistic update in Post
+    // can be reverted rather than leaving the post looking liked.
+    throw lastError ?? new Error('No connected account can like this post');
   }
 
   async function handleBoost(post: UnifiedPost) {
+    let lastError: unknown;
     for (const [, entry] of clientEntries) {
       if (entry.platform !== post.platform) continue;
       try {
@@ -666,9 +671,10 @@
         }
         return;
       } catch (e) {
-        console.error('Boost failed:', e);
+        lastError = e;
       }
     }
+    throw lastError ?? new Error('No connected account can repost this post');
   }
 
   function handleReply(post: UnifiedPost) {

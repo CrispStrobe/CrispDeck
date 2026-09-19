@@ -4,6 +4,7 @@
  */
 
 import type { UnifiedPost, Platform } from './types';
+import { swallow } from './debug-log';
 
 const DB_NAME = 'crispdeck-bookmarks';
 const DB_VERSION = 1;
@@ -25,6 +26,15 @@ interface BookmarkedPost {
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
+    // IndexedDB is not always there: private windows in some browsers, blocked
+    // site data, embedded webviews. Reading it unguarded threw a ReferenceError
+    // rather than rejecting, and isBookmarked() is the first await in Post's
+    // onMount — so one unavailable storage API took the whole component's setup
+    // down with it, prefs and the live-count subscription included.
+    if (typeof indexedDB === 'undefined') {
+      reject(new Error('IndexedDB unavailable'));
+      return;
+    }
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onerror = () => reject(req.error);
     req.onsuccess = () => resolve(req.result);
@@ -84,9 +94,21 @@ export async function removeBookmark(uri: string): Promise<void> {
  */
 let _bookmarkUriCache: Set<string> | null = null;
 
+/**
+ * Whether a post is bookmarked.
+ *
+ * Degrades to false when the store cannot be opened, rather than rejecting:
+ * every rendered post asks this, and a storage failure should cost the bookmark
+ * indicator, not the post.
+ */
 export async function isBookmarked(uri: string): Promise<boolean> {
   if (!_bookmarkUriCache) {
-    _bookmarkUriCache = await getAllBookmarkedUris();
+    try {
+      _bookmarkUriCache = await getAllBookmarkedUris();
+    } catch (e) {
+      swallow('bookmarks.isBookmarked', e);
+      return false;
+    }
   }
   return _bookmarkUriCache.has(uri);
 }

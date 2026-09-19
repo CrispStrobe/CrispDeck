@@ -65,6 +65,7 @@
   }
 
   async function handleLike(post: UnifiedPost) {
+    let lastError: unknown;
     for (const [id, entry] of clientEntries) {
       const acct = accounts.find(a => a.id === id);
       if (acct?.platform !== post.platform) continue;
@@ -74,13 +75,22 @@
           await (entry.client as BlueskyClient).like(raw.post?.uri ?? raw.uri, raw.post?.cid ?? raw.cid);
         } else if (post.platform === 'mastodon') {
           await (entry.client as MastodonClient).favourite((post.raw as any).id);
+        } else {
+          // This client's platform has no action here; don't report success.
+          continue;
         }
         return;
-      } catch (e) { console.error('Like failed:', e); }
+      } catch (e) {
+        lastError = e;
+      }
     }
+    // Nothing succeeded: tell the caller, so the optimistic update in Post
+    // can be reverted rather than leaving the post looking liked.
+    throw lastError ?? new Error('No connected account can like this post');
   }
 
   async function handleBoost(post: UnifiedPost) {
+    let lastError: unknown;
     for (const [id, entry] of clientEntries) {
       const acct = accounts.find(a => a.id === id);
       if (acct?.platform !== post.platform) continue;
@@ -90,10 +100,18 @@
           await (entry.client as BlueskyClient).repost(raw.post?.uri ?? raw.uri, raw.post?.cid ?? raw.cid);
         } else if (post.platform === 'mastodon') {
           await (entry.client as MastodonClient).reblog((post.raw as any).id);
+        } else {
+          // This client's platform has no action here; don't report success.
+          continue;
         }
         return;
-      } catch (e) { console.error('Boost failed:', e); }
+      } catch (e) {
+        lastError = e;
+      }
     }
+    // Nothing succeeded: tell the caller, so the optimistic update in Post
+    // can be reverted rather than leaving the post looking repostd.
+    throw lastError ?? new Error('No connected account can repost this post');
   }
 
   // Intersection observer for "caught up" detection
