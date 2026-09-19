@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { getTheme, setTheme, nextTheme } from '$lib/settings';
+  import { isNavItemActive } from '$lib/nav-active';
   import { base } from '$app/paths';
   import { routePath } from '$lib/routes';
   import '../app.css';
@@ -38,9 +40,9 @@
   let theme = $state<'dark' | 'oled' | 'light'>('dark');
 
   function toggleTheme() {
-    theme = theme === 'dark' ? 'oled' : theme === 'oled' ? 'light' : 'dark';
+    theme = nextTheme(theme);
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('crispdeck-theme', theme);
+    setTheme(theme);
   }
   let showShortcuts = $state(false);
   let offline = $state(false);
@@ -107,8 +109,8 @@
     }
 
     // Restore theme
-    const saved = localStorage.getItem('crispdeck-theme') as 'dark' | 'oled' | 'light' | null;
-    if (saved) { theme = saved; document.documentElement.setAttribute('data-theme', saved); }
+    theme = getTheme();
+    document.documentElement.setAttribute('data-theme', theme);
 
     // Restore display preferences
     const root = document.documentElement;
@@ -275,28 +277,13 @@
     { href: '/messages', icon: MessageSquare, label: i18n.t.nav.dms },
   ]);
 
-  // Merged routes: sidebar item → also active for these paths
-  const mergedRoutes: Record<string, string[]> = {
-    '/trending': ['/trending', '/catchup'],
-    '/lists': ['/lists', '/feed-builder', '/starterpacks'],
-    '/bookmarks': ['/bookmarks', '/reading-lists'],
-    '/archive': ['/archive', '/gallery'],
-    '/analytics': ['/analytics', '/calendar'],
-    '/moderation': ['/moderation', '/labelers'],
-    '/compose': ['/compose', '/drafts'],
-    '/settings': ['/settings', '/instance'],
-  };
 
   // navItems keep unprefixed route ids: they are compared against here, and
   // they are the keys persisted in `crispdeck-nav-hidden`, so they must not
   // change shape with where the app is mounted. The mount point is added at
   // render time instead.
   function isActive(href: string): boolean {
-    const path = routePath(page.url?.pathname ?? '/');
-    if (href === '/') return path === '/';
-    const routes = mergedRoutes[href];
-    if (routes) return routes.some(r => path.startsWith(r));
-    return path.startsWith(href);
+    return isNavItemActive(href, routePath(page.url?.pathname ?? '/'));
   }
 </script>
 

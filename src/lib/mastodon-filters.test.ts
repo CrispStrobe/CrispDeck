@@ -1,328 +1,291 @@
 /**
- * Tests for Mastodon server-side filter logic (v2 API filter matching).
- * These tests cover the client-side filter application that mirrors
- * Mastodon's server-side v2 filter behavior.
+ * Tests for Mastodon server-side filters (v2 API).
+ *
+ * These previously declared their own FilterKeyword/MastodonFilter types and
+ * local buildKeywordMatcher/matchesFilter/applyFilters/cache functions, and
+ * asserted against those — so they passed no matter what ./mastodon-filters
+ * actually did. They now exercise the real module.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import {
+  isFilterExpired,
+  buildFilterMatcher,
+  getCachedFilters,
+  setCachedFilters,
+  invalidateFilterCache,
+  type MastodonFilter,
+  type FilterContext,
+} from './mastodon-filters';
 
-// ── Types mirroring Mastodon v2 filter API ─────────────────────────────────
-
-type FilterAction = 'warn' | 'hide';
-type FilterContext = 'home' | 'notifications' | 'public' | 'thread' | 'account';
-
-interface FilterKeyword {
-  id: string;
-  keyword: string;
-  whole_word: boolean;
-}
-
-interface MastodonFilter {
-  id: string;
-  title: string;
-  context: FilterContext[];
-  filter_action: FilterAction;
-  keywords: FilterKeyword[];
-  expires_at: string | null;
-}
-
-// ── Filter matching logic (mirrors server-side behavior) ───────────────────
-
-function buildKeywordMatcher(kw: FilterKeyword): (text: string) => boolean {
-  if (kw.whole_word) {
-    try {
-      const re = new RegExp(`\\b${kw.keyword}\\b`, 'i');
-      return (text: string) => re.test(text);
-    } catch {
-      const lower = kw.keyword.toLowerCase();
-      return (text: string) => text.toLowerCase().includes(lower);
-    }
-  }
-  const lower = kw.keyword.toLowerCase();
-  return (text: string) => text.toLowerCase().includes(lower);
-}
-
-function matchesFilter(text: string, filter: MastodonFilter, context: FilterContext): boolean {
-  if (!filter.context.includes(context)) return false;
-  if (filter.expires_at && new Date(filter.expires_at) < new Date()) return false;
-  if (filter.keywords.length === 0) return false;
-  return filter.keywords.some(kw => buildKeywordMatcher(kw)(text));
-}
-
-function applyFilters(
-  text: string,
-  filters: MastodonFilter[],
-  context: FilterContext
-): { action: FilterAction | null; matchedFilters: MastodonFilter[] } {
-  const matched = filters.filter(f => matchesFilter(text, f, context));
-  if (matched.length === 0) return { action: null, matchedFilters: [] };
-  // 'hide' takes precedence over 'warn'
-  const action = matched.some(f => f.filter_action === 'hide') ? 'hide' : 'warn';
-  return { action, matchedFilters: matched };
-}
-
-// ── Filter cache ───────────────────────────────────────────────────────────
-
-let _filterCache: { filters: MastodonFilter[]; fetchedAt: number } | null = null;
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-function setCachedFilters(filters: MastodonFilter[]): void {
-  _filterCache = { filters, fetchedAt: Date.now() };
-}
-
-function getCachedFilters(): MastodonFilter[] | null {
-  if (!_filterCache) return null;
-  if (Date.now() - _filterCache.fetchedAt > CACHE_TTL) {
-    _filterCache = null;
-    return null;
-  }
-  return _filterCache.filters;
-}
-
-function invalidateFilterCache(): void {
-  _filterCache = null;
-}
-
-// ── Tests ──────────────────────────────────────────────────────────────────
-
-describe('Mastodon server-side filters', () => {
-  beforeEach(() => {
-    invalidateFilterCache();
-  });
-
-  const makeFilter = (overrides: Partial<MastodonFilter> = {}): MastodonFilter => ({
-    id: 'f1',
-    title: 'Test Filter',
+function filter(over: Partial<MastodonFilter> = {}): MastodonFilter {
+  return {
+    id: '1',
+    title: 'Spoilers',
     context: ['home'],
-    filter_action: 'warn',
-    keywords: [{ id: 'kw1', keyword: 'spoiler', whole_word: false }],
     expires_at: null,
-    ...overrides,
+    filter_action: 'warn',
+    keywords: [{ id: 'k1', keyword: 'spoiler', whole_word: false }],
+    ...over,
+  };
+}
+
+const INSTANCE = 'https://mastodon.social';
+
+beforeEach(() => {
+  invalidateFilterCache();
+  // Matcher compilation is memoised on module state; vary filter ids per test
+  // where it matters rather than reaching into that cache.
+});
+afterEach(() => vi.useRealTimers());
+
+describe('isFilterExpired', () => {
+  it('a filter with no expiry never expires', () => {
+    expect(isFilterExpired(filter({ expires_at: null }))).toBe(false);
   });
 
-  describe('keyword matching', () => {
-    it('matches substring when whole_word is false', () => {
-      const kw: FilterKeyword = { id: 'k1', keyword: 'test', whole_word: false };
-      const matcher = buildKeywordMatcher(kw);
-      expect(matcher('this is a test post')).toBe(true);
-      expect(matcher('testing 123')).toBe(true);
-      expect(matcher('contest results')).toBe(true);
-    });
-
-    it('matches only whole words when whole_word is true', () => {
-      const kw: FilterKeyword = { id: 'k1', keyword: 'test', whole_word: true };
-      const matcher = buildKeywordMatcher(kw);
-      expect(matcher('this is a test post')).toBe(true);
-      expect(matcher('testing 123')).toBe(false);
-      expect(matcher('contest results')).toBe(false);
-    });
-
-    it('is case-insensitive for both modes', () => {
-      const substring: FilterKeyword = { id: 'k1', keyword: 'Hello', whole_word: false };
-      const wholeWord: FilterKeyword = { id: 'k2', keyword: 'Hello', whole_word: true };
-      expect(buildKeywordMatcher(substring)('HELLO WORLD')).toBe(true);
-      expect(buildKeywordMatcher(substring)('say hello')).toBe(true);
-      expect(buildKeywordMatcher(wholeWord)('HELLO there')).toBe(true);
-      expect(buildKeywordMatcher(wholeWord)('say hello!')).toBe(true);
-    });
-
-    it('handles unicode text', () => {
-      const kw: FilterKeyword = { id: 'k1', keyword: 'cafe', whole_word: false };
-      const matcher = buildKeywordMatcher(kw);
-      expect(matcher('visit the cafe today')).toBe(true);
-      // unicode variant won't match plain ASCII
-      expect(matcher('visit the caf\u00e9 today')).toBe(false);
-    });
-
-    it('handles unicode keyword', () => {
-      const kw: FilterKeyword = { id: 'k1', keyword: '\u00fc\u00f6\u00e4', whole_word: false };
-      const matcher = buildKeywordMatcher(kw);
-      expect(matcher('German umlauts: \u00fc\u00f6\u00e4')).toBe(true);
-      expect(matcher('no match here')).toBe(false);
-    });
-
-    it('handles regex special chars in keyword gracefully', () => {
-      // whole_word uses RegExp, so special chars need to not crash
-      const kw: FilterKeyword = { id: 'k1', keyword: 'c++', whole_word: true };
-      const matcher = buildKeywordMatcher(kw);
-      // The regex may fail to compile due to unescaped +, falls back to includes
-      expect(matcher('I love c++')).toBe(true);
-    });
-
-    it('matches mixed whole-word and non-whole-word keywords', () => {
-      const filter = makeFilter({
-        keywords: [
-          { id: 'k1', keyword: 'spoiler', whole_word: true },
-          { id: 'k2', keyword: 'nsfw', whole_word: false },
-        ],
-      });
-      // whole-word 'spoiler' should not match 'spoilers' (no nsfw either)
-      expect(matchesFilter('spoilers ahead', filter, 'home')).toBe(false);
-      // exact whole word 'spoiler' should match
-      expect(matchesFilter('this is a spoiler warning', filter, 'home')).toBe(true);
-      expect(matchesFilter('nsfw content here', filter, 'home')).toBe(true); // substring match
-      expect(matchesFilter('nsfwcontent', filter, 'home')).toBe(true); // substring match (not whole word)
-      expect(matchesFilter('safe content about spoilers', filter, 'home')).toBe(false); // 'spoilers' != whole word 'spoiler', no nsfw
-    });
+  it('a past expiry is expired', () => {
+    expect(isFilterExpired(filter({ expires_at: '2020-01-01T00:00:00.000Z' }))).toBe(true);
   });
 
-  describe('filter context matching', () => {
-    it('applies filter only in matching context', () => {
-      const filter = makeFilter({ context: ['home'] });
-      expect(matchesFilter('spoiler alert', filter, 'home')).toBe(true);
-      expect(matchesFilter('spoiler alert', filter, 'notifications')).toBe(false);
-      expect(matchesFilter('spoiler alert', filter, 'public')).toBe(false);
-    });
-
-    it('applies filter in multiple contexts', () => {
-      const filter = makeFilter({ context: ['home', 'public', 'thread'] });
-      expect(matchesFilter('spoiler alert', filter, 'home')).toBe(true);
-      expect(matchesFilter('spoiler alert', filter, 'public')).toBe(true);
-      expect(matchesFilter('spoiler alert', filter, 'thread')).toBe(true);
-      expect(matchesFilter('spoiler alert', filter, 'notifications')).toBe(false);
-      expect(matchesFilter('spoiler alert', filter, 'account')).toBe(false);
-    });
-
-    it('supports all 5 filter contexts', () => {
-      const allContexts: FilterContext[] = ['home', 'notifications', 'public', 'thread', 'account'];
-      const filter = makeFilter({ context: allContexts });
-      for (const ctx of allContexts) {
-        expect(matchesFilter('spoiler alert', filter, ctx)).toBe(true);
-      }
-    });
+  it('a future expiry is not expired', () => {
+    const future = new Date(Date.now() + 60_000).toISOString();
+    expect(isFilterExpired(filter({ expires_at: future }))).toBe(false);
   });
 
-  describe('filter expiry', () => {
-    it('ignores expired filters', () => {
-      const expired = makeFilter({
-        expires_at: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-      });
-      expect(matchesFilter('spoiler alert', expired, 'home')).toBe(false);
-    });
+  it('expiry exactly now counts as expired', () => {
+    vi.useFakeTimers();
+    const now = new Date('2026-01-10T12:00:00.000Z');
+    vi.setSystemTime(now);
+    expect(isFilterExpired(filter({ expires_at: now.toISOString() }))).toBe(true);
+  });
+});
 
-    it('applies non-expired filters', () => {
-      const active = makeFilter({
-        expires_at: new Date(Date.now() + 3600000).toISOString(), // 1 hour from now
-      });
-      expect(matchesFilter('spoiler alert', active, 'home')).toBe(true);
-    });
-
-    it('applies filters with no expiry (null)', () => {
-      const permanent = makeFilter({ expires_at: null });
-      expect(matchesFilter('spoiler alert', permanent, 'home')).toBe(true);
-    });
+describe('buildFilterMatcher — matching', () => {
+  it('matches a substring keyword, case-insensitively', () => {
+    const match = buildFilterMatcher([filter({ id: 'a' })], 'home');
+    expect(match('contains a SPOILER here')).toEqual({ action: 'warn', title: 'Spoilers' });
   });
 
-  describe('filter with empty keyword list', () => {
-    it('never matches when keywords array is empty', () => {
-      const filter = makeFilter({ keywords: [] });
-      expect(matchesFilter('anything at all', filter, 'home')).toBe(false);
-      expect(matchesFilter('spoiler', filter, 'home')).toBe(false);
-      expect(matchesFilter('', filter, 'home')).toBe(false);
-    });
+  it('returns null when nothing matches', () => {
+    const match = buildFilterMatcher([filter({ id: 'b' })], 'home');
+    expect(match('nothing of note')).toBeNull();
   });
 
-  describe('filter actions', () => {
-    it('returns warn action', () => {
-      const filter = makeFilter({ filter_action: 'warn' });
-      const result = applyFilters('spoiler alert', [filter], 'home');
-      expect(result.action).toBe('warn');
-      expect(result.matchedFilters).toHaveLength(1);
-    });
-
-    it('returns hide action', () => {
-      const filter = makeFilter({ filter_action: 'hide' });
-      const result = applyFilters('spoiler alert', [filter], 'home');
-      expect(result.action).toBe('hide');
-    });
-
-    it('hide takes precedence over warn when both match', () => {
-      const warnFilter = makeFilter({ id: 'f1', filter_action: 'warn' });
-      const hideFilter = makeFilter({
-        id: 'f2',
-        filter_action: 'hide',
-        keywords: [{ id: 'k2', keyword: 'spoiler', whole_word: false }],
-      });
-      const result = applyFilters('spoiler alert', [warnFilter, hideFilter], 'home');
-      expect(result.action).toBe('hide');
-      expect(result.matchedFilters).toHaveLength(2);
-    });
-
-    it('returns null action when no filters match', () => {
-      const filter = makeFilter();
-      const result = applyFilters('clean content', [filter], 'home');
-      expect(result.action).toBeNull();
-      expect(result.matchedFilters).toHaveLength(0);
-    });
-
-    it('returns null action when context does not match', () => {
-      const filter = makeFilter({ context: ['public'] });
-      const result = applyFilters('spoiler alert', [filter], 'home');
-      expect(result.action).toBeNull();
-    });
+  it('whole_word does not match inside a longer word', () => {
+    const match = buildFilterMatcher([filter({
+      id: 'c', keywords: [{ id: 'k', keyword: 'cat', whole_word: true }],
+    })], 'home');
+    expect(match('the cat sat')).not.toBeNull();
+    expect(match('concatenate')).toBeNull();
   });
 
-  describe('multiple filters', () => {
-    it('applies multiple independent filters', () => {
-      const filters = [
-        makeFilter({ id: 'f1', keywords: [{ id: 'k1', keyword: 'spoiler', whole_word: false }] }),
-        makeFilter({ id: 'f2', keywords: [{ id: 'k2', keyword: 'nsfw', whole_word: false }] }),
-      ];
-      expect(applyFilters('spoiler warning', filters, 'home').matchedFilters).toHaveLength(1);
-      expect(applyFilters('nsfw content', filters, 'home').matchedFilters).toHaveLength(1);
-      expect(applyFilters('spoiler nsfw', filters, 'home').matchedFilters).toHaveLength(2);
-      expect(applyFilters('clean post', filters, 'home').matchedFilters).toHaveLength(0);
-    });
+  it('a substring keyword does match inside a longer word', () => {
+    const match = buildFilterMatcher([filter({
+      id: 'd', keywords: [{ id: 'k', keyword: 'cat', whole_word: false }],
+    })], 'home');
+    expect(match('concatenate')).not.toBeNull();
   });
 
-  describe('filter cache', () => {
-    it('returns null when cache is empty', () => {
-      expect(getCachedFilters()).toBeNull();
-    });
+  it('matches if any keyword in the filter hits', () => {
+    const match = buildFilterMatcher([filter({
+      id: 'e',
+      keywords: [
+        { id: 'k1', keyword: 'alpha', whole_word: false },
+        { id: 'k2', keyword: 'beta', whole_word: false },
+      ],
+    })], 'home');
+    expect(match('mentions beta only')).not.toBeNull();
+  });
 
-    it('stores and retrieves filters', () => {
-      const filters = [makeFilter()];
-      setCachedFilters(filters);
-      const cached = getCachedFilters();
-      expect(cached).toEqual(filters);
-    });
+  it('returns the first matching filter when several apply', () => {
+    const match = buildFilterMatcher([
+      filter({ id: 'f1', title: 'First', keywords: [{ id: 'k', keyword: 'x', whole_word: false }] }),
+      filter({ id: 'f2', title: 'Second', keywords: [{ id: 'k', keyword: 'x', whole_word: false }] }),
+    ], 'home');
+    expect(match('x')).toMatchObject({ title: 'First' });
+  });
 
-    it('invalidateFilterCache clears cache', () => {
-      setCachedFilters([makeFilter()]);
-      expect(getCachedFilters()).not.toBeNull();
-      invalidateFilterCache();
-      expect(getCachedFilters()).toBeNull();
-    });
+  it('carries the filter action through', () => {
+    const match = buildFilterMatcher([filter({ id: 'g', filter_action: 'hide' })], 'home');
+    expect(match('spoiler')).toEqual({ action: 'hide', title: 'Spoilers' });
+  });
 
-    it('returns null after TTL expiry', () => {
-      setCachedFilters([makeFilter()]);
-      expect(getCachedFilters()).not.toBeNull();
+  /** Keywords come from user input and must not be able to break the regex. */
+  it('treats regex metacharacters in a keyword literally', () => {
+    const match = buildFilterMatcher([filter({
+      id: 'h', keywords: [{ id: 'k', keyword: 'c++', whole_word: false }],
+    })], 'home');
+    expect(match('I write c++ daily')).not.toBeNull();
+    expect(match('I write cccc daily')).toBeNull();
+  });
 
-      // Advance time past TTL (5 minutes)
-      vi.useFakeTimers();
-      vi.advanceTimersByTime(5 * 60 * 1000 + 1);
-      expect(getCachedFilters()).toBeNull();
-      vi.useRealTimers();
-    });
+  it('never throws on a keyword full of metacharacters', () => {
+    const match = buildFilterMatcher([filter({
+      id: 'i', keywords: [{ id: 'k', keyword: '[unclosed(', whole_word: true }],
+    })], 'home');
+    expect(() => match('[unclosed(')).not.toThrow();
+  });
 
-    it('returns filters before TTL expiry', () => {
-      vi.useFakeTimers();
-      const filters = [makeFilter()];
-      setCachedFilters(filters);
+  /**
+   * whole_word used to wrap the keyword in \b...\b. A word boundary cannot
+   * exist between two non-word characters, so a keyword starting or ending with
+   * punctuation matched nothing at all — "c++" as a whole word never fired.
+   * The boundary is now required only on an edge where the keyword has a word
+   * character, which is Mastodon's own rule.
+   */
+  it('whole_word matches a keyword that ends in punctuation', () => {
+    const match = buildFilterMatcher([filter({
+      id: 'i2', keywords: [{ id: 'k', keyword: 'c++', whole_word: true }],
+    })], 'home');
+    expect(match('I write c++ daily')).not.toBeNull();
+    expect(match('I write c daily')).toBeNull();
+  });
 
-      // Advance less than TTL
-      vi.advanceTimersByTime(4 * 60 * 1000);
-      expect(getCachedFilters()).toEqual(filters);
-      vi.useRealTimers();
-    });
+  it('whole_word matches a keyword that starts with punctuation', () => {
+    const match = buildFilterMatcher([filter({
+      id: 'i3', keywords: [{ id: 'k', keyword: '$AAPL', whole_word: true }],
+    })], 'home');
+    expect(match('buying $AAPL today')).not.toBeNull();
+    // The keyword still has to be present in full.
+    expect(match('buying AAPL today')).toBeNull();
+    // Its leading edge is '$', a non-word character, so nothing is required of
+    // what precedes it — unlike the trailing 'L', which is still guarded.
+    expect(match('ticker:$AAPL')).not.toBeNull();
+    expect(match('$AAPLX')).toBeNull();
+  });
 
-    it('setCachedFilters replaces previous cache', () => {
-      const first = [makeFilter({ id: 'f1' })];
-      const second = [makeFilter({ id: 'f2' })];
-      setCachedFilters(first);
-      setCachedFilters(second);
-      const cached = getCachedFilters();
-      expect(cached).toHaveLength(1);
-      expect(cached![0].id).toBe('f2');
-    });
+  it('still refuses to match inside a longer word on a guarded edge', () => {
+    const match = buildFilterMatcher([filter({
+      id: 'i4', keywords: [{ id: 'k', keyword: 'cat', whole_word: true }],
+    })], 'home');
+    expect(match('the cat sat')).not.toBeNull();
+    expect(match('concatenate')).toBeNull();
+    expect(match('cats')).toBeNull();
+    expect(match('bobcat')).toBeNull();
+  });
+
+  it('finds a later occurrence when the first is inside a word', () => {
+    const match = buildFilterMatcher([filter({
+      id: 'i5', keywords: [{ id: 'k', keyword: 'cat', whole_word: true }],
+    })], 'home');
+    expect(match('concatenate, then the cat')).not.toBeNull();
+  });
+
+  it('matches at the very start and very end of the text', () => {
+    const match = buildFilterMatcher([filter({
+      id: 'i6', keywords: [{ id: 'k', keyword: 'cat', whole_word: true }],
+    })], 'home');
+    expect(match('cat')).not.toBeNull();
+    expect(match('cat sat')).not.toBeNull();
+    expect(match('the cat')).not.toBeNull();
+  });
+
+  it('treats non-latin scripts as word characters', () => {
+    const match = buildFilterMatcher([filter({
+      id: 'i7', keywords: [{ id: 'k', keyword: 'テスト', whole_word: true }],
+    })], 'home');
+    expect(match('これは テスト です')).not.toBeNull();
+    expect(match('テストケース')).toBeNull();  // inside a longer run of word chars
+  });
+
+  it('is case-insensitive for whole words too', () => {
+    const match = buildFilterMatcher([filter({
+      id: 'i8', keywords: [{ id: 'k', keyword: 'Spoiler', whole_word: true }],
+    })], 'home');
+    expect(match('a SPOILER here')).not.toBeNull();
+  });
+
+  it('an empty keyword matches nothing rather than everything', () => {
+    const match = buildFilterMatcher([filter({
+      id: 'i9', keywords: [{ id: 'k', keyword: '', whole_word: true }],
+    })], 'home');
+    expect(match('any text at all')).toBeNull();
+  });
+});
+
+describe('buildFilterMatcher — applicability', () => {
+  it('ignores filters for another context', () => {
+    const match = buildFilterMatcher([filter({ id: 'j', context: ['notifications'] })], 'home');
+    expect(match('spoiler')).toBeNull();
+  });
+
+  it('applies a filter listed for several contexts', () => {
+    const f = filter({ id: 'k', context: ['home', 'public'] as FilterContext[] });
+    expect(buildFilterMatcher([f], 'home')('spoiler')).not.toBeNull();
+    expect(buildFilterMatcher([f], 'public')('spoiler')).not.toBeNull();
+    expect(buildFilterMatcher([f], 'thread')('spoiler')).toBeNull();
+  });
+
+  it('ignores expired filters', () => {
+    const match = buildFilterMatcher([filter({
+      id: 'l', expires_at: '2020-01-01T00:00:00.000Z',
+    })], 'home');
+    expect(match('spoiler')).toBeNull();
+  });
+
+  it('ignores filters with no keywords', () => {
+    const match = buildFilterMatcher([filter({ id: 'm', keywords: [] })], 'home');
+    expect(match('anything')).toBeNull();
+  });
+
+  it('an empty filter list matches nothing', () => {
+    expect(buildFilterMatcher([], 'home')('anything')).toBeNull();
+  });
+
+  it('skips inapplicable filters but still applies the rest', () => {
+    const match = buildFilterMatcher([
+      filter({ id: 'n1', context: ['notifications'], title: 'Wrong context' }),
+      filter({ id: 'n2', title: 'Right context',
+               keywords: [{ id: 'k', keyword: 'target', whole_word: false }] }),
+    ], 'home');
+    expect(match('target')).toMatchObject({ title: 'Right context' });
+  });
+});
+
+describe('filter cache', () => {
+  it('returns null before anything is stored', () => {
+    expect(getCachedFilters(INSTANCE)).toBeNull();
+  });
+
+  it('round-trips filters for an instance', () => {
+    const filters = [filter({ id: 'c1' })];
+    setCachedFilters(INSTANCE, filters);
+    expect(getCachedFilters(INSTANCE)).toEqual(filters);
+  });
+
+  it('keeps instances separate', () => {
+    setCachedFilters(INSTANCE, [filter({ id: 'c2', title: 'A' })]);
+    setCachedFilters('https://other.example', [filter({ id: 'c3', title: 'B' })]);
+    expect(getCachedFilters(INSTANCE)![0].title).toBe('A');
+    expect(getCachedFilters('https://other.example')![0].title).toBe('B');
+  });
+
+  it('expires after the TTL', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-10T12:00:00.000Z'));
+    setCachedFilters(INSTANCE, [filter({ id: 'c4' })]);
+    expect(getCachedFilters(INSTANCE)).not.toBeNull();
+
+    vi.setSystemTime(new Date('2026-01-10T12:04:59.000Z'));
+    expect(getCachedFilters(INSTANCE)).not.toBeNull();   // still inside 5 minutes
+
+    vi.setSystemTime(new Date('2026-01-10T12:05:01.000Z'));
+    expect(getCachedFilters(INSTANCE)).toBeNull();       // past it
+  });
+
+  it('invalidates one instance without touching the others', () => {
+    setCachedFilters(INSTANCE, [filter({ id: 'c5' })]);
+    setCachedFilters('https://other.example', [filter({ id: 'c6' })]);
+    invalidateFilterCache(INSTANCE);
+    expect(getCachedFilters(INSTANCE)).toBeNull();
+    expect(getCachedFilters('https://other.example')).not.toBeNull();
+  });
+
+  it('invalidates everything when given no instance', () => {
+    setCachedFilters(INSTANCE, [filter({ id: 'c7' })]);
+    setCachedFilters('https://other.example', [filter({ id: 'c8' })]);
+    invalidateFilterCache();
+    expect(getCachedFilters(INSTANCE)).toBeNull();
+    expect(getCachedFilters('https://other.example')).toBeNull();
   });
 });

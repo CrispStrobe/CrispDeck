@@ -3,41 +3,49 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeEach } from 'vitest';
+import { getHomeMode, setHomeMode, homeRedirectPath, HOME_MODES } from './settings';
 
 describe('homepage mode', () => {
   beforeEach(() => { localStorage.clear(); });
 
   it('defaults to dashboard when nothing stored', () => {
-    expect(localStorage.getItem('crispdeck-home-mode') ?? 'dashboard').toBe('dashboard');
+    expect(getHomeMode()).toBe('dashboard');
   });
 
-  it('persists feed mode', () => {
-    localStorage.setItem('crispdeck-home-mode', 'feed');
+  it('round-trips each mode', () => {
+    for (const mode of HOME_MODES) {
+      setHomeMode(mode);
+      expect(getHomeMode()).toBe(mode);
+    }
+  });
+
+  it('writes the key the dashboard reads', () => {
+    setHomeMode('feed');
     expect(localStorage.getItem('crispdeck-home-mode')).toBe('feed');
   });
 
-  it('persists deck mode', () => {
-    localStorage.setItem('crispdeck-home-mode', 'deck');
-    expect(localStorage.getItem('crispdeck-home-mode')).toBe('deck');
+  it('ignores a value that is not a mode', () => {
+    localStorage.setItem('crispdeck-home-mode', 'somewhere-else');
+    expect(getHomeMode()).toBe('dashboard');
   });
 
   it('dashboard mode does not redirect', () => {
-    localStorage.setItem('crispdeck-home-mode', 'dashboard');
-    const mode = localStorage.getItem('crispdeck-home-mode');
-    expect(mode).toBe('dashboard');
-    // dashboard mode: no redirect, show overview
+    expect(homeRedirectPath('dashboard')).toBeNull();
   });
 
-  it('feed mode would redirect to /feed', () => {
-    localStorage.setItem('crispdeck-home-mode', 'feed');
-    const mode = localStorage.getItem('crispdeck-home-mode');
-    expect(mode === 'feed').toBe(true);
+  it('feed mode redirects to /feed', () => {
+    expect(homeRedirectPath('feed')).toBe('/feed');
   });
 
-  it('deck mode would redirect to /deck', () => {
-    localStorage.setItem('crispdeck-home-mode', 'deck');
-    const mode = localStorage.getItem('crispdeck-home-mode');
-    expect(mode === 'deck').toBe(true);
+  it('deck mode redirects to /deck', () => {
+    expect(homeRedirectPath('deck')).toBe('/deck');
+  });
+
+  it('redirects include the mount point', () => {
+    // The Pages mirror serves the app under /<repo>/.
+    expect(homeRedirectPath('feed', '/CrispDeck')).toBe('/CrispDeck/feed');
+    expect(homeRedirectPath('deck', '/CrispDeck')).toBe('/CrispDeck/deck');
+    expect(homeRedirectPath('dashboard', '/CrispDeck')).toBeNull();
   });
 });
 

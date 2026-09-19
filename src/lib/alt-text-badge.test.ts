@@ -7,42 +7,12 @@ import { describe, it, expect } from 'vitest';
 // ── Replicate alt text extraction logic from Post.svelte ─────────────────
 
 /** Extract alt text from Bluesky image objects */
-function getBskyImageAltTexts(embeds: any): string[] {
-  if (!embeds) return [];
-  const embed = embeds as any;
-  let images: any[] = [];
-  if (embed.$type === 'app.bsky.embed.images#view' && embed.images) {
-    images = embed.images;
-  } else if (embed.$type === 'app.bsky.embed.recordWithMedia#view' && embed.media) {
-    if (embed.media.$type === 'app.bsky.embed.images#view' && embed.media.images) {
-      images = embed.media.images;
-    }
-  }
-  return images.map((img: any) => img.alt ?? '');
-}
 
-/** Extract alt text (description) from Mastodon media attachments */
-function getMastodonMediaAltTexts(raw: any): string[] {
-  const target = raw.reblog ?? raw;
-  const sources = [
-    target.mediaAttachments ?? target.media_attachments,
-  ];
-  for (const source of sources) {
-    if (Array.isArray(source) && source.length > 0) {
-      return source
-        .filter((item: any) => item && (item.type === 'image' || item.type === 'video' || item.type === 'gifv'))
-        .map((item: any) => item.description ?? '');
-    }
-  }
-  return [];
-}
-
-/** Check if an image has non-empty alt text (determines if ALT badge should show) */
-function hasAltText(altText: string | undefined | null): boolean {
-  return typeof altText === 'string' && altText.trim().length > 0;
-}
-
-// ── Tests ─────────────────────────────────────────────────────────────────
+// These now come from the modules the component renders from, rather than
+// copies kept alongside them.
+import {
+  hasAltText, getBskyImageAltTexts, getMastodonMediaAltTexts,
+} from './alt-text';
 
 describe('Bluesky alt text extraction', () => {
   it('returns empty array for null embeds', () => {

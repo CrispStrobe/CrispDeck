@@ -1,92 +1,109 @@
-import { describe, it, expect, vi } from 'vitest';
+/**
+ * Offline feed cache.
+ *
+ * This previously declared `const cacheFeed = vi.fn()` and then asserted that
+ * the mock it had just made was called — the "wiring" it claimed to check was
+ * simulated inside the test. It now exercises $lib/offline-cache against a real
+ * IndexedDB, which is what the feed page calls on every load.
+ */
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import 'fake-indexeddb/auto';
+import { cacheFeed, loadCachedFeed, formatCachedTime, isOffline } from './offline-cache';
+import type { UnifiedPost } from './types';
 
-describe('offline feed cache wiring', () => {
-  describe('cache on successful load', () => {
-    it('calls cacheFeed after successful loadFeed with posts', () => {
-      const cacheFeed = vi.fn();
-      const posts = [{ uri: 'post1' }, { uri: 'post2' }];
-      // Simulate successful feed load
-      if (posts.length > 0) {
-        cacheFeed('feed', posts);
-      }
-      expect(cacheFeed).toHaveBeenCalledWith('feed', posts);
-    });
+const post = (uri: string): UnifiedPost => ({
+  uri, text: `post ${uri}`, createdAt: '2026-01-10T12:00:00.000Z',
+  platform: 'bluesky', author: { handle: '@a', displayName: 'A' },
+  likeCount: 0, repostCount: 0, replyCount: 0,
+} as UnifiedPost);
 
-    it('does NOT cache when no posts loaded', () => {
-      const cacheFeed = vi.fn();
-      const posts: any[] = [];
-      if (posts.length > 0) {
-        cacheFeed('feed', posts);
-      }
-      expect(cacheFeed).not.toHaveBeenCalled();
-    });
+beforeEach(async () => { await cacheFeed('feed', []); });
+afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
-    it('clears offline banner on successful load', () => {
-      let offlineBanner = 'Offline — cached from 5 min ago';
-      const posts = [{ uri: 'post1' }];
-      if (posts.length > 0) {
-        offlineBanner = '';
-      }
-      expect(offlineBanner).toBe('');
-    });
+describe('caching a loaded feed', () => {
+  it('round-trips the posts', async () => {
+    await cacheFeed('feed', [post('a'), post('b')]);
+    const cached = await loadCachedFeed('feed');
+    expect(cached?.posts.map(p => p.uri)).toEqual(['a', 'b']);
   });
 
-  describe('offline fallback', () => {
-    it('loads from cache when network fails and no posts', async () => {
-      const cached = {
-        key: 'feed',
-        posts: [{ uri: 'cached1' }, { uri: 'cached2' }],
-        cachedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-      };
-      let posts: any[] = [];
-      let offlineBanner = '';
-
-      // Simulate: allPosts is empty, posts is empty
-      if (posts.length === 0) {
-        if (cached && cached.posts.length > 0) {
-          posts = cached.posts;
-          offlineBanner = `Offline — showing cached feed from 5 min ago`;
-        }
-      }
-
-      expect(posts).toHaveLength(2);
-      expect(offlineBanner).toContain('Offline');
-    });
-
-    it('does nothing when cache is also empty', () => {
-      let posts: any[] = [];
-      let offlineBanner = '';
-      const cached = null;
-
-      if (posts.length === 0) {
-        if (cached && (cached as any).posts.length > 0) {
-          posts = (cached as any).posts;
-          offlineBanner = 'Offline';
-        }
-      }
-
-      expect(posts).toHaveLength(0);
-      expect(offlineBanner).toBe('');
-    });
+  it('records when it was cached', async () => {
+    await cacheFeed('feed', [post('a')]);
+    const cached = await loadCachedFeed('feed');
+    expect(Date.parse(cached!.cachedAt)).not.toBeNaN();
   });
 
-  describe('offline banner', () => {
-    it('shows retry button that clears banner and reloads', () => {
-      let offlineBanner = 'Offline — cached from 2 min ago';
-      let reloaded = false;
+  it('caps the cache at 100 posts, keeping the newest page', async () => {
+    await cacheFeed('feed', Array.from({ length: 250 }, (_, i) => post(`p${i}`)));
+    const cached = await loadCachedFeed('feed');
+    expect(cached!.posts).toHaveLength(100);
+    expect(cached!.posts[0].uri).toBe('p0');
+  });
 
-      // Simulate retry click
-      offlineBanner = '';
-      reloaded = true;
+  it('caching an empty feed replaces what was there', async () => {
+    await cacheFeed('feed', [post('a')]);
+    await cacheFeed('feed', []);
+    expect((await loadCachedFeed('feed'))?.posts).toEqual([]);
+  });
 
-      expect(offlineBanner).toBe('');
-      expect(reloaded).toBe(true);
-    });
+  it('keeps separate keys apart, so the deck cannot overwrite the feed', async () => {
+    await cacheFeed('feed', [post('from-feed')]);
+    await cacheFeed('deck:1', [post('from-deck')]);
+    expect((await loadCachedFeed('feed'))!.posts[0].uri).toBe('from-feed');
+    expect((await loadCachedFeed('deck:1'))!.posts[0].uri).toBe('from-deck');
+  });
+});
 
-    it('banner is yellow/warning styled (not red/error)', () => {
-      const bannerClass = 'bg-yellow-900/50 border-yellow-700 text-yellow-200';
-      expect(bannerClass).toContain('yellow');
-      expect(bannerClass).not.toContain('red');
-    });
+describe('reading the cache', () => {
+  it('is null for a key that was never cached', async () => {
+    expect(await loadCachedFeed('never-written')).toBeNull();
+  });
+
+  /**
+   * The feed falls back to this when the network fails, so it must not throw.
+   * A fresh module instance is needed because openDB memoises its connection.
+   */
+  it('resolves rather than throwing when IndexedDB is unavailable', async () => {
+    vi.resetModules();
+    vi.stubGlobal('indexedDB', undefined);
+    const offline = await import('./offline-cache');
+    await expect(offline.loadCachedFeed('feed')).resolves.toBeNull();
+    await expect(offline.cacheFeed('feed', [post('a')])).resolves.toBeUndefined();
+  });
+
+  /**
+   * One failed open used to poison the memoised promise for the rest of the
+   * session, silently disabling the cache even once IndexedDB came back.
+   */
+  it('retries after a failed open instead of staying broken', async () => {
+    vi.resetModules();
+    const realIndexedDB = globalThis.indexedDB;
+    vi.stubGlobal('indexedDB', undefined);
+    const offline = await import('./offline-cache');
+    await offline.loadCachedFeed('feed');           // fails, clears the memo
+
+    vi.stubGlobal('indexedDB', realIndexedDB);
+    await offline.cacheFeed('recovered', [post('a')]);
+    expect((await offline.loadCachedFeed('recovered'))?.posts).toHaveLength(1);
+  });
+});
+
+describe('formatCachedTime', () => {
+  it('reads as minutes just after caching', () => {
+    const justNow = new Date(Date.now() - 2 * 60_000).toISOString();
+    expect(formatCachedTime(justNow)).toMatch(/m|now|min/i);
+  });
+
+  it('returns a string for an old timestamp rather than throwing', () => {
+    expect(typeof formatCachedTime('2020-01-01T00:00:00.000Z')).toBe('string');
+  });
+});
+
+describe('isOffline', () => {
+  it('follows navigator.onLine', () => {
+    vi.stubGlobal('navigator', { onLine: false });
+    expect(isOffline()).toBe(true);
+    vi.stubGlobal('navigator', { onLine: true });
+    expect(isOffline()).toBe(false);
   });
 });

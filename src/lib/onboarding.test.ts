@@ -5,37 +5,13 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 
-// ── Instance URL cleaning (mirrors settings page logic) ────────────────────
-
-function cleanInstanceUrl(input: string): string {
-  return input.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
-}
-
-function buildInstanceUrl(cleaned: string): string {
-  return `https://${cleaned}`;
-}
-
-// ── Bluesky handle cleaning ────────────────────────────────────────────────
-
-function cleanBskyHandle(input: string): string {
-  return input.trim().replace(/^@/, '');
-}
-
-// ── First-run flag ─────────────────────────────────────────────────────────
+// The helpers now live in a module the sign-in page actually calls.
+import {
+  cleanInstanceUrl, buildInstanceUrl, cleanBskyHandle,
+  markFirstRunComplete, isFirstRunComplete, resetFirstRun,
+} from './onboarding';
 
 const FIRST_RUN_KEY = 'crispdeck-first-run-complete';
-
-function markFirstRunComplete(): void {
-  localStorage.setItem(FIRST_RUN_KEY, 'true');
-}
-
-function isFirstRunComplete(): boolean {
-  return localStorage.getItem(FIRST_RUN_KEY) === 'true';
-}
-
-function resetFirstRun(): void {
-  localStorage.removeItem(FIRST_RUN_KEY);
-}
 
 // ── Tests ──────────────────────────────────────────────────────────────────
 

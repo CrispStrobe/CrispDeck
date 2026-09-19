@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { appendOperator as append, fromMeOperator, pastWeekOperator } from '$lib/search-operators';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
@@ -48,7 +49,7 @@
   }
 
   function appendOperator(op: string) {
-    query = (query.trim() + ' ' + op).trim();
+    query = append(query, op);
   }
 
   onMount(async () => {
@@ -176,10 +177,10 @@
       <button onclick={() => appendOperator('has:media')} class="flex items-center gap-1 px-2 py-1 text-[10px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
         <Image size={10} /> Has media
       </button>
-      <button onclick={() => { const me = accounts[0]?.handle; if (me) appendOperator(`from:${me}`); }} class="flex items-center gap-1 px-2 py-1 text-[10px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
+      <button onclick={() => { const op = fromMeOperator(accounts[0]?.handle); if (op) appendOperator(op); }} class="flex items-center gap-1 px-2 py-1 text-[10px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
         <User size={10} /> From me
       </button>
-      <button onclick={() => { const d = new Date(); d.setDate(d.getDate() - 7); appendOperator(`since:${d.toISOString().split('T')[0]}`); }} class="flex items-center gap-1 px-2 py-1 text-[10px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
+      <button onclick={() => appendOperator(pastWeekOperator())} class="flex items-center gap-1 px-2 py-1 text-[10px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition-colors">
         <Calendar size={10} /> Past week
       </button>
       <button onclick={() => showSearchHelp = !showSearchHelp} class="flex items-center gap-1 px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">

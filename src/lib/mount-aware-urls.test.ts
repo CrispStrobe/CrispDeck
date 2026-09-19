@@ -43,6 +43,24 @@ describe('URLs into our own app include the mount point', () => {
     expect(db).toMatch(/\$\{window\.location\.origin\}\$\{base\}\/oauth\/callback/);
   });
 
+  /**
+   * The origin check above misses in-app navigation: goto('/feed') is just as
+   * broken under /<repo>/ as `${origin}/feed`, and it slipped through — the
+   * voice command for "go home" used goto('/') while every one of its siblings
+   * went through base.
+   */
+  it('goto() always routes through base', () => {
+    const bad: string[] = [];
+    for (const file of walk('src')) {
+      const src = readFileSync(file, 'utf8');
+      for (const m of src.matchAll(/\bgoto\(\s*['"`]\//g)) {
+        const line = src.slice(0, m.index).split('\n').length;
+        bad.push(`  ${file}:${line}  ${src.slice(m.index!, m.index! + 50).split('\n')[0]}`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
   it('our own API calls go through apiUrl, not the raw origin', () => {
     // Pages has no /api of its own; apiUrl is what redirects those to Vercel.
     const fb = readFileSync('src/lib/feed-builder.ts', 'utf8');

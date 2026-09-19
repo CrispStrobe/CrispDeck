@@ -1,16 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
+import { shouldAutoScroll, isColumnLocked, DEFAULT_SCROLL_LOCK } from './deck-scroll';
 
 describe('scroll-lock toggle', () => {
   describe('default state', () => {
     it('defaults to locked (true)', () => {
-      const scrollLock = true;
-      expect(scrollLock).toBe(true);
+      expect(DEFAULT_SCROLL_LOCK).toBe(true);
     });
 
     it('column config defaults to locked when not set', () => {
       const col = { id: 'col1', title: 'Timeline', type: 'timeline' };
-      const locked = (col as any).scrollLock ?? true;
-      expect(locked).toBe(true);
+      expect(isColumnLocked(col)).toBe(true);
     });
   });
 
@@ -33,7 +32,7 @@ describe('scroll-lock toggle', () => {
       const scrollLock = false;
       const prevPostCount = 5;
       const currentCount = 7;
-      const shouldScroll = !scrollLock && currentCount > prevPostCount && prevPostCount > 0;
+      const shouldScroll = shouldAutoScroll(scrollLock, prevPostCount, currentCount);
       expect(shouldScroll).toBe(true);
     });
 
@@ -41,7 +40,7 @@ describe('scroll-lock toggle', () => {
       const scrollLock = true;
       const prevPostCount = 5;
       const currentCount = 7;
-      const shouldScroll = !scrollLock && currentCount > prevPostCount && prevPostCount > 0;
+      const shouldScroll = shouldAutoScroll(scrollLock, prevPostCount, currentCount);
       expect(shouldScroll).toBe(false);
     });
 
@@ -49,7 +48,7 @@ describe('scroll-lock toggle', () => {
       const scrollLock = false;
       const prevPostCount = 7;
       const currentCount = 5;
-      const shouldScroll = !scrollLock && currentCount > prevPostCount && prevPostCount > 0;
+      const shouldScroll = shouldAutoScroll(scrollLock, prevPostCount, currentCount);
       expect(shouldScroll).toBe(false);
     });
 
@@ -57,7 +56,7 @@ describe('scroll-lock toggle', () => {
       const scrollLock = false;
       const prevPostCount = 0;
       const currentCount = 10;
-      const shouldScroll = !scrollLock && currentCount > prevPostCount && prevPostCount > 0;
+      const shouldScroll = shouldAutoScroll(scrollLock, prevPostCount, currentCount);
       expect(shouldScroll).toBe(false);
     });
   });

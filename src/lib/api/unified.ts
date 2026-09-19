@@ -3,7 +3,7 @@ import type { mastodon } from 'masto';
 
 import type { UnifiedPost, FeedItem, CrosspostGroup, Filters, Platform } from '$lib/types';
 import type { ThreadsPost } from '$lib/api/threads';
-import { fingerprint, similarity, ShingleIndex } from '$lib/api/near-duplicate';
+import { fingerprint, similarity, usedWordFallback, ShingleIndex } from '$lib/api/near-duplicate';
 
 /**
  * Whether a feed item's `reason` is a repost.
@@ -258,6 +258,21 @@ export function detectCrossposts(posts: UnifiedPost[], identityPairs?: Set<strin
       if (post2.platform === post1.platform) continue;
       if (processedUris.has(post2.uri)) continue;
       if (Math.abs(t1 - timestamps.get(post2.uri)!) >= TIME_WINDOW_MS) continue;
+
+      // A score involving a text too short to form a shingle only says that one
+      // post's words appear in the other: "thanks" is fully contained in
+      // "thanks everyone", and two strangers both posting "Good morning!" score
+      // a perfect 1. Grouping those as a crosspost merges unrelated people's
+      // small talk and hides one of the posts, so a short text has to be
+      // corroborated by the authors being the same person.
+      if (usedWordFallback(prints[i]) || usedWordFallback(prints[j])) {
+        const sameHandle =
+          post1.author.handle.toLowerCase() === post2.author.handle.toLowerCase();
+        const sameIdentity = identityPairs
+          ? areIdentityMatched(post1.author.handle, post2.author.handle, identityPairs)
+          : false;
+        if (!sameHandle && !sameIdentity) continue;
+      }
 
       const score = similarity(prints[i], prints[j]);
       if (score > bestScore) {

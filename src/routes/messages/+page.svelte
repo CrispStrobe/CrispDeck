@@ -8,23 +8,8 @@
   import { resumeBlueskyOAuthSession } from '$lib/api/bluesky-oauth';
   import { Agent } from '@atproto/api';
   import type { Account, Platform } from '$lib/types';
+  import { formatConversationTime, inferPlatformFromHandle, type Conversation, type Message } from '$lib/messages';
 
-  interface Conversation {
-    id: string;
-    platform: Platform;
-    participant: { handle: string; displayName?: string; avatar?: string };
-    lastMessage?: string;
-    lastDate?: string;
-    unread: boolean;
-  }
-
-  interface Message {
-    id: string;
-    text: string;
-    sender: { handle: string; displayName?: string; avatar?: string };
-    createdAt: string;
-    isOurs: boolean;
-  }
 
   let accounts: Account[] = $state([]);
   let loading = $state(true);
@@ -281,7 +266,7 @@
     // Create a new conversation entry and select it
     const convo: Conversation = {
       id: `new-${Date.now()}`,
-      platform: handle.includes('@') ? 'mastodon' : 'bluesky',
+      platform: inferPlatformFromHandle(handle),
       participant: { handle },
       unread: false,
     };
@@ -292,14 +277,7 @@
     newConvoHandle = '';
   }
 
-  function formatTime(dateStr: string): string {
-    const d = new Date(dateStr);
-    const now = Date.now();
-    const diff = now - d.getTime();
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  }
+  const formatTime = (dateStr: string) => formatConversationTime(dateStr);
 </script>
 
 <svelte:head><title>CrispDeck — Messages</title><meta name="description" content="Direct messages across Mastodon and Bluesky" /></svelte:head>

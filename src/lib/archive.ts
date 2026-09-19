@@ -159,6 +159,10 @@ export async function searchArchive(params: {
   const hasMediaFilter = !!params.hasMedia;
 
   let initial: ArchivedPost[];
+  // Whether the read above already narrowed by that field, so the filter below
+  // does not need to repeat it.
+  let narrowedByType = false;
+  let narrowedByPlatform = false;
 
   if (params.type && !params.platform && !hasTextFilters && !hasDateFilters && !hasMediaFilter) {
     // Index scan on 'type' — much faster than getAll() for large archives
@@ -167,12 +171,14 @@ export async function searchArchive(params: {
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
     });
+    narrowedByType = true;
   } else if (params.platform && !params.type && !hasTextFilters && !hasDateFilters && !hasMediaFilter) {
     initial = await new Promise<ArchivedPost[]>((resolve, reject) => {
       const req = store.index('platform').getAll(params.platform);
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
     });
+    narrowedByPlatform = true;
   } else {
     // Full scan — needed for text search or complex multi-field filters
     initial = await new Promise<ArchivedPost[]>((resolve, reject) => {
@@ -184,10 +190,16 @@ export async function searchArchive(params: {
 
   let results = initial;
 
-  if (params.platform && params.type) {
-    // Both set but only one was used for index scan
-    if (params.platform) results = results.filter(p => p.platform === params.platform);
-    if (params.type) results = results.filter(p => p.type === params.type);
+  // Apply whichever of these the read did not already narrow by. This used to
+  // be guarded on `params.platform && params.type`, so a type or platform
+  // filter combined with anything that forces a full scan — a text query, an
+  // author, a date range — was dropped entirely: searching "svelte" within
+  // likes returned posts of every type.
+  if (params.type && !narrowedByType) {
+    results = results.filter(p => p.type === params.type);
+  }
+  if (params.platform && !narrowedByPlatform) {
+    results = results.filter(p => p.platform === params.platform);
   }
   if (params.author) {
     const a = params.author.toLowerCase();

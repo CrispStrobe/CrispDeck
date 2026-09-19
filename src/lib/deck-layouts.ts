@@ -6,7 +6,7 @@
  * The active layout name is also persisted so it survives reloads.
  */
 
-import type { ColumnType } from '$lib/components/deck/DeckColumn.svelte';
+import type { ColumnType } from '$lib/deck-columns';
 
 export type ColumnNotifyMode = 'off' | 'sound' | 'desktop' | 'both';
 

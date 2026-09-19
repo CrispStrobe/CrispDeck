@@ -1,4 +1,7 @@
 <script lang="ts">
+  import * as embeds from '$lib/components/post-embeds';
+  import { hasAltText } from '$lib/alt-text';
+  import { formatDate, relativeTime } from '$lib/time-format';
   import { i18n } from '$lib/i18n.svelte';
   import { base } from '$app/paths';
   import { Heart, Repeat, MessageCircle, Quote, Bookmark, Share, Flag, Languages, Camera, Loader2, Volume2, VolumeOff, BarChart3, UserPlus, UserCheck, Pin, ListPlus, X as XIcon } from '@lucide/svelte';
@@ -334,19 +337,13 @@
         return;
       }
 
-      const resp = await fetch(`${instanceUrl}/api/v1/polls/${pollId}/votes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ choices: [choiceIndex] }),
-      });
-      if (resp.ok) {
-        const updated = await resp.json();
+      try {
+        const updated = await mastoClient.votePoll(pollId, [choiceIndex]);
         ((post.raw ?? {}) as any).poll = updated;
         toast.success(i18n.t.post.voteRecorded);
-      } else {
-        const errText = await resp.text().catch(() => resp.statusText);
-        voteError = `Vote failed: ${errText}`;
-        toast.error(`Vote failed: ${resp.status}`);
+      } catch (err) {
+        voteError = String(err instanceof Error ? err.message : err);
+        toast.error(voteError);
       }
     } catch (e) {
       voteError = String(e);
@@ -430,24 +427,7 @@
     onboost(post);
   }
 
-  function formatDate(dateString?: string): string {
-    if (!dateString) return '—';
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return '—';
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  }
 
-  function relativeTime(dateString?: string): string {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return '';
-    const diff = Date.now() - date.getTime();
-    if (diff < 60000) return 'now';
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
-    if (diff < 604800000) return `${Math.floor(diff / 86400000)}d`;
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  }
 
   function getProfileUrl(p: UnifiedPost): string {
     const h = encodeURIComponent(p.author.handle);
@@ -600,89 +580,27 @@
 
   function getMastodonMedia(): any[] {
     if (post.platform !== 'mastodon' && post.platform !== 'threads') return [];
-    const raw = (post.raw ?? {}) as any;
-    const target = raw.reblog ?? raw;
-    // Handle both camelCase (masto library) and snake_case (raw fetch)
-    const sources = [
-      post.embeds,
-      target.mediaAttachments ?? target.media_attachments,
-    ];
-    for (const source of sources) {
-      if (Array.isArray(source) && source.length > 0) {
-        return source.filter((item: any) => item && (item.type === 'image' || item.type === 'video' || item.type === 'gifv')).map((item: any) => ({
-          ...item,
-          // Normalize to camelCase for template
-          previewUrl: item.previewUrl ?? item.preview_url,
-          remoteUrl: item.remoteUrl ?? item.remote_url,
-        }));
-      }
-    }
-    return [];
+    return embeds.getMastodonMedia(post.embeds, post.raw);
   }
 
   function getBskyImages(): any[] {
-    if (post.platform !== 'bluesky' || !post.embeds) return [];
-    const embed = post.embeds as any;
-    if (embed.$type === 'app.bsky.embed.images#view' && embed.images) {
-      return embed.images;
-    }
-    // Images inside recordWithMedia (quote + images)
-    if (embed.$type === 'app.bsky.embed.recordWithMedia#view' && embed.media) {
-      if (embed.media.$type === 'app.bsky.embed.images#view' && embed.media.images) {
-        return embed.media.images;
-      }
-    }
-    return [];
+    if (post.platform !== 'bluesky') return [];
+    return embeds.getBskyImages(post.embeds);
   }
 
   function getBskyExternal(): any | null {
-    if (post.platform !== 'bluesky' || !post.embeds) return null;
-    const embed = post.embeds as any;
-    // Direct external link
-    if (embed.$type === 'app.bsky.embed.external#view' && embed.external) {
-      return embed.external;
-    }
-    // External link inside recordWithMedia (quote + link card)
-    if (embed.$type === 'app.bsky.embed.recordWithMedia#view' && embed.media) {
-      if (embed.media.$type === 'app.bsky.embed.external#view' && embed.media.external) {
-        return embed.media.external;
-      }
-    }
-    return null;
+    if (post.platform !== 'bluesky') return null;
+    return embeds.getBskyExternal(post.embeds);
   }
 
   function getBskyQuote(): any | null {
-    if (post.platform !== 'bluesky' || !post.embeds) return null;
-    const embed = post.embeds as any;
-    // Direct quote
-    if (embed.$type === 'app.bsky.embed.record#view' && embed.record) {
-      const rec = embed.record;
-      if (rec.$type === 'app.bsky.embed.record#viewRecord') {
-        return rec;
-      }
-    }
-    // Quote inside recordWithMedia
-    if (embed.$type === 'app.bsky.embed.recordWithMedia#view' && embed.record) {
-      const rec = embed.record?.record;
-      if (rec?.$type === 'app.bsky.embed.record#viewRecord') {
-        return rec;
-      }
-    }
-    return null;
+    if (post.platform !== 'bluesky') return null;
+    return embeds.getBskyQuote(post.embeds);
   }
 
   function getBskyVideo(): any | null {
-    if (post.platform !== 'bluesky' || !post.embeds) return null;
-    const embed = post.embeds as any;
-    if (embed.$type === 'app.bsky.embed.video#view') {
-      return embed;
-    }
-    if (embed.$type === 'app.bsky.embed.recordWithMedia#view' && embed.media) {
-      if (embed.media.$type === 'app.bsky.embed.video#view') {
-        return embed.media;
-      }
-    }
-    return null;
+    if (post.platform !== 'bluesky') return null;
+    return embeds.getBskyVideo(post.embeds);
   }
 
   function getThreadsQuote(): any | null {
@@ -693,18 +611,7 @@
 
   function getMastodonCard(): any | null {
     if (post.platform !== 'mastodon') return null;
-    const raw = (post.raw ?? {}) as any;
-    const target = raw.reblog ?? raw;
-    const card = target.card ?? target.preview_card;
-    if (!card || !card.url) return null;
-    // Don't show card if there are media attachments (images take priority)
-    const media = target.mediaAttachments ?? target.media_attachments ?? [];
-    if (Array.isArray(media) && media.length > 0) return null;
-    // Normalize snake_case to camelCase
-    return {
-      ...card,
-      provider_name: card.provider_name ?? card.providerName,
-    };
+    return embeds.getMastodonCard(post.raw);
   }
 
   const mastodonCard = $derived(getMastodonCard());
@@ -970,7 +877,7 @@
               >
                 <img decoding="async" loading="lazy" src={image.thumb} alt={image.alt || ''} style={boxStyle} class="rounded-md w-full {bskyImages.length === 1 ? (boxStyle ? 'object-cover bg-black/10' : 'max-h-64 object-contain bg-black/10') : 'aspect-square object-cover'}" />
               </button>
-              {#if image.alt}
+              {#if hasAltText(image.alt)}
                 <button
                   type="button"
                   class="absolute bottom-1 left-1 px-1 py-0.5 text-[9px] font-bold bg-black/70 text-white rounded"
@@ -1123,7 +1030,7 @@
                 >
                   <img decoding="async" loading="lazy" src={imageUrl} alt={attachment.description || `Image ${i + 1}`} style={mastoBoxStyle} class="rounded-md w-full {mastodonMedia.length === 1 ? (mastoBoxStyle ? 'object-cover bg-black/10' : 'max-h-64 object-contain bg-black/10') : 'aspect-square object-cover'} bg-[var(--color-surface-hover)]" />
                 </button>
-                {#if attachment.description}
+                {#if hasAltText(attachment.description)}
                   <button
                     type="button"
                     class="absolute bottom-1 left-1 px-1 py-0.5 text-[9px] font-bold bg-black/70 text-white rounded"

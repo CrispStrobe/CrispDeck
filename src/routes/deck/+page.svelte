@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { isStreamableColumn, isBlueskyStreamable, mastodonStreamFor } from '$lib/deck-streaming';
+  import { isColumnLocked } from '$lib/deck-scroll';
+  import * as deckFocus from '$lib/deck-focus';
   import { base } from '$app/paths';
   import { onMount, onDestroy } from 'svelte';
   import { initAllClients, invalidateClientCache, type ClientEntry } from '$lib/api/client-factory';
@@ -7,7 +10,7 @@
   import { haptic } from '$lib/haptics';
   import DelayedSpinner from '$lib/components/DelayedSpinner.svelte';
   import DeckColumn from '$lib/components/deck/DeckColumn.svelte';
-  import type { ColumnType } from '$lib/components/deck/DeckColumn.svelte';
+  import type { ColumnType } from '$lib/deck-columns';
   import FloatingCompose from '$lib/components/FloatingCompose.svelte';
   import FeedPickerDialog from '$lib/components/FeedPickerDialog.svelte';
   import type { FeedChoice } from '$lib/bluesky-feeds';
@@ -159,9 +162,10 @@
   let focusedPostIdx = $state(-1);
 
   function focusColumn(idx: number) {
-    if (idx < 0 || idx >= columns.length) return;
-    focusedColumnIdx = idx;
-    focusedPostIdx = -1;
+    const next = deckFocus.focusColumn({ column: focusedColumnIdx, post: focusedPostIdx }, idx, columns.length);
+    if (next.column === focusedColumnIdx && next.post === focusedPostIdx) return;
+    focusedColumnIdx = next.column;
+    focusedPostIdx = next.post;
     // Scroll the column into view
     if (deckContainerEl) {
       const wrapper = deckContainerEl.children[idx] as HTMLElement;
@@ -173,9 +177,10 @@
     if (focusedColumnIdx < 0) return;
     const col = columns[focusedColumnIdx];
     const posts = columnPosts[col?.id] ?? [];
-    if (idx < 0) idx = 0;
-    if (idx >= posts.length) idx = posts.length - 1;
-    focusedPostIdx = idx;
+    focusedPostIdx = deckFocus.focusPost(
+      { column: focusedColumnIdx, post: focusedPostIdx }, idx, posts.length,
+    ).post;
+    idx = focusedPostIdx;
     // Scroll the post into view within the column
     if (deckContainerEl) {
       const colEl = deckContainerEl.children[focusedColumnIdx] as HTMLElement;
@@ -205,12 +210,12 @@
     // Column navigation: h/l or ArrowLeft/ArrowRight
     if (e.key === 'h' || e.key === 'ArrowLeft') {
       e.preventDefault();
-      focusColumn(focusedColumnIdx <= 0 ? 0 : focusedColumnIdx - 1);
+      focusColumn(deckFocus.focusPrevColumn({ column: focusedColumnIdx, post: focusedPostIdx }, columns.length).column);
       return;
     }
     if (e.key === 'l' || e.key === 'ArrowRight') {
       e.preventDefault();
-      focusColumn(focusedColumnIdx < 0 ? 0 : Math.min(focusedColumnIdx + 1, columns.length - 1));
+      focusColumn(deckFocus.focusNextColumn({ column: focusedColumnIdx, post: focusedPostIdx }, columns.length).column);
       return;
     }
 
@@ -228,10 +233,10 @@
     }
 
     // 1-9 jump to column by position
-    const num = parseInt(e.key);
-    if (num >= 1 && num <= 9 && num <= columns.length) {
+    const byNumber = deckFocus.columnForNumberKey(e.key, columns.length);
+    if (byNumber !== null) {
       e.preventDefault();
-      focusColumn(num - 1);
+      focusColumn(byNumber);
       return;
     }
 
@@ -903,8 +908,7 @@
     }
 
     // Enable streaming for other column types (timeline, mentions, notifications, local, federated, hashtag, list)
-    const streamableTypes = ['timeline', 'mentions', 'notifications', 'local', 'federated', 'hashtag', 'list', 'user'];
-    if (streamableTypes.includes(col.type) && !streamCleanups.has(col.id)) {
+    if (isStreamableColumn(col.type) && !streamCleanups.has(col.id)) {
       const prevCleanup = streamCleanups.get(col.id);
       if (prevCleanup) prevCleanup();
 
@@ -924,12 +928,7 @@
       if (mastoClient) {
         const token = mastoClient.getAccessToken();
         if (token) {
-          let streamType = 'user'; // default for timeline, mentions, notifications
-          let streamParam: string | undefined;
-          if (col.type === 'local') streamType = 'public:local';
-          else if (col.type === 'federated') streamType = 'public';
-          else if (col.type === 'hashtag' && col.query) { streamType = 'hashtag'; streamParam = col.query; }
-          else if (col.type === 'list' && col.query) { streamType = 'list'; streamParam = col.query; }
+          const { streamType, streamParam } = mastodonStreamFor(col.type, col.query)!;
 
           cleanups.push(streamManager.enableColumn({
             columnId: `${col.id}-masto`,
@@ -943,7 +942,7 @@
       }
 
       // Bluesky: use Jetstream for timeline/user columns (DID-filtered)
-      if (bskyClient && (col.type === 'timeline' || col.type === 'user' || col.type === 'mentions')) {
+      if (bskyClient && isBlueskyStreamable(col.type)) {
         cleanups.push(streamManager.enableColumn({
           columnId: `${col.id}-bsky`,
           platform: 'bluesky',
@@ -1294,7 +1293,7 @@
             onwidthchange={(w) => handleColumnWidthChange(col.id, w)}
             notify={col.notify ?? 'off'}
             onnotifychange={(mode) => handleNotifyChange(col.id, mode)}
-            scrollLock={col.scrollLock ?? true}
+            scrollLock={isColumnLocked(col)}
             onscrolllockchange={(locked) => handleScrollLockChange(col.id, locked)}
             color={col.color ?? ''}
             oncolorchange={(c) => handleColorChange(col.id, c)}

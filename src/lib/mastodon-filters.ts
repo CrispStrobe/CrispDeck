@@ -64,16 +64,10 @@ export function buildFilterMatcher(
   // Build per-filter matchers
   const filterMatchers: Array<{ test: (text: string) => boolean; result: FilterMatchResult }> = applicable.map(f => {
     const keywordTests = f.keywords.map(kw => {
-      if (kw.whole_word) {
-        try {
-          const re = new RegExp(`\\b${escapeRegex(kw.keyword)}\\b`, 'i');
-          return (text: string) => re.test(text);
-        } catch {
-          const lower = kw.keyword.toLowerCase();
-          return (text: string) => text.toLowerCase().includes(lower);
-        }
-      }
       const lower = kw.keyword.toLowerCase();
+      if (kw.whole_word) {
+        return (text: string) => containsWholeWord(text.toLowerCase(), lower);
+      }
       return (text: string) => text.toLowerCase().includes(lower);
     });
 
@@ -94,9 +88,46 @@ export function buildFilterMatcher(
   return matcher;
 }
 
-/** Escape special regex characters in a string */
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** Letters, digits and underscore — what counts as "inside a word". */
+const WORD_CHAR = /[\p{L}\p{N}_]/u;
+
+function isWordChar(ch: string | undefined): boolean {
+  return ch !== undefined && WORD_CHAR.test(ch);
+}
+
+/**
+ * Whole-word containment, without \b.
+ *
+ * \b asserts a transition between a word character and a non-word character,
+ * which cannot exist between two non-word characters — so `\bc\+\+\b` never
+ * matched "c++" in any text, and a whole-word keyword starting or ending with
+ * punctuation silently filtered nothing.
+ *
+ * Mastodon's own rule is to require the boundary only on an edge where the
+ * keyword actually has a word character to protect, which is what this does:
+ * "cat" still does not match inside "concatenate", while "c++" matches "c++"
+ * wherever it appears.
+ *
+ * Written as a scan rather than a regex deliberately: the lookbehind that would
+ * express this cleanly is unsupported by the WebKit shipped on iOS 15, which is
+ * this app's minimum, and the previous code's try/catch would have quietly
+ * downgraded those users to substring matching.
+ *
+ * Both arguments are expected lower-cased by the caller.
+ */
+function containsWholeWord(haystack: string, needle: string): boolean {
+  if (!needle) return false;
+  const guardStart = isWordChar(needle[0]);
+  const guardEnd = isWordChar(needle[needle.length - 1]);
+
+  for (let from = 0; ; ) {
+    const at = haystack.indexOf(needle, from);
+    if (at === -1) return false;
+    const before = at > 0 ? haystack[at - 1] : undefined;
+    const after = haystack[at + needle.length];
+    if ((!guardStart || !isWordChar(before)) && (!guardEnd || !isWordChar(after))) return true;
+    from = at + 1;
+  }
 }
 
 // ── Filter cache for feed pages (TTL-based) ─────────────────────────────────

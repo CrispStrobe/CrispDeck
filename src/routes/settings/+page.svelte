@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { getTtsEngine, setTtsEngine, getSttEngine, setSttEngine, getHomeMode, setHomeMode, type SpeechEngine, type HomeMode } from '$lib/settings';
   import { apiUrl } from '$lib/api-origin';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
@@ -122,16 +123,12 @@
   // TTS + STT model + engine settings (stored in localStorage)
   let ttsModel = $state(localStorage.getItem('crispdeck-tts-model') ?? 'kokoro');
   let sttModel = $state(localStorage.getItem('crispdeck-stt-model') ?? 'whisper');
-  let ttsEngine = $state<'auto' | 'crispasr' | 'browser'>(
-    (localStorage.getItem('crispdeck-tts-engine') as any) ?? 'auto'
-  );
-  let sttEngine = $state<'auto' | 'crispasr' | 'browser'>(
-    (localStorage.getItem('crispdeck-stt-engine') as any) ?? 'auto'
-  );
+  let ttsEngine = $state<SpeechEngine>(getTtsEngine());
+  let sttEngine = $state<SpeechEngine>(getSttEngine());
   function saveTtsModel() { localStorage.setItem('crispdeck-tts-model', ttsModel); }
   function saveSttModel() { localStorage.setItem('crispdeck-stt-model', sttModel); }
-  function saveTtsEngine() { localStorage.setItem('crispdeck-tts-engine', ttsEngine); }
-  function saveSttEngine() { localStorage.setItem('crispdeck-stt-engine', sttEngine); }
+  function saveTtsEngine() { setTtsEngine(ttsEngine); }
+  function saveSttEngine() { setSttEngine(sttEngine); }
 
   // Notifications
   let notifPermission = $state<'granted' | 'denied' | 'default'>('default');
@@ -220,7 +217,7 @@
   let fontSize = $state(parseInt(localStorage.getItem('crispdeck-font-size') ?? '14'));
   let lineSpacing = $state(parseFloat(localStorage.getItem('crispdeck-line-spacing') ?? '1.5'));
   let contentWidth = $state(parseInt(localStorage.getItem('crispdeck-content-width') ?? '0')); // 0 = auto
-  let homeMode = $state(localStorage.getItem('crispdeck-home-mode') ?? 'dashboard');
+  let homeMode = $state<HomeMode>(getHomeMode());
   let density = $state<DensityMode>(getDensity());
 
   const fontMap: Record<FontFamily, string> = {
@@ -1140,7 +1137,7 @@
         <select
           id="home-mode"
           value={homeMode}
-          onchange={(e) => { homeMode = (e.target as HTMLSelectElement).value; localStorage.setItem('crispdeck-home-mode', homeMode); }}
+          onchange={(e) => { homeMode = (e.target as HTMLSelectElement).value as HomeMode; setHomeMode(homeMode); }}
           class="px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none"
         >
           <option value="dashboard">{i18n.t.settings.homeDashboard}</option>

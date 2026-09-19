@@ -18,6 +18,58 @@ export interface CountUpdate {
 
 type CountListener = (update: CountUpdate) => void;
 
+/**
+ * Remembers which post each like/repost record pointed at.
+ *
+ * A Jetstream delete commit carries no `record`, so it names only the record
+ * being removed:
+ *
+ *   {"rev":"...","operation":"delete","collection":"app.bsky.feed.like","rkey":"..."}
+ *
+ * Verified against the live firehose: 80 of 80 deletes seen in 20 seconds had
+ * no record. Without a map from record back to subject there is nothing to
+ * decrement, so the `delta === -1` branch below was unreachable and counts only
+ * ever went up for as long as a post stayed on screen.
+ *
+ * Only likes on posts currently being watched are remembered, which keeps this
+ * naturally small; `max` is a backstop for a long-lived tab.
+ */
+class SubjectIndex {
+  private entries = new Map<string, string>();
+
+  constructor(private max = 5000) {}
+
+  private static key(did: string, collection: string, rkey: string) {
+    return `${did}/${collection}/${rkey}`;
+  }
+
+  remember(did: string, collection: string, rkey: string, uri: string): void {
+    const k = SubjectIndex.key(did, collection, rkey);
+    this.entries.delete(k); // re-insert so iteration order is least-recent-first
+    this.entries.set(k, uri);
+    if (this.entries.size > this.max) {
+      const oldest = this.entries.keys().next();
+      if (!oldest.done) this.entries.delete(oldest.value);
+    }
+  }
+
+  /** Look up and consume — a record can only be deleted once. */
+  take(did: string, collection: string, rkey: string): string | undefined {
+    const k = SubjectIndex.key(did, collection, rkey);
+    const uri = this.entries.get(k);
+    if (uri !== undefined) this.entries.delete(k);
+    return uri;
+  }
+
+  get size(): number {
+    return this.entries.size;
+  }
+
+  clear(): void {
+    this.entries.clear();
+  }
+}
+
 const JETSTREAM_URL = 'wss://jetstream2.us-east.bsky.network/subscribe';
 
 class JetstreamClient {
@@ -30,6 +82,8 @@ class JetstreamClient {
   private enabled = false;
   private reconnectAttempts = 0;
   private visibilityHandler: (() => void) | null = null;
+  /** Maps like/repost records back to their subject so deletes can decrement. */
+  private subjects = new SubjectIndex();
 
   /** Start listening for real-time events */
   connect() {
@@ -150,6 +204,7 @@ class JetstreamClient {
   /** Clear all watched posts */
   clearWatched() {
     this.uriListeners.clear();
+    this.subjects.clear();
   }
 
   /** Subscribe to all count updates (broadcast — prefer per-URI watchPost listener) */
@@ -161,28 +216,39 @@ class JetstreamClient {
   private handleEvent(data: any) {
     if (!data.commit) return;
 
-    const { collection, operation, record } = data.commit;
+    const { collection, operation, record, rkey } = data.commit;
     if (!collection || !operation) return;
 
+    const type: 'like' | 'repost' | undefined =
+      collection === 'app.bsky.feed.like' ? 'like'
+      : collection === 'app.bsky.feed.repost' ? 'repost'
+      : undefined;
+    if (!type) return;
+
     let uri: string | undefined;
-    let type: 'like' | 'repost' | undefined;
+    let delta: 1 | -1;
 
-    if (collection === 'app.bsky.feed.like' && record?.subject?.uri) {
-      uri = record.subject.uri;
-      type = 'like';
-    } else if (collection === 'app.bsky.feed.repost' && record?.subject?.uri) {
-      uri = record.subject.uri;
-      type = 'repost';
+    if (operation === 'create') {
+      uri = record?.subject?.uri;
+      if (!uri) return;
+      // Remember it so the matching delete can be attributed later.
+      if (data.did && rkey && this.uriListeners.has(uri)) {
+        this.subjects.remember(data.did, collection, rkey, uri);
+      }
+      delta = 1;
+    } else if (operation === 'delete') {
+      // Deletes carry no subject; resolve it from the create we saw earlier.
+      if (!data.did || !rkey) return;
+      uri = this.subjects.take(data.did, collection, rkey);
+      if (!uri) return;
+      delta = -1;
+    } else {
+      return;
     }
-
-    if (!uri || !type) return;
 
     // Only emit for posts we're watching
     const perUri = this.uriListeners.get(uri);
     if (!perUri && this.listeners.size === 0) return;
-
-    const delta = operation === 'create' ? 1 : operation === 'delete' ? -1 : 0;
-    if (delta === 0) return;
 
     const update: CountUpdate = { uri, type, delta: delta as 1 | -1 };
 
