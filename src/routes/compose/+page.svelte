@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getSttEngine } from '$lib/settings';
+  import { buildScheduledAt, minScheduleDate, formatScheduledFor } from '$lib/quick-schedule';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { logCrosspost, saveDraft as dbSaveDraft, listDrafts, deleteDraft as dbDeleteDraft } from '$lib/db';
@@ -73,8 +74,9 @@
   let scheduleTime = $state('');
 
   async function handleSchedule() {
-    if (!text.trim() || !scheduleDate || !scheduleTime) return;
-    const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
+    if (!text.trim()) return;
+    const scheduledAt = buildScheduledAt(scheduleDate, scheduleTime);
+    if (!scheduledAt) return;
     try {
       await dbSaveDraft({
         text: text.trim(),
@@ -83,7 +85,7 @@
         content_warning: showCW ? contentWarning : null,
         scheduled_at: scheduledAt,
       });
-      toast.success(`Scheduled for ${new Date(scheduledAt).toLocaleString()}`);
+      toast.success(`Scheduled for ${formatScheduledFor(scheduledAt)}`);
       text = '';
       showSchedule = false;
       scheduleDate = '';
@@ -983,7 +985,7 @@
                   <div class="space-y-2">
                     <label for="schedule-date" class="text-xs text-[var(--color-text-muted)]">{i18n.t.compose.date}</label>
                     <input id="schedule-date" type="date" bind:value={scheduleDate}
-                      min={new Date().toISOString().split('T')[0]}
+                      min={minScheduleDate()}
                       class="w-full px-2 py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-xs text-[var(--color-text)] focus:outline-none" />
                     <label for="schedule-time" class="text-xs text-[var(--color-text-muted)]">{i18n.t.compose.time}</label>
                     <input id="schedule-time" type="time" bind:value={scheduleTime}

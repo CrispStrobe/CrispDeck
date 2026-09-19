@@ -61,8 +61,6 @@ const ACCEPTED = new Set([
   'src/lib/new-column-types.test.ts',
   'src/lib/offline-feed-wiring.test.ts',
   'src/lib/perf-optimizations.test.ts',
-  'src/lib/quick-schedule.test.ts',
-  'src/lib/search-operators.test.ts',
 ]);
 
 describe('tests exercise application code', () => {
