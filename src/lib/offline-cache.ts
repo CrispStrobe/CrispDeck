@@ -22,7 +22,7 @@ let dbPromise: Promise<IDBDatabase> | null = null;
 
 function openDB(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject) => {
+  dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
@@ -32,6 +32,12 @@ function openDB(): Promise<IDBDatabase> {
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
+  }).catch((e) => {
+    // Drop the cached promise so a later call can retry. Without this one
+    // transient failure to open the database disabled the offline cache for the
+    // rest of the session: every subsequent call awaited the same rejection.
+    dbPromise = null;
+    throw e;
   });
   return dbPromise;
 }

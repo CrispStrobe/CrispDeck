@@ -76,6 +76,30 @@ export class MastodonClient {
     return snakeToCamel(data) as MastodonPost[];
   }
 
+  /**
+   * Vote in a poll.
+   *
+   * Votes are always authenticated — an unauthenticated POST here is rejected
+   * by the instance, so this refuses up front rather than making the call.
+   * Returns the updated poll.
+   */
+  async votePoll(pollId: string, choices: number[]): Promise<unknown> {
+    if (!this.accessToken) throw new Error('Auth required to vote in a poll');
+    const response = await fetch(`${this.instanceUrl}/api/v1/polls/${pollId}/votes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.accessToken}`,
+      },
+      body: JSON.stringify({ choices }),
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => response.statusText);
+      throw new Error(`Vote failed: ${detail || response.status}`);
+    }
+    return response.json();
+  }
+
   /** Get context (ancestors + descendants) of a status */
   async getStatusContext(statusId: string): Promise<{ ancestors: MastodonPost[]; descendants: MastodonPost[] }> {
     const resp = await this.fetchPublic<{ ancestors: MastodonPost[]; descendants: MastodonPost[] }>(

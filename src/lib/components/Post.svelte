@@ -337,19 +337,13 @@
         return;
       }
 
-      const resp = await fetch(`${instanceUrl}/api/v1/polls/${pollId}/votes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ choices: [choiceIndex] }),
-      });
-      if (resp.ok) {
-        const updated = await resp.json();
+      try {
+        const updated = await mastoClient.votePoll(pollId, [choiceIndex]);
         ((post.raw ?? {}) as any).poll = updated;
         toast.success(i18n.t.post.voteRecorded);
-      } else {
-        const errText = await resp.text().catch(() => resp.statusText);
-        voteError = `Vote failed: ${errText}`;
-        toast.error(`Vote failed: ${resp.status}`);
+      } catch (err) {
+        voteError = String(err instanceof Error ? err.message : err);
+        toast.error(voteError);
       }
     } catch (e) {
       voteError = String(e);
