@@ -1,6 +1,7 @@
 <script lang="ts">
   import { isStreamableColumn, isBlueskyStreamable, mastodonStreamFor } from '$lib/deck-streaming';
   import { isColumnLocked } from '$lib/deck-scroll';
+  import * as deckFocus from '$lib/deck-focus';
   import { base } from '$app/paths';
   import { onMount, onDestroy } from 'svelte';
   import { initAllClients, invalidateClientCache, type ClientEntry } from '$lib/api/client-factory';
@@ -161,9 +162,10 @@
   let focusedPostIdx = $state(-1);
 
   function focusColumn(idx: number) {
-    if (idx < 0 || idx >= columns.length) return;
-    focusedColumnIdx = idx;
-    focusedPostIdx = -1;
+    const next = deckFocus.focusColumn({ column: focusedColumnIdx, post: focusedPostIdx }, idx, columns.length);
+    if (next.column === focusedColumnIdx && next.post === focusedPostIdx) return;
+    focusedColumnIdx = next.column;
+    focusedPostIdx = next.post;
     // Scroll the column into view
     if (deckContainerEl) {
       const wrapper = deckContainerEl.children[idx] as HTMLElement;
@@ -175,9 +177,10 @@
     if (focusedColumnIdx < 0) return;
     const col = columns[focusedColumnIdx];
     const posts = columnPosts[col?.id] ?? [];
-    if (idx < 0) idx = 0;
-    if (idx >= posts.length) idx = posts.length - 1;
-    focusedPostIdx = idx;
+    focusedPostIdx = deckFocus.focusPost(
+      { column: focusedColumnIdx, post: focusedPostIdx }, idx, posts.length,
+    ).post;
+    idx = focusedPostIdx;
     // Scroll the post into view within the column
     if (deckContainerEl) {
       const colEl = deckContainerEl.children[focusedColumnIdx] as HTMLElement;
@@ -207,12 +210,12 @@
     // Column navigation: h/l or ArrowLeft/ArrowRight
     if (e.key === 'h' || e.key === 'ArrowLeft') {
       e.preventDefault();
-      focusColumn(focusedColumnIdx <= 0 ? 0 : focusedColumnIdx - 1);
+      focusColumn(deckFocus.focusPrevColumn({ column: focusedColumnIdx, post: focusedPostIdx }, columns.length).column);
       return;
     }
     if (e.key === 'l' || e.key === 'ArrowRight') {
       e.preventDefault();
-      focusColumn(focusedColumnIdx < 0 ? 0 : Math.min(focusedColumnIdx + 1, columns.length - 1));
+      focusColumn(deckFocus.focusNextColumn({ column: focusedColumnIdx, post: focusedPostIdx }, columns.length).column);
       return;
     }
 
@@ -230,10 +233,10 @@
     }
 
     // 1-9 jump to column by position
-    const num = parseInt(e.key);
-    if (num >= 1 && num <= 9 && num <= columns.length) {
+    const byNumber = deckFocus.columnForNumberKey(e.key, columns.length);
+    if (byNumber !== null) {
       e.preventDefault();
-      focusColumn(num - 1);
+      focusColumn(byNumber);
       return;
     }
 

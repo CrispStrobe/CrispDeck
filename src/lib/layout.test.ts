@@ -4,6 +4,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeEach } from 'vitest';
+import { isNavItemActive, MERGED_ROUTES } from './nav-active';
 
 // ── Navigation item structure ───────────────────────────────────────────────
 
@@ -60,24 +61,28 @@ describe('sidebar navigation items', () => {
 
 // ── Merged route matching ───────────────────────────────────────────────────
 
-describe('merged route matching (isActive logic)', () => {
-  const mergedRoutes: Record<string, string[]> = {
-    '/trending': ['/trending', '/catchup'],
-    '/lists': ['/lists', '/feed-builder', '/starterpacks'],
-    '/bookmarks': ['/bookmarks', '/reading-lists'],
-    '/archive': ['/archive', '/gallery'],
-    '/analytics': ['/analytics', '/calendar'],
-    '/moderation': ['/moderation', '/labelers'],
-    '/compose': ['/compose', '/drafts'],
-    '/settings': ['/settings', '/instance'],
-  };
+describe('the merged-route mapping', () => {
+  it('every merged route includes its own sidebar href', () => {
+    for (const [href, routes] of Object.entries(MERGED_ROUTES)) {
+      expect(routes, href).toContain(href);
+    }
+  });
 
-  function isActive(href: string, currentPath: string): boolean {
-    if (href === '/') return currentPath === '/';
-    const routes = mergedRoutes[href];
-    if (routes) return routes.some(r => currentPath.startsWith(r));
-    return currentPath.startsWith(href);
-  }
+  it('no path is claimed by two different sidebar items', () => {
+    const seen = new Map<string, string>();
+    for (const [href, routes] of Object.entries(MERGED_ROUTES)) {
+      for (const r of routes) {
+        expect(seen.has(r), `${r} claimed by ${seen.get(r)} and ${href}`).toBe(false);
+        seen.set(r, href);
+      }
+    }
+  });
+});
+
+describe('merged route matching (isActive logic)', () => {
+  // The mapping and the rule now come from the module the layout uses.
+  const isActive = (href: string, currentPath: string) =>
+    isNavItemActive(href, currentPath);
 
   it('dashboard only active on exact /', () => {
     expect(isActive('/', '/')).toBe(true);

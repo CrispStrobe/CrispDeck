@@ -31,6 +31,18 @@ function walk(dir: string, out: string[] = []): string[] {
 const IMPORT = /import\s+(?:type\s+)?[\s\S]*?from\s*['"]([^'"]+)['"]/g;
 const APP = /^(\.\.?\/|\$lib\/|\$app\/)/;
 
+/**
+ * Files whose subject is a live API rather than a module.
+ *
+ * These call real endpoints and assert on what comes back, so importing no
+ * application code is correct, not a smell — flagging them alongside tests that
+ * assert against their own fixtures would make the list mean two things.
+ */
+const LIVE_API_TESTS = new Set([
+  'src/lib/api/bluesky.live.test.ts',
+  'src/lib/api/bluesky.pds.unit.test.ts',
+]);
+
 function exercisesAppCode(src: string): boolean {
   IMPORT.lastIndex = 0;
   for (const m of src.matchAll(IMPORT)) {
@@ -47,12 +59,8 @@ function exercisesAppCode(src: string): boolean {
  * so it cannot fail when the corresponding app code breaks.
  */
 const ACCEPTED = new Set([
-  'src/lib/api/bluesky.live.test.ts',
-  'src/lib/api/bluesky.pds.unit.test.ts',
-  'src/lib/deck-keyboard.test.ts',
   'src/lib/delayed-spinner.test.ts',
   'src/lib/fixes.test.ts',
-  'src/lib/layout.test.ts',
   'src/lib/new-column-types.test.ts',
   'src/lib/offline-feed-wiring.test.ts',
   'src/lib/perf-optimizations.test.ts',
@@ -63,9 +71,16 @@ describe('tests exercise application code', () => {
 
   it('no new test file asserts only against its own fixtures', () => {
     const offenders = files.filter(
-      (f) => !exercisesAppCode(readFileSync(f, 'utf8')) && !ACCEPTED.has(f)
+      (f) => !exercisesAppCode(readFileSync(f, 'utf8'))
+        && !ACCEPTED.has(f)
+        && !LIVE_API_TESTS.has(f)
     );
     expect(offenders).toEqual([]);
+  });
+
+  it('the live-API exemptions still exist', () => {
+    // A renamed or deleted file should not sit here unnoticed.
+    expect([...LIVE_API_TESTS].filter((f) => !files.includes(f))).toEqual([]);
   });
 
   it('the accepted list has no stale entries', () => {
@@ -74,6 +89,10 @@ describe('tests exercise application code', () => {
       (f) => !files.includes(f) || exercisesAppCode(readFileSync(f, 'utf8'))
     );
     expect(stale).toEqual([]);
+  });
+
+  it('nothing is both accepted and exempt', () => {
+    expect([...ACCEPTED].filter((f) => LIVE_API_TESTS.has(f))).toEqual([]);
   });
 
   it('most of the suite does exercise application code', () => {
