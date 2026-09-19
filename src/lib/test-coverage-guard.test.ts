@@ -58,8 +58,10 @@ function exercisesAppCode(src: string): boolean {
  * Known offenders. Each asserts against fixtures declared in the test file,
  * so it cannot fail when the corresponding app code breaks.
  */
-const ACCEPTED = new Set([
-  'src/lib/delayed-spinner.test.ts',
+const ACCEPTED = new Set<string>([
+  // Empty. Every test file now exercises application code, or is a live-API
+  // test listed above. Adding an entry here means admitting a test that cannot
+  // fail when the app breaks, so it wants a reason in the commit message.
 ]);
 
 describe('tests exercise application code', () => {
