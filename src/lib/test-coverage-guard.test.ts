@@ -54,7 +54,6 @@ const ACCEPTED = new Set([
   'src/lib/delayed-spinner.test.ts',
   'src/lib/fixes.test.ts',
   'src/lib/layout.test.ts',
-  'src/lib/messages.test.ts',
   'src/lib/new-column-types.test.ts',
   'src/lib/offline-feed-wiring.test.ts',
   'src/lib/perf-optimizations.test.ts',

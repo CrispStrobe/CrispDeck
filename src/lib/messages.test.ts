@@ -1,124 +1,113 @@
 /**
- * Tests for messages logic — conversation model, message formatting,
- * unread counting, new conversation creation.
+ * Conversation list model.
+ *
+ * This previously declared its own Conversation and Message interfaces and
+ * reimplemented the unread count, the sort and the time formatting, so nothing
+ * here could fail when the messages page changed. It now exercises
+ * $lib/messages, which that page uses.
  */
 import { describe, it, expect } from 'vitest';
+import {
+  countUnread, sortByRecent, inferPlatformFromHandle, formatConversationTime,
+  type Conversation,
+} from './messages';
 
-interface Conversation {
-  id: string;
-  platform: 'bluesky' | 'mastodon' | 'threads';
-  participant: { handle: string; displayName?: string; avatar?: string };
-  lastMessage?: string;
-  lastDate?: string;
-  unread: boolean;
+function convo(o: Partial<Conversation> & { id: string }): Conversation {
+  return {
+    platform: 'bluesky',
+    participant: { handle: 'alice.bsky.social', displayName: 'Alice' },
+    unread: false,
+    ...o,
+  } as Conversation;
 }
 
-interface Message {
-  id: string;
-  text: string;
-  sender: { handle: string; displayName?: string };
-  createdAt: string;
-  isOurs: boolean;
-}
-
-describe('conversation model', () => {
-  it('represents a Bluesky conversation', () => {
-    const convo: Conversation = {
-      id: 'bsky-convo-1',
-      platform: 'bluesky',
-      participant: { handle: 'alice.bsky.social', displayName: 'Alice' },
-      lastMessage: 'Hey!',
-      lastDate: '2026-06-01T12:00:00Z',
-      unread: true,
-    };
-    expect(convo.platform).toBe('bluesky');
-    expect(convo.unread).toBe(true);
+describe('unread counting', () => {
+  it('counts the conversations waiting', () => {
+    expect(countUnread([
+      convo({ id: '1', unread: true }),
+      convo({ id: '2', unread: false }),
+      convo({ id: '3', unread: true }),
+    ])).toBe(2);
   });
 
-  it('represents a Mastodon conversation', () => {
-    const convo: Conversation = {
-      id: 'masto-convo-1',
-      platform: 'mastodon',
-      participant: { handle: '@bob@mastodon.social' },
-      unread: false,
-    };
-    expect(convo.platform).toBe('mastodon');
-    expect(convo.lastMessage).toBeUndefined();
+  it('is zero when everything is read', () => {
+    expect(countUnread([convo({ id: '1' }), convo({ id: '2' })])).toBe(0);
+  });
+
+  it('is zero for no conversations', () => {
+    expect(countUnread([])).toBe(0);
   });
 });
 
-describe('unread count calculation', () => {
-  it('counts unread conversations', () => {
-    const conversations: Conversation[] = [
-      { id: '1', platform: 'bluesky', participant: { handle: 'a' }, unread: true },
-      { id: '2', platform: 'mastodon', participant: { handle: 'b' }, unread: false },
-      { id: '3', platform: 'bluesky', participant: { handle: 'c' }, unread: true },
+describe('sorting', () => {
+  it('puts the most recent first', () => {
+    const sorted = sortByRecent([
+      convo({ id: 'old', lastDate: '2026-01-01T00:00:00.000Z' }),
+      convo({ id: 'new', lastDate: '2026-01-03T00:00:00.000Z' }),
+      convo({ id: 'mid', lastDate: '2026-01-02T00:00:00.000Z' }),
+    ]);
+    expect(sorted.map(c => c.id)).toEqual(['new', 'mid', 'old']);
+  });
+
+  it('sorts a conversation with no date last, not first', () => {
+    const sorted = sortByRecent([
+      convo({ id: 'none' }),
+      convo({ id: 'dated', lastDate: '2026-01-01T00:00:00.000Z' }),
+    ]);
+    expect(sorted.map(c => c.id)).toEqual(['dated', 'none']);
+  });
+
+  it('does not mutate the input', () => {
+    const input = [
+      convo({ id: 'a', lastDate: '2026-01-01T00:00:00.000Z' }),
+      convo({ id: 'b', lastDate: '2026-01-02T00:00:00.000Z' }),
     ];
-    const unreadCount = conversations.filter(c => c.unread).length;
-    expect(unreadCount).toBe(2);
-  });
-
-  it('zero unread when all read', () => {
-    const conversations: Conversation[] = [
-      { id: '1', platform: 'bluesky', participant: { handle: 'a' }, unread: false },
-    ];
-    const unreadCount = conversations.filter(c => c.unread).length;
-    expect(unreadCount).toBe(0);
+    sortByRecent(input);
+    expect(input.map(c => c.id)).toEqual(['a', 'b']);
   });
 });
 
-describe('conversation sorting', () => {
-  it('sorts by most recent message first', () => {
-    const convos: Conversation[] = [
-      { id: '1', platform: 'bluesky', participant: { handle: 'a' }, lastDate: '2026-06-01T10:00:00Z', unread: false },
-      { id: '2', platform: 'mastodon', participant: { handle: 'b' }, lastDate: '2026-06-01T14:00:00Z', unread: false },
-      { id: '3', platform: 'bluesky', participant: { handle: 'c' }, lastDate: '2026-06-01T08:00:00Z', unread: false },
-    ];
-    const sorted = convos.sort((a, b) =>
-      (b.lastDate ? new Date(b.lastDate).getTime() : 0) - (a.lastDate ? new Date(a.lastDate).getTime() : 0)
-    );
-    expect(sorted[0].id).toBe('2');
-    expect(sorted[2].id).toBe('3');
+describe('platform inference', () => {
+  it('reads a Mastodon handle as Mastodon', () => {
+    expect(inferPlatformFromHandle('@user@mastodon.social')).toBe('mastodon');
+  });
+
+  it('reads a bare domain as Bluesky', () => {
+    expect(inferPlatformFromHandle('alice.bsky.social')).toBe('bluesky');
+  });
+
+  /** Pinned, not endorsed: a leading @ is enough to swing it. */
+  it('misreads a Bluesky handle typed with a leading @', () => {
+    expect(inferPlatformFromHandle('@alice.bsky.social')).toBe('mastodon');
   });
 });
 
-describe('message time formatting', () => {
-  function formatTime(dateStr: string): string {
-    const d = new Date(dateStr);
-    const now = Date.now();
-    const diff = now - d.getTime();
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  }
+describe('conversation time', () => {
+  const now = Date.parse('2026-06-15T12:00:00.000Z');
 
-  it('shows minutes for recent messages', () => {
-    const recent = new Date(Date.now() - 5 * 60000).toISOString();
-    expect(formatTime(recent)).toBe('5m');
+  it('shows minutes within the hour', () => {
+    expect(formatConversationTime(new Date(now - 5 * 60_000).toISOString(), now)).toBe('5m');
   });
 
-  it('shows hours for today messages', () => {
-    const hours = new Date(Date.now() - 3 * 3600000).toISOString();
-    expect(formatTime(hours)).toBe('3h');
+  it('shows hours within the day', () => {
+    expect(formatConversationTime(new Date(now - 3 * 3_600_000).toISOString(), now)).toBe('3h');
   });
 
-  it('shows date for older messages', () => {
-    const old = '2026-01-15T12:00:00Z';
-    const formatted = formatTime(old);
-    expect(formatted).toContain('Jan');
-  });
-});
-
-describe('new conversation creation', () => {
-  it('infers Mastodon platform from @ handle', () => {
-    const handle = '@user@mastodon.social';
-    const platform = handle.includes('@') ? 'mastodon' : 'bluesky';
-    expect(platform).toBe('mastodon');
+  it('shows a date beyond a day', () => {
+    expect(formatConversationTime('2026-01-15T12:00:00.000Z', now)).toContain('Jan');
   });
 
-  it('infers Bluesky platform from dot handle', () => {
-    const handle = 'alice.bsky.social';
-    const platform = handle.includes('@') ? 'mastodon' : 'bluesky';
-    expect(platform).toBe('bluesky');
+  it('shows 0m for something that just arrived', () => {
+    expect(formatConversationTime(new Date(now).toISOString(), now)).toBe('0m');
+  });
+
+  it('crosses from minutes to hours at exactly one hour', () => {
+    expect(formatConversationTime(new Date(now - 59 * 60_000).toISOString(), now)).toBe('59m');
+    expect(formatConversationTime(new Date(now - 60 * 60_000).toISOString(), now)).toBe('1h');
+  });
+
+  it('crosses from hours to a date at exactly one day', () => {
+    expect(formatConversationTime(new Date(now - 23 * 3_600_000).toISOString(), now)).toBe('23h');
+    expect(formatConversationTime(new Date(now - 24 * 3_600_000).toISOString(), now)).not.toMatch(/h$/);
   });
 });
