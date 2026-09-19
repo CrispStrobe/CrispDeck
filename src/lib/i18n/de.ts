@@ -157,7 +157,7 @@ export default {
       needMastodonToVote: 'Verbinde ein Mastodon-Konto, um bei Umfragen abzustimmen',
       voteRecorded: 'Stimme gezählt',
       voteFailed: 'Abstimmung fehlgeschlagen — prüfe deine Verbindung',
-      bookmarkFailed: 'Lesezeichen fehlgeschlagen',
+      bookmarkFailed: 'Lesezeichen fehlgeschlagen', likeFailed: 'Liken fehlgeschlagen — nicht gespeichert', boostFailed: 'Reposten fehlgeschlagen — nicht gespeichert',
       savedLocallyOnly: 'Lokal gespeichert, aber die Server-Synchronisierung ist fehlgeschlagen',
       reply: 'Antworten',
       boost: 'Teilen',

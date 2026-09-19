@@ -170,6 +170,8 @@ export const translations = {
       voteRecorded: 'Vote recorded',
       voteFailed: 'Vote failed — check your connection',
       bookmarkFailed: 'Bookmark failed',
+      likeFailed: 'Like failed — not saved',
+      boostFailed: 'Repost failed — not saved',
       savedLocallyOnly: 'Saved locally but server sync failed',
       reply: 'Reply',
       boost: 'Boost',

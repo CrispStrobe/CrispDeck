@@ -63,3 +63,25 @@ if (typeof URL !== 'undefined' && typeof URL.createObjectURL !== 'function') {
     objectUrls.delete(url);
   };
 }
+
+/**
+ * jsdom has no matchMedia, and code that asks about prefers-reduced-motion or a
+ * breakpoint would otherwise throw inside a component under test. Reports "no
+ * preference, no match", which is the right default for a test.
+ */
+if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    configurable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+}

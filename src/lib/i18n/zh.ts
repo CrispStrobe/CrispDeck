@@ -26,7 +26,7 @@ export default {
       multipleChoice: '多选', hour1: '1小时', hours6: '6小时',
       hours24: '24小时', days3: '3天', days7: '7天',
     },
-    post: { voteRecorded: '投票已记录', voteFailed: '投票失败 — 请检查网络连接', viewQuotedImages: '查看引用帖子的图片', ttsFailed: '语音朗读失败', translationFailed: '翻译失败', showPostStatistics: '显示帖子统计', showAltText: '显示替代文本', sharePostAsImage: '以图片分享帖子', savedLocallyOnly: '已本地保存，但服务器同步失败', reposts: '转发', reportReason: '举报原因（可选）：', reportPost: '举报帖子', reportHint: '请在打开的页面上使用该平台的举报功能来完成举报。', replies: '回复', quotePost: '引用帖子', postStatistics: '帖子统计', noReadingLists: '暂无阅读列表', needMastodonToVote: '请连接 Mastodon 账户以参与投票', likes: '点赞', engagementBreakdown: '互动明细', copyLinkToPost: '复制帖子链接', bookmarkFailed: '添加书签失败', addToReadingList: '添加到阅读列表', addPostToReadingList: '添加到阅读列表',
+    post: { voteRecorded: '投票已记录', voteFailed: '投票失败 — 请检查网络连接', viewQuotedImages: '查看引用帖子的图片', ttsFailed: '语音朗读失败', translationFailed: '翻译失败', showPostStatistics: '显示帖子统计', showAltText: '显示替代文本', sharePostAsImage: '以图片分享帖子', savedLocallyOnly: '已本地保存，但服务器同步失败', reposts: '转发', reportReason: '举报原因（可选）：', reportPost: '举报帖子', reportHint: '请在打开的页面上使用该平台的举报功能来完成举报。', replies: '回复', quotePost: '引用帖子', postStatistics: '帖子统计', noReadingLists: '暂无阅读列表', needMastodonToVote: '请连接 Mastodon 账户以参与投票', likes: '点赞', engagementBreakdown: '互动明细', copyLinkToPost: '复制帖子链接', bookmarkFailed: '添加书签失败', likeFailed: '点赞失败 — 未保存', boostFailed: '转发失败 — 未保存', addToReadingList: '添加到阅读列表', addPostToReadingList: '添加到阅读列表',
       reply: '回复', boost: '转发', quote: '引用', like: '喜欢',
       bookmark: '书签', removeBookmark: '取消书签', copyLink: '复制链接',
       copied: '已复制！', report: '举报', translate: '翻译',
