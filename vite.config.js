@@ -59,6 +59,12 @@ export default defineConfig({
     chunkSizeWarningLimit: 500,
   },
 
+  // Resolve the browser build of dependencies in tests. Without this, `svelte`
+  // resolves to its server entry and mount() is unavailable, so a component can
+  // only be tested by copying its logic into the test — which is how a third of
+  // this suite ended up asserting against its own fixtures.
+  resolve: { conditions: ['browser'] },
+
   test: {
     include: ['src/**/*.test.ts'],
     // Most of this codebase is browser code — localStorage, document, window.
