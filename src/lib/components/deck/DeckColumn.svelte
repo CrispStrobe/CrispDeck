@@ -11,7 +11,7 @@
   import type { NotificationGroup } from '$lib/notification-grouping';
   import { i18n } from '$lib/i18n.svelte';
 
-  export type ColumnType = 'timeline' | 'mentions' | 'notifications' | 'my-posts' | 'search' | 'list' | 'hashtag' | 'user' | 'feed' | 'local' | 'federated' | 'tag-group' | 'rss' | 'keyword-monitor' | 'threads-search' | 'messages' | 'trending' | 'activity' | 'likes' | 'followers';
+  import { clampColumnWidth, MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH, type ColumnType } from '$lib/deck-columns';
 
   let {
     id,
@@ -252,8 +252,7 @@
   let startX = 0;
   let startWidth = 0;
 
-  const MIN_COLUMN_WIDTH = 280;
-  const MAX_COLUMN_WIDTH = 600;
+
   const KEYBOARD_RESIZE_STEP = 20;
 
   function onResizeStart(e: MouseEvent) {
@@ -271,9 +270,7 @@
     width = clampWidth(startWidth + delta);
   }
 
-  function clampWidth(value: number): number {
-    return Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, value));
-  }
+  const clampWidth = clampColumnWidth;
 
   /**
    * Keyboard half of the window-splitter pattern — role="separator" with a

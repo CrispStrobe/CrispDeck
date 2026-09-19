@@ -2,25 +2,35 @@
  * Tests for deck column configuration, layouts, drag/reorder, and width logic.
  */
 import { describe, it, expect } from 'vitest';
+import {
+  COLUMN_TYPES, clampColumnWidth, moveColumn, requiresQuery,
+  MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH, type ColumnType,
+} from './deck-columns';
+import type { DeckColumnConfig } from './deck-layouts';
 
-type ColumnType = 'timeline' | 'mentions' | 'notifications' | 'my-posts' | 'search' | 'list' | 'hashtag' | 'user' | 'feed' | 'local' | 'federated' | 'tag-group' | 'rss' | 'keyword-monitor' | 'threads-search';
 
-interface DeckColumnConfig {
-  id: string;
-  title: string;
-  type: ColumnType;
-  query?: string;
-  width?: number;
-}
 
 describe('deck column configuration', () => {
-  it('supports all 14 column types', () => {
-    const types: ColumnType[] = ['timeline', 'mentions', 'notifications', 'my-posts', 'search', 'list', 'hashtag', 'user', 'feed', 'local', 'federated', 'tag-group', 'rss', 'keyword-monitor'];
-    expect(types.length).toBe(14);
-    for (const t of types) {
+  it('every declared column type can be configured', () => {
+    // Previously a hand-written list of 14, asserted against itself — the app
+    // had grown to 20 without this noticing.
+    for (const t of COLUMN_TYPES) {
       const col: DeckColumnConfig = { id: `${t}-1`, title: t, type: t };
       expect(col.type).toBe(t);
     }
+    expect(COLUMN_TYPES.length).toBeGreaterThanOrEqual(20);
+  });
+
+  it('has no duplicate column types', () => {
+    expect(new Set(COLUMN_TYPES).size).toBe(COLUMN_TYPES.length);
+  });
+
+  it('knows which column types need a query', () => {
+    expect(requiresQuery('search')).toBe(true);
+    expect(requiresQuery('hashtag')).toBe(true);
+    expect(requiresQuery('user')).toBe(true);
+    expect(requiresQuery('timeline')).toBe(false);
+    expect(requiresQuery('notifications')).toBe(false);
   });
 
   it('search/hashtag/user columns require query', () => {
@@ -54,19 +64,25 @@ describe('deck column configuration', () => {
 });
 
 describe('deck column width constraints', () => {
-  it('clamps width to minimum 280', () => {
-    const width = Math.max(280, Math.min(600, 200));
-    expect(width).toBe(280);
+  it('clamps width to the minimum', () => {
+    expect(clampColumnWidth(200)).toBe(MIN_COLUMN_WIDTH);
   });
 
-  it('clamps width to maximum 600', () => {
-    const width = Math.max(280, Math.min(600, 700));
-    expect(width).toBe(600);
+  it('clamps width to the maximum', () => {
+    expect(clampColumnWidth(700)).toBe(MAX_COLUMN_WIDTH);
   });
 
   it('passes through valid widths', () => {
-    const width = Math.max(280, Math.min(600, 400));
-    expect(width).toBe(400);
+    expect(clampColumnWidth(400)).toBe(400);
+  });
+
+  it('keeps the limits themselves', () => {
+    expect(clampColumnWidth(MIN_COLUMN_WIDTH)).toBe(MIN_COLUMN_WIDTH);
+    expect(clampColumnWidth(MAX_COLUMN_WIDTH)).toBe(MAX_COLUMN_WIDTH);
+  });
+
+  it('falls back to the default rather than storing NaN', () => {
+    expect(Number.isFinite(clampColumnWidth(NaN))).toBe(true);
   });
 });
 
@@ -78,13 +94,7 @@ describe('deck column reorder', () => {
       { id: 'c', title: 'C', type: 'notifications' },
     ];
 
-    // Move 'c' to position 0
-    const fromIdx = 2;
-    const toIdx = 0;
-    const moved = columns[fromIdx];
-    const updated = [...columns];
-    updated.splice(fromIdx, 1);
-    updated.splice(toIdx, 0, moved);
+    const updated = moveColumn(columns, 2, 0);
 
     expect(updated[0].id).toBe('c');
     expect(updated[1].id).toBe('a');

@@ -9,7 +9,7 @@
   import { haptic } from '$lib/haptics';
   import DelayedSpinner from '$lib/components/DelayedSpinner.svelte';
   import DeckColumn from '$lib/components/deck/DeckColumn.svelte';
-  import type { ColumnType } from '$lib/components/deck/DeckColumn.svelte';
+  import type { ColumnType } from '$lib/deck-columns';
   import FloatingCompose from '$lib/components/FloatingCompose.svelte';
   import FeedPickerDialog from '$lib/components/FeedPickerDialog.svelte';
   import type { FeedChoice } from '$lib/bluesky-feeds';
