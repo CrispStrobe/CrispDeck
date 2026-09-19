@@ -11,6 +11,7 @@
  */
 
 import type { BrowserOAuthClient } from '@atproto/oauth-client-browser';
+import { swallow } from '$lib/debug-log';
 import type { Agent } from '@atproto/api';
 import { isTauri } from '$lib/platform';
 // The very document served at this deployment's /client-metadata.json — one
@@ -284,7 +285,7 @@ export function wasSilentReauthAttempt(): boolean {
 export function clearSilentReauthFlag(): void {
   try {
     sessionStorage.removeItem(SILENT_REAUTH_INFLIGHT);
-  } catch {}
+  } catch (e) { swallow('bluesky-oauth.clearSilentReauthFlag', e); }
 }
 
 /**

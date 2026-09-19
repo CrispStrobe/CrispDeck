@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { swallow } from '$lib/debug-log';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
@@ -142,7 +143,7 @@
               isSubscribed: labelers.some(l => l.did === actor.did),
             });
           }
-        } catch {}
+        } catch (e) { swallow('labelers.searchLabelers', e); }
       }
       searchResults = results;
     } catch (e) {

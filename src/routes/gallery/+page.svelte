@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { swallow } from '$lib/debug-log';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
@@ -34,7 +35,7 @@
       accounts = result.accounts;
       clientEntries = result.clients;
       await loadMedia();
-    } catch {} finally { loading = false; }
+    } catch (e) { swallow('gallery:L37', e); } finally { loading = false; }
   });
 
   async function loadMedia() {

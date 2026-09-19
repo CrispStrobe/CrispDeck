@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { swallow } from '$lib/debug-log';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
@@ -119,7 +120,7 @@
         announcements = anns
           .filter((a: any) => !dismissedAnnouncementIds.has(a.id))
           .map((a: any) => ({ id: a.id, content: a.content, publishedAt: a.published_at ?? a.created_at }));
-      } catch {}
+      } catch (e) { swallow('notifications.loadNotifications', e); }
     }
     groups = groupNotifications(all);
     setCache('notifications', groups);
