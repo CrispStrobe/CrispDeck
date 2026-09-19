@@ -1,5 +1,6 @@
 <script lang="ts">
   import { i18n } from '$lib/i18n.svelte';
+  import { swallow } from '$lib/debug-log';
   import { base } from '$app/paths';
   import { AlertTriangle, RefreshCw } from '@lucide/svelte';
 
@@ -17,7 +18,7 @@
   }
 </script>
 
-<svelte:boundary onerror={(e) => console.error('Page error:', e)}>
+<svelte:boundary onerror={(e) => swallow('ErrorBoundary', e)}>
   {@render children()}
 
   {#snippet failed(error: unknown, reset: () => void)}

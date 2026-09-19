@@ -1,5 +1,6 @@
 <script lang="ts">
   import { swallow } from '$lib/debug-log';
+  import { toast } from '$lib/toast.svelte';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
@@ -104,7 +105,8 @@
       const savedPrefs = localStorage.getItem('crispdeck-label-prefs');
       if (savedPrefs) labelPrefs = JSON.parse(savedPrefs);
     } catch (e) {
-      console.error('Failed to load labelers:', e);
+      swallow('labelers.loadLabelers', e);
+      toast.error(i18n.t.moderation.labelersFailed);
     }
   }
 

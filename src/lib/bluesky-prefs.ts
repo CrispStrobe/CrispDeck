@@ -6,6 +6,7 @@
 
 import type { Agent } from '@atproto/api';
 import { listMutedWords, saveMutedWords, createMutedWord, type MutedWord } from './muted-words';
+import { swallow } from './debug-log';
 
 export interface BskyMutedWord {
   value: string;
@@ -41,22 +42,32 @@ export async function syncMutedWordsFromServer(agent: Agent): Promise<void> {
 
     if (added) saveMutedWords(local);
   } catch (e) {
-    console.error('Failed to sync muted words from Bluesky:', e);
+    // A background merge on connect. Nothing the user started, so no toast;
+    // it still needs to be readable in Settings when words fail to appear.
+    swallow('bluesky-prefs.syncMutedWordsFromServer', e);
   }
 }
 
 /**
  * Push a muted word to the Bluesky server preferences.
+ *
+ * Goes through the SDK's addMutedWord rather than putPreferences, for the
+ * reason already documented on pinFeed in bluesky-feeds.ts: the preferences
+ * document is a single array covering saved feeds, labelers, adult content
+ * settings and every other muted word, and putPreferences writes that array
+ * wholesale. This function used to call it with an array holding one
+ * mutedWordsPref, so muting a single word discarded the account's saved feeds,
+ * labeler subscriptions and every word muted before it. addMutedWord reads,
+ * merges and writes back.
+ *
+ * Throws on failure — the caller saves the word locally and needs to know that
+ * the server copy did not happen, or the user is told a word is muted
+ * everywhere when it is muted only on this device.
  */
 export async function pushMutedWordToServer(agent: Agent, value: string): Promise<void> {
-  try {
-    await agent.api.app.bsky.actor.putPreferences({
-      preferences: [{
-        $type: 'app.bsky.actor.defs#mutedWordsPref',
-        items: [{ value, targets: ['content', 'tag'], actorTarget: 'all' }],
-      }],
-    });
-  } catch (e) {
-    console.error('Failed to push muted word to Bluesky:', e);
-  }
+  await (agent as any).addMutedWord({
+    value,
+    targets: ['content', 'tag'],
+    actorTarget: 'all',
+  });
 }

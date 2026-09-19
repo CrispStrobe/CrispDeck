@@ -10,6 +10,8 @@
   import { getMastodonLists, createMastodonList } from '$lib/list-management';
   import Post from '$lib/components/Post.svelte';
   import { tryLoad, tryAction } from '$lib/page-error';
+  import { swallow } from '$lib/debug-log';
+  import { toast } from '$lib/toast.svelte';
   import type { Account, UnifiedPost } from '$lib/types';
   import { getCached, setCache } from '$lib/view-cache';
 
@@ -99,11 +101,13 @@
         const resp = await fetch(`${masto.getInstanceUrl()}/api/v1/timelines/list/${list.id}?limit=40`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (resp.ok) {
-          const raw = await resp.json();
-          listPosts = sortPosts(raw.map((s: any) => normalizePost(s, 'mastodon')), 'newest');
-        }
-      } catch (e) { console.error('Failed to load Mastodon list:', e); }
+        if (!resp.ok) throw new Error(`Mastodon list timeline responded ${resp.status}`);
+        const raw = await resp.json();
+        listPosts = sortPosts(raw.map((s: any) => normalizePost(s, 'mastodon')), 'newest');
+      } catch (e) {
+        swallow('lists.selectMastoList', e);
+        toast.error(i18n.t.lists.openFailed);
+      }
       break;
     }
     loadingPosts = false;
@@ -120,7 +124,10 @@
         const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
         const resp = await agent.api.app.bsky.feed.getFeed({ feed: feed.uri, limit: 50 });
         listPosts = sortPosts(resp.data.feed.map(p => normalizePost(p, 'bluesky')), 'newest');
-      } catch (e) { console.error('Failed to load Bluesky feed:', e); }
+      } catch (e) {
+        swallow('lists.selectBskyFeed', e);
+        toast.error(i18n.t.lists.openFailed);
+      }
       break;
     }
     loadingPosts = false;
@@ -137,7 +144,10 @@
         const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
         const resp = await agent.api.app.bsky.feed.getListFeed({ list: list.uri, limit: 50 });
         listPosts = sortPosts(resp.data.feed.map(p => normalizePost(p, 'bluesky')), 'newest');
-      } catch (e) { console.error('Failed to load Bluesky list feed:', e); }
+      } catch (e) {
+        swallow('lists.selectBskyList', e);
+        toast.error(i18n.t.lists.openFailed);
+      }
       break;
     }
     loadingPosts = false;
@@ -150,11 +160,13 @@
       const resp = await fetch(
         `https://public.api.bsky.app/xrpc/app.bsky.unspecced.getPopularFeedGenerators?query=${encodeURIComponent(feedSearch)}&limit=20`
       );
-      if (resp.ok) {
-        const data = await resp.json();
-        feedSearchResults = (data.feeds ?? []) as unknown as BskyFeed[];
-      }
-    } catch (e) { console.error('Feed search failed:', e); }
+      if (!resp.ok) throw new Error(`Feed search responded ${resp.status}`);
+      const data = await resp.json();
+      feedSearchResults = (data.feeds ?? []) as unknown as BskyFeed[];
+    } catch (e) {
+      swallow('lists.searchFeeds', e);
+      toast.error(i18n.t.feed.feedSearchFailed);
+    }
     searchingFeeds = false;
   }
 

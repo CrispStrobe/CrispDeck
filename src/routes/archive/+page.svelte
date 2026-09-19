@@ -1,5 +1,7 @@
 <script lang="ts">
   import { formatDate } from '$lib/time-format';
+  import { toast } from '$lib/toast.svelte';
+  import { swallow } from '$lib/debug-log';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
@@ -50,6 +52,7 @@
 
   /** Auto-refresh: fetch only posts newer than the latest archived post */
   async function autoRefresh() {
+    let failedAccounts = 0;
     if (!stats.dateRange) return;
     building = true;
     buildProgress = 'Checking for new posts...';
@@ -96,11 +99,17 @@
           } while (cursor && !done);
         }
       } catch (e) {
-        console.error(`Auto-refresh failed for ${acct.handle}:`, e);
+        swallow(`archive.autoRefresh:${acct.handle}`, e);
+        failedAccounts++;
       }
     }
 
+    // 'Archive is up to date' must not be claimed for an account that failed.
     buildProgress = added > 0 ? `Added ${added} new posts.` : 'Archive is up to date.';
+    if (failedAccounts > 0) {
+      toast.warning(i18n.t.common.someAccountsFailed.replace('{count}', String(failedAccounts)));
+    }
+
     stats = await getArchiveStats();
     building = false;
     // Clear progress message after a moment
@@ -108,6 +117,7 @@
   }
 
   async function buildArchive() {
+    let failedAccounts = 0;
     building = true;
     error = '';
     let total = 0;
@@ -172,11 +182,16 @@
           } while (cursor);
         }
       } catch (e) {
-        console.error(`Archive build failed for ${acct.handle}:`, e);
+        swallow(`archive.build:${acct.handle}`, e);
+        failedAccounts++;
       }
     }
 
     buildProgress = `Done! ${total} items archived.`;
+    if (failedAccounts > 0) {
+      toast.warning(i18n.t.common.someAccountsFailed.replace('{count}', String(failedAccounts)));
+    }
+
     stats = await getArchiveStats();
     building = false;
   }

@@ -85,10 +85,18 @@ describe('the contexts used across the app', () => {
       const src = readFileSync(file, 'utf8');
       // Skip the declaration itself, which lives with the implementation.
       if (file.endsWith('debug-log.ts')) continue;
-      for (const m of src.matchAll(/swallow\(\s*([^,]*),/g)) {
+      // [^,\n] so the match cannot run across lines and pick up prose from a
+      // comment that happens to mention swallow().
+      for (const m of src.matchAll(/swallow\(\s*([^,\n]*),/g)) {
         const arg = m[1].trim();
-        // A literal, non-empty context. A variable would be useless in the log.
-        if (!/^'[^']+'$/.test(arg)) bad.push(`${file}: swallow(${arg}`);
+        // A literal, non-empty context: a bare variable would be useless in
+        // the log. A template literal counts as long as it opens with static
+        // text — `deck.rss:${col.query}` reads in the log viewer as exactly
+        // the column that failed, which is better than a fixed string, while
+        // `${whatever}` alone is just as opaque as a variable.
+        const plain = /^'[^']+'$/.test(arg);
+        const template = /^`[^`$]+/.test(arg) && arg.endsWith('`');
+        if (!plain && !template) bad.push(`${file}: swallow(${arg}`);
       }
     }
     expect(bad).toEqual([]);

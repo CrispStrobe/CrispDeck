@@ -1,5 +1,6 @@
 <script lang="ts">
   import { swallow } from '$lib/debug-log';
+  import { toast } from '$lib/toast.svelte';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
@@ -45,6 +46,8 @@
   });
 
   async function loadNotifications() {
+
+    let failedAccounts = 0;
     // Fetch notifications from all accounts in parallel
     const fetchers: Promise<UnifiedNotification[]>[] = [];
 
@@ -76,7 +79,7 @@
                 postUri: n.reasonSubject,
               });
             }
-          } catch (e) { console.error(`Failed to load notifications for ${acct.handle}:`, e); }
+          } catch (e) { swallow(`notifications.load:${acct.handle}`, e); failedAccounts++; }
           return notifs;
         })());
       } else if (acct.platform === 'mastodon') {
@@ -102,7 +105,7 @@
                 });
               }
             }
-          } catch (e) { console.error(`Failed to load notifications for ${acct.handle}:`, e); }
+          } catch (e) { swallow(`notifications.load:${acct.handle}`, e); failedAccounts++; }
           return notifs;
         })());
       }
@@ -110,6 +113,11 @@
 
     const results = await Promise.all(fetchers);
     const all = results.flat();
+    // An account that failed contributes nothing, and the list then looks
+    // like a quiet account rather than a broken connection.
+    if (failedAccounts > 0) {
+      toast.warning(i18n.t.common.someAccountsFailed.replace('{count}', String(failedAccounts)));
+    }
 
     // Fetch Mastodon announcements
     for (const [, entry] of clientEntries) {
@@ -136,7 +144,11 @@
         try {
           if (action === 'accept') await masto.authorizeFollowRequest(mastoAccountId);
           else await masto.rejectFollowRequest(mastoAccountId);
-        } catch (e) { console.error(`Follow request ${action} failed:`, e); }
+        } catch (e) {
+          swallow(`notifications.followRequest:${action}`, e);
+          toast.error(i18n.t.notifications.followRequestFailed);
+          return; // leave the request in the list rather than hiding it
+        }
       }
     }
     groups = groups.filter(g => g.id !== group.id);

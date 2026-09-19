@@ -1,5 +1,6 @@
 <script lang="ts">
   import { swallow } from '$lib/debug-log';
+  import { toast } from '$lib/toast.svelte';
   import { isStreamableColumn, isBlueskyStreamable, mastodonStreamFor } from '$lib/deck-streaming';
   import { isColumnLocked } from '$lib/deck-scroll';
   import * as deckFocus from '$lib/deck-focus';
@@ -358,7 +359,8 @@
         loadColumn(col); // fire and forget — each shows its own spinner
       }
     } catch (e) {
-      console.error('Deck init failed:', e);
+      swallow('deck.init', e);
+      toast.error(i18n.t.deck.initFailed);
       loading = false;
     }
 
@@ -590,7 +592,7 @@
           // from every other column type for no stated reason.
           posts.push(...items.slice(0, 50).map(item => rssItemToPost(item, feedTitle)));
         } catch (e) {
-          console.error(`Failed to fetch RSS ${col.query}:`, e);
+          swallow(`deck.rss:${col.query}`, e);
         }
       } else if (col.type === 'user' && col.query) {
         // Try Bluesky first (handles with dots), then Mastodon (handles with @)
@@ -675,7 +677,7 @@
           const results = await threadsClient.keywordSearch(col.query, { searchType: 'RECENT', limit: 50 });
           posts.push(...results.map(p => normalizePost(p, 'threads')));
         } catch (e) {
-          console.error('Threads search column failed:', e);
+          swallow(`deck.threadsSearch:${col.query}`, e);
         }
       } else if (col.type === 'messages') {
         // Load conversations as pseudo-posts for deck display
@@ -848,7 +850,7 @@
         } catch (e) { swallow('deck:L847', e); }
       }
     } catch (e) {
-      console.error(`Failed to load column ${col.id}:`, e);
+      swallow(`deck.loadColumn:${col.id}`, e);
     }
 
     // Dedup by URI to avoid Svelte each_key_duplicate errors

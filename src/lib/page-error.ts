@@ -1,8 +1,16 @@
 /**
  * Page-level error handling utilities.
  *
- * Provides consistent error reporting for page data loading.
- * Use instead of silent catch (e) { swallow('page-error:L5', e); } blocks on user-visible operations.
+ * Provides consistent error reporting for page data loading. Use these
+ * instead of a catch block that only reaches the console: a console-only
+ * failure is invisible to the user, who is left looking at an empty list
+ * with no idea whether it is empty or broken.
+ *
+ * Failures are filed through swallow() so they also reach the in-app log
+ * viewer in Settings, where a user can actually read them.
+ *
+ * Pass `message` to show a translated string; the English fallback built
+ * from `context` is only for internal operations with no UI copy yet.
  */
 
 import { toast } from '$lib/toast.svelte';
@@ -19,13 +27,13 @@ export async function tryLoad<T>(
   fn: () => Promise<T>,
   fallback: T,
   context?: string,
+  message?: string,
 ): Promise<T> {
   try {
     return await fn();
   } catch (e) {
-    const msg = context ? `Failed to load ${context}` : 'Loading failed';
-    console.error(msg, e);
-    toast.error(msg);
+    swallow(`tryLoad:${context ?? 'unknown'}`, e);
+    toast.error(message ?? (context ? `Failed to load ${context}` : 'Loading failed'));
     return fallback;
   }
 }
@@ -40,13 +48,14 @@ export async function tryLoad<T>(
 export async function tryAction(
   fn: () => Promise<unknown>,
   actionName: string,
+  message?: string,
 ): Promise<boolean> {
   try {
     await fn();
     return true;
   } catch (e) {
-    console.error(`${actionName} failed:`, e);
-    toast.error(`${actionName} failed`);
+    swallow(`tryAction:${actionName}`, e);
+    toast.error(message ?? `${actionName} failed`);
     return false;
   }
 }
@@ -61,14 +70,15 @@ export async function tryWrite(
   fn: () => Promise<unknown>,
   successMsg: string,
   errorContext: string,
+  message?: string,
 ): Promise<boolean> {
   try {
     await fn();
     toast.success(successMsg);
     return true;
   } catch (e) {
-    console.error(`Failed to ${errorContext}:`, e);
-    toast.error(`Failed to ${errorContext}`);
+    swallow(`tryWrite:${errorContext}`, e);
+    toast.error(message ?? `Failed to ${errorContext}`);
     return false;
   }
 }

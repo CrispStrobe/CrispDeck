@@ -1,5 +1,6 @@
 <script lang="ts">
   import { base } from '$app/paths';
+  import { swallow } from '$lib/debug-log';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Shield, Loader2, Ban, VolumeX, UserX } from '@lucide/svelte';
@@ -74,7 +75,7 @@
           for (const m of mutes.data.mutes) {
             allMuted.push({ platform: 'bluesky', handle: m.handle, displayName: m.displayName, avatar: m.avatar, did: m.did, type: 'mute' });
           }
-        } catch (e) { console.error('Moderation data load failed:', e); toast.error(i18n.t.moderation.loadFailed); }
+        } catch (e) { swallow('moderation.load', e); toast.error(i18n.t.moderation.loadFailed); }
       } else if (acct.platform === 'mastodon') {
         const masto = entry.client as MastodonClient;
         const token = masto.getAccessToken();
@@ -94,7 +95,7 @@
               allMuted.push({ platform: 'mastodon', handle: `@${a.acct}`, displayName: a.display_name, avatar: a.avatar, id: a.id, type: 'mute' });
             }
           }
-        } catch (e) { console.error('Moderation data load failed:', e); toast.error(i18n.t.moderation.loadFailed); }
+        } catch (e) { swallow('moderation.load', e); toast.error(i18n.t.moderation.loadFailed); }
       }
     }
 
@@ -122,7 +123,7 @@
             listItemCount: l.listItemCount,
             subscribed: !!l.viewer?.muted || !!l.viewer?.blocked,
           }));
-      } catch (e) { console.error('Moderation data load failed:', e); toast.error(i18n.t.moderation.loadFailed); }
+      } catch (e) { swallow('moderation.load', e); toast.error(i18n.t.moderation.loadFailed); }
       break;
     }
   }

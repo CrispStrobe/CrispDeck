@@ -92,7 +92,10 @@
           if (!cursor) break;
         }
       } catch (e) {
-        console.error('searchStarterPacks failed:', e);
+        // The fallback strategy below may still find packs; only a total
+        // failure is worth telling the user about, and that is reported
+        // through `error` when both strategies fail.
+        swallow('starterpacks.searchStarterPacks', e);
       }
 
       // Fallback: search posts mentioning starter packs. Must go through the
@@ -121,7 +124,7 @@
             } catch (e) { swallow('starterpacks.search', e); }
           }));
         } catch (e) {
-          console.error('Starter pack fallback search failed:', e);
+          swallow('starterpacks.fallbackSearch', e);
           // Both strategies failed with errors — this is an auth problem,
           // not an empty result
           if (!apiWorked) {

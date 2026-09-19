@@ -1,5 +1,6 @@
 <script lang="ts">
   import { cleanInstanceUrl, buildInstanceUrl, cleanBskyHandle, markFirstRunComplete } from '$lib/onboarding';
+  import { swallow } from '$lib/debug-log';
   import { getHomeMode, homeRedirectPath } from '$lib/settings';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
@@ -25,7 +26,7 @@
     try {
       accounts = await listAccounts();
     } catch (e) {
-      console.error('Failed to load accounts:', e);
+      swallow('dashboard.loadAccounts', e);
     } finally {
       loading = false;
     }

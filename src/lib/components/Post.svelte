@@ -206,11 +206,12 @@
       } catch (e) {
         if (engine === 'crispasr') {
           speaking = false;
-          console.error('CrispASR TTS failed:', e);
+          swallow('Post.tts:crispasr', e);
           toast.error(i18n.t.post.ttsFailed);
           return;
         }
-        console.error('CrispASR TTS failed, falling back to browser:', e);
+        // Not final — the browser's speechSynthesis is tried next.
+        swallow('Post.tts:fallback', e);
       }
     }
 
@@ -313,7 +314,7 @@
         } catch { /* share cancelled */ }
       }, 'image/png');
     } catch (e) {
-      console.error('Share as image failed:', e);
+      swallow('Post.shareAsImage', e);
       shareError = `Share failed: ${e instanceof Error ? e.message : 'Unknown error'}. Cross-origin images may block capture.`;
       setTimeout(() => { shareError = ''; }, 5000);
     } finally {
@@ -383,7 +384,7 @@
       }
       bookmarked = !bookmarked;
     } catch (e) {
-      console.error('Bookmark failed:', e);
+      swallow('Post.handleBookmark', e);
       toast.error(i18n.t.post.bookmarkFailed);
       return;
     }
@@ -401,7 +402,7 @@
           await deleteBlueskyBookmark(agent, post.uri);
         }
       } catch (e) {
-        console.warn('Bluesky server bookmark sync failed:', e);
+        swallow('Post.bookmarkServerSync', e);
         toast.warning(i18n.t.post.savedLocallyOnly);
       }
     }

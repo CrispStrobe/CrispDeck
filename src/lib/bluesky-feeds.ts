@@ -19,6 +19,7 @@
  */
 
 import type { Agent } from '@atproto/api';
+import { swallow } from './debug-log';
 
 export type FeedKind = 'timeline' | 'feed' | 'list';
 
@@ -120,7 +121,8 @@ export async function listSavedFeeds(agent: Agent): Promise<FeedChoice[]> {
         f.likeCount = g.likeCount;
       }
     } catch (e) {
-      console.error('Could not resolve feed generator names:', e);
+      // Names are cosmetic; the feed list is still usable without them.
+      swallow('bluesky-feeds.resolveNames', e);
     }
   }
 

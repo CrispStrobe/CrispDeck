@@ -4,7 +4,7 @@
  */
 
 import { BlueskyClient } from './bluesky';
-import { swallow } from '$lib/debug-log';
+import { swallow, addLog } from '$lib/debug-log';
 import { MastodonClient } from './mastodon';
 import { ThreadsClient } from './threads';
 import { initBlueskyOAuth, restoreBlueskyOAuthSession, maybeSilentReauth } from './bluesky-oauth';
@@ -153,7 +153,8 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
         // OAuth account but session expired, or no credentials
         // Use read-only client — pages will show appropriate messages
         if (creds.auth_method === 'oauth') {
-          console.warn(`OAuth session expired for ${acct.handle}. Reconnect in Settings > Account.`);
+          // Not an exception — an expected state with no error object.
+          addLog('warn', `OAuth session expired for ${acct.handle}. Reconnect in Settings > Account.`, 'client-factory');
         }
         return {
           accountId: acct.id,
@@ -181,7 +182,7 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
         };
       }
     } catch (e) {
-      console.error(`Failed to init client for ${acct.handle}:`, e);
+      swallow(`client-factory.init:${acct.handle}`, e);
       return null;
     }
   }));

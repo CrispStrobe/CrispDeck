@@ -407,7 +407,7 @@ export default {
       engagementByDay: 'Durchschn. Engagement nach Wochentag',
       activityByHour: 'Posting-Aktivität nach Stunde (beide Plattformen)',
     },
-    moderation: {
+    moderation: { labelersFailed: 'Die Labeler konnten nicht geladen werden',
       loadFailed: 'Moderationsdaten konnten nicht geladen werden',
       searchResults: 'Suchergebnisse',
       noLabelers: 'Keine Labeler abonniert',
@@ -424,7 +424,7 @@ export default {
       blocked: 'Blockiert',
       muted: 'Stummgeschaltet',
     },
-    lists: {
+    lists: { openFailed: 'Diese Liste konnte nicht geöffnet werden',
       searchFeedsPlaceholder: 'Feeds suchen …',
       tabLists: 'Listen',
       noPostsInList: 'Keine Beiträge in dieser Liste.',
@@ -440,7 +440,7 @@ export default {
       selectList: 'Wählen Sie eine Liste oder einen Feed aus.',
       noPosts: 'Keine Beiträge in dieser Liste.',
     },
-    trending: {
+    trending: { loadFailed: 'Trends von {platform} konnten nicht geladen werden',
       addAccountToSee: 'Füge ein Bluesky- oder Mastodon-Konto hinzu, um Trends zu sehen, unter',
       trendingPosts: 'Angesagte Beiträge',
       noBskyTopics: 'Keine Bluesky-Trendthemen verfügbar.',
@@ -531,7 +531,7 @@ export default {
       noLicenses: 'Keine licenses.json gefunden. Führen Sie node scripts/generate-licenses.js aus.',
       generated: 'Erstellt',
     },
-    feed: {
+    feed: { savedFeedsFailed: 'Die gespeicherten Feeds konnten nicht geladen werden', pinFailed: 'Die angehefteten Feeds konnten nicht geändert werden',
       filterBsky: 'Bsky',
       filterMasto: 'Masto',
       retry: 'Erneut versuchen',
@@ -575,7 +575,7 @@ export default {
       scrollMore: 'Scrollen für mehr',
       endOfFeed: 'Ende des Feeds',
     },
-    notifications: {
+    notifications: { followRequestFailed: 'Auf die Folgeanfrage konnte nicht reagiert werden',
       accept: 'Annehmen',
       reject: 'Ablehnen',
       refresh: 'Aktualisieren',
@@ -660,7 +660,7 @@ export default {
       saved: 'Gespeichert {date}',
       calendarView: 'Kalender',
     },
-    deck: {
+    deck: { initFailed: 'Das Deck konnte nicht eingerichtet werden',
       loadLayoutPlaceholder: 'Layout laden …',
       liveStreaming: 'Live-Übertragung',
       refreshColumn: 'Spalte aktualisieren',
@@ -850,7 +850,7 @@ export default {
       pageTitle: 'CrispDeck — Datenschutzerklärung',
       metaDescription: 'Datenschutzerklärung von CrispDeck — wie mit deinen Daten umgegangen wird.',
     },
-    common: {
+    common: { someAccountsFailed: '{count} Konto/Konten nicht erreichbar',
       create: 'Erstellen',
       switchAccount: 'Konto wechseln',
       scrollToTop: 'Nach oben scrollen',

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { i18n } from '$lib/i18n.svelte';
+  import { swallow } from '$lib/debug-log';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
@@ -70,13 +71,13 @@
         // cookie). Return the user where they were — pages already show a
         // reconnect hint; never strand them on an error screen they
         // didn't ask for.
-        console.warn('Silent Bluesky re-auth failed:', e);
+        swallow('oauth.bskySilentReauth', e);
         goto(takeReturnTo() ?? `${base}/feed`);
         return;
       }
       status = 'error';
       errorMsg = String(e);
-      console.error('Bluesky OAuth callback failed:', e);
+      swallow('oauth.bskyCallback', e);
     }
   });
 </script>

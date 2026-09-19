@@ -1,5 +1,6 @@
 <script lang="ts">
   import { base } from '$app/paths';
+  import { swallow } from '$lib/debug-log';
   import { onMount } from 'svelte';
   import { Info, ExternalLink, Search, Shield, ScrollText } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
@@ -43,7 +44,8 @@
         generatedAt = raw.generatedAt ?? null;
       }
     } catch (e) {
-      console.error('Failed to load licenses:', e);
+      // The licence list renders empty; nothing the user started.
+      swallow('about.loadLicenses', e);
     } finally {
       loading = false;
     }

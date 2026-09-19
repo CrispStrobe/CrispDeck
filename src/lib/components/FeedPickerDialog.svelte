@@ -13,6 +13,7 @@
    * — removing the escape hatch would be a different kind of wrong.
    */
   import { Search, Loader2, Hash, Users, X } from '@lucide/svelte';
+  import { swallow } from '$lib/debug-log';
   import { i18n } from '$lib/i18n.svelte';
   import { listSavedFeeds, searchFeedGenerators, type FeedChoice } from '$lib/bluesky-feeds';
 
@@ -48,7 +49,7 @@
     if (!agent) { loading = false; return; }
     listSavedFeeds(agent)
       .then((f) => { saved = f; })
-      .catch((e) => console.error('Could not load saved feeds:', e))
+      .catch((e) => swallow('FeedPickerDialog.savedFeeds', e))
       .finally(() => { loading = false; });
   });
 
