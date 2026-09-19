@@ -1,129 +1,128 @@
 /**
- * Tests for the delayed loading / spinner display logic.
- * Validates that the delay mechanism works correctly to prevent flicker.
+ * DelayedSpinner, mounted.
+ *
+ * This file used to call setTimeout in the test body and assert that a local
+ * `show` flag flipped — a test of JavaScript's timers, which passed whatever
+ * the component did. With `resolve.conditions: ['browser']` in vite.config.js,
+ * `svelte` resolves to its client build and mount() is available, so the
+ * component itself can be rendered and its behaviour checked.
+ *
+ * The point of the component is to avoid flicker: a spinner that appears for
+ * 40ms is worse than no spinner, so nothing renders until the work has been
+ * slow enough to be worth reporting.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+// @vitest-environment jsdom
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { mount, unmount, flushSync, createRawSnippet } from 'svelte';
+import DelayedSpinner from '$lib/components/DelayedSpinner.svelte';
 
-// Test the delay logic directly (since Svelte component testing requires JSDOM + mount)
+function render(props: { delay?: number } = {}) {
+  const target = document.createElement('div');
+  document.body.appendChild(target);
+  const children = createRawSnippet(() => ({ render: () => '<span>loading…</span>' }));
+  const app = mount(DelayedSpinner, { target, props: { ...props, children } as any });
+  flushSync();
+  return {
+    target,
+    text: () => target.textContent ?? '',
+    destroy: () => { unmount(app); target.remove(); },
+  };
+}
 
-describe('delayed spinner logic', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => { vi.useRealTimers(); document.body.innerHTML = ''; });
+
+describe('DelayedSpinner', () => {
+  it('renders nothing immediately', () => {
+    const view = render({ delay: 100 });
+    expect(view.text()).toBe('');
+    view.destroy();
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('does not show immediately', () => {
-    let show = false;
-    const timer = setTimeout(() => { show = true; }, 100);
-    expect(show).toBe(false);
-    clearTimeout(timer);
-  });
-
-  it('shows after delay elapses', () => {
-    let show = false;
-    setTimeout(() => { show = true; }, 100);
+  it('renders its children once the delay has passed', () => {
+    const view = render({ delay: 100 });
     vi.advanceTimersByTime(100);
-    expect(show).toBe(true);
+    flushSync();
+    expect(view.text()).toContain('loading…');
+    view.destroy();
   });
 
-  it('does not show if cleared before delay', () => {
-    let show = false;
-    const timer = setTimeout(() => { show = true; }, 100);
-    vi.advanceTimersByTime(50);
-    clearTimeout(timer);
-    vi.advanceTimersByTime(100);
-    expect(show).toBe(false);
+  it('stays hidden just before the delay', () => {
+    const view = render({ delay: 100 });
+    vi.advanceTimersByTime(99);
+    flushSync();
+    expect(view.text()).toBe('');
+    view.destroy();
   });
 
-  it('respects custom delay values', () => {
-    let show = false;
-    setTimeout(() => { show = true; }, 200);
-    vi.advanceTimersByTime(100);
-    expect(show).toBe(false);
-    vi.advanceTimersByTime(100);
-    expect(show).toBe(true);
-  });
-
-  it('handles zero delay', () => {
-    let show = false;
-    setTimeout(() => { show = true; }, 0);
-    vi.advanceTimersByTime(0);
-    expect(show).toBe(true);
-  });
-
-  it('handles very short delay', () => {
-    let show = false;
-    setTimeout(() => { show = true; }, 1);
-    vi.advanceTimersByTime(1);
-    expect(show).toBe(true);
-  });
-
-  it('cleanup prevents showing after unmount', () => {
-    let show = false;
-    const timer = setTimeout(() => { show = true; }, 100);
-    // Simulate unmount cleanup
-    clearTimeout(timer);
+  it('honours a custom delay', () => {
+    const view = render({ delay: 500 });
     vi.advanceTimersByTime(200);
-    expect(show).toBe(false);
-  });
-});
-
-describe('delayed loading state utility', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
+    flushSync();
+    expect(view.text()).toBe('');
+    vi.advanceTimersByTime(300);
+    flushSync();
+    expect(view.text()).toContain('loading…');
+    view.destroy();
   });
 
-  /** Simple implementation of the delayed loading pattern */
-  function createDelayedLoading(delayMs = 100) {
-    let visible = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-
-    return {
-      start() {
-        timer = setTimeout(() => { visible = true; }, delayMs);
-      },
-      stop() {
-        if (timer) { clearTimeout(timer); timer = null; }
-        visible = false;
-      },
-      get visible() { return visible; },
-    };
-  }
-
-  it('visible is false initially', () => {
-    const dl = createDelayedLoading();
-    expect(dl.visible).toBe(false);
+  it('uses its default delay when none is given', () => {
+    const view = render();
+    vi.advanceTimersByTime(99);
+    flushSync();
+    expect(view.text()).toBe('');
+    vi.advanceTimersByTime(1);
+    flushSync();
+    expect(view.text()).toContain('loading…');
+    view.destroy();
   });
 
-  it('visible becomes true after delay', () => {
-    const dl = createDelayedLoading(100);
-    dl.start();
-    vi.advanceTimersByTime(100);
-    expect(dl.visible).toBe(true);
-  });
-
-  it('visible stays false if stopped before delay', () => {
-    const dl = createDelayedLoading(100);
-    dl.start();
+  /** The whole point: work that finishes quickly must never flash a spinner. */
+  it('never renders when unmounted before the delay elapses', () => {
+    const view = render({ delay: 100 });
     vi.advanceTimersByTime(50);
-    dl.stop();
+    view.destroy();
     vi.advanceTimersByTime(100);
-    expect(dl.visible).toBe(false);
+    flushSync();
+    expect(document.body.textContent).toBe('');
   });
 
-  it('stop resets visible to false', () => {
-    const dl = createDelayedLoading(100);
-    dl.start();
-    vi.advanceTimersByTime(100);
-    expect(dl.visible).toBe(true);
-    dl.stop();
-    expect(dl.visible).toBe(false);
+  it('clears its timer on unmount, so nothing fires later', () => {
+    const clearSpy = vi.spyOn(globalThis, 'clearTimeout');
+    const view = render({ delay: 100 });
+    view.destroy();
+    expect(clearSpy).toHaveBeenCalled();
+    clearSpy.mockRestore();
+  });
+
+  it('stays rendered once shown', () => {
+    const view = render({ delay: 10 });
+    vi.advanceTimersByTime(10);
+    flushSync();
+    expect(view.text()).toContain('loading…');
+    vi.advanceTimersByTime(10_000);
+    flushSync();
+    expect(view.text()).toContain('loading…');
+    view.destroy();
+  });
+
+  it('a zero delay still defers past the first paint', () => {
+    const view = render({ delay: 0 });
+    expect(view.text()).toBe('');
+    vi.advanceTimersByTime(0);
+    flushSync();
+    expect(view.text()).toContain('loading…');
+    view.destroy();
+  });
+
+  it('two spinners keep their own timers', () => {
+    const fast = render({ delay: 50 });
+    const slow = render({ delay: 500 });
+    vi.advanceTimersByTime(50);
+    flushSync();
+    expect(fast.text()).toContain('loading…');
+    expect(slow.text()).toBe('');
+    fast.destroy();
+    slow.destroy();
   });
 });
