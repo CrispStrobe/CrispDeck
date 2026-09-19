@@ -7,10 +7,12 @@ import { checkLighthouse, summarize, markdown } from '../../bench/check-lighthou
  * Tests for the guard, not for the app's score.
  *
  * The thresholds it enforces came from measurement: four runs of the same
- * build scored performance 99, 99, 95, 97, while accessibility,
- * best-practices and SEO returned 100 every time. That split is the whole
- * design — the stable categories are held where they are, and performance
- * gets a floor far below the noise rather than a threshold inside it.
+ * build on the loaded dev VPS scored performance 99, 99, 95, 97, while
+ * accessibility, best-practices and SEO returned 100 every time. The first
+ * CI-runner run scored 100 on all four. That split is the whole design — the
+ * stable categories are held where they are, and performance gets a floor far
+ * below the noise rather than a threshold inside it, until enough runner
+ * samples exist to say what the runner's own range actually is.
  *
  * The failure worth guarding against is not a low score. It is a report that
  * says nothing — a page that never loaded, a run that produced no categories
@@ -96,8 +98,9 @@ describe('checkLighthouse', () => {
   });
 
   it('tolerates the performance noise it was measured against', () => {
-    // The four observed runs, none of which should ever fail the build.
-    for (const score of [0.99, 0.99, 0.95, 0.97]) {
+    // Every score observed so far — the four dev-VPS runs and the first CI
+    // run — none of which should ever fail the build.
+    for (const score of [0.99, 0.99, 0.95, 0.97, 1]) {
       const r = report({ categories: { ...report().categories, performance: { score } } });
       expect(checkLighthouse(r, BUDGET), `performance ${score}`).toEqual([]);
     }

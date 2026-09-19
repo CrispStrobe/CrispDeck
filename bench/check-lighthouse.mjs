@@ -101,10 +101,11 @@ export function markdown(report) {
     '|---|---|',
     ...Object.entries(s.metrics).map(([k, v]) => `| ${k} | ${v} |`),
     '',
-    '> The performance score on a shared runner moved between 95 and 99 across',
-    '> four runs of one unchanged build. Treat a few points of movement as',
-    '> noise; the budget only fails a collapse. The other three categories were',
-    '> stable at 100 and are gated near that.',
+    '> The performance score moved between 95 and 99 across four runs of one',
+    '> unchanged build on a loaded dev box, and scored 100 on the CI runner.',
+    '> Treat a few points of movement as noise; the budget only fails a',
+    '> collapse. The other three categories have been stable at 100 and are',
+    '> gated near that.',
   ];
   return out.join('\n');
 }
