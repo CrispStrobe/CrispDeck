@@ -1,5 +1,7 @@
 <script lang="ts">
   import { base } from '$app/paths';
+  import { toast } from '$lib/toast.svelte';
+  import { swallow } from '$lib/debug-log';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { BarChart3, Heart, Repeat, MessageCircle, Clock, TrendingUp, Download, Loader2, ChevronDown, Percent } from '@lucide/svelte';
@@ -39,6 +41,7 @@
   });
 
   async function loadAllPosts() {
+    let failedAccounts = 0;
     loading = true;
     posts = [];
     let total = 0;
@@ -92,10 +95,17 @@
           } while (cursor);
         }
       } catch (e) {
-        console.error(`Failed to load for ${acct.handle}:`, e);
+        swallow(`analytics.load:${acct.handle}`, e);
+        failedAccounts++;
       }
     }
+    // The totals below are computed from whatever loaded; say so when an
+    // account is missing, or the numbers read as the full picture.
     loadingProgress = `Loaded ${total} posts total.`;
+    if (failedAccounts > 0) {
+      toast.warning(i18n.t.common.someAccountsFailed.replace('{count}', String(failedAccounts)));
+    }
+
     loadingPercent = 100;
     loading = false;
 

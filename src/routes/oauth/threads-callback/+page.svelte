@@ -1,5 +1,6 @@
 <script lang="ts">
   import { i18n } from '$lib/i18n.svelte';
+  import { swallow } from '$lib/debug-log';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
@@ -92,7 +93,7 @@
     } catch (e) {
       status = 'error';
       errorMsg = String(e);
-      console.error('Threads OAuth callback failed:', e);
+      swallow('oauth.threadsCallback', e);
     }
   });
 </script>

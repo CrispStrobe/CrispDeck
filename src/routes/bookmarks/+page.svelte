@@ -1,5 +1,6 @@
 <script lang="ts">
   import { swallow } from '$lib/debug-log';
+  import { toast } from '$lib/toast.svelte';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { Bookmark, Loader2, Inbox, RefreshCw } from '@lucide/svelte';
@@ -31,6 +32,7 @@
   });
 
   async function syncBookmarks() {
+    let failedAccounts = 0;
     syncing = true;
     syncResult = '';
     let totalImported = 0;
@@ -65,14 +67,20 @@
           }
         }
       } catch (e) {
-        console.error(`Bookmark sync failed for ${acct.handle}:`, e);
+        swallow(`bookmarks.sync:${acct.handle}`, e);
+        failedAccounts++;
       }
     }
 
     posts = await listBookmarks();
+    // "All bookmarks already synced" is a lie when an account never answered.
     syncResult = totalImported > 0
       ? `Imported ${totalImported} new bookmark${totalImported > 1 ? 's' : ''}.`
       : 'All bookmarks already synced.';
+    if (failedAccounts > 0) {
+      toast.warning(i18n.t.common.someAccountsFailed.replace('{count}', String(failedAccounts)));
+    }
+
     syncing = false;
   }
 </script>

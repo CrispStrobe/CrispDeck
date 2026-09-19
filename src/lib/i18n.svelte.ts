@@ -422,7 +422,7 @@ export const translations = {
       engagementByDay: 'Avg engagement by day of week',
       activityByHour: 'Posting activity by hour (both platforms)',
     },
-    moderation: {
+    moderation: { labelersFailed: 'Could not load labelers',
       loadFailed: 'Failed to load moderation data',
       searchResults: 'Search Results',
       noLabelers: 'No Labelers Subscribed',
@@ -439,7 +439,7 @@ export const translations = {
       blocked: 'Blocked',
       muted: 'Muted',
     },
-    lists: {
+    lists: { openFailed: 'Could not open that list',
       searchFeedsPlaceholder: 'Search feeds...',
       tabLists: 'Lists',
       noPostsInList: 'No posts in this list.',
@@ -455,7 +455,7 @@ export const translations = {
       selectList: 'Select a list or feed to view its timeline.',
       noPosts: 'No posts in this list.',
     },
-    trending: {
+    trending: { loadFailed: 'Could not load trending from {platform}',
       addAccountToSee: 'Add a Bluesky or Mastodon account to see trending content, in',
       trendingPosts: 'Trending Posts',
       noBskyTopics: 'No Bluesky trending topics available.',
@@ -546,7 +546,7 @@ export const translations = {
       noLicenses: 'No licenses.json found. Run node scripts/generate-licenses.js to generate.',
       generated: 'Generated',
     },
-    feed: {
+    feed: { savedFeedsFailed: 'Could not load your saved feeds', pinFailed: 'Could not change your pinned feeds',
       filterBsky: 'Bsky',
       filterMasto: 'Masto',
       retry: 'Retry',
@@ -590,7 +590,7 @@ export const translations = {
       scrollMore: 'Scroll for more',
       endOfFeed: 'End of feed',
     },
-    notifications: {
+    notifications: { followRequestFailed: 'Could not respond to the follow request',
       accept: 'Accept',
       reject: 'Reject',
       refresh: 'Refresh',
@@ -676,7 +676,7 @@ export const translations = {
       saved: 'Saved {date}',
       calendarView: 'Calendar',
     },
-    deck: {
+    deck: { initFailed: 'The deck could not be set up',
       loadLayoutPlaceholder: 'Load layout...',
       liveStreaming: 'Live streaming',
       refreshColumn: 'Refresh column',
@@ -869,7 +869,7 @@ export const translations = {
       pageTitle: 'CrispDeck — Privacy Policy',
       metaDescription: 'CrispDeck privacy policy — how your data is handled.',
     },
-    common: {
+    common: { someAccountsFailed: '{count} account(s) could not be reached',
       create: 'Create',
       switchAccount: 'Switch account',
       scrollToTop: 'Scroll to top',

@@ -3,6 +3,8 @@
   import { onMount, onDestroy } from 'svelte';
   import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal, RefreshCw, ChevronDown, Hash, Users, Search, Pin, PinOff } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
+  import { toast } from '$lib/toast.svelte';
+  import { swallow } from '$lib/debug-log';
   import DelayedSpinner from '$lib/components/DelayedSpinner.svelte';
   import Post from '$lib/components/Post.svelte';
   import CrosspostGroup from '$lib/components/CrosspostGroup.svelte';
@@ -289,7 +291,8 @@
     try {
       savedFeeds = await listSavedFeeds(agent);
     } catch (e) {
-      console.error('Could not load saved feeds:', e);
+      swallow('feed.loadPinnedFeeds', e);
+      toast.error(i18n.t.feed.savedFeedsFailed);
     }
   }
 
@@ -336,7 +339,8 @@
       else await pinFeed(agent, choice);
       await loadPinnedFeeds();
     } catch (e) {
-      console.error('Could not change pinned feeds:', e);
+      swallow('feed.togglePin', e);
+      toast.error(i18n.t.feed.pinFailed);
     } finally {
       pinBusy = null;
     }
@@ -392,7 +396,7 @@
             : await bsky.getTimeline(cursor, limit);
           return { posts: r.feed.map(p => tag(normalizePost(p, 'bluesky'))), cursor: r.cursor, degraded: false };
         } catch (e) {
-          console.error(`Timeline failed for ${acct.handle}, trying author feed:`, e);
+          swallow(`feed.timeline:${acct.handle}`, e);
         }
       }
       const r = await bsky.getAuthorFeed(acct.handle, cursor);
@@ -519,7 +523,7 @@
         if (result.value.cursor) cursors[result.value.acct.id] = result.value.cursor;
         if (result.value.degraded) degradedHandles.push(result.value.acct.handle);
       } else {
-        console.error('Failed to load feed for account:', result.reason);
+        swallow('feed.loadAccount', result.reason);
         error = (error ? error + '\n' : '') + String(result.reason);
       }
     }

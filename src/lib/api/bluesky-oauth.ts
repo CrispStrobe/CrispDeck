@@ -173,7 +173,7 @@ export async function initBlueskyOAuth(): Promise<{
     // Not being able to offer OAuth at all (the Tauri webview) is a fact about
     // the platform, not a failure worth logging on every launch.
     if (!(e instanceof OAuthUnavailableError)) {
-      console.error('Bluesky OAuth init failed:', e);
+      swallow('bluesky-oauth.init', e);
     }
   }
   return null;
@@ -258,13 +258,14 @@ export async function restoreBlueskyOAuthSession(did: string): Promise<OAuthRest
       return { status: 'ok', did: session.did, agent: new Agent(session) };
     } catch (e) {
       if (isSessionDeadError(e)) {
-        console.warn(`Bluesky OAuth session for ${did} is no longer valid:`, e);
+        swallow(`bluesky-oauth.restore:${did}`, e);
         return { status: 'expired' };
       }
       lastErr = e;
     }
   }
-  console.warn(`Bluesky OAuth restore for ${did} failed transiently (will retry soon):`, lastErr);
+  // Transient: the caller retries on the next page load.
+  swallow(`bluesky-oauth.restoreTransient:${did}`, lastErr);
   return { status: 'unavailable' };
 }
 
@@ -326,7 +327,7 @@ export async function maybeSilentReauth(handleOrDid: string, did: string): Promi
     // authorize() genuinely failed before redirecting.
     if (!String(e).includes('User navigated back')) {
       clearSilentReauthFlag();
-      console.warn('Silent Bluesky re-auth could not start:', e);
+      swallow('bluesky-oauth.silentReauth', e);
     }
     return false;
   }

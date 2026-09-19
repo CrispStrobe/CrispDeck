@@ -33,6 +33,13 @@ export function swallow(context: string, error: unknown): void {
       ? (error.message || error.name)
       : String(error);
     addLog('warn', message, context);
+    // The ring buffer keeps only the message, so a developer would lose the
+    // stack that a plain console.error used to give them. Mirror the original
+    // error to the console as well — except under test, where the mirrored
+    // output is pure noise.
+    if (import.meta.env?.MODE !== 'test') {
+      console.warn(`[${context}]`, error);
+    }
   } catch {
     // Log buffer unavailable; there is nothing useful left to do.
   }

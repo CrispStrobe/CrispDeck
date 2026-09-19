@@ -1,5 +1,6 @@
 <script lang="ts">
   import { swallow } from '$lib/debug-log';
+  import { toast } from '$lib/toast.svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
@@ -95,7 +96,8 @@
         link: t.link ?? `https://bsky.app/search?q=${encodeURIComponent(t.topic ?? t.tag ?? '')}`,
       })).filter((t: BskyTrendingTopic) => t.topic);
     } catch (e) {
-      console.error('Bluesky trending failed:', e);
+      // Not final: the older suggested-feeds endpoint is tried below.
+      swallow('trending.bskyPrimary', e);
       // Try the older suggested feeds endpoint as fallback
       try {
         const resp = await fetch('https://public.api.bsky.app/xrpc/app.bsky.unspecced.getTaggedSuggestions');
@@ -109,7 +111,12 @@
               link: `https://bsky.app/search?q=${encodeURIComponent(s.tag)}`,
             }));
         }
-      } catch (e) { swallow('trending.loadBskyTrending', e); }
+      } catch (e) {
+        // Both endpoints are gone; the page would otherwise show an empty
+        // column that looks like "nothing is trending".
+        swallow('trending.loadBskyTrending', e);
+        toast.error(i18n.t.trending.loadFailed.replace('{platform}', i18n.t.common.bluesky));
+      }
     }
   }
 
@@ -132,7 +139,8 @@
         trendingPosts = sortPosts(raw.map((s: any) => normalizePost(s, 'mastodon')), 'newest');
       }
     } catch (e) {
-      console.error('Mastodon trending failed:', e);
+      swallow('trending.loadMastoTrending', e);
+      toast.error(i18n.t.trending.loadFailed.replace('{platform}', i18n.t.common.mastodon));
     }
   }
 

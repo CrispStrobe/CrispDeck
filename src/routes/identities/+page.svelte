@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { swallow } from '$lib/debug-log';
   import {
     listIdentities,
     createIdentity as dbCreateIdentity, deleteIdentity as dbDeleteIdentity,
@@ -116,7 +117,7 @@
               page = await masto.getFollowing(me.id, lastId);
             }
           } catch (e) {
-            console.error(`Failed to fetch Mastodon follows:`, e);
+            swallow('identities.mastodonFollows', e);
           }
 
           await cacheFollows(acct.id, mastoFollows);
