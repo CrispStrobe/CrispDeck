@@ -53,7 +53,6 @@ const ACCEPTED = new Set([
   'src/lib/deck.test.ts',
   'src/lib/delayed-spinner.test.ts',
   'src/lib/fixes.test.ts',
-  'src/lib/homepage.test.ts',
   'src/lib/layout.test.ts',
   'src/lib/messages.test.ts',
   'src/lib/new-column-types.test.ts',

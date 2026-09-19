@@ -1,5 +1,6 @@
 <script lang="ts">
   import { cleanInstanceUrl, buildInstanceUrl, cleanBskyHandle, markFirstRunComplete } from '$lib/onboarding';
+  import { getHomeMode, homeRedirectPath } from '$lib/settings';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
@@ -15,13 +16,9 @@
 
   onMount(async () => {
     // Check if user prefers direct-to-feed mode
-    const homeMode = localStorage.getItem('crispdeck-home-mode') ?? 'dashboard';
-    if (homeMode === 'feed') {
-      goto(`${base}/feed`, { replaceState: true });
-      return;
-    }
-    if (homeMode === 'deck') {
-      goto(`${base}/deck`, { replaceState: true });
+    const redirect = homeRedirectPath(getHomeMode(), base);
+    if (redirect) {
+      goto(redirect, { replaceState: true });
       return;
     }
 

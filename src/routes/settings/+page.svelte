@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getTtsEngine, setTtsEngine, getSttEngine, setSttEngine, type SpeechEngine } from '$lib/settings';
+  import { getTtsEngine, setTtsEngine, getSttEngine, setSttEngine, getHomeMode, setHomeMode, type SpeechEngine, type HomeMode } from '$lib/settings';
   import { apiUrl } from '$lib/api-origin';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
@@ -217,7 +217,7 @@
   let fontSize = $state(parseInt(localStorage.getItem('crispdeck-font-size') ?? '14'));
   let lineSpacing = $state(parseFloat(localStorage.getItem('crispdeck-line-spacing') ?? '1.5'));
   let contentWidth = $state(parseInt(localStorage.getItem('crispdeck-content-width') ?? '0')); // 0 = auto
-  let homeMode = $state(localStorage.getItem('crispdeck-home-mode') ?? 'dashboard');
+  let homeMode = $state<HomeMode>(getHomeMode());
   let density = $state<DensityMode>(getDensity());
 
   const fontMap: Record<FontFamily, string> = {
@@ -1137,7 +1137,7 @@
         <select
           id="home-mode"
           value={homeMode}
-          onchange={(e) => { homeMode = (e.target as HTMLSelectElement).value; localStorage.setItem('crispdeck-home-mode', homeMode); }}
+          onchange={(e) => { homeMode = (e.target as HTMLSelectElement).value as HomeMode; setHomeMode(homeMode); }}
           class="px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none"
         >
           <option value="dashboard">{i18n.t.settings.homeDashboard}</option>

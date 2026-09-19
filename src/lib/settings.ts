@@ -14,14 +14,17 @@
  */
 
 export type Theme = 'dark' | 'oled' | 'light';
+export type HomeMode = 'dashboard' | 'feed' | 'deck';
 export type SpeechEngine = 'auto' | 'crispasr' | 'browser';
 
 const THEME_KEY = 'crispdeck-theme';
 const TTS_ENGINE_KEY = 'crispdeck-tts-engine';
 const STT_ENGINE_KEY = 'crispdeck-stt-engine';
+const HOME_MODE_KEY = 'crispdeck-home-mode';
 
 export const THEMES: Theme[] = ['dark', 'oled', 'light'];
 export const SPEECH_ENGINES: SpeechEngine[] = ['auto', 'crispasr', 'browser'];
+export const HOME_MODES: HomeMode[] = ['dashboard', 'feed', 'deck'];
 
 function read(key: string): string | null {
   try {
@@ -70,4 +73,26 @@ export function getSttEngine(): SpeechEngine {
 
 export function setSttEngine(engine: SpeechEngine): void {
   write(STT_ENGINE_KEY, engine);
+}
+
+/** Which screen the app opens on. */
+export function getHomeMode(): HomeMode {
+  const saved = read(HOME_MODE_KEY) as HomeMode | null;
+  return saved && HOME_MODES.includes(saved) ? saved : 'dashboard';
+}
+
+export function setHomeMode(mode: HomeMode): void {
+  write(HOME_MODE_KEY, mode);
+}
+
+/**
+ * Where the dashboard should send the user on open, or null to stay put.
+ *
+ * The path is built with the mount point, since the app is served under
+ * /<repo>/ on the Pages mirror.
+ */
+export function homeRedirectPath(mode: HomeMode, base = ''): string | null {
+  if (mode === 'feed') return `${base}/feed`;
+  if (mode === 'deck') return `${base}/deck`;
+  return null;
 }
