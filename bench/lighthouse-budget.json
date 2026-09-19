@@ -1,0 +1,30 @@
+{
+  "_comment": [
+    "Thresholds set from measurement, not from aspiration. Four runs against",
+    "the same build on a loaded box scored performance 99, 99, 95, 97 while",
+    "accessibility, best-practices and SEO returned 100 every time.",
+    "",
+    "So the two kinds of score get two kinds of gate. The three stable",
+    "categories are held near where they are, because a drop there is a real",
+    "regression a human introduced. The performance score is a floor well",
+    "below the worst observed run: it is NOT a target, and passing it is not",
+    "evidence of anything. It exists to catch a catastrophe -- a render",
+    "blocking script, an unoptimised hero image -- on a shared runner whose",
+    "noise is larger than any change worth arguing about.",
+    "",
+    "Read the reported numbers in the job summary for the real signal."
+  ],
+  "categories": {
+    "accessibility": 0.95,
+    "best-practices": 0.95,
+    "seo": 0.95,
+    "performance": 0.8
+  },
+  "mustPass": [
+    "errors-in-console",
+    "viewport",
+    "html-has-lang",
+    "document-title",
+    "color-contrast"
+  ]
+}

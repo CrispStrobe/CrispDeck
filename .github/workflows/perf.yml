@@ -150,6 +150,31 @@ jobs:
             console.log("measurement complete: " + r.postsRendered + " posts, " + r.scroll.frames + " frames sampled");
           '
 
+      - name: Lighthouse
+        id: lighthouse
+        run: |
+          set -o pipefail
+          # Lighthouse drives a real Chrome. Point it at the one Playwright
+          # already installed above rather than installing a second browser.
+          export CHROME_PATH="$(node -e 'console.log(require("playwright").chromium.executablePath())')"
+          npx -y lighthouse@12 http://localhost:4173/ \
+            --output=json --output-path=lighthouse.json \
+            --preset=desktop \
+            --chrome-flags="--headless=new --no-sandbox --disable-dev-shm-usage" \
+            --quiet
+
+      - name: Lighthouse budget
+        run: node bench/check-lighthouse.mjs lighthouse.json bench/lighthouse-budget.json
+
+      - name: Report Lighthouse
+        if: always()
+        run: |
+          if [ -f lighthouse.json ]; then
+            node bench/check-lighthouse.mjs lighthouse.json bench/lighthouse-budget.json --markdown >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "_Lighthouse produced no report._" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Report
         if: always()
         run: |
@@ -170,6 +195,7 @@ jobs:
           path: |
             bench-result.json
             bundle-size.json
+            lighthouse.json
             bench/bundle-budget.json
             chunk-map.client.json
             chunk-map.server.json
