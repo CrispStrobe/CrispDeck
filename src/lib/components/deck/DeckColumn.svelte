@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { shouldAutoScroll } from '$lib/deck-scroll';
   import { pickAnchor, measureItems, restoreAnchor, type ScrollAnchor } from '$lib/feed-scroll';
   import { saveReadPosition, getReadPosition, flushReadPositions } from '$lib/read-position';
   import { onMount, onDestroy } from 'svelte';
@@ -91,7 +92,7 @@
   // Auto-scroll to top when new posts arrive and scroll-lock is off
   $effect(() => {
     const currentCount = filteredPosts.length;
-    if (!scrollLock && currentCount > prevPostCount && prevPostCount > 0 && contentEl) {
+    if (shouldAutoScroll(scrollLock, prevPostCount, currentCount) && contentEl) {
       contentEl.scrollTo({ top: 0, behavior: 'smooth' });
     }
     prevPostCount = currentCount;

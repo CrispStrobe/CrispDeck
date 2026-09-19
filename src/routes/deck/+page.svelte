@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { isStreamableColumn, isBlueskyStreamable, mastodonStreamFor } from '$lib/deck-streaming';
+  import { isColumnLocked } from '$lib/deck-scroll';
   import { base } from '$app/paths';
   import { onMount, onDestroy } from 'svelte';
   import { initAllClients, invalidateClientCache, type ClientEntry } from '$lib/api/client-factory';
@@ -903,8 +905,7 @@
     }
 
     // Enable streaming for other column types (timeline, mentions, notifications, local, federated, hashtag, list)
-    const streamableTypes = ['timeline', 'mentions', 'notifications', 'local', 'federated', 'hashtag', 'list', 'user'];
-    if (streamableTypes.includes(col.type) && !streamCleanups.has(col.id)) {
+    if (isStreamableColumn(col.type) && !streamCleanups.has(col.id)) {
       const prevCleanup = streamCleanups.get(col.id);
       if (prevCleanup) prevCleanup();
 
@@ -924,12 +925,7 @@
       if (mastoClient) {
         const token = mastoClient.getAccessToken();
         if (token) {
-          let streamType = 'user'; // default for timeline, mentions, notifications
-          let streamParam: string | undefined;
-          if (col.type === 'local') streamType = 'public:local';
-          else if (col.type === 'federated') streamType = 'public';
-          else if (col.type === 'hashtag' && col.query) { streamType = 'hashtag'; streamParam = col.query; }
-          else if (col.type === 'list' && col.query) { streamType = 'list'; streamParam = col.query; }
+          const { streamType, streamParam } = mastodonStreamFor(col.type, col.query)!;
 
           cleanups.push(streamManager.enableColumn({
             columnId: `${col.id}-masto`,
@@ -943,7 +939,7 @@
       }
 
       // Bluesky: use Jetstream for timeline/user columns (DID-filtered)
-      if (bskyClient && (col.type === 'timeline' || col.type === 'user' || col.type === 'mentions')) {
+      if (bskyClient && isBlueskyStreamable(col.type)) {
         cleanups.push(streamManager.enableColumn({
           columnId: `${col.id}-bsky`,
           platform: 'bluesky',
@@ -1294,7 +1290,7 @@
             onwidthchange={(w) => handleColumnWidthChange(col.id, w)}
             notify={col.notify ?? 'off'}
             onnotifychange={(mode) => handleNotifyChange(col.id, mode)}
-            scrollLock={col.scrollLock ?? true}
+            scrollLock={isColumnLocked(col)}
             onscrolllockchange={(locked) => handleScrollLockChange(col.id, locked)}
             color={col.color ?? ''}
             oncolorchange={(c) => handleColorChange(col.id, c)}

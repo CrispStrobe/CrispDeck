@@ -1,4 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
+import {
+  STREAMABLE_COLUMN_TYPES, BLUESKY_STREAMABLE_COLUMN_TYPES,
+  isStreamableColumn, isBlueskyStreamable, mastodonStreamFor,
+} from './deck-streaming';
 
 /**
  * Tests for expanded column streaming support.
@@ -6,23 +10,20 @@ import { describe, it, expect, vi } from 'vitest';
  * are configured for each column type.
  */
 describe('streaming column configuration', () => {
-  // Map of column types to expected Mastodon stream types
+  // Derived from the module the deck page uses, rather than restated here.
   const mastoStreamTypes: Record<string, { streamType: string; streamParam?: string }> = {
-    timeline: { streamType: 'user' },
-    mentions: { streamType: 'user' },
-    notifications: { streamType: 'user' },
-    local: { streamType: 'public:local' },
-    federated: { streamType: 'public' },
-    hashtag: { streamType: 'hashtag', streamParam: 'svelte' },
-    list: { streamType: 'list', streamParam: '12345' },
-    user: { streamType: 'user' },
+    timeline: mastodonStreamFor('timeline')!,
+    mentions: mastodonStreamFor('mentions')!,
+    notifications: mastodonStreamFor('notifications')!,
+    local: mastodonStreamFor('local')!,
+    federated: mastodonStreamFor('federated')!,
+    hashtag: mastodonStreamFor('hashtag', 'svelte')!,
+    list: mastodonStreamFor('list', '12345')!,
+    user: mastodonStreamFor('user')!,
   };
 
-  // Columns that should get Bluesky Jetstream streaming
-  const bskyStreamable = ['timeline', 'user', 'mentions'];
-
-  // All column types that should be streamable
-  const streamableTypes = ['timeline', 'mentions', 'notifications', 'local', 'federated', 'hashtag', 'list', 'user'];
+  const bskyStreamable = [...BLUESKY_STREAMABLE_COLUMN_TYPES];
+  const streamableTypes = [...STREAMABLE_COLUMN_TYPES];
 
   describe('streamable column types', () => {
     it('has 8 streamable column types', () => {

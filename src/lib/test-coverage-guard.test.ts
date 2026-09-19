@@ -62,9 +62,7 @@ const ACCEPTED = new Set([
   'src/lib/offline-feed-wiring.test.ts',
   'src/lib/perf-optimizations.test.ts',
   'src/lib/quick-schedule.test.ts',
-  'src/lib/scroll-lock.test.ts',
   'src/lib/search-operators.test.ts',
-  'src/lib/streaming-columns.test.ts',
 ]);
 
 describe('tests exercise application code', () => {
