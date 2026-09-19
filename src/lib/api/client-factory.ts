@@ -4,6 +4,7 @@
  */
 
 import { BlueskyClient } from './bluesky';
+import { swallow } from '$lib/debug-log';
 import { MastodonClient } from './mastodon';
 import { ThreadsClient } from './threads';
 import { initBlueskyOAuth, restoreBlueskyOAuthSession, maybeSilentReauth } from './bluesky-oauth';
@@ -90,7 +91,7 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
   if (accounts.some((a) => a.platform === 'bluesky')) {
     try {
       oauthSession = await initBlueskyOAuth();
-    } catch {}
+    } catch (e) { swallow('client-factory.initAllClients', e); }
   }
 
   // Init all accounts in parallel — each app-password login / OAuth restore
@@ -243,7 +244,7 @@ export function getBskyAgent(clients: Map<number, ClientEntry>): Agent | null {
   for (const entry of clients.values()) {
     if (entry.platform === 'bluesky') {
       if (entry.oauthAgent) return entry.oauthAgent;
-      try { return (entry.client as BlueskyClient).getAgent(); } catch {}
+      try { return (entry.client as BlueskyClient).getAgent(); } catch (e) { swallow('client-factory.getBskyAgent', e); }
     }
   }
   return null;

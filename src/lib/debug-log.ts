@@ -16,6 +16,29 @@ const entries: LogEntry[] = [];
 let installed = false;
 
 /**
+ * Record a non-fatal error that the caller is deliberately swallowing.
+ *
+ * A lot of this app's work is per-account or per-column, and partial failure is
+ * normal: one instance is down, one token expired, one column 404s. Catching
+ * those is right — the UI should not collapse because one of eight columns
+ * failed — but discarding them entirely left nothing to look at when something
+ * was wrong. These now land in the same ring buffer the log viewer in Settings
+ * reads, so a user can see why a column is empty.
+ *
+ * Never throws: logging must not become the thing that breaks the caller.
+ */
+export function swallow(context: string, error: unknown): void {
+  try {
+    const message = error instanceof Error
+      ? (error.message || error.name)
+      : String(error);
+    addLog('warn', message, context);
+  } catch {
+    // Log buffer unavailable; there is nothing useful left to do.
+  }
+}
+
+/**
  * Add a log entry manually.
  */
 export function addLog(level: LogEntry['level'], message: string, source?: string): void {

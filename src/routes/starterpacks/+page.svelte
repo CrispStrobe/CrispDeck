@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { swallow } from '$lib/debug-log';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
@@ -69,7 +70,7 @@
             const pack = sp as unknown as StarterPack;
             if (!seen.has(pack.uri)) { seen.add(pack.uri); allPacks.push(pack); }
           }
-        } catch {}
+        } catch (e) { swallow('starterpacks.search', e); }
       }
 
       // Strategy 2: Use the official searchStarterPacks API (requires auth)
@@ -117,7 +118,7 @@
                 const pack = sp as unknown as StarterPack;
                 if (!seen.has(pack.uri)) { seen.add(pack.uri); allPacks.push(pack); }
               }
-            } catch {}
+            } catch (e) { swallow('starterpacks.search', e); }
           }));
         } catch (e) {
           console.error('Starter pack fallback search failed:', e);

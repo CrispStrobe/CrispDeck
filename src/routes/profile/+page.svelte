@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { swallow } from '$lib/debug-log';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
@@ -123,7 +124,7 @@
             const rels = await relResp.json();
             if (rels[0]) { following = rels[0].following; followsYou = rels[0].followed_by; }
           }
-        } catch {}
+        } catch (e) { swallow('profile.loadProfile', e); }
       }
     }
   }

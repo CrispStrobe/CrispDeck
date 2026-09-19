@@ -1,4 +1,5 @@
 import { apiUrl } from '$lib/api-origin';
+import { swallow } from '$lib/debug-log';
 /**
  * Threads API client — wraps Meta's official Threads API (Graph API).
  *
@@ -340,7 +341,7 @@ export class ThreadsClient {
                 },
               };
             }
-          } catch {}
+          } catch (e) { swallow('threads.refreshLongLivedToken', e); }
           return {
             ...post,
             reposted_post: {

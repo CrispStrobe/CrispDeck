@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { swallow } from '$lib/debug-log';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { searchArchive } from '$lib/archive';
@@ -49,7 +50,7 @@
           });
         }
       }
-    } catch {} finally { loading = false; }
+    } catch (e) { swallow('calendar:L52', e); } finally { loading = false; }
   });
 
   function prevMonth() {

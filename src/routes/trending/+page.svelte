@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { swallow } from '$lib/debug-log';
   import { i18n } from '$lib/i18n.svelte';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
@@ -108,7 +109,7 @@
               link: `https://bsky.app/search?q=${encodeURIComponent(s.tag)}`,
             }));
         }
-      } catch {}
+      } catch (e) { swallow('trending.loadBskyTrending', e); }
     }
   }
 

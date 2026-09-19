@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { swallow } from '$lib/debug-log';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { Bookmark, Loader2, Inbox, RefreshCw } from '@lucide/svelte';
@@ -24,7 +25,7 @@
       const result = await initAllClients();
       accounts = result.accounts;
       clientEntries = result.clients;
-    } catch {}
+    } catch (e) { swallow('bookmarks:L27', e); }
     posts = await listBookmarks();
     loading = false;
   });

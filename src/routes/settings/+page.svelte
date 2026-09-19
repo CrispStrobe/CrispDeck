@@ -51,7 +51,7 @@
   import { listKeywordSets, saveKeywordSet, removeKeywordSet, createKeywordSet, parseKeywords, type KeywordSet } from '$lib/keyword-monitor';
   import { getAlertSettings, setAlertSettings } from '$lib/notification-alerts';
   import { exportSettings, importSettings, type SettingsExport } from '$lib/settings-export';
-  import { getLogs, clearLogs, getLogCount, type LogEntry } from '$lib/debug-log';
+  import { getLogs, clearLogs, getLogCount, type LogEntry, swallow } from '$lib/debug-log';
   import type { Account } from '$lib/types';
 
   let uiLanguage = $state<Language>(i18n.lang);
@@ -158,7 +158,7 @@
       webPushSubscribed = sub !== null;
       const resp = await fetch(apiUrl('/api/push/vapid-key'));
       vapidKeyAvailable = resp.ok;
-    } catch {}
+    } catch (e) { swallow('settings.saveSttEngine', e); }
 
     // Check Tauri + CrispASR availability
     if (typeof (globalThis as any).__TAURI_INTERNALS__ !== 'undefined') {
@@ -166,7 +166,7 @@
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         crispasrAvailable = await invoke('asr_available') as boolean;
-      } catch {}
+      } catch (e) { swallow('settings.saveSttEngine', e); }
     }
   });
 
@@ -274,7 +274,7 @@
     if (!confirm(i18n.t.settings.purgeConfirm)) return;
     // Delete IndexedDB databases
     for (const name of ['crispdeck-archive', 'crispdeck-bookmarks', 'crispdeck-engagement', 'crispdeck-translations']) {
-      try { indexedDB.deleteDatabase(name); } catch {}
+      try { indexedDB.deleteDatabase(name); } catch (e) { swallow('settings.purgeAllData', e); }
     }
     purgeViewCache();
     calcCacheStats();
@@ -1534,7 +1534,7 @@
         <button
           onclick={() => {
             if (newFeedUrl.trim()) {
-              try { addFeed(newFeedUrl.trim()); rssFeeds = listFeeds(); newFeedUrl = ''; } catch {}
+              try { addFeed(newFeedUrl.trim()); rssFeeds = listFeeds(); newFeedUrl = ''; } catch (e) { swallow('settings:L1537', e); }
             }
           }}
           disabled={!newFeedUrl.trim()}

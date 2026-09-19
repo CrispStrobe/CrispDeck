@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { swallow } from '$lib/debug-log';
   import { getSttEngine } from '$lib/settings';
   import { buildScheduledAt, minScheduleDate, formatScheduledFor } from '$lib/quick-schedule';
   import { base } from '$app/paths';
@@ -238,7 +239,7 @@
               if (data.cw) { contentWarning = data.cw; showCW = true; }
               autoSaveRestoredFrom = data.savedAt ?? 'earlier';
             }
-          } catch {}
+          } catch (e) { swallow('compose.clearAutoSave', e); }
         }
       }
     } catch (e) {
@@ -490,7 +491,7 @@
             error = 'CrispASR not available in this build. Switch to "Browser" engine in Settings.';
             return;
           }
-        } catch {}
+        } catch (e) { swallow('compose.toggleDictation', e); }
       } else if (engine === 'crispasr') {
         error = 'CrispASR requires the desktop app. Switch to "Browser" engine in Settings.';
         return;

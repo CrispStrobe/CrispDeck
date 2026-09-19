@@ -13,7 +13,7 @@
   import ScrollToTop from '$lib/components/ScrollToTop.svelte';
   import AccountSwitcher from '$lib/components/AccountSwitcher.svelte';
   import { i18n } from '$lib/i18n.svelte';
-  import { installLogInterceptors } from '$lib/debug-log';
+  import { installLogInterceptors, swallow } from '$lib/debug-log';
   import { preloadSanitizer } from '$lib/sanitize';
   import { initDensity } from '$lib/density';
   installLogInterceptors();
@@ -189,7 +189,7 @@
       // Update PWA badge
       if (unreadMessages > 0) (navigator as any).setAppBadge?.(unreadMessages);
       else (navigator as any).clearAppBadge?.();
-    } catch {}
+    } catch (e) { swallow('layout.checkUnreadMessages', e); }
   }
 
   function handleGlobalKeydown(e: KeyboardEvent) {

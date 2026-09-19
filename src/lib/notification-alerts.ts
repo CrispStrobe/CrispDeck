@@ -1,3 +1,4 @@
+import { swallow } from './debug-log';
 /**
  * Notification sounds + desktop alerts.
  * Plays a sound and/or shows a system notification when new mentions/DMs arrive.
@@ -45,7 +46,7 @@ export function playNotificationSound(volume = 0.5): void {
     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
     oscillator.start(ctx.currentTime);
     oscillator.stop(ctx.currentTime + 0.3);
-  } catch {}
+  } catch (e) { swallow('notification-alerts.playNotificationSound', e); }
 }
 
 /**
@@ -55,7 +56,7 @@ export function showDesktopAlert(title: string, body: string, icon?: string): vo
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
   try {
     new Notification(title, { body, icon, tag: 'crispdeck-alert' });
-  } catch {}
+  } catch (e) { swallow('notification-alerts.showDesktopAlert', e); }
 }
 
 /**

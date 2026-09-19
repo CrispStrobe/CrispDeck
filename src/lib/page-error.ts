@@ -2,10 +2,11 @@
  * Page-level error handling utilities.
  *
  * Provides consistent error reporting for page data loading.
- * Use instead of silent catch {} blocks on user-visible operations.
+ * Use instead of silent catch (e) { swallow('page-error:L5', e); } blocks on user-visible operations.
  */
 
 import { toast } from '$lib/toast.svelte';
+import { swallow } from './debug-log';
 
 /**
  * Wrap an async operation with error toast on failure.
