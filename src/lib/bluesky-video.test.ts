@@ -6,7 +6,13 @@ import { isVideoFile } from './compose/media';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-describe('BlueskyClient.uploadVideo', () => {
+// Generous explicit timeout, not because these tests are slow but because the
+// first call into @atproto's browser build is: it logs a base64 ponyfill
+// warning and loads the fallback before doing anything. Under load that pushed
+// this suite past vitest's 5s default, which reads as a regression in CI when
+// it is a machine having a bad minute. The browser build is what
+// `resolve.conditions: ['browser']` selects, so this belongs with that change.
+describe('BlueskyClient.uploadVideo', { timeout: 20_000 }, () => {
   let client: BlueskyClient;
   const mockFile = new File(['video-data'], 'test.mp4', { type: 'video/mp4' });
 
