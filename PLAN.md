@@ -11,9 +11,9 @@ A unified Mastodon + Bluesky + Threads social media client with:
 
 **Tech stack**: SvelteKit 2, Svelte 5 (runes), Tailwind CSS 4, Vite 6, Tauri 2, TypeScript + Rust, Vitest
 
-## Current State (2026-09-19)
+## Current State (2026-09-20)
 
-v1.2.0+ — 1,783 unit tests across 131 files + Playwright E2E tests, 29 pages, 20 deck column types, CI fully green, live at https://crispdeck.vercel.app. Post-v1.2.0: account switcher, multi-select, quick add-to-list, 6 perf optimizations (parallel crossposting/uploads/column-loads, normalize caches, session-scoped prefs). See CHANGELOG.md.
+v1.2.8 — 1,845 unit tests across 140 files (plus 62 live-API tests that run nightly rather than on every PR) + Playwright E2E tests, 29 pages, 20 deck column types, CI fully green, live at https://crispdeck.vercel.app. Post-v1.2.0: account switcher, multi-select, quick add-to-list, 6 perf optimizations (parallel crossposting/uploads/column-loads, normalize caches, session-scoped prefs). See CHANGELOG.md.
 
 Recent reliability work (2026-09-18/19), merged as PRs #1–#5:
 
@@ -1654,6 +1654,57 @@ The app is feature-rich (20 column types, 1,520+ tests, streaming, keyboard nav,
   that fails at random gets ignored, which costs more than it is worth.
 - **Key files**: `.github/workflows/perf.yml`, `bench/check-lighthouse.mjs`,
   `bench/lighthouse-budget.json`, `src/lib/lighthouse-budget.test.ts`
+
+### 179. Silent-success audit: writes that were never checked
+- **Status**: Done (2026-09-20, PRs #8 and #9)
+- **Effort**: Medium
+- **Priority**: Must-have
+- **Description**: Item 171 fixed catch blocks that only reached the console.
+  This is the failure mode underneath it: code paths that never threw at all.
+  `fetch` resolves for a 401/403/500, and a guard clause that skips the request
+  leaves the success message running anyway.
+- [x] Every `fetch` whose response is discarded or never tested (11 sites)
+- [x] Guard clauses whose success message sat outside the guard (follow,
+      block, mute, DM send)
+- [x] `src/lib/http.ts` — `fetchOk`/`fetchJson`, which strip the query string
+      before a URL reaches an error message, since tokens travel there and
+      these messages land in the log viewer users paste into bug reports
+- [x] `unchecked-fetch.test.ts` pins two unambiguous shapes: a discarded
+      response, and one assigned to a variable never tested in the file
+- **Deliberately not** a blanket "no bare fetch" rule — ~100 of the calls here
+  do check, and an allowlist of ninety entries guards nothing.
+
+### 180. Accessibility: routes nobody was scoring
+- **Status**: Done (2026-09-20, PR #10)
+- **Effort**: Small
+- **Priority**: Should-have
+- **Description**: The Lighthouse gate added in #6 only ever scored `/`, which
+  logged out is a 200-element shell. Most accessibility audits had nothing to
+  judge, so the 100 it reported meant very little.
+- [x] Score /about, /compose, /settings and /calendar as well
+- [x] Fix the seven unlabelled icon-only buttons this found (calendar month
+      arrows, archive search, deck refresh and remove, and the close buttons on
+      FloatingCompose, MediaLightbox and DeckColumn)
+- [x] `icon-button-labels.test.ts` so the pattern cannot come back
+- **Still open**: contrast debt on /about (93) and /settings (96), and links in
+  text distinguished only by colour on /about. Held at today's scores by
+  per-route floors so it cannot get worse, and visible in the job summary.
+- **Still unmeasured**: deck and feed carrying real posts. That needs an
+  authenticated run.
+
+### 181. Live API suites off the required check
+- **Status**: Done (2026-09-20, PR #10)
+- **Effort**: Small
+- **Priority**: Should-have
+- **Description**: Seven suites hit real Bluesky/Mastodon/PLC endpoints inside
+  the required `Frontend build` check. mastodon.social timing out at 15s had
+  turned a run red twice with nothing wrong in the repo.
+- [x] Gated behind `CRISPDECK_LIVE`; nightly `Live APIs` workflow plus manual
+      dispatch
+- [x] `live-test-gating.test.ts` — a new live suite cannot quietly rejoin the
+      PR path, and a suite that is gated but listed in no workflow fails too
+      (it would look like coverage while never running)
+- **Side effect**: PR suite ~240s → ~145s.
 
 ### Branch cleanup (2026-09-19)
 
