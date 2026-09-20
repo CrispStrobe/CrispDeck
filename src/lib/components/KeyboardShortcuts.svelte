@@ -108,7 +108,7 @@
       {#each voiceCommands as cmd}
         <div class="flex items-center justify-between py-1">
           <span class="text-sm text-[var(--color-text-muted)]">{cmd.desc}</span>
-          <span class="text-[10px] text-[var(--color-primary)] font-mono">{cmd.phrase}</span>
+          <span class="text-[10px] text-[var(--color-primary-text)] font-mono">{cmd.phrase}</span>
         </div>
       {/each}
     </div>

@@ -9,7 +9,7 @@
 
 <div class="flex items-center justify-center min-h-[70vh] px-4">
   <div class="text-center max-w-md">
-    <p class="text-6xl font-bold text-[var(--color-primary)] mb-2">{page.status}</p>
+    <p class="text-6xl font-bold text-[var(--color-primary-text)] mb-2">{page.status}</p>
     <h1 class="text-xl font-semibold mb-2">
       {page.status === 404 ? 'Page not found' : 'Something went wrong'}
     </h1>

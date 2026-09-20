@@ -670,7 +670,7 @@
       <button
         onclick={() => switchTab(tab.id)}
         class="px-4 py-2 text-sm whitespace-nowrap transition-colors
-          {activeTab === tab.id ? 'text-[var(--color-primary)] border-b-2 border-[var(--color-primary)] font-medium' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+          {activeTab === tab.id ? 'text-[var(--color-primary-text)] border-b-2 border-[var(--color-primary)] font-medium' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
       >
         {i18n.t.settings[tab.labelKey]}
       </button>
@@ -1680,7 +1680,7 @@
         <div class="space-y-2">
           <p class="text-xs text-[var(--color-text-muted)]">
             Free Google Translate proxy. No API key, no commercial restriction.
-            Uses public instances by default. You can self-host or use any <a href="https://github.com/thedaviddelta/lingva-translate" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">{i18n.t.settings.lingvaInstance}</a>.
+            Uses public instances by default. You can self-host or use any <a href="https://github.com/thedaviddelta/lingva-translate" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary-text)] hover:underline">{i18n.t.settings.lingvaInstance}</a>.
           </p>
           <div>
             <label for="lingva-instance" class="block text-xs text-[var(--color-text-muted)] mb-1">{i18n.t.settings.instanceUrlOptional}</label>
@@ -1699,7 +1699,7 @@
       {#if translateProvider === 'libretranslate'}
         <div class="space-y-2">
           <p class="text-xs text-[var(--color-text-muted)]">
-            Open-source translation (AGPL). Self-host or use a <a href="https://github.com/LibreTranslate/LibreTranslate" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">{i18n.t.settings.publicInstance}</a>.
+            Open-source translation (AGPL). Self-host or use a <a href="https://github.com/LibreTranslate/LibreTranslate" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary-text)] hover:underline">{i18n.t.settings.publicInstance}</a>.
             Some instances require an API key.
           </p>
           <div>
@@ -1730,7 +1730,7 @@
       {#if translateProvider === 'mymemory'}
         <p class="text-xs text-[var(--color-text-muted)]">
           Free API, no key needed. 5,000 chars/day limit. Auto-detects source language.
-          For personal, non-commercial use only (<a href="https://mymemory.translated.net/doc/usagelimits.php" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">terms</a>).
+          For personal, non-commercial use only (<a href="https://mymemory.translated.net/doc/usagelimits.php" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary-text)] hover:underline">terms</a>).
           For unlimited translation, use Lingva, LibreTranslate, BYOK, or CrispASR.
         </p>
       {/if}
@@ -1876,7 +1876,7 @@
             <div class="flex items-center justify-between mb-1">
               <label for="ai-api-key" class="text-xs text-[var(--color-text-muted)]">{i18n.t.translation.apiKey}</label>
               {#if getPreset(aiPresetId)?.docsUrl}
-                <a href={getPreset(aiPresetId)?.docsUrl} target="_blank" rel="noopener" class="text-[10px] text-[var(--color-primary)] hover:underline flex items-center gap-0.5">
+                <a href={getPreset(aiPresetId)?.docsUrl} target="_blank" rel="noopener" class="text-[10px] text-[var(--color-primary-text)] hover:underline flex items-center gap-0.5">
                   {i18n.t.compose.aiGetApiKey}
                   <ExternalLink size={10} />
                 </a>
@@ -2350,7 +2350,7 @@
           <button onclick={() => { clearLogs(); debugLogs = []; }} class="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-danger)]">{i18n.t.settings.clear}</button>
         {/if}
       </div>
-      <button onclick={() => { debugLogs = getLogs(); showDebugLog = !showDebugLog; }} class="text-xs text-[var(--color-primary)] hover:underline">
+      <button onclick={() => { debugLogs = getLogs(); showDebugLog = !showDebugLog; }} class="text-xs text-[var(--color-primary-text)] hover:underline">
         {showDebugLog ? 'Hide log' : `Show log (${getLogCount()} entries)`}
       </button>
       {#if showDebugLog}
@@ -2407,7 +2407,7 @@
         {/if}
       </div>
       <div class="text-xs text-[var(--color-text-muted)] space-y-1">
-        <p>{i18n.t.settings.licensedUnder} <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">AGPL-3.0</a></p>
+        <p>{i18n.t.settings.licensedUnder} <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary-text)] hover:underline">AGPL-3.0</a></p>
       </div>
     </div>
   </section>

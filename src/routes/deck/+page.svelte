@@ -1271,7 +1271,7 @@
     <div class="flex-1 flex items-center justify-center">
       <div class="text-center">
         <Columns3 size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
-        <p class="text-[var(--color-text-muted)]">{i18n.t.deck.addAccountsIn} <a href="{base}/settings" class="text-[var(--color-primary)] underline">{i18n.t.nav.settings}</a> first.</p>
+        <p class="text-[var(--color-text-muted)]">{i18n.t.deck.addAccountsIn} <a href="{base}/settings" class="text-[var(--color-primary-text)] underline">{i18n.t.nav.settings}</a> first.</p>
       </div>
     </div>
   {:else}

@@ -436,7 +436,7 @@
         href={`${base}${item.href}`.replace(/\/$/, "") || "/"}
         class="flex flex-col items-center gap-0 px-1 py-1 rounded-lg transition-colors min-w-0 flex-1
           {isActive(item.href)
-            ? 'text-[var(--color-primary)]'
+            ? 'text-[var(--color-primary-text)]'
             : 'text-[var(--color-text-muted)]'}"
       >
         <item.icon size={18} />

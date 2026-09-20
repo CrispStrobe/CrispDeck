@@ -279,7 +279,7 @@
 
   {#if buildProgress}
     <div class="mb-4 p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] text-sm flex items-center gap-2">
-      {#if building}<Loader2 size={14} class="animate-spin text-[var(--color-primary)]" />{/if}
+      {#if building}<Loader2 size={14} class="animate-spin text-[var(--color-primary-text)]" />{/if}
       {buildProgress}
     </div>
   {/if}
@@ -289,7 +289,7 @@
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
       <div class="bg-[var(--color-surface)] p-3 rounded-lg border border-[var(--color-border)] text-center">
         <Database size={16} class="text-[var(--color-text-muted)] mx-auto mb-1" />
-        <div class="text-lg font-bold text-[var(--color-primary)]">{stats.total}</div>
+        <div class="text-lg font-bold text-[var(--color-primary-text)]">{stats.total}</div>
         <div class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.archive.totalArchived}</div>
       </div>
       <div class="bg-[var(--color-surface)] p-3 rounded-lg border border-[var(--color-border)] text-center">

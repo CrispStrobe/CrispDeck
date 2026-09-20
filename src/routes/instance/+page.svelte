@@ -216,7 +216,7 @@
             </a>
           {/if}
           {#if instance.contact.email}
-            <a href="mailto:{instance.contact.email}" class="text-xs text-[var(--color-primary)] hover:underline flex items-center gap-1">
+            <a href="mailto:{instance.contact.email}" class="text-xs text-[var(--color-primary-text)] hover:underline flex items-center gap-1">
               <Mail size={10} /> {instance.contact.email}
             </a>
           {/if}
@@ -231,7 +231,7 @@
         <ol class="space-y-2">
           {#each instance.rules as rule, i}
             <li class="flex gap-3 text-sm">
-              <span class="text-xs font-bold text-[var(--color-primary)] mt-0.5 w-5 text-right flex-shrink-0">{i + 1}.</span>
+              <span class="text-xs font-bold text-[var(--color-primary-text)] mt-0.5 w-5 text-right flex-shrink-0">{i + 1}.</span>
               <span class="text-[var(--color-text)]">{rule.text}</span>
             </li>
           {/each}

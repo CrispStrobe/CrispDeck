@@ -339,7 +339,7 @@
 
   {#if loading}
     <div class="flex items-center justify-center py-20">
-      <Loader2 size={32} class="animate-spin text-[var(--color-primary)]" />
+      <Loader2 size={32} class="animate-spin text-[var(--color-primary-text)]" />
     </div>
   {:else}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -392,7 +392,7 @@
               <div class="p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] {!rule.enabled ? 'opacity-50' : ''}">
                 <div class="flex items-center gap-2 mb-2">
                   <GripVertical size={12} class="text-[var(--color-text-muted)] cursor-move" />
-                  <span class="text-xs font-medium text-[var(--color-primary)] px-1.5 py-0.5 bg-[var(--color-primary)]/10 rounded">
+                  <span class="text-xs font-medium text-[var(--color-primary-text)] px-1.5 py-0.5 bg-[var(--color-primary)]/10 rounded">
                     {getRuleLabel(rule.type)}
                   </span>
                   <div class="flex-1"></div>
@@ -467,7 +467,7 @@
                       onclick={() => addRule(rt.type)}
                       class="flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-[var(--color-surface-hover)] rounded-md transition-colors"
                     >
-                      <span class="text-[var(--color-primary)]">{rt.label}</span>
+                      <span class="text-[var(--color-primary-text)]">{rt.label}</span>
                     </button>
                   {/each}
                 </div>
@@ -485,7 +485,7 @@
                 <Copy size={12} />
               </button>
             </div>
-            <code class="text-xs text-[var(--color-primary)] break-all">{compiledQuery}</code>
+            <code class="text-xs text-[var(--color-primary-text)] break-all">{compiledQuery}</code>
             <p class="text-[10px] text-[var(--color-text-muted)] mt-1">{feedDescription}</p>
           </div>
         {/if}

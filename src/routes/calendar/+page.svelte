@@ -108,7 +108,7 @@
 
   {#if loading}
     <div class="flex items-center justify-center py-20">
-      <Loader2 size={32} class="animate-spin text-[var(--color-primary)]" />
+      <Loader2 size={32} class="animate-spin text-[var(--color-primary-text)]" />
     </div>
   {:else}
     <!-- Calendar grid -->

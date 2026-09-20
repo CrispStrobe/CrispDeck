@@ -139,7 +139,7 @@
 
   {#if loading}
     <div class="flex items-center justify-center py-20">
-      <Loader2 size={32} class="animate-spin text-[var(--color-primary)]" />
+      <Loader2 size={32} class="animate-spin text-[var(--color-primary-text)]" />
     </div>
   {:else if filtered.length === 0}
     <div class="text-center py-20 text-[var(--color-text-muted)]">

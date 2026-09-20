@@ -312,7 +312,7 @@
   {#if scanning}
     <div class="mb-6 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
       <div class="flex items-center gap-3">
-        <Loader2 size={18} class="animate-spin text-[var(--color-primary)]" />
+        <Loader2 size={18} class="animate-spin text-[var(--color-primary-text)]" />
         <span class="text-sm">{scanProgress}</span>
       </div>
     </div>
@@ -476,7 +476,7 @@
           <div class="flex items-center gap-2 flex-wrap">
             <Tag size={12} class="text-[var(--color-text-muted)]" />
             {#each identity.tags as tag}
-              <span class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded">
+              <span class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-[var(--color-primary)]/20 text-[var(--color-primary-text)] rounded">
                 {tag}
                 <button onclick={() => handleRemoveTag(identity.id, tag)} class="hover:text-[var(--color-danger)]">
                   <X size={10} />

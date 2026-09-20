@@ -1,7 +1,20 @@
 @import "tailwindcss";
 
+/*
+ * Colour tokens.
+ *
+ * --color-primary is the *background* colour: white text sits on it, so it
+ * has to be dark enough for that. --color-primary-text is the same hue as
+ * text on the page background, where the requirement runs the other way.
+ * One token cannot satisfy both — #6366f1 gave 4.47:1 under white text and
+ * 4.00:1 as text on #0f172a, failing WCAG AA in both directions at once.
+ *
+ * Measured, not guessed: the ratios are in the commit that introduced this.
+ */
+
 :root, [data-theme="dark"] {
-  --color-primary: #6366f1;
+  --color-primary: #5b5ee8;        /* white text on it: 4.99:1 */
+  --color-primary-text: #818cf8;   /* as text on --color-bg: 5.98:1 */
   --color-primary-hover: #4f46e5;
   --color-bluesky: #0085ff;
   --color-mastodon: #6364ff;
@@ -17,7 +30,8 @@
 }
 
 [data-theme="oled"] {
-  --color-primary: #6366f1;
+  --color-primary: #5b5ee8;        /* white text on it: 4.99:1 */
+  --color-primary-text: #818cf8;   /* as text on black: 7.04:1 */
   --color-primary-hover: #4f46e5;
   --color-bluesky: #0085ff;
   --color-mastodon: #6364ff;
@@ -33,7 +47,8 @@
 }
 
 [data-theme="light"] {
-  --color-primary: #4f46e5;
+  --color-primary: #4f46e5;        /* white text on it: 6.29:1 */
+  --color-primary-text: #4f46e5;   /* as text on #f8fafc: 6.01:1 */
   --color-primary-hover: #4338ca;
   --color-bluesky: #0070e0;
   --color-mastodon: #563acc;

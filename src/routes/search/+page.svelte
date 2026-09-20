@@ -190,7 +190,7 @@
       {#if query.trim()}
         <button
           onclick={handleSaveSearch}
-          class="flex items-center gap-1 px-2 py-1 text-[10px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md transition-colors {isSaved(query.trim()) ? 'text-[var(--color-primary)] border-[var(--color-primary)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]'}"
+          class="flex items-center gap-1 px-2 py-1 text-[10px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md transition-colors {isSaved(query.trim()) ? 'text-[var(--color-primary-text)] border-[var(--color-primary)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]'}"
         >
           {#if isSaved(query.trim())}<BookmarkCheck size={10} /> Saved{:else}<Bookmark size={10} /> Save search{/if}
         </button>
@@ -279,7 +279,7 @@
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <Search size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
       <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">{i18n.t.search.noAccounts}</h3>
-      <p class="text-sm text-[var(--color-text-muted)]">{i18n.t.search.addAccountsToSearch} <a href="{base}/settings" class="text-[var(--color-primary)] underline">{i18n.t.nav.settings}</a></p>
+      <p class="text-sm text-[var(--color-text-muted)]">{i18n.t.search.addAccountsToSearch} <a href="{base}/settings" class="text-[var(--color-primary-text)] underline">{i18n.t.nav.settings}</a></p>
     </div>
   {:else}
     <!-- Pre-search suggestions -->

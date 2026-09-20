@@ -883,7 +883,7 @@ function parseTargetAccounts(value: unknown): number[] {
             <div class="relative">
               <button
                 onclick={() => showTemplates = !showTemplates}
-                class="px-2 py-1 text-xs border rounded-md transition-colors {showTemplates ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+                class="px-2 py-1 text-xs border rounded-md transition-colors {showTemplates ? 'border-[var(--color-primary)] text-[var(--color-primary-text)]' : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
               >
                 Tpl
               </button>
@@ -892,7 +892,7 @@ function parseTargetAccounts(value: unknown): number[] {
                   <button
                     onclick={() => { saveTemplate({ name: text.trim().substring(0, 30) || 'Untitled', text: text.trim(), visibility, contentWarning: showCW ? contentWarning : undefined }); templates = listTemplates(); showTemplates = false; }}
                     disabled={!text.trim()}
-                    class="w-full text-left px-3 py-1.5 text-xs text-[var(--color-primary)] hover:bg-[var(--color-surface-hover)] disabled:opacity-30"
+                    class="w-full text-left px-3 py-1.5 text-xs text-[var(--color-primary-text)] hover:bg-[var(--color-surface-hover)] disabled:opacity-30"
                   >
                     + Save current as template
                   </button>

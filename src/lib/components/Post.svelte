@@ -807,7 +807,7 @@
 {#if hiddenByLabel && !labelRevealed}
   <div class="p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] text-center">
     <p class="text-xs text-[var(--color-text-muted)]">Content hidden: {postLabels.join(', ')}</p>
-    <button onclick={() => labelRevealed = true} class="text-xs text-[var(--color-primary)] hover:underline mt-1">{i18n.t.post.showAnyway}</button>
+    <button onclick={() => labelRevealed = true} class="text-xs text-[var(--color-primary-text)] hover:underline mt-1">{i18n.t.post.showAnyway}</button>
   </div>
 {:else}
 <div bind:this={postEl} data-post-uri={post.uri} class="group {compact ? 'p-2.5' : 'p-4'} bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] transition-shadow">
@@ -1260,7 +1260,7 @@
             <a
               href="{base}/bookmarks?tab=reading-lists"
               onclick={() => showListPicker = false}
-              class="block px-3 py-1.5 text-xs text-[var(--color-primary)] hover:bg-[var(--color-surface-hover)] border-t border-[var(--color-border)]"
+              class="block px-3 py-1.5 text-xs text-[var(--color-primary-text)] hover:bg-[var(--color-surface-hover)] border-t border-[var(--color-border)]"
             >
               Manage lists
             </a>
@@ -1320,7 +1320,7 @@
 
       <button
         onclick={() => showStats = !showStats}
-        class="flex items-center gap-1.5 transition-colors {showStats ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'} hover:text-[var(--color-primary)] opacity-0 group-hover:opacity-100"
+        class="flex items-center gap-1.5 transition-colors {showStats ? 'text-[var(--color-primary-text)]' : 'text-[var(--color-text-muted)]'} hover:text-[var(--color-primary-text)] opacity-0 group-hover:opacity-100"
         title={i18n.t.post.postStatistics}
         aria-label={i18n.t.post.showPostStatistics}
         aria-pressed={showStats}
