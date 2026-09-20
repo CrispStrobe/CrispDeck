@@ -1,7 +1,9 @@
 <script lang="ts">
   import { getTtsEngine, setTtsEngine, getSttEngine, setSttEngine, getHomeMode, setHomeMode, type SpeechEngine, type HomeMode } from '$lib/settings';
+  import { toast } from '$lib/toast.svelte';
   import { removeKey, writeJson, writeString } from '$lib/safe-storage';
   import { fetchOk, fetchJson } from '$lib/http';
+  import { getCredentialBackend, setCredentialBackend, type CredentialBackendInfo } from '$lib/db';
   import { apiUrl } from '$lib/api-origin';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
@@ -138,6 +140,27 @@
 
   // Web Push
   let webPushSubscribed = $state(false);
+  let credentialBackend: CredentialBackendInfo = $state({ backend: 'local', osStoreAvailable: false });
+  let credentialBackendBusy = $state(false);
+
+  async function loadCredentialBackend() {
+    credentialBackend = await getCredentialBackend();
+  }
+
+  async function chooseCredentialBackend(backend: 'keychain' | 'local') {
+    if (credentialBackendBusy || credentialBackend.backend === backend) return;
+    credentialBackendBusy = true;
+    try {
+      await setCredentialBackend(backend);
+      credentialBackend = { ...credentialBackend, backend };
+    } catch (e) {
+      swallow('settings.credentialBackend', e);
+      toast.error(i18n.t.settings.credentialStorage);
+    } finally {
+      credentialBackendBusy = false;
+    }
+  }
+
   let webPushLoading = $state(false);
   let webPushError = $state('');
   let vapidKeyAvailable = $state(false);
@@ -169,6 +192,11 @@
         const { invoke } = await import('@tauri-apps/api/core');
         crispasrAvailable = await invoke('asr_available') as boolean;
       } catch (e) { swallow('settings.saveSttEngine', e); }
+      // Which secret store credentials go to. Failing to read it leaves the
+      // safe default showing rather than an empty control.
+      try {
+        await loadCredentialBackend();
+      } catch (e) { swallow('settings.loadCredentialBackend', e); }
     }
   });
 
@@ -2113,6 +2141,43 @@
           </button>
         {/if}
       </div>
+
+      <!-- Where credentials are kept. Desktop only: the browser build has
+           IndexedDB and no choice to make, so it shows nothing here. -->
+      {#if isTauri}
+        <div>
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.credentialStorage}</span>
+              <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.credentialAppliesToNew}</p>
+            </div>
+          </div>
+          {#if credentialBackend.osStoreAvailable}
+            <div class="flex gap-2 mt-2">
+              <button
+                onclick={() => chooseCredentialBackend('keychain')}
+                disabled={credentialBackendBusy}
+                aria-pressed={credentialBackend.backend === 'keychain'}
+                class="flex-1 px-3 py-2 text-xs rounded-md border transition-colors disabled:opacity-50 {credentialBackend.backend === 'keychain' ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white' : 'border-[var(--color-border)] text-[var(--color-text-muted)]'}"
+              >
+                <span class="block font-medium">{i18n.t.settings.credentialKeychain}</span>
+                <span class="block text-[10px] opacity-80">{i18n.t.settings.credentialKeychainHint}</span>
+              </button>
+              <button
+                onclick={() => chooseCredentialBackend('local')}
+                disabled={credentialBackendBusy}
+                aria-pressed={credentialBackend.backend === 'local'}
+                class="flex-1 px-3 py-2 text-xs rounded-md border transition-colors disabled:opacity-50 {credentialBackend.backend === 'local' ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white' : 'border-[var(--color-border)] text-[var(--color-text-muted)]'}"
+              >
+                <span class="block font-medium">{i18n.t.settings.credentialLocal}</span>
+                <span class="block text-[10px] opacity-80">{i18n.t.settings.credentialLocalHint}</span>
+              </button>
+            </div>
+          {:else}
+            <p class="text-[10px] text-[var(--color-text-muted)] mt-2">{i18n.t.settings.credentialNoKeychain}</p>
+          {/if}
+        </div>
+      {/if}
 
       <!-- Web Push Notifications -->
       <div class="flex items-center justify-between">
