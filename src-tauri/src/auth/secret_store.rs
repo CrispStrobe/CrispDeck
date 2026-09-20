@@ -349,6 +349,100 @@ mod tests {
         assert!(!os_store_compiled_in(), "macOS is deliberately not wired up yet");
     }
 
+    /// Against the real OS store, not the fake one.
+    ///
+    /// Off by default: a developer machine may have a locked keychain, and a
+    /// test that prompts for a password is a test that hangs. CI sets
+    /// CRISPDECK_REAL_KEYCHAIN after preparing a store it owns — a temporary
+    /// keychain on macOS, a gnome-keyring session on Linux, and on Windows
+    /// the runner's own Credential Manager, which needs no preparation.
+    ///
+    /// This is the part the fake store cannot stand in for: whether the
+    /// platform actually accepts what we write and hands it back.
+    mod real_store {
+        use super::*;
+
+        fn enabled() -> bool {
+            std::env::var("CRISPDECK_REAL_KEYCHAIN").is_ok()
+        }
+
+        /// A key nothing else uses, so a failed run cannot poison a later one.
+        fn scratch_key() -> String {
+            format!(
+                "test-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_nanos())
+                    .unwrap_or(0)
+            )
+        }
+
+        #[test]
+        fn the_real_store_round_trips() {
+            if !enabled() {
+                eprintln!("skipped: set CRISPDECK_REAL_KEYCHAIN to run against the OS store");
+                return;
+            }
+            let store = OsSecretStore;
+            let key = scratch_key();
+            let secret = r#"{"app_password":"real-store-round-trip"}"#;
+
+            store.set(&key, secret).expect("write to the OS store");
+            let read = store.get(&key).expect("read it back");
+            assert_eq!(read, secret);
+
+            store.delete(&key).expect("clean up");
+            assert!(store.get(&key).is_err(), "entry should be gone after delete");
+        }
+
+        #[test]
+        fn the_real_store_keeps_entries_apart() {
+            if !enabled() {
+                return;
+            }
+            let store = OsSecretStore;
+            let (a, b) = (scratch_key(), scratch_key());
+
+            store.set(&a, "first").unwrap();
+            store.set(&b, "second").unwrap();
+            assert_eq!(store.get(&a).unwrap(), "first");
+            assert_eq!(store.get(&b).unwrap(), "second");
+
+            store.delete(&a).unwrap();
+            store.delete(&b).unwrap();
+        }
+
+        #[test]
+        fn deleting_something_absent_is_not_an_error() {
+            // forget() runs on every account deletion, including ones whose
+            // secret was never in the OS store.
+            if !enabled() {
+                return;
+            }
+            assert!(OsSecretStore.delete(&scratch_key()).is_ok());
+        }
+
+        #[test]
+        fn store_and_load_work_end_to_end_against_the_real_store() {
+            // The layer the app actually calls, not just the trait beneath it.
+            if !enabled() {
+                return;
+            }
+            let handle = scratch_key();
+            let secret = r#"{"token":"end-to-end"}"#;
+
+            let (column, used) =
+                store(Backend::Keychain, &OsSecretStore, "bluesky", &handle, secret).unwrap();
+            assert_eq!(used, Backend::Keychain, "a prepared store should not fall back");
+            assert!(is_keychain_ref(&column));
+            assert!(!column.contains("end-to-end"), "the secret must not be in the column");
+
+            assert_eq!(load(&OsSecretStore, &column).unwrap(), secret);
+            forget(&OsSecretStore, &column).unwrap();
+        }
+    }
+
     #[test]
     fn backend_names_round_trip() {
         for b in [Backend::Keychain, Backend::Local] {
