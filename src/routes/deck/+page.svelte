@@ -1,5 +1,6 @@
 <script lang="ts">
   import { swallow } from '$lib/debug-log';
+  import { readJson } from '$lib/safe-storage';
   import { toast } from '$lib/toast.svelte';
   import { isStreamableColumn, isBlueskyStreamable, mastodonStreamFor } from '$lib/deck-streaming';
   import { isColumnLocked } from '$lib/deck-scroll';
@@ -341,8 +342,7 @@
       rebuildClientGroups();
 
       // Load saved column config or use defaults
-      const saved = localStorage.getItem('crispdeck-deck-columns');
-      columns = saved ? JSON.parse(saved) : defaultColumns;
+      columns = readJson('crispdeck-deck-columns', defaultColumns, Array.isArray);
 
       // Load saved layouts via module
       refreshLayoutList();

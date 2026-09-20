@@ -3,6 +3,8 @@
  * Stored in localStorage.
  */
 
+import { readJson } from './safe-storage';
+
 export interface PostTemplate {
   id: string;
   name: string;
@@ -15,8 +17,7 @@ export interface PostTemplate {
 const STORAGE_KEY = 'crispdeck-templates';
 
 export function listTemplates(): PostTemplate[] {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  return raw ? JSON.parse(raw) : [];
+  return readJson<PostTemplate[]>(STORAGE_KEY, [], Array.isArray);
 }
 
 export function saveTemplate(template: Omit<PostTemplate, 'id' | 'createdAt'>): PostTemplate {

@@ -27,6 +27,24 @@
   import { searchArchive } from '$lib/archive';
   import type { Account, Platform } from '$lib/types';
 
+/**
+ * A draft's target_accounts is an array, or the JSON text of one when it came
+ * back from the database as a string. A corrupt value used to throw straight
+ * out of the render path and take the page with it; an empty selection is
+ * recoverable, a blank page is not.
+ */
+function parseTargetAccounts(value: unknown): number[] {
+  if (Array.isArray(value)) return value as number[];
+  if (typeof value !== 'string') return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    swallow('drafts.targetAccounts', e);
+    return [];
+  }
+}
+
   let accounts: Account[] = $state([]);
   let selectedAccountIds: number[] = $state([]);
   let loading = $state(true);
@@ -200,9 +218,7 @@
           visibility = (draft.visibility as typeof visibility) ?? 'public';
           contentWarning = draft.content_warning ?? '';
           showCW = !!draft.content_warning;
-          const ids = Array.isArray(draft.target_accounts)
-            ? draft.target_accounts
-            : JSON.parse(draft.target_accounts as unknown as string);
+          const ids = parseTargetAccounts(draft.target_accounts);
           selectedAccountIds = ids;
           editingDraftId = draft.id;
         }

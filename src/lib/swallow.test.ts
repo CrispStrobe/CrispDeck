@@ -85,9 +85,15 @@ describe('the contexts used across the app', () => {
       const src = readFileSync(file, 'utf8');
       // Skip the declaration itself, which lives with the implementation.
       if (file.endsWith('debug-log.ts')) continue;
-      // [^,\n] so the match cannot run across lines and pick up prose from a
-      // comment that happens to mention swallow().
-      for (const m of src.matchAll(/swallow\(\s*([^,\n]*),/g)) {
+      // Comments are stripped first. Prose mentioning swallow() kept being
+      // read as a call: first across a line break, then — once that was
+      // fixed — from a single-line docblock that happened to contain a comma.
+      // Matching source with a regex means comments have to go, not just be
+      // narrowly avoided.
+      const code = src
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+      for (const m of code.matchAll(/swallow\(\s*([^,\n]*),/g)) {
         const arg = m[1].trim();
         // A literal, non-empty context: a bare variable would be useless in
         // the log. A template literal counts as long as it opens with static

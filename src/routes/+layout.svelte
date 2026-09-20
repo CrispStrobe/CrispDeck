@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getTheme, setTheme, nextTheme } from '$lib/settings';
+  import { readJson } from '$lib/safe-storage';
   import { isNavItemActive } from '$lib/nav-active';
   import { base } from '$app/paths';
   import { routePath } from '$lib/routes';
@@ -56,8 +57,10 @@
   const SIMPLE_MODE_HIDDEN = ['/deck', '/identities', '/archive', '/analytics', '/moderation', '/labelers', '/about'];
   const savedSimpleMode = localStorage.getItem('crispdeck-simple-mode') === 'true';
   let simpleMode = $state(savedSimpleMode);
+  // This runs while the shell initialises, outside any try/catch: a corrupt
+  // value used to throw here and take every page down with it.
   let navHidden = $state<Set<string>>(new Set(
-    savedSimpleMode ? SIMPLE_MODE_HIDDEN : JSON.parse(localStorage.getItem('crispdeck-nav-hidden') ?? '[]')
+    savedSimpleMode ? SIMPLE_MODE_HIDDEN : readJson<string[]>('crispdeck-nav-hidden', [], Array.isArray)
   ));
   let showNavCustomize = $state(false);
 

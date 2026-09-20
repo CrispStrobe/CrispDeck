@@ -1,5 +1,6 @@
 <script lang="ts">
   import { base } from '$app/paths';
+  import { swallow } from '$lib/debug-log';
   import { onMount } from 'svelte';
   import { listDrafts, deleteDraft as dbDeleteDraft, saveDraft as dbSaveDraft } from '$lib/db';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
@@ -10,6 +11,24 @@
   import { crosspostThread, type PostResult } from '$lib/compose/adapter';
   import { splitForPlatform } from '$lib/compose/thread';
   import type { Draft, Account, Platform } from '$lib/types';
+
+/**
+ * A draft's target_accounts is an array, or the JSON text of one when it came
+ * back from the database as a string. A corrupt value used to throw straight
+ * out of the render path and take the page with it; an empty selection is
+ * recoverable, a blank page is not.
+ */
+function parseTargetAccounts(value: unknown): number[] {
+  if (Array.isArray(value)) return value as number[];
+  if (typeof value !== 'string') return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    swallow('drafts.targetAccounts', e);
+    return [];
+  }
+}
 
   let drafts: Draft[] = $state([]);
   let accounts: Account[] = $state([]);
@@ -64,9 +83,7 @@
     error = '';
     results = [];
 
-    const targetIds = Array.isArray(draft.target_accounts)
-      ? draft.target_accounts
-      : JSON.parse(draft.target_accounts as unknown as string);
+    const targetIds = parseTargetAccounts(draft.target_accounts);
 
     const targets = targetIds
       .map((id: number) => {
@@ -124,7 +141,7 @@
       await dbDeleteDraft(draftId);
       await dbSaveDraft({
         text: draft.text,
-        target_accounts: Array.isArray(draft.target_accounts) ? draft.target_accounts : JSON.parse(draft.target_accounts as unknown as string),
+        target_accounts: parseTargetAccounts(draft.target_accounts),
         visibility: draft.visibility,
         content_warning: draft.content_warning,
         scheduled_at: scheduledAt,
@@ -143,9 +160,7 @@
   }
 
   function getAccountNames(targetAccounts: number[] | string): string {
-    const ids = Array.isArray(targetAccounts)
-      ? targetAccounts
-      : JSON.parse(targetAccounts as unknown as string);
+    const ids = parseTargetAccounts(targetAccounts);
     return ids.map((id: number) => accounts.find(a => a.id === id)?.handle ?? `#${id}`).join(', ');
   }
 
@@ -183,9 +198,7 @@
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   function getDraftPlatforms(draft: Draft): Platform[] {
-    const ids = Array.isArray(draft.target_accounts)
-      ? draft.target_accounts
-      : JSON.parse(draft.target_accounts as unknown as string);
+    const ids = parseTargetAccounts(draft.target_accounts);
     return [...new Set(ids.map((id: number) => accounts.find(a => a.id === id)?.platform).filter(Boolean))] as Platform[];
   }
 </script>
