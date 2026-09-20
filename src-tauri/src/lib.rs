@@ -65,6 +65,8 @@ pub fn run() {
             commands::db_commands::db_update_account,
             commands::db_commands::db_delete_account,
             commands::db_commands::db_get_credentials,
+            commands::db_commands::credential_backend_get,
+            commands::db_commands::credential_backend_set,
             // Identity commands
             commands::db_commands::db_list_identities,
             commands::db_commands::db_create_identity,
