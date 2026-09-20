@@ -694,7 +694,7 @@
       </h2>
       <button
         onclick={() => showBskyForm = !showBskyForm}
-        class="flex items-center gap-1 px-3 py-1.5 text-sm bg-[var(--color-bluesky)] hover:opacity-90 rounded-md transition-opacity"
+        class="flex items-center gap-1 px-3 py-1.5 text-sm bg-[var(--color-bluesky-strong)] hover:opacity-90 rounded-md transition-opacity"
       >
         <Plus size={14} />
         Add
@@ -710,14 +710,14 @@
               onclick={() => bskyAuthMode = 'oauth'}
               disabled={!oauthAvailable}
               title={oauthAvailable ? undefined : OAUTH_UNAVAILABLE_IN_APP}
-              class="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed {bskyAuthMode === 'oauth' ? 'bg-[var(--color-bluesky)] text-white' : 'text-[var(--color-text-muted)]'}"
+              class="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed {bskyAuthMode === 'oauth' ? 'bg-[var(--color-bluesky-strong)] text-white' : 'text-[var(--color-text-muted)]'}"
             >
               <Shield size={12} />
               {i18n.t.settings.oauthRecommended}
             </button>
             <button
               onclick={() => bskyAuthMode = 'app-password'}
-              class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {bskyAuthMode === 'app-password' ? 'bg-[var(--color-bluesky)] text-white' : 'text-[var(--color-text-muted)]'}"
+              class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {bskyAuthMode === 'app-password' ? 'bg-[var(--color-bluesky-strong)] text-white' : 'text-[var(--color-text-muted)]'}"
             >
               App Password
             </button>
@@ -746,7 +746,7 @@
               <button
                 onclick={connectBlueskyOAuth}
                 disabled={bskyLoading || !bskyHandle.trim()}
-                class="flex items-center gap-1 px-4 py-2 bg-[var(--color-bluesky)] hover:opacity-90 rounded-md text-sm font-medium transition-opacity disabled:opacity-50"
+                class="flex items-center gap-1 px-4 py-2 bg-[var(--color-bluesky-strong)] hover:opacity-90 rounded-md text-sm font-medium transition-opacity disabled:opacity-50"
               >
                 {#if bskyLoading}<Loader2 size={14} class="animate-spin" />{/if}
                 <Shield size={14} />
@@ -784,7 +784,7 @@
               <button
                 onclick={addBlueskyAccount}
                 disabled={bskyLoading}
-                class="flex items-center gap-1 px-4 py-2 bg-[var(--color-bluesky)] hover:opacity-90 rounded-md text-sm font-medium transition-opacity disabled:opacity-50"
+                class="flex items-center gap-1 px-4 py-2 bg-[var(--color-bluesky-strong)] hover:opacity-90 rounded-md text-sm font-medium transition-opacity disabled:opacity-50"
               >
                 {#if bskyLoading}<Loader2 size={14} class="animate-spin" />{/if}
                 Add Account
@@ -847,7 +847,7 @@
       </h2>
       <button
         onclick={() => showMastoForm = !showMastoForm}
-        class="flex items-center gap-1 px-3 py-1.5 text-sm bg-[var(--color-mastodon)] hover:opacity-90 rounded-md transition-opacity"
+        class="flex items-center gap-1 px-3 py-1.5 text-sm bg-[var(--color-mastodon-strong)] hover:opacity-90 rounded-md transition-opacity"
       >
         <Plus size={14} />
         Add
@@ -871,7 +871,7 @@
             <button
               onclick={handleStartMastodonOAuth}
               disabled={mastoLoading}
-              class="flex items-center gap-1 px-4 py-2 bg-[var(--color-mastodon)] hover:opacity-90 rounded-md text-sm font-medium transition-opacity disabled:opacity-50"
+              class="flex items-center gap-1 px-4 py-2 bg-[var(--color-mastodon-strong)] hover:opacity-90 rounded-md text-sm font-medium transition-opacity disabled:opacity-50"
             >
               {#if mastoLoading}<Loader2 size={14} class="animate-spin" />{/if}
               {#if mastoOAuthState}

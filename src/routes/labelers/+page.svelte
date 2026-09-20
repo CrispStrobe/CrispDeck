@@ -235,7 +235,7 @@
         placeholder={i18n.t.moderation.searchLabelers}
         class="flex-1 px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-bluesky)]"
       />
-      <button type="submit" disabled={searching} class="px-4 py-2 bg-[var(--color-bluesky)] text-white text-sm rounded-lg disabled:opacity-50">
+      <button type="submit" disabled={searching} class="px-4 py-2 bg-[var(--color-bluesky-strong)] text-white text-sm rounded-lg disabled:opacity-50">
         {#if searching}<Loader2 size={14} class="animate-spin" />{:else}Search{/if}
       </button>
     </div>
@@ -267,7 +267,7 @@
                   Unsubscribe
                 </button>
               {:else}
-                <button onclick={() => subscribeLabeler(labeler)} class="px-3 py-1 text-xs bg-[var(--color-bluesky)] text-white rounded-md">
+                <button onclick={() => subscribeLabeler(labeler)} class="px-3 py-1 text-xs bg-[var(--color-bluesky-strong)] text-white rounded-md">
                   Subscribe
                 </button>
               {/if}

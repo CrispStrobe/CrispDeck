@@ -219,7 +219,7 @@
     <div class="mb-6 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
       <div class="flex items-center gap-2">
         <input type="text" bind:value={newListTitle} placeholder={i18n.t.lists.listNamePlaceholder} class="flex-1 px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)]" />
-        <button onclick={createMastoList} class="px-3 py-2 bg-[var(--color-mastodon)] text-white text-sm rounded-md">Create (Mastodon)</button>
+        <button onclick={createMastoList} class="px-3 py-2 bg-[var(--color-mastodon-strong)] text-white text-sm rounded-md">Create (Mastodon)</button>
       </div>
     </div>
   {/if}
