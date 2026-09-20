@@ -22,8 +22,8 @@
 //!
 //! macOS is special-cased. The `keyring` crate uses the default login keychain
 //! and cannot select another, so macOS goes through `security-framework`
-//! directly and puts secrets in a keychain of its own that locks independently
-//! of login. See mac_keychain.rs.
+//! directly: the modern data protection keychain, the login keychain, or a
+//! keychain file the user already manages. See mac_keychain.rs.
 
 use anyhow::{anyhow, Result};
 
@@ -163,9 +163,10 @@ impl SecretStore for OsSecretStore {
     }
 }
 
-/// macOS goes through security-framework so it can use a keychain of its own
-/// rather than the login one. Which keychain is the user's choice; the default
-/// is the dedicated one. See mac_keychain.rs for what that actually buys.
+/// macOS goes through security-framework because keyring can only ever use the
+/// login keychain. The choice of keychain is the user's — including pointing
+/// at one they already manage — and we never hold a keychain password, so
+/// losing one cannot take CrispDeck's credentials with it. See mac_keychain.rs.
 #[cfg(target_os = "macos")]
 impl SecretStore for OsSecretStore {
     fn set(&self, key: &str, secret: &str) -> Result<()> {
@@ -179,9 +180,11 @@ impl SecretStore for OsSecretStore {
     }
 }
 
-/// Which keychain to use, read from the environment so the choice can be made
-/// once at startup and tests can pin it. The command layer writes it from the
-/// stored setting.
+/// Which keychain to use: one of the two reserved names, or a path to a
+/// keychain the user already manages.
+///
+/// Read from the environment so the choice is made once at startup and tests
+/// can pin it; the command layer writes it from the stored setting.
 #[cfg(target_os = "macos")]
 fn mac_keychain_choice() -> super::mac_keychain::MacKeychain {
     super::mac_keychain::MacKeychain::parse(

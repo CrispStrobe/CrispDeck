@@ -1,139 +1,94 @@
-//! macOS: a keychain of our own, rather than the login one.
+//! macOS: which keychain, and never one we hold the password to.
 //!
-//! The `keyring` crate uses the default login keychain and offers no way to
-//! choose another, which is why macOS was left on the local encrypted blob
-//! when the other platforms moved to their OS stores.
+//! The first version of this created a keychain of its own and kept its
+//! password in the login keychain. That was wrong, and a user's experience
+//! said why: they had forgotten their login keychain password, and it mattered
+//! little because other keychains held what their apps needed. A design that
+//! parks its password in the login keychain rebuilds exactly the dependency
+//! they had escaped — forget that one password and CrispDeck's credentials go
+//! with it.
 //!
-//! WHAT A SEPARATE KEYCHAIN ACTUALLY BUYS. Not a stronger root of trust: the
-//! password for this keychain is itself kept in the login keychain, so anyone
-//! who can open that can reach this one. What it buys is independent locking.
-//! The login keychain typically stays unlocked for a whole session; this one
-//! is set to lock on sleep and after fifteen minutes idle, so a walked-away-
-//! from Mac stops handing out access tokens without logging the user out of
-//! everything else they own. Say that plainly rather than implying more.
+//! So this holds no keychain password at all. Three choices, none of which
+//! require us to keep a secret in order to reach a secret:
 //!
-//! The user can choose the login keychain instead — some people prefer one
-//! place for everything, and a security control nobody understands gets
-//! turned off rather than used.
+//! - DataProtection — the modern keychain, the one Passwords.app surfaces and
+//!   iOS uses exclusively. There is no keychain password: items are protected
+//!   by the login session, and can optionally sync through iCloud. Needs the
+//!   app to be signed with a keychain-access-group entitlement, so an unsigned
+//!   development build may be refused — which is why it degrades rather than
+//!   insists.
+//! - File — a keychain the user already has and manages, named by path. We
+//!   open it and read; if it is locked, macOS asks the user, exactly as it
+//!   does for any other app. Their password stays theirs.
+//! - Login — the default keychain, alongside everything else. Simple, and what
+//!   most apps do.
+//!
+//! We deliberately do not create keychains. `security create-keychain` and
+//! Keychain Access both do it better, and a keychain created by an app is one
+//! whose password has to live somewhere — which is the mistake above.
 
 #![cfg(target_os = "macos")]
 
 use anyhow::{anyhow, Context, Result};
-use security_framework::os::macos::keychain::{CreateOptions, KeychainSettings, SecKeychain};
+use security_framework::os::macos::keychain::SecKeychain;
+use security_framework::passwords::{
+    delete_generic_password_options, generic_password, set_generic_password_options,
+};
+use security_framework::passwords_options::PasswordOptions;
 
 use super::secret_store::{SecretStore, SERVICE};
 
 /// Which keychain macOS credentials go to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MacKeychain {
-    /// A keychain belonging to this app, locked independently.
-    Dedicated,
-    /// The user's login keychain, alongside everything else.
+    /// The modern keychain: no keychain password, optional iCloud sync.
+    DataProtection,
+    /// A keychain file the user manages, by path.
+    File(String),
+    /// The login keychain.
     Login,
 }
 
 impl MacKeychain {
-    pub fn as_str(self) -> &'static str {
+    pub fn as_str(&self) -> String {
         match self {
-            MacKeychain::Dedicated => "dedicated",
-            MacKeychain::Login => "login",
+            MacKeychain::DataProtection => "data-protection".to_string(),
+            MacKeychain::Login => "login".to_string(),
+            MacKeychain::File(path) => path.clone(),
         }
     }
 
+    /// Anything that looks like a path is one; the two names are reserved.
+    ///
+    /// Defaults to the login keychain rather than DataProtection, because an
+    /// unsigned build cannot use the latter and silently falling back to the
+    /// encrypted blob would be a worse surprise than using the keychain every
+    /// other app uses.
     pub fn parse(value: &str) -> MacKeychain {
         match value {
-            "login" => MacKeychain::Login,
-            _ => MacKeychain::Dedicated,
+            "data-protection" => MacKeychain::DataProtection,
+            "login" | "" => MacKeychain::Login,
+            path if path.contains('/') => MacKeychain::File(path.to_string()),
+            _ => MacKeychain::Login,
         }
     }
 }
 
-/// The account name the dedicated keychain's own password is filed under, in
-/// the login keychain.
-const KEYCHAIN_PASSWORD_ACCOUNT: &str = "dedicated-keychain-password";
-
-/// Lock fifteen minutes after the last use.
-const LOCK_INTERVAL_SECONDS: u32 = 15 * 60;
-
-/// Where the dedicated keychain lives.
+/// Should items follow the user to their other Macs?
 ///
-/// Overridable so tests can work in a directory they own rather than the
-/// user's real keychain directory — CI runs these against the real Security
-/// framework, and a test that writes to ~/Library/Keychains is a test that
-/// leaves something behind.
-fn keychain_path() -> Result<String> {
-    if let Ok(path) = std::env::var("CRISPDECK_KEYCHAIN_PATH") {
-        return Ok(path);
+/// Off unless asked for. Syncing access tokens through iCloud is a reasonable
+/// thing to want and a surprising thing to get without choosing it.
+fn sync_enabled() -> bool {
+    std::env::var("CRISPDECK_KEYCHAIN_ICLOUD_SYNC").as_deref() == Ok("1")
+}
+
+fn protected_options(key: &str) -> PasswordOptions {
+    let mut options = PasswordOptions::new_generic_password(SERVICE, key);
+    options.use_protected_keychain();
+    if sync_enabled() {
+        options.set_access_synchronized(Some(true));
     }
-    let home = std::env::var("HOME").context("no HOME to put a keychain in")?;
-    Ok(format!("{home}/Library/Keychains/CrispDeck.keychain-db"))
-}
-
-/// A password for the dedicated keychain, generated once and kept in the
-/// login keychain.
-///
-/// Generated rather than asked for: prompting on first launch to invent a
-/// second password is how people end up choosing the same one they already
-/// use, or writing it down.
-fn dedicated_password() -> Result<String> {
-    let login = SecKeychain::default().context("cannot open the login keychain")?;
-
-    if let Ok((password, _)) = login.find_generic_password(SERVICE, KEYCHAIN_PASSWORD_ACCOUNT) {
-        return Ok(String::from_utf8(password.to_vec())
-            .context("the stored keychain password is not valid UTF-8")?);
-    }
-
-    let generated = generate_password();
-    login
-        .set_generic_password(SERVICE, KEYCHAIN_PASSWORD_ACCOUNT, generated.as_bytes())
-        .map_err(|e| anyhow!("could not store the keychain password: {e}"))?;
-    Ok(generated)
-}
-
-/// 32 bytes of randomness, hex encoded.
-fn generate_password() -> String {
-    use rand::RngCore;
-    let mut bytes = [0u8; 32];
-    rand::thread_rng().fill_bytes(&mut bytes);
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
-}
-
-/// Open the dedicated keychain, creating it the first time.
-fn open_dedicated() -> Result<SecKeychain> {
-    let path = keychain_path()?;
-    let password = dedicated_password()?;
-
-    match SecKeychain::open(&path) {
-        Ok(mut keychain) => {
-            // Opening succeeds for a keychain that is merely locked, so unlock
-            // before use or the first read fails with a prompt behind it.
-            keychain
-                .unlock(Some(&password))
-                .map_err(|e| anyhow!("could not unlock {path}: {e}"))?;
-            Ok(keychain)
-        }
-        Err(_) => create_dedicated(&path, &password),
-    }
-}
-
-fn create_dedicated(path: &str, password: &str) -> Result<SecKeychain> {
-    let mut keychain = CreateOptions::new()
-        .password(password)
-        // Never prompt: this may run while the app is starting, and a modal
-        // nobody is there to answer is a hang.
-        .prompt_user(false)
-        .create(path)
-        .map_err(|e| anyhow!("could not create {path}: {e}"))?;
-
-    // The reason for a separate keychain in the first place.
-    let mut settings = KeychainSettings::new();
-    settings.set_lock_on_sleep(true);
-    settings.set_lock_interval(Some(LOCK_INTERVAL_SECONDS));
-    keychain
-        .set_settings(&settings)
-        .map_err(|e| anyhow!("could not set lock settings on {path}: {e}"))?;
-
-    Ok(keychain)
+    options
 }
 
 /// The macOS secret store, in whichever keychain the user chose.
@@ -142,25 +97,41 @@ pub struct MacKeychainStore {
 }
 
 impl MacKeychainStore {
-    fn keychain(&self) -> Result<SecKeychain> {
-        match self.which {
-            MacKeychain::Login => {
-                SecKeychain::default().context("cannot open the login keychain")
+    /// The file-based keychain for File and Login.
+    ///
+    /// Note what is absent: any attempt to unlock. A locked keychain makes
+    /// macOS ask the user, which is the right party to ask — and means we
+    /// never hold a password that could be lost with us.
+    fn file_keychain(&self) -> Result<SecKeychain> {
+        match &self.which {
+            MacKeychain::Login => SecKeychain::default().context("cannot open the login keychain"),
+            MacKeychain::File(path) => SecKeychain::open(path)
+                .map_err(|e| anyhow!("cannot open the keychain at {path}: {e}")),
+            MacKeychain::DataProtection => {
+                Err(anyhow!("the data protection keychain is not a file"))
             }
-            MacKeychain::Dedicated => open_dedicated(),
         }
     }
 }
 
 impl SecretStore for MacKeychainStore {
     fn set(&self, key: &str, secret: &str) -> Result<()> {
-        self.keychain()?
+        if self.which == MacKeychain::DataProtection {
+            return set_generic_password_options(secret.as_bytes(), protected_options(key))
+                .map_err(|e| anyhow!("could not write {key} to the data protection keychain: {e}"));
+        }
+        self.file_keychain()?
             .set_generic_password(SERVICE, key, secret.as_bytes())
             .map_err(|e| anyhow!("could not write {key} to the keychain: {e}"))
     }
 
     fn get(&self, key: &str) -> Result<String> {
-        let keychain = self.keychain()?;
+        if self.which == MacKeychain::DataProtection {
+            let bytes = generic_password(protected_options(key))
+                .map_err(|e| anyhow!("no data protection keychain entry for {key}: {e}"))?;
+            return String::from_utf8(bytes).context("keychain entry is not valid UTF-8");
+        }
+        let keychain = self.file_keychain()?;
         let (password, _item) = keychain
             .find_generic_password(SERVICE, key)
             .map_err(|e| anyhow!("no keychain entry for {key}: {e}"))?;
@@ -168,15 +139,56 @@ impl SecretStore for MacKeychainStore {
     }
 
     fn delete(&self, key: &str) -> Result<()> {
-        let keychain = self.keychain()?;
+        // Already gone is the outcome the caller wanted: forget() runs on every
+        // account deletion, including accounts never stored here.
+        if self.which == MacKeychain::DataProtection {
+            let _ = delete_generic_password_options(protected_options(key));
+            return Ok(());
+        }
+        let keychain = self.file_keychain()?;
         match keychain.find_generic_password(SERVICE, key) {
-            // Already gone is the outcome the caller wanted; forget() runs on
-            // every account deletion, including ones never stored here.
             Err(_) => Ok(()),
             Ok((_, item)) => {
                 item.delete();
                 Ok(())
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_two_names_are_reserved_and_anything_path_like_is_a_path() {
+        assert_eq!(MacKeychain::parse("data-protection"), MacKeychain::DataProtection);
+        assert_eq!(MacKeychain::parse("login"), MacKeychain::Login);
+        assert_eq!(
+            MacKeychain::parse("/Users/someone/Library/Keychains/Work.keychain-db"),
+            MacKeychain::File("/Users/someone/Library/Keychains/Work.keychain-db".to_string())
+        );
+    }
+
+    #[test]
+    fn an_empty_or_unrecognised_setting_means_the_login_keychain() {
+        // Not DataProtection: an unsigned build cannot use that, and falling
+        // through to the encrypted blob would surprise people more than using
+        // the keychain every other app uses.
+        assert_eq!(MacKeychain::parse(""), MacKeychain::Login);
+        assert_eq!(MacKeychain::parse("nonsense"), MacKeychain::Login);
+    }
+
+    #[test]
+    fn a_path_round_trips_through_the_setting() {
+        let path = "/Volumes/Secrets/crispdeck.keychain-db";
+        assert_eq!(MacKeychain::parse(&MacKeychain::parse(path).as_str()), MacKeychain::File(path.to_string()));
+    }
+
+    #[test]
+    fn the_names_round_trip_too() {
+        for which in [MacKeychain::DataProtection, MacKeychain::Login] {
+            assert_eq!(MacKeychain::parse(&which.as_str()), which);
         }
     }
 }
