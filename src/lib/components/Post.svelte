@@ -287,7 +287,8 @@
   // Share as image
   let capturingImage = $state(false);
   let shareError = $state('');
-  let postEl: HTMLDivElement | undefined = $state();
+  // HTMLElement, not HTMLDivElement: the wrapper is an <article> now.
+  let postEl: HTMLElement | undefined = $state();
 
   async function handleShareAsImage() {
     if (!postEl) return;
@@ -810,7 +811,9 @@
     <button onclick={() => labelRevealed = true} class="text-xs text-[var(--color-primary-text)] hover:underline mt-1">{i18n.t.post.showAnyway}</button>
   </div>
 {:else}
-<div bind:this={postEl} data-post-uri={post.uri} class="group {compact ? 'p-2.5' : 'p-4'} bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] transition-shadow">
+<!-- <article>, not <div>: a screen reader can then move post to post. Without
+     it a timeline is one undifferentiated run of text hundreds of items long. -->
+<article bind:this={postEl} data-post-uri={post.uri} class="group {compact ? 'p-2.5' : 'p-4'} bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] transition-shadow">
   <!-- Label warnings -->
   {#if warnedLabels.length > 0 && !labelRevealed}
     <div class="mb-2 p-2 bg-yellow-900/20 border border-yellow-700/30 rounded text-xs text-yellow-300 flex items-center justify-between">
@@ -864,7 +867,9 @@
           <span class="w-2 h-2 rounded-full flex-shrink-0" style="background: {platformColor}"></span>
         </a>
         <a href={getThreadUrl(post)} class="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:underline flex-shrink-0 ml-auto" title={formatDate(post.createdAt)}>
-          {relAge}
+          <!-- <time datetime> carries the real instant. "2h" read aloud on its
+               own says nothing, and the title attribute is mouse-only. -->
+          <time datetime={post.createdAt}>{relAge}</time>
         </a>
         {#if post.platform === 'mastodon' && (post.raw as any)?.edited_at}
           <span class="text-[9px] text-[var(--color-text-muted)] opacity-60" title="Edited {formatDate((post.raw as any).edited_at)}">(edited)</span>
@@ -1381,7 +1386,7 @@
       </div>
     </div>
   {/if}
-</div>
+</article>
 
 {#if lightboxIndex !== null}
   <MediaLightbox items={lightboxItems} index={lightboxIndex} onclose={closeLightbox} />
