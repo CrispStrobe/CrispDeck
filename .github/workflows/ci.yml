@@ -73,6 +73,18 @@ jobs:
             librsvg2-dev \
             libssl-dev
 
+      # `cargo check` type-checks and stops. It never builds the test
+      # binaries, so the unit tests in src-tauri had never run in CI — they
+      # could have been broken for months without anyone finding out. The
+      # Rust side holds credential encryption, the Mastodon OAuth exchange
+      # and the whole local database, so it is the last place that should be
+      # unverified.
+      - name: cargo test
+        working-directory: src-tauri
+        run: cargo test --lib --locked
+
+      # Kept separately: `cargo test` builds the lib and its tests, but not
+      # the binary target, and a break there would still ship.
       - name: cargo check
         working-directory: src-tauri
-        run: cargo check
+        run: cargo check --locked
