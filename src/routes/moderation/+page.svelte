@@ -1,5 +1,7 @@
 <script lang="ts">
   import { base } from '$app/paths';
+  import { fetchOk } from '$lib/http';
+  import { findBlockUri, unblockActor } from '$lib/bluesky-moderation';
   import { swallow } from '$lib/debug-log';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
@@ -17,6 +19,8 @@
     avatar?: string;
     id?: string; // mastodon account id
     did?: string; // bluesky did
+    /** at:// URI of the block record — what actually removes a Bluesky block. */
+    blockUri?: string;
     type: 'block' | 'mute';
   }
 
@@ -68,7 +72,9 @@
           // Blocks
           const blocks = await agent.api.app.bsky.graph.getBlocks({ limit: 100 });
           for (const b of blocks.data.blocks) {
-            allBlocked.push({ platform: 'bluesky', handle: b.handle, displayName: b.displayName, avatar: b.avatar, did: b.did, type: 'block' });
+            // viewer.blocking is the block record's URI — the only handle on
+            // the record that unblocking can use.
+            allBlocked.push({ platform: 'bluesky', handle: b.handle, displayName: b.displayName, avatar: b.avatar, did: b.did, blockUri: b.viewer?.blocking, type: 'block' });
           }
           // Mutes
           const mutes = await agent.api.app.bsky.graph.getMutes({ limit: 100 });
@@ -135,23 +141,31 @@
       try {
         if (item.platform === 'bluesky' && item.did) {
           const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
-          // Find and delete the block record
-          const blocks = await agent.api.app.bsky.graph.getBlocks({ limit: 100 });
-          // Unblock by deleting the block relationship
-          await agent.api.app.bsky.graph.muteActor({ actor: item.did }); // This is a workaround
-          // Actually need to delete the block record from the repo
+          // This used to fetch the block list, discard it, and call muteActor
+          // instead — muting the account the user was unblocking, leaving the
+          // block in place, and dropping the row from the list regardless.
+          const uri = item.blockUri ?? (await findBlockUri(agent, item.did));
+          if (!uri) throw new Error('No block record found for this account');
+          await unblockActor(agent, uri);
         } else if (item.platform === 'mastodon' && item.id) {
           const masto = entry.client as MastodonClient;
           const token = masto.getAccessToken();
-          if (token) {
-            await fetch(`${masto.getInstanceUrl()}/api/v1/accounts/${item.id}/unblock`, {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${token}` },
-            });
-          }
+          if (!token) throw new Error('No access token for this Mastodon account');
+          await fetchOk(
+            `${masto.getInstanceUrl()}/api/v1/accounts/${item.id}/unblock`,
+            { method: 'POST', headers: { Authorization: `Bearer ${token}` } },
+            'unblock account',
+          );
+        } else {
+          throw new Error('This account cannot be unblocked from here');
         }
         blocked = blocked.filter(b => b !== item);
-      } catch (e) { error = String(e); }
+        toast.success(i18n.t.profile.unblocked);
+      } catch (e) {
+        // Only remove the row when the server agreed.
+        swallow('moderation.unblock', e);
+        toast.error(i18n.t.profile.unblockFailed);
+      }
       break;
     }
   }
@@ -185,15 +199,18 @@
         } else if (item.platform === 'mastodon' && item.id) {
           const masto = entry.client as MastodonClient;
           const token = masto.getAccessToken();
-          if (token) {
-            await fetch(`${masto.getInstanceUrl()}/api/v1/accounts/${item.id}/unmute`, {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${token}` },
-            });
-          }
+          if (!token) throw new Error('No access token for this Mastodon account');
+          await fetchOk(
+            `${masto.getInstanceUrl()}/api/v1/accounts/${item.id}/unmute`,
+            { method: 'POST', headers: { Authorization: `Bearer ${token}` } },
+            'unmute account',
+          );
         }
         muted = muted.filter(m => m !== item);
-      } catch (e) { error = String(e); }
+      } catch (e) {
+        swallow('moderation.unmute', e);
+        toast.error(i18n.t.profile.muteFailed);
+      }
       break;
     }
   }

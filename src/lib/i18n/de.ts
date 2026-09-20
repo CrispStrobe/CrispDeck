@@ -729,7 +729,7 @@ export default {
       confirmClear: 'Gesamtes Archiv löschen? Dies kann nicht rückgängig gemacht werden.',
       done: 'Fertig! {count} Einträge archiviert.',
     },
-    profile: {
+    profile: { followFailed: 'Das Folgen konnte nicht geändert werden', muteFailed: 'Dieses Konto konnte nicht stummgeschaltet werden', unblockFailed: 'Die Blockierung konnte nicht aufgehoben werden', blockFailed: 'Dieses Konto konnte nicht blockiert werden', unblocked: 'Blockierung aufgehoben', unblock: 'Blockierung aufheben',
       followsYou: 'Folgt dir',
       backToFeed: 'Zurück zum Feed',
       following: 'Folgt',

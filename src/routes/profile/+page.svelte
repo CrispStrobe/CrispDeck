@@ -11,6 +11,9 @@
   import { getCached, setCache, isStale } from '$lib/view-cache';
   import Post from '$lib/components/Post.svelte';
   import type { UnifiedPost, Account, Platform } from '$lib/types';
+  import { blockActor, unblockActor, findBlockUri, muteActor } from '$lib/bluesky-moderation';
+  import { fetchOk } from '$lib/http';
+  import { toast } from '$lib/toast.svelte';
 
   let loading = $state(true);
   let error = $state('');
@@ -23,6 +26,10 @@
   let followingList: Array<{ handle: string; displayName?: string; avatar?: string }> = $state([]);
   let loadingFollows = $state(false);
   let following = $state(false);
+  let blocked = $state(false);
+  let muted = $state(false);
+  /** URI of the block record, when we already know it — saves a lookup. */
+  let blockedUri: string | null = $state(null);
   let followsYou = $state(false);
   let followersCursor: string | undefined = $state(undefined);
   let followingCursor: string | undefined = $state(undefined);
@@ -97,6 +104,10 @@
       profile = await bsky.getProfile(handle);
       following = !!profile.viewer?.following;
       followsYou = !!profile.viewer?.followedBy;
+      // viewer.blocking is the block record's URI; viewer.muted is a flag.
+      blockedUri = profile.viewer?.blocking ?? null;
+      blocked = !!blockedUri;
+      muted = !!profile.viewer?.muted;
       const { feed } = await bsky.getAuthorFeed(handle);
       posts = sortPosts(feed.map(p => normalizePost(p, 'bluesky')), 'newest');
     } else {
@@ -122,11 +133,30 @@
           const relResp = await fetch(`${masto.getInstanceUrl()}/api/v1/accounts/relationships?id[]=${account.id}`, { headers: { Authorization: `Bearer ${token}` } });
           if (relResp.ok) {
             const rels = await relResp.json();
-            if (rels[0]) { following = rels[0].following; followsYou = rels[0].followed_by; }
+            if (rels[0]) {
+              following = rels[0].following;
+              followsYou = rels[0].followed_by;
+              blocked = !!rels[0].blocking;
+              muted = !!rels[0].muting;
+            }
           }
         } catch (e) { swallow('profile.loadProfile', e); }
       }
     }
+  }
+
+  /**
+   * POST to a Mastodon account endpoint, failing when the server refuses.
+   *
+   * The bare fetch these calls used resolves for a 401, so the line after it
+   * reported success for an action the instance rejected.
+   */
+  async function mastoAction(masto: MastodonClient, path: string, token: string): Promise<void> {
+    await fetchOk(
+      `${masto.getInstanceUrl()}/api/v1/accounts/${path}`,
+      { method: 'POST', headers: { Authorization: `Bearer ${token}` } },
+      path,
+    );
   }
 
   async function toggleFollow() {
@@ -134,31 +164,31 @@
     if (!entry) return;
     try {
       if (platform === 'bluesky') {
-        // Bluesky follow/unfollow via agent
         const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
         if (following) {
-          // unfollow — need the follow record URI
-          if (profile.viewer?.following) {
-            await agent.deleteFollow(profile.viewer.following);
+          // Unfollowing needs the follow record's URI. Without it nothing can
+          // be deleted — and flipping the button anyway told the user they had
+          // unfollowed someone they still follow.
+          if (!profile.viewer?.following) {
+            throw new Error('No follow record to remove — reload the profile and try again');
           }
+          await agent.deleteFollow(profile.viewer.following);
+          profile.viewer.following = undefined;
         } else {
-          await agent.follow(profile.did);
+          const res = await agent.follow(profile.did);
+          if (profile.viewer) profile.viewer.following = res?.uri;
         }
       } else {
         const masto = entry.client as MastodonClient;
         const token = masto.getAccessToken();
-        const instanceUrl = masto.getInstanceUrl();
-        if (token && profile._mastodonId) {
-          const endpoint = following ? 'unfollow' : 'follow';
-          await fetch(`${instanceUrl}/api/v1/accounts/${profile._mastodonId}/${endpoint}`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
-          });
-        }
+        if (!token) throw new Error('No access token for this Mastodon account');
+        if (!profile._mastodonId) throw new Error('This profile has no Mastodon account id');
+        await mastoAction(masto, `${profile._mastodonId}/${following ? 'unfollow' : 'follow'}`, token);
       }
       following = !following;
     } catch (e) {
-      error = `Follow action failed: ${e}`;
+      swallow('profile.toggleFollow', e);
+      toast.error(i18n.t.profile.followFailed);
     }
   }
 
@@ -223,18 +253,51 @@
     try {
       if (platform === 'bluesky' && profile.did) {
         const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
-        await agent.api.app.bsky.graph.muteActor({ actor: profile.did });
+        // This used to call muteActor and then report "User blocked." A mute
+        // does not stop the other account replying, quoting or following.
+        await blockActor(agent, profile.did);
+        blockedUri = await findBlockUri(agent, profile.did);
       } else if (platform === 'mastodon' && profile._mastodonId) {
         const masto = entry.client as MastodonClient;
         const token = masto.getAccessToken();
-        if (token) {
-          await fetch(`${masto.getInstanceUrl()}/api/v1/accounts/${profile._mastodonId}/block`, {
-            method: 'POST', headers: { Authorization: `Bearer ${token}` },
-          });
-        }
+        if (!token) throw new Error('No access token for this Mastodon account');
+        await mastoAction(masto, `${profile._mastodonId}/block`, token);
+      } else {
+        // No branch ran: saying "User blocked." here would be a lie.
+        throw new Error('This account cannot be blocked from here');
       }
-      error = 'User blocked.';
-    } catch (e) { error = String(e); }
+      blocked = true;
+      toast.success(i18n.t.profile.blocked);
+    } catch (e) {
+      swallow('profile.blockUser', e);
+      toast.error(i18n.t.profile.blockFailed);
+    }
+  }
+
+  async function unblockUser() {
+    const entry = getEntry();
+    if (!entry) return;
+    try {
+      if (platform === 'bluesky' && profile.did) {
+        const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
+        const uri = blockedUri ?? profile.viewer?.blocking ?? (await findBlockUri(agent, profile.did));
+        if (!uri) throw new Error('No block record found for this account');
+        await unblockActor(agent, uri);
+        blockedUri = null;
+      } else if (platform === 'mastodon' && profile._mastodonId) {
+        const masto = entry.client as MastodonClient;
+        const token = masto.getAccessToken();
+        if (!token) throw new Error('No access token for this Mastodon account');
+        await mastoAction(masto, `${profile._mastodonId}/unblock`, token);
+      } else {
+        throw new Error('This account cannot be unblocked from here');
+      }
+      blocked = false;
+      toast.success(i18n.t.profile.unblocked);
+    } catch (e) {
+      swallow('profile.unblockUser', e);
+      toast.error(i18n.t.profile.unblockFailed);
+    }
   }
 
   async function muteUser() {
@@ -243,18 +306,21 @@
     try {
       if (platform === 'bluesky' && profile.did) {
         const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
-        await agent.api.app.bsky.graph.muteActor({ actor: profile.did });
+        await muteActor(agent, profile.did);
       } else if (platform === 'mastodon' && profile._mastodonId) {
         const masto = entry.client as MastodonClient;
         const token = masto.getAccessToken();
-        if (token) {
-          await fetch(`${masto.getInstanceUrl()}/api/v1/accounts/${profile._mastodonId}/mute`, {
-            method: 'POST', headers: { Authorization: `Bearer ${token}` },
-          });
-        }
+        if (!token) throw new Error('No access token for this Mastodon account');
+        await mastoAction(masto, `${profile._mastodonId}/mute`, token);
+      } else {
+        throw new Error('This account cannot be muted from here');
       }
-      error = 'User muted.';
-    } catch (e) { error = String(e); }
+      muted = true;
+      toast.success(i18n.t.profile.muted);
+    } catch (e) {
+      swallow('profile.muteUser', e);
+      toast.error(i18n.t.profile.muteFailed);
+    }
   }
 
   const filteredPosts = $derived.by(() => {
@@ -352,8 +418,12 @@
           >
             {#if following}<UserMinus size={14} /> Following{:else}<UserPlus size={14} /> Follow{/if}
           </button>
-          <button onclick={muteUser} class="px-3 py-2 text-xs border border-[var(--color-border)] rounded-md text-[var(--color-text-muted)] hover:text-yellow-400 hover:border-yellow-500 transition-colors" title={i18n.t.profile.mute}>{i18n.t.profile.mute}</button>
-          <button onclick={blockUser} class="px-3 py-2 text-xs border border-[var(--color-border)] rounded-md text-[var(--color-text-muted)] hover:text-red-400 hover:border-red-500 transition-colors" title={i18n.t.profile.block}>{i18n.t.profile.block}</button>
+          <button onclick={muteUser} disabled={muted} class="px-3 py-2 text-xs border border-[var(--color-border)] rounded-md text-[var(--color-text-muted)] hover:text-yellow-400 hover:border-yellow-500 transition-colors disabled:opacity-50" title={i18n.t.profile.mute}>{i18n.t.profile.mute}</button>
+          {#if blocked}
+            <button onclick={unblockUser} class="px-3 py-2 text-xs border border-red-500 rounded-md text-red-400 hover:bg-red-500/10 transition-colors" title={i18n.t.profile.unblock}>{i18n.t.profile.unblock}</button>
+          {:else}
+            <button onclick={blockUser} class="px-3 py-2 text-xs border border-[var(--color-border)] rounded-md text-[var(--color-text-muted)] hover:text-red-400 hover:border-red-500 transition-colors" title={i18n.t.profile.block}>{i18n.t.profile.block}</button>
+          {/if}
         </div>
         {#if profile.description}
           <p class="text-sm text-[var(--color-text)] mt-2">{profile.description}</p>

@@ -748,7 +748,7 @@ export const translations = {
       confirmClear: 'Delete entire archive? This cannot be undone.',
       done: 'Done! {count} items archived.',
     },
-    profile: {
+    profile: { followFailed: 'Could not change who you follow', muteFailed: 'Could not mute this account', unblockFailed: 'Could not unblock this account', blockFailed: 'Could not block this account', unblocked: 'Unblocked', unblock: 'Unblock',
       followsYou: 'Follows you',
       backToFeed: 'Back to feed',
       following: 'Following',
