@@ -495,7 +495,7 @@
           <button
             onclick={runPreview}
             disabled={previewLoading || !compiledQuery.trim()}
-            class="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--color-bluesky)] rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
+            class="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--color-bluesky-strong)] rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
           >
             {#if previewLoading}<Loader2 size={14} class="animate-spin" />{:else}<Play size={14} />{/if}
             {i18n.t.feedBuilder.preview}
@@ -530,7 +530,7 @@
             <button
               onclick={handlePublish}
               disabled={publishLoading || !compiledQuery.trim()}
-              class="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--color-bluesky)] rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
+              class="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--color-bluesky-strong)] rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               {#if publishLoading}<Loader2 size={14} class="animate-spin" />{:else}<Upload size={14} />{/if}
               Publish to Bluesky

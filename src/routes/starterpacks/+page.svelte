@@ -268,7 +268,7 @@
           <input type="text" bind:value={createDesc} placeholder="Description (optional)" class="w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-bluesky)]" />
           <textarea bind:value={createHandles} placeholder={i18n.t.starterPacks.handlesPlaceholder} rows="4" class="w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-bluesky)] font-mono"></textarea>
           <div class="flex gap-2">
-            <button onclick={handleCreatePack} disabled={creating || !createName.trim() || !createHandles.trim()} class="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--color-bluesky)] text-white rounded-md disabled:opacity-50">
+            <button onclick={handleCreatePack} disabled={creating || !createName.trim() || !createHandles.trim()} class="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--color-bluesky-strong)] text-white rounded-md disabled:opacity-50">
               {#if creating}<Loader2 size={14} class="animate-spin" />{:else}<Plus size={14} />{/if}
               Create
             </button>
@@ -276,7 +276,7 @@
           </div>
         </div>
       {:else}
-        <button onclick={() => showCreate = true} class="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--color-bluesky)] text-white rounded-md hover:opacity-90">
+        <button onclick={() => showCreate = true} class="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--color-bluesky-strong)] text-white rounded-md hover:opacity-90">
           <Plus size={14} /> {i18n.t.starterPacks.createPack}
         </button>
       {/if}
@@ -292,7 +292,7 @@
         placeholder={i18n.t.starterPacks.searchPacks}
         class="flex-1 px-4 py-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-bluesky)]"
       />
-      <button type="submit" disabled={searching || !bskyEntry} class="px-5 py-3 bg-[var(--color-bluesky)] text-white text-sm font-medium rounded-lg disabled:opacity-50">
+      <button type="submit" disabled={searching || !bskyEntry} class="px-5 py-3 bg-[var(--color-bluesky-strong)] text-white text-sm font-medium rounded-lg disabled:opacity-50">
         {#if searching}<Loader2 size={14} class="animate-spin" />{:else}Search{/if}
       </button>
     </div>

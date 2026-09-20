@@ -1,6 +1,18 @@
 @import "tailwindcss";
 
 /*
+ * --color-*-strong: the brand hue dark enough to carry text on top of it.
+ *
+ * The plain --color-bluesky / --color-mastodon stay the brand colours and are
+ * still right for dots, borders, and text on the page background. As a button
+ * background they put #f8fafc at 3.46:1 and 4.18:1, both under WCAG AA.
+ *
+ * Only the action buttons use these. Darkening the brand tokens outright was
+ * the alternative and would have dropped their 17 text uses to 3.31 and 2.90,
+ * which is the same mistake in the other direction.
+ */
+
+/*
  * Colour tokens.
  *
  * --color-primary is the *background* colour: white text sits on it, so it
@@ -19,6 +31,8 @@
   --color-bluesky: #0085ff;
   --color-mastodon: #6364ff;
   --color-threads: #000000;
+  --color-bluesky-strong: #0069cc;   /* text on it: >=5.1:1 */
+  --color-mastodon-strong: #4b4ce0; /* text on it: >=5.8:1 */
   --color-bg: #0f172a;
   --color-surface: #1e293b;
   --color-surface-hover: #334155;
@@ -36,6 +50,8 @@
   --color-bluesky: #0085ff;
   --color-mastodon: #6364ff;
   --color-threads: #ffffff;
+  --color-bluesky-strong: #0069cc;   /* text on it: >=5.1:1 */
+  --color-mastodon-strong: #4b4ce0; /* text on it: >=5.8:1 */
   --color-bg: #000000;
   --color-surface: #0a0a0a;
   --color-surface-hover: #1a1a1a;
@@ -53,6 +69,8 @@
   --color-bluesky: #0070e0;
   --color-mastodon: #563acc;
   --color-threads: #000000;
+  --color-bluesky-strong: #005cb8;   /* text on it: >=5.1:1 */
+  --color-mastodon-strong: #4544cc; /* text on it: >=5.8:1 */
   --color-bg: #f8fafc;
   --color-surface: #ffffff;
   --color-surface-hover: #f1f5f9;
