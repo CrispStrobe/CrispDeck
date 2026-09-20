@@ -284,3 +284,35 @@ export async function completeMastodonOAuth(params: {
   if (!isTauri()) return browserDb.completeMastodonOAuth(params);
   return invoke('auth_complete_mastodon_oauth', params);
 }
+
+/** Where the desktop build keeps credentials. */
+export interface CredentialBackendInfo {
+  /** 'keychain' = the OS secret store; 'local' = the encrypted blob in the DB. */
+  backend: 'keychain' | 'local';
+  /** Whether this build has an OS store at all. False on macOS and the web. */
+  osStoreAvailable: boolean;
+}
+
+/**
+ * Read the credential storage setting.
+ *
+ * The browser build has no choice to make — IndexedDB is the only store — so
+ * it reports the local backend with nothing on offer, and the settings screen
+ * hides the control rather than showing one that cannot do anything.
+ */
+export async function getCredentialBackend(): Promise<CredentialBackendInfo> {
+  if (!isTauri()) return { backend: 'local', osStoreAvailable: false };
+  return invoke('credential_backend_get');
+}
+
+/**
+ * Choose where *new* credentials are written.
+ *
+ * Accounts already connected stay where they are: moving them would mean
+ * decrypting every secret and writing it elsewhere, which is a thing to do
+ * deliberately rather than as a side effect of flicking a switch.
+ */
+export async function setCredentialBackend(backend: 'keychain' | 'local'): Promise<void> {
+  if (!isTauri()) return;
+  return invoke('credential_backend_set', { backend });
+}

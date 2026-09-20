@@ -183,7 +183,7 @@ export default {
       voted: 'Abgestimmt',
       open: 'Offen',
     },
-    settings: {
+    settings: { credentialNoKeychain: 'Auf dieser Plattform gibt es noch keinen System-Schlüsselbund; Zugangsdaten werden in der App verschlüsselt.', credentialAppliesToNew: 'Gilt für künftig verbundene Konten; bestehende bleiben, wo sie sind.', credentialLocalHint: 'Mit einem von diesem Rechner abgeleiteten Schlüssel verschlüsselt. Schwächer, aber immer verfügbar.', credentialKeychainHint: 'Das Betriebssystem verwahrt das Geheimnis. Wo verfügbar bevorzugt.', credentialLocal: 'Verschlüsselt in dieser App', credentialKeychain: 'System-Schlüsselbund', credentialStorage: 'Zugangsdaten-Speicher',
       twoFactorCode: '2FA-Code (siehe deine E-Mails)',
       densityDesc: 'Passt Abstände, Avatargröße und Innenabstand in der gesamten Oberfläche an',
       displayHeading: 'Darstellung',
