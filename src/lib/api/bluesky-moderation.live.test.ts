@@ -2,6 +2,20 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { parseAtUri, BLOCK_COLLECTION, unblockActor } from '../bluesky-moderation';
 
 /**
+ * Hits the real Bluesky network over the network.
+ *
+ * Gated behind CRISPDECK_LIVE so a slow or unreachable third party cannot turn
+ * a pull request red. These are worth having — they are what catches an API
+ * changing shape under us — but a required check should report on the code in
+ * the change, not on someone else's uptime. The Live APIs workflow runs them
+ * nightly and on demand.
+ *
+ *   CRISPDECK_LIVE=1 npm test -- src/lib/api/bluesky-moderation.live.test.ts
+ */
+const LIVE = !!process.env.CRISPDECK_LIVE;
+
+
+/**
  * Live oracle for the block record this app writes.
  *
  * Block records are public in AT Proto — they live in the author's repo and
@@ -38,7 +52,7 @@ async function listRecords(pds: string, did: string, collection: string, limit =
   return (await r.json()).records ?? [];
 }
 
-describe('app.bsky.graph.block, against real records', () => {
+describe.skipIf(!LIVE)('app.bsky.graph.block, against real records', () => {
   let records: any[] = [];
   let source = '';
 

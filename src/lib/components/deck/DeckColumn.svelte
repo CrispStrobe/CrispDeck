@@ -448,7 +448,7 @@
         {/if}
       </div>
       {#if onrefresh}
-        <button onclick={onrefresh} disabled={loading} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
+        <button onclick={onrefresh} disabled={loading} aria-label={i18n.t.common.refreshColumn} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
           <RefreshCw size={12} class={loading ? 'animate-spin' : ''} />
         </button>
       {/if}
@@ -459,7 +459,7 @@
         </button>
       {/if}
       {#if onremove && !pinned}
-        <button onclick={onremove} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors">
+        <button onclick={onremove} aria-label={i18n.t.common.removeColumn} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors">
           <X size={12} />
         </button>
       {/if}

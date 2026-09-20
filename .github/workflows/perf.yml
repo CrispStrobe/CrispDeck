@@ -157,20 +157,36 @@ jobs:
           # Lighthouse drives a real Chrome. Point it at the one Playwright
           # already installed above rather than installing a second browser.
           export CHROME_PATH="$(node -e 'console.log(require("playwright").chromium.executablePath())')"
-          npx -y lighthouse@12 http://localhost:4173/ \
-            --output=json --output-path=lighthouse.json \
-            --preset=desktop \
-            --chrome-flags="--headless=new --no-sandbox --disable-dev-shm-usage" \
-            --quiet
+
+          # Scoring only "/" was close to scoring nothing: logged out it is a
+          # 200-element shell, and most accessibility audits came back "not
+          # applicable" for want of anything to judge. The routes are read
+          # from the budget so the two cannot drift apart.
+          routes=$(node -e '
+            const b = require("./bench/lighthouse-budget.json");
+            console.log((b.routes ?? [{ path: "/" }]).map((r) => r.path).join(" "));
+          ')
+          echo "measuring: $routes"
+
+          for route in $routes; do
+            slug=$(echo "$route" | sed 's#^/##; s#/#-#g')
+            out="lighthouse${slug:+-$slug}.json"
+            npx -y lighthouse@12 "http://localhost:4173${route}" \
+              --output=json --output-path="$out" \
+              --preset=desktop \
+              --chrome-flags="--headless=new --no-sandbox --disable-dev-shm-usage" \
+              --quiet
+            test -s "$out" || { echo "no report for $route"; exit 1; }
+          done
 
       - name: Lighthouse budget
-        run: node bench/check-lighthouse.mjs lighthouse.json bench/lighthouse-budget.json
+        run: node bench/check-lighthouse.mjs bench/lighthouse-budget.json lighthouse*.json
 
       - name: Report Lighthouse
         if: always()
         run: |
-          if [ -f lighthouse.json ]; then
-            node bench/check-lighthouse.mjs lighthouse.json bench/lighthouse-budget.json --markdown >> "$GITHUB_STEP_SUMMARY"
+          if ls lighthouse*.json >/dev/null 2>&1; then
+            node bench/check-lighthouse.mjs bench/lighthouse-budget.json lighthouse*.json --markdown >> "$GITHUB_STEP_SUMMARY"
           else
             echo "_Lighthouse produced no report._" >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -195,7 +211,7 @@ jobs:
           path: |
             bench-result.json
             bundle-size.json
-            lighthouse.json
+            lighthouse*.json
             bench/bundle-budget.json
             chunk-map.client.json
             chunk-map.server.json

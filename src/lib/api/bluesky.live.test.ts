@@ -4,9 +4,23 @@
  */
 import { describe, it, expect } from 'vitest';
 
+/**
+ * Hits the real Bluesky public API over the network.
+ *
+ * Gated behind CRISPDECK_LIVE so a slow or unreachable third party cannot turn
+ * a pull request red. These are worth having — they are what catches an API
+ * changing shape under us — but a required check should report on the code in
+ * the change, not on someone else's uptime. The Live APIs workflow runs them
+ * nightly and on demand.
+ *
+ *   CRISPDECK_LIVE=1 npm test -- src/lib/api/bluesky.live.test.ts
+ */
+const LIVE = !!process.env.CRISPDECK_LIVE;
+
+
 const PUBLIC_API = 'https://public.api.bsky.app';
 
-describe('Bluesky public API — live', () => {
+describe.skipIf(!LIVE)('Bluesky public API — live', () => {
   it('trending topics returns data', async () => {
     const resp = await fetch(`${PUBLIC_API}/xrpc/app.bsky.unspecced.getTrendingTopics?limit=10`);
     expect(resp.ok).toBe(true);

@@ -850,7 +850,7 @@ export default {
       pageTitle: 'CrispDeck — Datenschutzerklärung',
       metaDescription: 'Datenschutzerklärung von CrispDeck — wie mit deinen Daten umgegangen wird.',
     },
-    common: { someAccountsFailed: '{count} Konto/Konten nicht erreichbar',
+    common: { removeColumn: 'Spalte entfernen', close: 'Schließen', refreshColumn: 'Spalte aktualisieren', nextMonth: 'Nächster Monat', previousMonth: 'Vorheriger Monat', someAccountsFailed: '{count} Konto/Konten nicht erreichbar',
       create: 'Erstellen',
       switchAccount: 'Konto wechseln',
       scrollToTop: 'Nach oben scrollen',

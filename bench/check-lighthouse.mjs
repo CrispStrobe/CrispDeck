@@ -8,11 +8,28 @@
 import { readFileSync } from 'node:fs';
 
 /**
+ * Merge the global category floors with a route's own overrides.
+ *
+ * A route floor is set at what that route scores today, so CI locks in "no
+ * worse" while the remaining debt stays visible instead of being averaged
+ * into a single number that hides which page is the problem.
+ *
+ * @param {any} budget
+ * @param {string} [routePath]
+ * @returns {Record<string, number>}
+ */
+export function floorsFor(budget, routePath) {
+  const route = (budget.routes ?? []).find((/** @type {any} */ r) => r.path === routePath);
+  return { ...(budget.categories ?? {}), ...(route?.categories ?? {}) };
+}
+
+/**
  * @param {any} report  a Lighthouse JSON report
  * @param {any} budget  a lighthouse-budget.json
+ * @param {string} [routePath]  which route this report is for
  * @returns {string[]} one message per violation; empty means within budget
  */
-export function checkLighthouse(report, budget) {
+export function checkLighthouse(report, budget, routePath) {
   const failures = [];
 
   // A report with no categories would let every threshold below pass by
@@ -26,7 +43,7 @@ export function checkLighthouse(report, budget) {
     failures.push(`Lighthouse runtime error: ${report.runtimeError.code} ${report.runtimeError.message ?? ''}`.trim());
   }
 
-  for (const [name, min] of Object.entries(budget.categories ?? {})) {
+  for (const [name, min] of Object.entries(floorsFor(budget, routePath))) {
     const cat = report.categories[name];
     if (!cat) {
       failures.push(`category "${name}" missing from the report`);
@@ -38,7 +55,8 @@ export function checkLighthouse(report, budget) {
     }
     if (cat.score < min) {
       failures.push(
-        `${name} scored ${Math.round(cat.score * 100)}, below the ${Math.round(Number(min) * 100)} floor`,
+        `${routePath ? routePath + ': ' : ''}${name} scored ${Math.round(cat.score * 100)}, ` +
+        `below the ${Math.round(Number(min) * 100)} floor`,
       );
     }
   }
@@ -53,7 +71,7 @@ export function checkLighthouse(report, budget) {
     // is a pass. informative audits carry no score and cannot fail.
     if (audit.scoreDisplayMode === 'notApplicable' || audit.scoreDisplayMode === 'informative') continue;
     if (audit.score !== 1) {
-      failures.push(`audit "${id}" failed: ${audit.title ?? id}`);
+      failures.push(`${routePath ? routePath + ': ' : ''}audit "${id}" failed: ${audit.title ?? id}`);
     }
   }
 
@@ -85,13 +103,12 @@ export function summarize(report) {
 /**
  * Render a summary as the markdown a GitHub job summary renders.
  * @param {any} report  a Lighthouse JSON report
+ * @param {string} [routePath]
  */
-export function markdown(report) {
+export function markdown(report, routePath) {
   const s = summarize(report);
   const out = [
-    '### Lighthouse',
-    '',
-    `\`${s.url}\`, desktop preset.`,
+    `**${routePath ?? s.url}** — desktop preset.`,
     '',
     '| category | score |',
     '|---|---|',
@@ -101,38 +118,75 @@ export function markdown(report) {
     '|---|---|',
     ...Object.entries(s.metrics).map(([k, v]) => `| ${k} | ${v} |`),
     '',
-    '> The performance score moved between 95 and 99 across four runs of one',
-    '> unchanged build on a loaded dev box, and scored 100 on the CI runner.',
-    '> Treat a few points of movement as noise; the budget only fails a',
-    '> collapse. The other three categories have been stable at 100 and are',
-    '> gated near that.',
   ];
   return out.join('\n');
 }
 
 // CLI:
-//   node bench/check-lighthouse.mjs lighthouse.json bench/lighthouse-budget.json
-//   node bench/check-lighthouse.mjs lighthouse.json bench/lighthouse-budget.json --markdown
+//   node bench/check-lighthouse.mjs <budget.json> <report.json>...
+//   node bench/check-lighthouse.mjs <budget.json> <report.json>... --markdown
 //
-// --markdown only renders; it never gates. The budget run above is what fails
-// the build, so a formatting problem in a summary cannot turn a passing job red
+// Each report file is named lighthouse<slug>.json, where the slug encodes the
+// route it covers (lighthouse.json for "/", lighthouse-about.json for
+// "/about"), so one invocation can check every route in a run.
+//
+// --markdown only renders; it never gates. The budget run is what fails the
+// build, so a formatting problem in a summary cannot turn a passing job red
 // (and, just as importantly, cannot turn a failing one green).
+
+/**
+ * lighthouse-about.json -> /about ; lighthouse.json -> /
+ * @param {string} file
+ */
+export function routeFromFilename(file) {
+  const base = file.replace(/^.*[/\\]/, '').replace(/\.json$/, '');
+  const slug = base.replace(/^lighthouse-?/, '');
+  return slug ? `/${slug.replace(/-/g, '/')}` : '/';
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
   const asMarkdown = args.includes('--markdown');
-  const [reportPath, budgetPath] = args.filter((a) => !a.startsWith('--'));
-  const report = JSON.parse(readFileSync(reportPath, 'utf8'));
+  const [budgetPath, ...reportPaths] = args.filter((a) => !a.startsWith('--'));
+  const budget = JSON.parse(readFileSync(budgetPath, 'utf8'));
+
+  if (!reportPaths.length) {
+    console.error('no Lighthouse reports given — the run produced nothing to check');
+    process.exit(1);
+  }
+
+  const failures = [];
+  const rendered = [];
+
+  for (const path of reportPaths) {
+    const report = JSON.parse(readFileSync(path, 'utf8'));
+    const route = routeFromFilename(path);
+    if (asMarkdown) {
+      rendered.push(markdown(report, route));
+    } else {
+      console.log(`\n=== ${route}`);
+      console.log(JSON.stringify(summarize(report), null, 2));
+      failures.push(...checkLighthouse(report, budget, route));
+    }
+  }
 
   if (asMarkdown) {
-    console.log(markdown(report));
+    console.log('### Lighthouse\n');
+    console.log(rendered.join('\n\n'));
+    console.log(
+      '\n> The performance score moved between 95 and 99 across four runs of one\n' +
+      '> unchanged build on a loaded dev box, and scored 100 on the CI runner.\n' +
+      '> Treat a few points of movement as noise; the budget only fails a\n' +
+      '> collapse. Accessibility floors are per route, set at what each route\n' +
+      '> scores today, so this locks in "no worse" rather than hiding debt.\n' +
+      '>\n' +
+      '> All routes are measured logged out. The deck and feed carrying real\n' +
+      '> posts are still unmeasured — that needs an authenticated run.',
+    );
+  } else if (failures.length) {
+    console.error('\nLighthouse budget exceeded:\n  ' + failures.join('\n  '));
+    process.exit(1);
   } else {
-    const budget = JSON.parse(readFileSync(budgetPath, 'utf8'));
-    console.log(JSON.stringify(summarize(report), null, 2));
-    const failures = checkLighthouse(report, budget);
-    if (failures.length) {
-      console.error('\nLighthouse budget exceeded:\n  ' + failures.join('\n  '));
-      process.exit(1);
-    }
     console.log('\nwithin budget');
   }
 }

@@ -8,7 +8,21 @@ import { MastodonClient } from './mastodon';
 import { normalizePost, sortPosts, filterPosts, detectCrossposts } from './unified';
 import type { UnifiedPost } from '$lib/types';
 
-describe('Feed ordering (live API)', () => {
+/**
+ * Hits the real Bluesky and Mastodon public APIs over the network.
+ *
+ * Gated behind CRISPDECK_LIVE so a slow or unreachable third party cannot turn
+ * a pull request red. These are worth having — they are what catches an API
+ * changing shape under us — but a required check should report on the code in
+ * the change, not on someone else's uptime. The Live APIs workflow runs them
+ * nightly and on demand.
+ *
+ *   CRISPDECK_LIVE=1 npm test -- src/lib/api/ordering.test.ts
+ */
+const LIVE = !!process.env.CRISPDECK_LIVE;
+
+
+describe.skipIf(!LIVE)('Feed ordering (live API)', () => {
   it('Bluesky feed posts are correctly ordered after sortPosts', async () => {
     const client = BlueskyClient.readOnly('bsky.app');
     const { feed } = await client.getAuthorFeed('bsky.app');

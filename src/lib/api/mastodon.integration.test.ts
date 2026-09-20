@@ -6,7 +6,21 @@ import { describe, it, expect } from 'vitest';
 import { MastodonClient, mastodonClientFromHandle } from './mastodon';
 import { normalizePost } from './unified';
 
-describe('MastodonClient (live API)', () => {
+/**
+ * Hits the real mastodon.social instance over the network.
+ *
+ * Gated behind CRISPDECK_LIVE so a slow or unreachable third party cannot turn
+ * a pull request red. These are worth having — they are what catches an API
+ * changing shape under us — but a required check should report on the code in
+ * the change, not on someone else's uptime. The Live APIs workflow runs them
+ * nightly and on demand.
+ *
+ *   CRISPDECK_LIVE=1 npm test -- src/lib/api/mastodon.integration.test.ts
+ */
+const LIVE = !!process.env.CRISPDECK_LIVE;
+
+
+describe.skipIf(!LIVE)('MastodonClient (live API)', () => {
   const client = new MastodonClient('https://mastodon.social');
 
   it('looks up account by handle', async () => {
@@ -77,6 +91,7 @@ describe('MastodonClient (live API)', () => {
   }, 10000);
 });
 
+// Pure construction, no network — keep these running on every pull request.
 describe('mastodonClientFromHandle', () => {
   it('creates client from full handle', () => {
     const client = mastodonClientFromHandle('user@mastodon.social');

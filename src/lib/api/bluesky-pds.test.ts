@@ -5,7 +5,21 @@
 import { describe, it, expect } from 'vitest';
 import { resolvePdsEndpoint } from './bluesky';
 
-describe('resolvePdsEndpoint', () => {
+/**
+ * Hits the real PLC directory and Bluesky PDS over the network.
+ *
+ * Gated behind CRISPDECK_LIVE so a slow or unreachable third party cannot turn
+ * a pull request red. These are worth having — they are what catches an API
+ * changing shape under us — but a required check should report on the code in
+ * the change, not on someone else's uptime. The Live APIs workflow runs them
+ * nightly and on demand.
+ *
+ *   CRISPDECK_LIVE=1 npm test -- src/lib/api/bluesky-pds.test.ts
+ */
+const LIVE = !!process.env.CRISPDECK_LIVE;
+
+
+describe.skipIf(!LIVE)('resolvePdsEndpoint', () => {
   it('resolves bsky.app to a PDS endpoint', async () => {
     const pds = await resolvePdsEndpoint('bsky.app');
     expect(pds).toMatch(/^https:\/\//);
