@@ -13,7 +13,7 @@ A unified Mastodon + Bluesky + Threads social media client with:
 
 ## Current State (2026-09-20)
 
-v1.2.8 — 1,845 unit tests across 140 files (plus 62 live-API tests that run nightly rather than on every PR) + Playwright E2E tests, 29 pages, 20 deck column types, CI fully green, live at https://crispdeck.vercel.app. Post-v1.2.0: account switcher, multi-select, quick add-to-list, 6 perf optimizations (parallel crossposting/uploads/column-loads, normalize caches, session-scoped prefs). See CHANGELOG.md.
+v1.2.8 — ~1,922 unit tests across 145 files (plus 62 live-API tests that run nightly rather than on every PR) and 27 Rust tests + Playwright E2E tests, 29 pages, 20 deck column types, CI fully green, live at https://crispdeck.vercel.app. Post-v1.2.0: account switcher, multi-select, quick add-to-list, 6 perf optimizations (parallel crossposting/uploads/column-loads, normalize caches, session-scoped prefs). See CHANGELOG.md.
 
 Recent reliability work (2026-09-18/19), merged as PRs #1–#5:
 
@@ -1705,6 +1705,57 @@ The app is feature-rich (20 column types, 1,520+ tests, streaming, keyboard nav,
       PR path, and a suite that is gated but listed in no workflow fails too
       (it would look like coverage while never running)
 - **Side effect**: PR suite ~240s → ~145s.
+
+### 182. Two HTML injection paths, and a per-post listener leak
+- **Status**: Done (2026-09-20, PR #12)
+- **Effort**: Medium
+- **Priority**: Must-have
+- [x] `{@html ann.content}` on the notifications page rendered instance
+      announcements — HTML written by the instance admin — with no sanitizer
+- [x] Custom emoji were spliced into already-sanitized HTML as a string, with
+      an unescaped remote URL. Reproduced: a URL of
+      `https://x/a.png" onerror="alert(1)` produced a live event handler,
+      *after* DOMPurify had run. Now injected through the parsed DOM, inside
+      text nodes only
+- [x] `escapeHtml(uri)` stops attribute breakout and says nothing about the
+      scheme; `href="javascript:..."` runs on click. 10 sites now use
+      `safeExternalUrl`
+- [x] The post-preferences "singleton" sat in the instance `<script>`, which
+      in Svelte 5 runs per component instance. Measured: 10 posts produced 10
+      listeners and 30 localStorage reads, none released on unmount. Moved to
+      `<script module>`; both counts are 0 and asserted
+
+### 183. Rust side: tests that never ran, and a broken feature behind them
+- **Status**: Done (2026-09-20, PR #15)
+- **Effort**: Medium
+- **Priority**: Must-have
+- **Description**: CI ran `cargo check`, which type-checks and stops — it
+  never built the test binaries, so the 5 tests in src-tauri had never run in
+  CI at all.
+- [x] CI runs `cargo test --lib` as well as `cargo check`
+- [x] **Threads accounts could not be saved on desktop**: migration 001 wrote
+      `CHECK (platform IN ('bluesky','mastodon'))` and Threads support was
+      added later without widening it. The browser build stores accounts in
+      IndexedDB and never noticed. Migration 002 fixes it
+- [x] Tests 5 → 27, covering AEAD tamper rejection, truncated input, and the
+      db layer against the real migrations over in-memory SQLite
+- **Documented, not fixed**: nothing stops two primary accounts on one
+  platform — neither insert nor update demotes the other.
+
+### 184. Dependency advisories, storage writes, contrast
+- **Status**: Done (2026-09-20, PRs #13, #14, #16, #17)
+- [x] 7 undici advisories (1 high) through `@vercel/blob`, a prod dependency
+      used by four serverless routes. `npm audit --production` now reports 0
+- [x] 11 `JSON.parse` of stored values with no guard — the worst in
+      `+layout.svelte` at shell init, where one corrupt value meant every page
+      failed to render
+- [x] All 64 `localStorage.setItem` calls through checked helpers
+- [x] `--color-primary` failed contrast both ways at once (4.47:1 under white
+      text, 4.00:1 as text). Split into background and text tokens
+- **Still open**: two /settings buttons put near-white text on the Bluesky
+  (3.46:1) and Mastodon (4.18:1) brand colours. Needs the same split across 63
+  sites, and darkening the tokens would drop their 17 text uses to 3.31 and
+  2.90. A decision about platform identity colour.
 
 ### Branch cleanup (2026-09-19)
 
