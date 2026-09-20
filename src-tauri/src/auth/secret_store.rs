@@ -20,10 +20,10 @@
 //! used, so the caller can say so rather than implying a protection that is
 //! not there.
 //!
-//! macOS is deliberately not special-cased yet. The `keyring` crate uses the
-//! default login keychain and cannot select another; a dedicated CrispDeck
-//! keychain needs `security-framework` directly, and that is not code to write
-//! without a Mac to test it on.
+//! macOS is special-cased. The `keyring` crate uses the default login keychain
+//! and cannot select another, so macOS goes through `security-framework`
+//! directly and puts secrets in a keychain of its own that locks independently
+//! of login. See mac_keychain.rs.
 
 use anyhow::{anyhow, Result};
 
@@ -163,7 +163,33 @@ impl SecretStore for OsSecretStore {
     }
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+/// macOS goes through security-framework so it can use a keychain of its own
+/// rather than the login one. Which keychain is the user's choice; the default
+/// is the dedicated one. See mac_keychain.rs for what that actually buys.
+#[cfg(target_os = "macos")]
+impl SecretStore for OsSecretStore {
+    fn set(&self, key: &str, secret: &str) -> Result<()> {
+        super::mac_keychain::MacKeychainStore { which: mac_keychain_choice() }.set(key, secret)
+    }
+    fn get(&self, key: &str) -> Result<String> {
+        super::mac_keychain::MacKeychainStore { which: mac_keychain_choice() }.get(key)
+    }
+    fn delete(&self, key: &str) -> Result<()> {
+        super::mac_keychain::MacKeychainStore { which: mac_keychain_choice() }.delete(key)
+    }
+}
+
+/// Which keychain to use, read from the environment so the choice can be made
+/// once at startup and tests can pin it. The command layer writes it from the
+/// stored setting.
+#[cfg(target_os = "macos")]
+fn mac_keychain_choice() -> super::mac_keychain::MacKeychain {
+    super::mac_keychain::MacKeychain::parse(
+        &std::env::var("CRISPDECK_MACOS_KEYCHAIN").unwrap_or_default(),
+    )
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
 impl SecretStore for OsSecretStore {
     fn set(&self, _key: &str, _secret: &str) -> Result<()> {
         Err(anyhow!("no OS secret store wired up for this platform"))
@@ -182,7 +208,7 @@ impl SecretStore for OsSecretStore {
 /// may still have no session bus to talk to. The UI wants both: whether to
 /// offer the choice, and what actually happened when a credential was written.
 pub const fn os_store_compiled_in() -> bool {
-    cfg!(any(target_os = "linux", target_os = "windows"))
+    cfg!(any(target_os = "linux", target_os = "windows", target_os = "macos"))
 }
 
 #[cfg(test)]
