@@ -256,7 +256,7 @@
           {/if}
         </span>
       </div>
-      <button onclick={handleClose} class="p-1.5 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors">
+      <button onclick={handleClose} aria-label={i18n.t.common.close} class="p-1.5 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors">
         <X size={16} />
       </button>
     </div>

@@ -100,9 +100,9 @@
       <h1 class="text-2xl font-bold">{i18n.t.nav.calendar}</h1>
     </div>
     <div class="flex items-center gap-3">
-      <button onclick={prevMonth} class="p-1.5 hover:bg-[var(--color-surface-hover)] rounded"><ChevronLeft size={18} /></button>
+      <button onclick={prevMonth} aria-label={i18n.t.common.previousMonth} class="p-1.5 hover:bg-[var(--color-surface-hover)] rounded"><ChevronLeft size={18} /></button>
       <span class="text-sm font-medium w-32 text-center">{monthNames[month]} {year}</span>
-      <button onclick={nextMonth} class="p-1.5 hover:bg-[var(--color-surface-hover)] rounded"><ChevronRight size={18} /></button>
+      <button onclick={nextMonth} aria-label={i18n.t.common.nextMonth} class="p-1.5 hover:bg-[var(--color-surface-hover)] rounded"><ChevronRight size={18} /></button>
     </div>
   </div>
 

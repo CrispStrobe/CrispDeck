@@ -1,0 +1,66 @@
+# Tests that hit real Bluesky, Mastodon and PLC endpoints.
+#
+# Split out of the required CI check on purpose. They are worth having — they
+# are what catches a third-party API changing shape under us, and one of them
+# validates the block record this app writes against real records read from
+# the network. But a required check should report on the code in the change,
+# not on someone else's uptime: mastodon.social timing out at 15s had already
+# turned a run red twice with nothing wrong in the repository.
+#
+# So they run nightly and on demand instead, where a failure is investigated
+# rather than re-run until it passes.
+
+name: Live APIs
+
+on:
+  schedule:
+    # 04:20 UTC — outside European and US working hours, so a failure is
+    # waiting in the morning rather than interrupting a day.
+    - cron: '20 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: live-apis
+  cancel-in-progress: false
+
+jobs:
+  live:
+    name: Live API suites
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm ci
+
+      - name: Run the live suites
+        env:
+          CRISPDECK_LIVE: '1'
+        run: |
+          set -o pipefail
+          npx vitest run \
+            src/lib/api/bluesky.live.test.ts \
+            src/lib/api/bluesky.integration.test.ts \
+            src/lib/api/bluesky-moderation.live.test.ts \
+            src/lib/api/bluesky-pds.test.ts \
+            src/lib/api/mastodon.integration.test.ts \
+            src/lib/api/ordering.test.ts \
+            src/lib/api/http.live.test.ts \
+            --reporter=verbose 2>&1 | tee live.log
+
+      - name: Summarise
+        if: always()
+        run: |
+          {
+            echo "### Live API suites"
+            echo
+            echo "A failure here usually means a third party changed or is down,"
+            echo "not that this repository broke. Read the output before reverting"
+            echo "anything."
+            echo
+            echo '```'
+            tail -40 live.log 2>/dev/null || echo "no output captured"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

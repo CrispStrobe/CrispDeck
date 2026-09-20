@@ -7,7 +7,21 @@ import { describe, it, expect } from 'vitest';
 import { BlueskyClient } from './bluesky';
 import { normalizePost } from './unified';
 
-describe('BlueskyClient (live API)', () => {
+/**
+ * Hits the real Bluesky public API over the network.
+ *
+ * Gated behind CRISPDECK_LIVE so a slow or unreachable third party cannot turn
+ * a pull request red. These are worth having — they are what catches an API
+ * changing shape under us — but a required check should report on the code in
+ * the change, not on someone else's uptime. The Live APIs workflow runs them
+ * nightly and on demand.
+ *
+ *   CRISPDECK_LIVE=1 npm test -- src/lib/api/bluesky.integration.test.ts
+ */
+const LIVE = !!process.env.CRISPDECK_LIVE;
+
+
+describe.skipIf(!LIVE)('BlueskyClient (live API)', () => {
   const client = BlueskyClient.readOnly('bsky.app');
 
   it('fetches a public profile', async () => {

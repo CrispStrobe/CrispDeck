@@ -334,7 +334,7 @@
           <option value="bluesky">{i18n.t.common.bluesky}</option>
           <option value="mastodon">{i18n.t.common.mastodon}</option>
         </select>
-        <button type="submit" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm">
+        <button type="submit" aria-label={i18n.t.nav.search} class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm">
           <Search size={14} />
         </button>
       </div>

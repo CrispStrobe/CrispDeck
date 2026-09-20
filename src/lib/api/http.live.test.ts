@@ -2,6 +2,20 @@ import { describe, it, expect } from 'vitest';
 import { fetchOk, fetchJson, HttpError } from '../http';
 
 /**
+ * Hits the real mastodon.social instance over the network.
+ *
+ * Gated behind CRISPDECK_LIVE so a slow or unreachable third party cannot turn
+ * a pull request red. These are worth having — they are what catches an API
+ * changing shape under us — but a required check should report on the code in
+ * the change, not on someone else's uptime. The Live APIs workflow runs them
+ * nightly and on demand.
+ *
+ *   CRISPDECK_LIVE=1 npm test -- src/lib/api/http.live.test.ts
+ */
+const LIVE = !!process.env.CRISPDECK_LIVE;
+
+
+/**
  * The unit tests for fetchOk stub `fetch`, so they prove the logic but not the
  * premise: that real servers answer a refused write with a non-2xx body that
  * plain `fetch` resolves happily.
@@ -25,7 +39,7 @@ async function failure(run: () => Promise<unknown>): Promise<HttpError> {
 const MASTO = 'https://mastodon.social';
 const BAD_TOKEN = { Authorization: 'Bearer definitely-not-a-real-token' };
 
-describe('real servers, real statuses', () => {
+describe.skipIf(!LIVE)('real servers, real statuses', () => {
   it('plain fetch resolves for a rejected write — this is the bug', async () => {
     // Posting a status with a bogus token. If `fetch` threw here, the app's
     // existing try/catch blocks would already have been enough.
@@ -82,7 +96,7 @@ describe('real servers, real statuses', () => {
   }, 30_000);
 });
 
-describe('the Mastodon client surfaces a refused write', () => {
+describe.skipIf(!LIVE)('the Mastodon client surfaces a refused write', () => {
   it('addToList rejects rather than resolving, against a real instance', async () => {
     // End-to-end through the client: bad token -> 401 -> fetchOk -> caller.
     // Before this, the response was dropped and the caller was told the

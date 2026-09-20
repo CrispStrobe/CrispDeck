@@ -79,6 +79,7 @@
     <!-- Close button -->
     <button
       onclick={close}
+      aria-label={i18n.t.common.close}
       class="absolute top-4 right-4 z-10 p-2 text-white/70 hover:text-white bg-black/40 rounded-full transition-colors"
     >
       <X size={20} />
