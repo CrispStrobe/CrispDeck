@@ -9,6 +9,8 @@
  * For alt-text: supports image-to-text via vision models (multimodal).
  */
 
+import { writeJson } from '$lib/safe-storage';
+
 // ── Types ─────────────────────────────────────────────────────────────────
 
 export type AIAction = 'correct' | 'shorten' | 'hashtags' | 'alt-text';
@@ -57,7 +59,7 @@ export function getAIComposeConfig(): AIComposeConfig {
 
 export function setAIComposeConfig(config: Partial<AIComposeConfig>): void {
   const current = getAIComposeConfig();
-  localStorage.setItem(CONFIG_KEY, JSON.stringify({ ...current, ...config }));
+  writeJson(CONFIG_KEY, { ...current, ...config });
 }
 
 export function isAIConfigured(): boolean {

@@ -11,6 +11,7 @@
  */
 
 import type { BrowserOAuthClient } from '@atproto/oauth-client-browser';
+import { writeString } from '$lib/safe-storage';
 import { swallow } from '$lib/debug-log';
 import type { Agent } from '@atproto/api';
 import { isTauri } from '$lib/platform';
@@ -305,7 +306,7 @@ export async function maybeSilentReauth(handleOrDid: string, did: string): Promi
   try {
     const last = Number(localStorage.getItem(guardKey) ?? 0);
     if (Date.now() - last < SILENT_REAUTH_MIN_INTERVAL_MS) return false;
-    localStorage.setItem(guardKey, String(Date.now()));
+    writeString(guardKey, String(Date.now()));
     sessionStorage.setItem(SILENT_REAUTH_INFLIGHT, '1');
     sessionStorage.setItem(OAUTH_RETURN_TO_KEY, window.location.pathname + window.location.search);
   } catch {

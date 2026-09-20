@@ -5,6 +5,7 @@
  */
 
 import type { UnifiedPost } from './types';
+import { writeJson } from './safe-storage';
 
 export interface RssFeed {
   id: string;
@@ -42,13 +43,13 @@ export function addFeed(url: string, title?: string): RssFeed {
     title: title?.trim() || url,
   };
   feeds.push(feed);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(feeds));
+  writeJson(STORAGE_KEY, feeds);
   return feed;
 }
 
 export function removeFeed(id: string): void {
   const feeds = listFeeds().filter(f => f.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(feeds));
+  writeJson(STORAGE_KEY, feeds);
 }
 
 export function importOPML(opmlText: string): RssFeed[] {
@@ -72,7 +73,7 @@ export function importOPML(opmlText: string): RssFeed[] {
     }
   }
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(feeds));
+  writeJson(STORAGE_KEY, feeds);
   return imported;
 }
 

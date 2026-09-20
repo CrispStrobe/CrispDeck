@@ -19,7 +19,7 @@ import { join } from 'node:path';
  * be explained afterwards.
  */
 
-/** Implements the reading itself. */
+/** Implements the reading and writing itself. */
 const ALLOWED = new Set(['src/lib/safe-storage.ts']);
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
@@ -104,6 +104,59 @@ describe('the source tree', () => {
     expect(
       offenders,
       `use readJson() from $lib/safe-storage — a corrupt value should reset a preference, not break the page:\n${offenders.join('\n')}`,
+    ).toEqual([]);
+  });
+});
+
+/**
+ * @returns one message per raw localStorage write
+ *
+ * setItem throws when the quota is full, and throws on *every* call in
+ * Safari's private mode — so a caller that ignores it reports a save that did
+ * not happen, which is the same shape of lie as an unchecked fetch.
+ * writeJson/writeString return false instead.
+ */
+export function findRawStorageWrites(source: string, file = ''): string[] {
+  const offenders: string[] = [];
+  source.split('\n').forEach((line, i) => {
+    if (/localStorage\.(setItem|removeItem)\s*\(/.test(line)) {
+      offenders.push(`${file}:${i + 1}: ${line.trim().slice(0, 70)}`);
+    }
+  });
+  return offenders;
+}
+
+describe('findRawStorageWrites', () => {
+  it('flags a raw setItem', () => {
+    expect(findRawStorageWrites("localStorage.setItem('k', 'v');")).toHaveLength(1);
+  });
+
+  it('flags a raw removeItem', () => {
+    expect(findRawStorageWrites("localStorage.removeItem('k');")).toHaveLength(1);
+  });
+
+  it('accepts the helpers', () => {
+    expect(findRawStorageWrites("writeJson('k', v); writeString('k', s); removeKey('k');")).toEqual([]);
+  });
+
+  it('does not flag a read', () => {
+    expect(findRawStorageWrites("const v = localStorage.getItem('k');")).toEqual([]);
+  });
+});
+
+describe('the source tree, writes', () => {
+  const files = sourceFiles('src');
+
+  it('writes to storage only through the helpers', () => {
+    const offenders: string[] = [];
+    for (const file of files) {
+      const key = file.replace(/\\/g, '/');
+      if (ALLOWED.has(key)) continue;
+      offenders.push(...findRawStorageWrites(readFileSync(file, 'utf8'), key));
+    }
+    expect(
+      offenders,
+      `use writeJson/writeString/removeKey from $lib/safe-storage — setItem throws on a full quota and on every call in Safari private mode:\n${offenders.join('\n')}`,
     ).toEqual([]);
   });
 });

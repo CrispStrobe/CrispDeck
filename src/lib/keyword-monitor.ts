@@ -6,6 +6,8 @@
  * Supports plain text (case-insensitive) and regex patterns.
  */
 
+import { writeJson } from './safe-storage';
+
 const STORAGE_KEY = 'crispdeck-keyword-monitors';
 
 export interface KeywordSet {
@@ -45,13 +47,13 @@ export function saveKeywordSet(set: KeywordSet): KeywordSet[] {
   } else {
     sets.push(set);
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sets));
+  writeJson(STORAGE_KEY, sets);
   return sets;
 }
 
 export function removeKeywordSet(id: string): KeywordSet[] {
   const sets = listKeywordSets().filter(s => s.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sets));
+  writeJson(STORAGE_KEY, sets);
   return sets;
 }
 

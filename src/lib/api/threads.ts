@@ -1,4 +1,5 @@
 import { apiUrl } from '$lib/api-origin';
+import { writeJson } from '$lib/safe-storage';
 import { swallow } from '$lib/debug-log';
 /**
  * Threads API client — wraps Meta's official Threads API (Graph API).
@@ -610,7 +611,7 @@ export function getThreadsConfig(): ThreadsConfig | null {
 }
 
 export function setThreadsConfig(config: ThreadsConfig): void {
-  localStorage.setItem(THREADS_CONFIG_KEY, JSON.stringify(config));
+  writeJson(THREADS_CONFIG_KEY, config);
 }
 
 // ── Server proxy helpers ────────────────────────────────────────────────────

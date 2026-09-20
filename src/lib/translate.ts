@@ -13,6 +13,8 @@
  * All results cached in IndexedDB.
  */
 
+import { writeJson } from './safe-storage';
+
 // ── Types ─────────────────────────────────────────────────────────────────
 
 export type TranslateProvider = 'crispasr' | 'openai' | 'mymemory' | 'lingva' | 'libretranslate';
@@ -69,7 +71,7 @@ export function getTranslateConfig(): TranslateConfig {
 
 export function setTranslateConfig(config: Partial<TranslateConfig>): void {
   const current = getTranslateConfig();
-  localStorage.setItem(CONFIG_KEY, JSON.stringify({ ...current, ...config }));
+  writeJson(CONFIG_KEY, { ...current, ...config });
 }
 
 /** Convenience — kept for backward compat with settings page */

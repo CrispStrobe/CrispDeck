@@ -1,6 +1,6 @@
 <script lang="ts">
   import { base } from '$app/paths';
-  import { readJson } from '$lib/safe-storage';
+  import { readJson, writeJson } from '$lib/safe-storage';
   import { onMount } from 'svelte';
   import { initAllClients, getBskyAgent, type ClientEntry } from '$lib/api/client-factory';
   import { normalizePost, sortPosts } from '$lib/api/unified';
@@ -171,7 +171,7 @@
       type: 'search',
       query: compiledQuery,
     });
-    localStorage.setItem('crispdeck-deck-columns', JSON.stringify(columns));
+    writeJson('crispdeck-deck-columns', columns);
     alert(`"${feed.name}" added to your deck!`);
   }
 

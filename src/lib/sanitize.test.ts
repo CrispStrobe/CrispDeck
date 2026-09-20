@@ -16,8 +16,17 @@ import { sanitizeHtml, injectCustomEmoji, safeImageUrl, preloadSanitizer } from 
 beforeAll(async () => {
   // DOMPurify loads lazily; without it sanitizeHtml falls back to stripping
   // every tag, and these tests would pass for the wrong reason.
+  //
+  // Waited for, not slept through: a fixed 50ms here was enough on an idle
+  // machine and not enough on a loaded one, so the formatting test failed
+  // intermittently for a reason that had nothing to do with sanitizing.
   preloadSanitizer();
-  await new Promise((r) => setTimeout(r, 50));
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    if (sanitizeHtml('<strong>x</strong>').includes('<strong>')) return;
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  throw new Error('DOMPurify did not load — these tests would assert against the strip-everything fallback');
 });
 
 const emoji = (over: Partial<{ shortcode: string; url: string }> = {}) => [

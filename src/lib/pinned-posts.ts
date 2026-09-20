@@ -3,6 +3,8 @@
  * Stored in localStorage.
  */
 
+import { writeJson } from './safe-storage';
+
 const STORAGE_KEY = 'crispdeck-pinned-posts';
 
 export interface PinnedPost {
@@ -31,13 +33,13 @@ export function pinPost(post: { uri: string; text: string; author: { handle: str
     platform: post.platform,
     pinnedAt: new Date().toISOString(),
   });
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(pins));
+  writeJson(STORAGE_KEY, pins);
   _pinnedUriCache = null; // invalidate cache
 }
 
 export function unpinPost(uri: string): void {
   const pins = listPinnedPosts().filter(p => p.uri !== uri);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(pins));
+  writeJson(STORAGE_KEY, pins);
   _pinnedUriCache = null; // invalidate cache
 }
 

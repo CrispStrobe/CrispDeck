@@ -1,4 +1,5 @@
 import { apiUrl } from '$lib/api-origin';
+import { writeJson } from './safe-storage';
 import { fetchOk } from './http';
 import { swallow } from './debug-log';
 /**
@@ -269,12 +270,12 @@ export function saveFeedDefinition(feed: FeedDefinition): void {
   } else {
     feeds.push(feed);
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(feeds));
+  writeJson(STORAGE_KEY, feeds);
 }
 
 export function deleteFeedDefinition(id: string): void {
   const feeds = listSavedFeeds().filter(f => f.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(feeds));
+  writeJson(STORAGE_KEY, feeds);
 }
 
 export function getFeedDefinition(id: string): FeedDefinition | null {

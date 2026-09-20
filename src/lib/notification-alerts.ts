@@ -1,4 +1,5 @@
 import { swallow } from './debug-log';
+import { writeJson } from './safe-storage';
 /**
  * Notification sounds + desktop alerts.
  * Plays a sound and/or shows a system notification when new mentions/DMs arrive.
@@ -27,7 +28,7 @@ export function getAlertSettings(): AlertSettings {
 
 export function setAlertSettings(settings: Partial<AlertSettings>): void {
   const current = getAlertSettings();
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...current, ...settings }));
+  writeJson(SETTINGS_KEY, { ...current, ...settings });
 }
 
 /**

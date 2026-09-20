@@ -1,5 +1,6 @@
 <script lang="ts">
   import { i18n } from '$lib/i18n.svelte';
+  import { removeKey } from '$lib/safe-storage';
   import { swallow } from '$lib/debug-log';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
@@ -84,7 +85,7 @@
       });
 
       // Clean up
-      localStorage.removeItem('crispdeck-threads-oauth-state');
+      removeKey('crispdeck-threads-oauth-state');
 
       status = 'success';
       const allAccounts = await listAccounts();

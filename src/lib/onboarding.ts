@@ -9,6 +9,8 @@
  * from the next.
  */
 
+import { writeString, removeKey } from './safe-storage';
+
 /** Host only: no scheme, no trailing slash, no surrounding whitespace. */
 export function cleanInstanceUrl(input: string): string {
   return input.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
@@ -35,7 +37,7 @@ export function cleanBskyHandle(input: string): string {
 const FIRST_RUN_KEY = 'crispdeck-first-run-complete';
 
 export function markFirstRunComplete(): void {
-  localStorage.setItem(FIRST_RUN_KEY, 'true');
+  writeString(FIRST_RUN_KEY, 'true');
 }
 
 export function isFirstRunComplete(): boolean {
@@ -43,5 +45,5 @@ export function isFirstRunComplete(): boolean {
 }
 
 export function resetFirstRun(): void {
-  localStorage.removeItem(FIRST_RUN_KEY);
+  removeKey(FIRST_RUN_KEY);
 }

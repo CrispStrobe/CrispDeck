@@ -1,6 +1,6 @@
 <script lang="ts">
   import { swallow } from '$lib/debug-log';
-  import { readJson } from '$lib/safe-storage';
+  import { readJson, writeJson } from '$lib/safe-storage';
   import { toast } from '$lib/toast.svelte';
   import { isStreamableColumn, isBlueskyStreamable, mastodonStreamFor } from '$lib/deck-streaming';
   import { isColumnLocked } from '$lib/deck-scroll';
@@ -393,7 +393,7 @@
   });
 
   function saveColumns() {
-    localStorage.setItem('crispdeck-deck-columns', JSON.stringify(columns));
+    writeJson('crispdeck-deck-columns', columns);
   }
 
   // Precomputed client groups — rebuilt after initAllClients

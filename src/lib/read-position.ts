@@ -6,6 +6,8 @@
  * to avoid blocking the main thread on frequent scroll events.
  */
 
+import { writeJson } from './safe-storage';
+
 const STORAGE_KEY = 'crispdeck-read-positions';
 
 interface ReadPositions {
@@ -34,7 +36,7 @@ function save(positions: ReadPositions): void {
   // Throttle writes: batch rapid scroll updates into one localStorage write
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(positions));
+    writeJson(STORAGE_KEY, positions);
   }, 500);
 }
 
@@ -81,6 +83,6 @@ export function clearReadPosition(contextKey: string): void {
 export function flushReadPositions(): void {
   if (_cache && _saveTimer) {
     clearTimeout(_saveTimer);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(_cache));
+    writeJson(STORAGE_KEY, _cache);
   }
 }

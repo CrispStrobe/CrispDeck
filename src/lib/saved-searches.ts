@@ -3,6 +3,8 @@
  * Stored in localStorage, can be opened as deck columns.
  */
 
+import { writeJson } from './safe-storage';
+
 const STORAGE_KEY = 'crispdeck-saved-searches';
 
 export interface SavedSearch {
@@ -32,13 +34,13 @@ export function saveSearch(query: string): SavedSearch {
     createdAt: new Date().toISOString(),
   };
   searches.push(saved);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(searches));
+  writeJson(STORAGE_KEY, searches);
   return saved;
 }
 
 export function deleteSavedSearch(id: string): void {
   const searches = listSavedSearches().filter(s => s.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(searches));
+  writeJson(STORAGE_KEY, searches);
 }
 
 export function isSaved(query: string): boolean {

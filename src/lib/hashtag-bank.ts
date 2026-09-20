@@ -5,6 +5,8 @@
  * Each set can be one-click inserted into the compose text.
  */
 
+import { writeJson } from './safe-storage';
+
 export interface HashtagSet {
   id: string;
   name: string;
@@ -30,7 +32,7 @@ export function saveHashtagSet(set: Omit<HashtagSet, 'id'>): HashtagSet {
     id: `hs-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
   };
   sets.push(newSet);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sets));
+  writeJson(STORAGE_KEY, sets);
   return newSet;
 }
 
@@ -42,13 +44,13 @@ export function updateHashtagSet(id: string, updates: Partial<Omit<HashtagSet, '
       updates.hashtags = updates.hashtags.map(h => h.startsWith('#') ? h : `#${h}`);
     }
     sets[idx] = { ...sets[idx], ...updates };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(sets));
+    writeJson(STORAGE_KEY, sets);
   }
 }
 
 export function deleteHashtagSet(id: string): void {
   const sets = listHashtagSets().filter(s => s.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sets));
+  writeJson(STORAGE_KEY, sets);
 }
 
 /** Format a hashtag set as a string ready to append to compose text */

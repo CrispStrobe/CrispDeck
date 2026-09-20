@@ -4,6 +4,7 @@
  */
 
 import { triggerAlert } from './notification-alerts';
+import { writeJson } from './safe-storage';
 
 const STORAGE_KEY = 'crispdeck-milestones';
 
@@ -33,7 +34,7 @@ export function getMilestoneConfig(): MilestoneConfig {
 
 export function setMilestoneConfig(config: Partial<MilestoneConfig>): void {
   const current = getMilestoneConfig();
-  localStorage.setItem(STORAGE_KEY + '-config', JSON.stringify({ ...current, ...config }));
+  writeJson(STORAGE_KEY + '-config', { ...current, ...config });
 }
 
 /** Get all milestones that have been reached (and notified) */
@@ -44,7 +45,7 @@ function getReachedMilestones(): ReachedMilestone[] {
 }
 
 function saveReachedMilestones(milestones: ReachedMilestone[]): void {
-  localStorage.setItem(STORAGE_KEY + '-reached', JSON.stringify(milestones));
+  writeJson(STORAGE_KEY + '-reached', milestones);
 }
 
 function hasReached(uri: string, metric: string, threshold: number): boolean {
