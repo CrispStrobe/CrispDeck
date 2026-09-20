@@ -3,7 +3,7 @@
  * Stored in localStorage.
  */
 
-import { readJson } from './safe-storage';
+import { readJson, writeJson } from './safe-storage';
 
 export interface PostTemplate {
   id: string;
@@ -28,13 +28,13 @@ export function saveTemplate(template: Omit<PostTemplate, 'id' | 'createdAt'>): 
     createdAt: new Date().toISOString(),
   };
   templates.unshift(newTemplate);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(templates));
+  writeJson(STORAGE_KEY, templates);
   return newTemplate;
 }
 
 export function deleteTemplate(id: string): void {
   const templates = listTemplates().filter(t => t.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(templates));
+  writeJson(STORAGE_KEY, templates);
 }
 
 /**

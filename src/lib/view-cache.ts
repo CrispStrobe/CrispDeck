@@ -6,6 +6,8 @@
  * TTL determines when cached data is considered stale (still shown, but triggers refresh).
  */
 
+import { writeJson, removeKey } from './safe-storage';
+
 const PREFIX = 'crispdeck-vc-';
 const DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes
 
@@ -33,7 +35,7 @@ export function getCached<T>(key: string): CacheEntry<T> | null {
 export function setCache<T>(key: string, data: T): void {
   try {
     const entry: CacheEntry<T> = { data, cachedAt: Date.now() };
-    localStorage.setItem(PREFIX + key, JSON.stringify(entry));
+    writeJson(PREFIX + key, entry);
   } catch {
     // localStorage full or quota exceeded — silently skip
   }
@@ -50,7 +52,7 @@ export function isStale(entry: CacheEntry<any>, ttl = DEFAULT_TTL): boolean {
  * Remove cached data for a view.
  */
 export function clearCache(key: string): void {
-  localStorage.removeItem(PREFIX + key);
+  removeKey(PREFIX + key);
 }
 
 /**
@@ -62,7 +64,7 @@ export function clearAllCache(): void {
     const k = localStorage.key(i);
     if (k?.startsWith(PREFIX)) keys.push(k);
   }
-  for (const k of keys) localStorage.removeItem(k);
+  for (const k of keys) removeKey(k);
 }
 
 /**

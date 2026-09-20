@@ -3,6 +3,8 @@
  * Includes all localStorage config except account credentials.
  */
 
+import { writeString } from './safe-storage';
+
 export interface SettingsExport {
   version: number;
   exported_at: string;
@@ -62,7 +64,7 @@ export function importSettings(data: SettingsExport): number {
   let count = 0;
   for (const [key, value] of Object.entries(data.settings)) {
     if (shouldExport(key) && typeof value === 'string') {
-      localStorage.setItem(key, value);
+      writeString(key, value);
       count++;
     }
   }

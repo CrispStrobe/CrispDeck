@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getTheme, setTheme, nextTheme } from '$lib/settings';
-  import { readJson } from '$lib/safe-storage';
+  import { readJson, writeJson, writeString } from '$lib/safe-storage';
   import { isNavItemActive } from '$lib/nav-active';
   import { base } from '$app/paths';
   import { routePath } from '$lib/routes';
@@ -66,18 +66,18 @@
 
   function toggleSimpleMode() {
     simpleMode = !simpleMode;
-    localStorage.setItem('crispdeck-simple-mode', String(simpleMode));
+    writeString('crispdeck-simple-mode', String(simpleMode));
     if (simpleMode) {
       navHidden = new Set(SIMPLE_MODE_HIDDEN);
     } else {
       navHidden = new Set();
     }
-    localStorage.setItem('crispdeck-nav-hidden', JSON.stringify([...navHidden]));
+    writeJson('crispdeck-nav-hidden', [...navHidden]);
   }
   function toggleNavItem(href: string) {
     if (navHidden.has(href)) navHidden.delete(href); else navHidden.add(href);
     navHidden = new Set(navHidden);
-    localStorage.setItem('crispdeck-nav-hidden', JSON.stringify([...navHidden]));
+    writeJson('crispdeck-nav-hidden', [...navHidden]);
   }
 
   async function getCachedClients() {

@@ -4,6 +4,8 @@
  * Stored in localStorage.
  */
 
+import { writeJson } from './safe-storage';
+
 const STORAGE_KEY = 'crispdeck-muted-words';
 
 export interface MutedWord {
@@ -31,7 +33,7 @@ export function listMutedWords(): MutedWord[] {
 }
 
 export function saveMutedWords(words: MutedWord[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(words));
+  writeJson(STORAGE_KEY, words);
 }
 
 export function addMutedWord(value: string, isRegex = false): MutedWord[] {

@@ -1,3 +1,5 @@
+import { writeString } from './safe-storage';
+
 export type Language = 'en' | 'de' | 'fr' | 'es' | 'ja' | 'pt' | 'zh' | 'ar';
 
 const RTL_LANGUAGES: Language[] = ['ar'];
@@ -966,7 +968,7 @@ export class TranslationService {
   setLanguage(l: Language) {
     this.lang = l;
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('crispdeck-language', l);
+      writeString('crispdeck-language', l);
     }
     this.applyDirection();
     // Load translation data

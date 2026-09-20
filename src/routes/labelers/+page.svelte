@@ -1,5 +1,6 @@
 <script lang="ts">
   import { swallow } from '$lib/debug-log';
+  import { writeJson } from '$lib/safe-storage';
   import { toast } from '$lib/toast.svelte';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
@@ -188,7 +189,7 @@
   function setLabelPref(identifier: string, pref: LabelPref) {
     labelPrefs[identifier] = pref;
     labelPrefs = { ...labelPrefs };
-    localStorage.setItem('crispdeck-label-prefs', JSON.stringify(labelPrefs));
+    writeJson('crispdeck-label-prefs', labelPrefs);
   }
 
   function getLabelPref(def: LabelDef): LabelPref {

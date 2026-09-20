@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getTtsEngine, setTtsEngine, getSttEngine, setSttEngine, getHomeMode, setHomeMode, type SpeechEngine, type HomeMode } from '$lib/settings';
+  import { removeKey, writeJson, writeString } from '$lib/safe-storage';
   import { fetchOk, fetchJson } from '$lib/http';
   import { apiUrl } from '$lib/api-origin';
   import { base } from '$app/paths';
@@ -126,8 +127,8 @@
   let sttModel = $state(localStorage.getItem('crispdeck-stt-model') ?? 'whisper');
   let ttsEngine = $state<SpeechEngine>(getTtsEngine());
   let sttEngine = $state<SpeechEngine>(getSttEngine());
-  function saveTtsModel() { localStorage.setItem('crispdeck-tts-model', ttsModel); }
-  function saveSttModel() { localStorage.setItem('crispdeck-stt-model', sttModel); }
+  function saveTtsModel() { writeString('crispdeck-tts-model', ttsModel); }
+  function saveSttModel() { writeString('crispdeck-stt-model', sttModel); }
   function saveTtsEngine() { setTtsEngine(ttsEngine); }
   function saveSttEngine() { setSttEngine(sttEngine); }
 
@@ -203,7 +204,7 @@
   }
 
   function handleAltTextModeChange() {
-    localStorage.setItem('crispdeck-alt-text-mode', altTextMode);
+    writeString('crispdeck-alt-text-mode', altTextMode);
   }
 
   let hideEngagement = $state(localStorage.getItem('crispdeck-hide-engagement') === 'true');
@@ -235,10 +236,10 @@
     root.style.setProperty('--user-line-height', String(lineSpacing));
     if (contentWidth > 0) root.style.setProperty('--user-content-width', `${contentWidth}px`);
     else root.style.removeProperty('--user-content-width');
-    localStorage.setItem('crispdeck-font-family', fontFamily);
-    localStorage.setItem('crispdeck-font-size', String(fontSize));
-    localStorage.setItem('crispdeck-line-spacing', String(lineSpacing));
-    localStorage.setItem('crispdeck-content-width', String(contentWidth));
+    writeString('crispdeck-font-family', fontFamily);
+    writeString('crispdeck-font-size', String(fontSize));
+    writeString('crispdeck-line-spacing', String(lineSpacing));
+    writeString('crispdeck-content-width', String(contentWidth));
   }
 
   // Cache management
@@ -268,7 +269,7 @@
       const k = localStorage.key(i);
       if (k?.startsWith('crispdeck-vc-')) keys.push(k);
     }
-    keys.forEach(k => localStorage.removeItem(k));
+    keys.forEach(k => removeKey(k));
     calcCacheStats();
   }
   async function purgeAllData() {
@@ -281,7 +282,7 @@
     calcCacheStats();
   }
   function handleLiveCountersChange() {
-    localStorage.setItem('crispdeck-live-counters', String(liveCounters));
+    writeString('crispdeck-live-counters', String(liveCounters));
     jetstream.setEnabled(liveCounters);
   }
 
@@ -366,7 +367,7 @@
   }
 
   function handleHideEngagementChange() {
-    localStorage.setItem('crispdeck-hide-engagement', String(hideEngagement));
+    writeString('crispdeck-hide-engagement', String(hideEngagement));
     window.dispatchEvent(new Event('crispdeck:prefs-changed'));
   }
 
@@ -498,12 +499,15 @@
       mastoOAuthState = await dbStartOAuth(instanceUrl);
 
       // Store OAuth state so the callback page can complete the flow
-      localStorage.setItem('crispdeck-oauth-state', JSON.stringify({
+      // Without this the callback page has nothing to finish the flow with.
+      if (!writeJson('crispdeck-oauth-state', {
         instance_url: instanceUrl,
         client_id: mastoOAuthState!.client_id,
         client_secret: mastoOAuthState!.client_secret,
         redirect_uri: mastoOAuthState!.redirect_uri,
-      }));
+      })) {
+        throw new Error('Could not store the sign-in state — browser storage is unavailable');
+      }
 
       // Redirect to the Mastodon authorization page
       // The callback at /oauth/callback will complete the flow
@@ -561,7 +565,7 @@
     // does not exist there.
     const redirectUri = `${window.location.origin}${base}/oauth/threads-callback`;
     const state = crypto.randomUUID();
-    localStorage.setItem('crispdeck-threads-oauth-state', state);
+    writeString('crispdeck-threads-oauth-state', state);
 
     try {
       if (threadsAdvanced && threadsClientId.trim() && threadsClientSecret.trim()) {
@@ -1169,7 +1173,7 @@
           id="compact-posts"
           type="checkbox"
           bind:checked={compactPosts}
-          onchange={() => { localStorage.setItem('crispdeck-compact-posts', String(compactPosts)); window.dispatchEvent(new Event('crispdeck:prefs-changed')); }}
+          onchange={() => { writeString('crispdeck-compact-posts', String(compactPosts)); window.dispatchEvent(new Event('crispdeck:prefs-changed')); }}
           class="w-4 h-4 accent-[var(--color-primary)]"
         />
       </div>
@@ -1183,7 +1187,7 @@
         <select
           id="media-preview"
           bind:value={mediaPreview}
-          onchange={() => { localStorage.setItem('crispdeck-media-preview', mediaPreview); window.dispatchEvent(new Event('crispdeck:prefs-changed')); }}
+          onchange={() => { writeString('crispdeck-media-preview', mediaPreview); window.dispatchEvent(new Event('crispdeck:prefs-changed')); }}
           class="px-2 py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)]"
         >
           <option value="lightbox">{i18n.t.settings.mediaPreviewLightbox}</option>
@@ -1578,7 +1582,7 @@
           <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.feedCacheDesc}</p>
         </div>
         <input id="feed-cache-size" type="range" min="50" max="500" step="50" bind:value={feedCacheSize}
-          oninput={() => localStorage.setItem('crispdeck-feed-cache-size', String(feedCacheSize))}
+          oninput={() => writeString('crispdeck-feed-cache-size', String(feedCacheSize))}
           class="w-28 accent-[var(--color-primary)]" />
       </div>
     </div>

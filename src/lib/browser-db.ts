@@ -1,4 +1,5 @@
 import { base } from '$app/paths';
+import { writeString } from './safe-storage';
 import { fetchOk } from './http';
 /**
  * Browser-side database using IndexedDB.
@@ -118,7 +119,7 @@ function getSeed(): string {
   let seed = localStorage.getItem(CRYPTO_KEY_NAME);
   if (!seed) {
     seed = crypto.randomUUID();
-    localStorage.setItem(CRYPTO_KEY_NAME, seed);
+    writeString(CRYPTO_KEY_NAME, seed);
   }
   return seed;
 }
@@ -143,7 +144,7 @@ async function getCryptoKey(): Promise<CryptoKey> {
   if (!saltB64) {
     const saltBytes = crypto.getRandomValues(new Uint8Array(32));
     saltB64 = btoa(String.fromCharCode(...saltBytes));
-    localStorage.setItem(CRYPTO_SALT_NAME, saltB64);
+    writeString(CRYPTO_SALT_NAME, saltB64);
   }
   const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
   _cachedCryptoKey = await deriveKey(salt, 600000);

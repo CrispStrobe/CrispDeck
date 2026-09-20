@@ -4,6 +4,8 @@
  * Stored in localStorage.
  */
 
+import { writeJson } from './safe-storage';
+
 const STORAGE_KEY = 'crispdeck-reading-lists';
 
 export interface ReadingListPost {
@@ -45,7 +47,7 @@ export function listReadingLists(): ReadingList[] {
 }
 
 function saveAll(lists: ReadingList[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(lists));
+  writeJson(STORAGE_KEY, lists);
 }
 
 export function saveReadingList(list: ReadingList): void {

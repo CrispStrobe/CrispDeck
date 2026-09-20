@@ -7,6 +7,7 @@
  */
 
 import type { ColumnType } from '$lib/deck-columns';
+import { writeJson, writeString, removeKey } from './safe-storage';
 
 export type ColumnNotifyMode = 'off' | 'sound' | 'desktop' | 'both';
 
@@ -73,16 +74,16 @@ export function saveLayout(name: string, columns: DeckColumnConfig[]): DeckLayou
     layouts.push(layout);
   }
 
-  localStorage.setItem(LAYOUTS_KEY, JSON.stringify(layouts));
+  writeJson(LAYOUTS_KEY, layouts);
   return layout;
 }
 
 export function deleteLayout(name: string): void {
   const layouts = listLayouts().filter(l => l.name !== name);
-  localStorage.setItem(LAYOUTS_KEY, JSON.stringify(layouts));
+  writeJson(LAYOUTS_KEY, layouts);
   // Clear active if it was the deleted one
   if (getActiveLayoutName() === name) {
-    localStorage.removeItem(ACTIVE_KEY);
+    removeKey(ACTIVE_KEY);
   }
 }
 
@@ -91,7 +92,7 @@ export function renameLayout(oldName: string, newName: string): void {
   const layout = layouts.find(l => l.name === oldName);
   if (layout) {
     layout.name = newName;
-    localStorage.setItem(LAYOUTS_KEY, JSON.stringify(layouts));
+    writeJson(LAYOUTS_KEY, layouts);
     if (getActiveLayoutName() === oldName) {
       setActiveLayoutName(newName);
     }
@@ -103,7 +104,7 @@ export function getActiveLayoutName(): string | null {
 }
 
 export function setActiveLayoutName(name: string): void {
-  localStorage.setItem(ACTIVE_KEY, name);
+  writeString(ACTIVE_KEY, name);
 }
 
 export function duplicateLayout(name: string): DeckLayout | null {

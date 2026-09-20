@@ -1,5 +1,6 @@
 <script lang="ts">
   import { swallow } from '$lib/debug-log';
+  import { removeKey, writeJson } from '$lib/safe-storage';
   import { hrefOrHash } from '$lib/safe-url';
   import { fetchOk } from '$lib/http';
   import { getSttEngine } from '$lib/settings';
@@ -154,18 +155,18 @@ function parseTargetAccounts(value: unknown): number[] {
     if (autoSaveTimer) clearTimeout(autoSaveTimer);
     autoSaveTimer = setTimeout(() => {
       if (text.trim()) {
-        localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({
+        writeJson(AUTOSAVE_KEY, {
           text, cw: showCW ? contentWarning : '', savedAt: new Date().toISOString(),
-        }));
+        });
       } else {
-        localStorage.removeItem(AUTOSAVE_KEY);
+        removeKey(AUTOSAVE_KEY);
       }
     }, 2000);
   }
 
   function clearAutoSave() {
     if (autoSaveTimer) clearTimeout(autoSaveTimer);
-    localStorage.removeItem(AUTOSAVE_KEY);
+    removeKey(AUTOSAVE_KEY);
     autoSaveRestoredFrom = null;
   }
 

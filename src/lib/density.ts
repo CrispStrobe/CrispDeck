@@ -9,6 +9,8 @@
  * Sets CSS custom properties on :root so all components adapt automatically.
  */
 
+import { writeString } from './safe-storage';
+
 export type DensityMode = 'compact' | 'comfortable' | 'spacious';
 
 const STORAGE_KEY = 'crispdeck-density';
@@ -53,7 +55,7 @@ export function getDensity(): DensityMode {
 
 /** Save density mode to localStorage. */
 export function saveDensity(mode: DensityMode): void {
-  localStorage.setItem(STORAGE_KEY, mode);
+  writeString(STORAGE_KEY, mode);
 }
 
 /** Apply density CSS custom properties to the document root. */

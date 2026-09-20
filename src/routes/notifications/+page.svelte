@@ -1,6 +1,6 @@
 <script lang="ts">
   import { swallow } from '$lib/debug-log';
-  import { readJson } from '$lib/safe-storage';
+  import { readJson, writeJson } from '$lib/safe-storage';
   import { sanitizeHtml } from '$lib/sanitize';
   import { toast } from '$lib/toast.svelte';
   import { base } from '$app/paths';
@@ -166,7 +166,7 @@
 
   function dismissAnnouncement(id: string) {
     dismissedAnnouncementIds.add(id);
-    localStorage.setItem('crispdeck-dismissed-announcements', JSON.stringify([...dismissedAnnouncementIds]));
+    writeJson('crispdeck-dismissed-announcements', [...dismissedAnnouncementIds]);
     announcements = announcements.filter(a => a.id !== id);
     // Also dismiss on server
     for (const [, entry] of clientEntries) {

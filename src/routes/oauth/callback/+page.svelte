@@ -1,5 +1,6 @@
 <script lang="ts">
   import { i18n } from '$lib/i18n.svelte';
+  import { removeKey } from '$lib/safe-storage';
   import { fetchJson } from '$lib/http';
   import { swallow } from '$lib/debug-log';
   import { base } from '$app/paths';
@@ -65,7 +66,7 @@
       });
 
       // Clean up OAuth state
-      localStorage.removeItem('crispdeck-oauth-state');
+      removeKey('crispdeck-oauth-state');
 
       status = 'success';
 

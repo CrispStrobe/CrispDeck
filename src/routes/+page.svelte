@@ -1,5 +1,6 @@
 <script lang="ts">
   import { cleanInstanceUrl, buildInstanceUrl, cleanBskyHandle, markFirstRunComplete } from '$lib/onboarding';
+  import { writeJson } from '$lib/safe-storage';
   import { swallow } from '$lib/debug-log';
   import { getHomeMode, homeRedirectPath } from '$lib/settings';
   import { base } from '$app/paths';
@@ -95,12 +96,15 @@
   async function connectMastodon(instanceUrl: string) {
     const url = buildInstanceUrl(cleanInstanceUrl(instanceUrl));
     const oauthState = await dbStartOAuth(url);
-    localStorage.setItem('crispdeck-oauth-state', JSON.stringify({
+    // Without this the callback page has nothing to finish the flow with.
+    if (!writeJson('crispdeck-oauth-state', {
       instance_url: url,
       client_id: oauthState.client_id,
       client_secret: oauthState.client_secret,
       redirect_uri: oauthState.redirect_uri,
-    }));
+    })) {
+      throw new Error('Could not store the sign-in state — browser storage is unavailable');
+    }
     markFirstRunComplete();
     window.location.href = oauthState.auth_url;
   }
