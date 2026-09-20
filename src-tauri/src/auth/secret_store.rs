@@ -372,10 +372,12 @@ mod tests {
     #[test]
     fn the_platform_flag_matches_the_build() {
         // Guards the cfg list against drifting from the Cargo.toml targets.
-        #[cfg(any(target_os = "linux", target_os = "windows"))]
+        // It earned that: wiring macOS up left this asserting the opposite,
+        // and CI's macOS leg failed on it rather than on the new code.
+        #[cfg(any(target_os = "linux", target_os = "windows", target_os = "macos"))]
         assert!(os_store_compiled_in());
-        #[cfg(not(any(target_os = "linux", target_os = "windows")))]
-        assert!(!os_store_compiled_in(), "macOS is deliberately not wired up yet");
+        #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
+        assert!(!os_store_compiled_in(), "no backend is wired up for this platform");
     }
 
     /// Against the real OS store, not the fake one.
