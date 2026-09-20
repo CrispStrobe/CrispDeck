@@ -1,5 +1,6 @@
 <script lang="ts">
   import { swallow } from '$lib/debug-log';
+  import { hrefOrHash } from '$lib/safe-url';
   import { toast } from '$lib/toast.svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { base } from '$app/paths';
@@ -222,7 +223,7 @@
             </h3>
             <div class="space-y-1">
               {#each bskyTopics.slice(0, 10) as topic}
-                <a href={topic.link} target="_blank" rel="noopener" class="block p-2 bg-[var(--color-surface)] rounded border border-[var(--color-border)] hover:border-[var(--color-bluesky)] text-sm transition-colors">
+                <a href={hrefOrHash(topic.link)} target="_blank" rel="noopener" class="block p-2 bg-[var(--color-surface)] rounded border border-[var(--color-border)] hover:border-[var(--color-bluesky)] text-sm transition-colors">
                   {topic.displayName || topic.topic}
                 </a>
               {/each}
@@ -236,7 +237,7 @@
             </h3>
             <div class="space-y-1">
               {#each filteredTags.slice(0, 10) as tag}
-                <a href={tag.url} target="_blank" rel="noopener" class="block p-2 bg-[var(--color-surface)] rounded border border-[var(--color-border)] hover:border-[var(--color-mastodon)] text-sm transition-colors">
+                <a href={hrefOrHash(tag.url)} target="_blank" rel="noopener" class="block p-2 bg-[var(--color-surface)] rounded border border-[var(--color-border)] hover:border-[var(--color-mastodon)] text-sm transition-colors">
                   #{tag.name}
                 </a>
               {/each}
@@ -294,7 +295,7 @@
     {#if activeTab === 'links'}
       <div class="space-y-3">
         {#each enrichedLinks as link}
-          <a href={link.url} target="_blank" rel="noopener noreferrer" class="flex gap-3 p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] hover:border-[var(--color-mastodon)] transition-colors">
+          <a href={hrefOrHash(link.url)} target="_blank" rel="noopener noreferrer" class="flex gap-3 p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] hover:border-[var(--color-mastodon)] transition-colors">
             {#if link.image}
               <img loading="lazy" src={link.image} alt="" class="w-20 h-14 rounded object-cover flex-shrink-0" />
             {/if}

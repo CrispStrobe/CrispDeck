@@ -1,5 +1,40 @@
+<script module lang="ts">
+  /**
+   * Post preferences, read once per session rather than once per post.
+   *
+   * This lived in the instance <script>, which in Svelte 5 runs for every
+   * component instance — so the "cache" was per-instance and re-read
+   * localStorage three times for every post rendered, and the invalidation
+   * listener was registered again for every post and never removed. Ten Post
+   * instances produced ten listeners and thirty localStorage reads; a deck of
+   * eight columns holds several hundred, all still attached after the posts
+   * scroll away, and all firing on each settings change.
+   *
+   * <script module> runs once for the module, which is what the original
+   * comment described and what the code now does.
+   */
+  let _postPrefsCache: { hideEngagement: boolean; mediaPreview: 'lightbox' | 'browser'; compact: boolean } | null = null;
+
+  export function getPostPrefs() {
+    if (_postPrefsCache) return _postPrefsCache;
+    _postPrefsCache = {
+      hideEngagement: localStorage.getItem('crispdeck-hide-engagement') === 'true',
+      mediaPreview: (localStorage.getItem('crispdeck-media-preview') as 'lightbox' | 'browser') || 'lightbox',
+      compact: localStorage.getItem('crispdeck-compact-posts') === 'true',
+    };
+    return _postPrefsCache;
+  }
+
+  // One listener for the module, not one per post. Nothing to remove: it
+  // lives as long as the module does.
+  if (typeof window !== 'undefined') {
+    window.addEventListener('crispdeck:prefs-changed', () => { _postPrefsCache = null; });
+  }
+</script>
+
 <script lang="ts">
   import * as embeds from '$lib/components/post-embeds';
+  import { hrefOrHash, safeExternalUrl } from '$lib/safe-url';
   import { hasAltText } from '$lib/alt-text';
   import { formatDate, relativeTime } from '$lib/time-format';
   import { i18n } from '$lib/i18n.svelte';
@@ -15,30 +50,13 @@
   import { onMount, onDestroy } from 'svelte';
   import { jetstream } from '$lib/jetstream';
   import type { UnifiedPost } from '$lib/types';
-  import { sanitizeHtml } from '$lib/sanitize';
+  import { sanitizeHtml, injectCustomEmoji } from '$lib/sanitize';
   import MediaLightbox from '$lib/components/MediaLightbox.svelte';
   import { haptic } from '$lib/haptics';
   import { toast } from '$lib/toast.svelte';
   import { swallow } from '$lib/debug-log';
   import type { LightboxItem } from '$lib/components/MediaLightbox.svelte';
 
-  // Session-scoped post preferences singleton — reads localStorage once, never re-reads
-  // until invalidated by settings page via window event. Eliminates 50+ localStorage
-  // reads per feed render and Date.now() checks on every Post instance.
-  let _postPrefsCache: { hideEngagement: boolean; mediaPreview: 'lightbox' | 'browser'; compact: boolean } | null = null;
-  function getPostPrefs() {
-    if (_postPrefsCache) return _postPrefsCache;
-    _postPrefsCache = {
-      hideEngagement: localStorage.getItem('crispdeck-hide-engagement') === 'true',
-      mediaPreview: (localStorage.getItem('crispdeck-media-preview') as 'lightbox' | 'browser') || 'lightbox',
-      compact: localStorage.getItem('crispdeck-compact-posts') === 'true',
-    };
-    return _postPrefsCache;
-  }
-  // Invalidate cache when settings change (fired from settings page)
-  if (typeof window !== 'undefined') {
-    window.addEventListener('crispdeck:prefs-changed', () => { _postPrefsCache = null; });
-  }
   const _postPrefs = getPostPrefs();
 
   let { post, hideMedia = false, compact = false, onlike, onboost, onreply, onquote, onfollow }: {
@@ -474,7 +492,8 @@
     if (p.platform === 'mastodon') {
       const raw = (p.raw ?? {}) as any;
       const account = raw.reblog ? raw.reblog.account : raw.account;
-      return account?.url ?? '#';
+      // A Mastodon account URL is whatever the remote instance reports.
+      return hrefOrHash(account?.url);
     }
     return `https://bsky.app/profile/${p.author.handle}`;
   }
@@ -541,7 +560,12 @@
       const feature = facet.features?.[0];
 
       if (feature?.$type === 'app.bsky.richtext.facet#link') {
-        result += `<a href="${escapeHtml(feature.uri)}" target="_blank" rel="noopener noreferrer">${escapeHtml(segment)}</a>`;
+        // escapeHtml keeps the URI inside the attribute; it says nothing
+        // about the scheme, and href="javascript:..." runs on click.
+        const safe = safeExternalUrl(feature.uri);
+        result += safe
+          ? `<a href="${escapeHtml(safe)}" target="_blank" rel="noopener noreferrer">${escapeHtml(segment)}</a>`
+          : escapeHtml(segment);
       } else if (feature?.$type === 'app.bsky.richtext.facet#mention') {
         result += `<a href="{base}/profile?handle=${encodeURIComponent(feature.did)}&platform=bluesky" data-mention="${escapeHtml(feature.did)}">${escapeHtml(segment)}</a>`;
       } else if (feature?.$type === 'app.bsky.richtext.facet#tag') {
@@ -657,16 +681,12 @@
   const bskyQuote = $derived(getBskyQuote());
   const threadsQuote = $derived(getThreadsQuote());
   const bskyVideo = $derived(getBskyVideo());
-  const mastodonHtml = $derived.by(() => {
-    let html = sanitizeHtml(getMastodonHtml());
-    // Render custom emoji :shortcode: → inline <img>
-    if (post.emojis?.length && html) {
-      for (const e of post.emojis) {
-        html = html.replaceAll(`:${e.shortcode}:`, `<img src="${e.url}" alt=":${e.shortcode}:" class="inline-emoji" draggable="false">`);
-      }
-    }
-    return html;
-  });
+  const mastodonHtml = $derived.by(() =>
+    // Emoji go in through the DOM, after sanitizing. The string replace this
+    // replaces interpolated a remote URL into an attribute — after DOMPurify
+    // had already run, so nothing was checking it.
+    injectCustomEmoji(sanitizeHtml(getMastodonHtml()), post.emojis),
+  );
   const bskyHtml = $derived(getBskyHtml());
   const bskyExternalHost = $derived.by(() => {
     if (!bskyExternal) return '';
@@ -951,7 +971,7 @@
           </div>
         {:else}
           <!-- Standard link card -->
-          <a href={bskyExternal.uri} target="_blank" rel="noopener noreferrer" class="mt-2 block border border-[var(--color-border)] rounded-lg overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
+          <a href={hrefOrHash(bskyExternal.uri)} target="_blank" rel="noopener noreferrer" class="mt-2 block border border-[var(--color-border)] rounded-lg overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
             {#if bskyExternal.thumb}
               <img decoding="async" loading="lazy" src={bskyExternal.thumb} alt="" class="w-full h-32 object-cover" />
             {/if}
@@ -1088,7 +1108,7 @@
 
       <!-- Mastodon link card -->
       {#if mastodonCard}
-        <a href={mastodonCard.url} target="_blank" rel="noopener noreferrer" class="mt-2 block border border-[var(--color-border)] rounded-lg overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
+        <a href={hrefOrHash(mastodonCard.url)} target="_blank" rel="noopener noreferrer" class="mt-2 block border border-[var(--color-border)] rounded-lg overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
           {#if mastodonCard.image}
             <img decoding="async" loading="lazy" src={mastodonCard.image} alt="" class="w-full h-32 object-cover" />
           {/if}

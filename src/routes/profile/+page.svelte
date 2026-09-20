@@ -1,5 +1,6 @@
 <script lang="ts">
   import { swallow } from '$lib/debug-log';
+  import { hrefOrHash } from '$lib/safe-url';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
@@ -510,7 +511,7 @@
         <div class="grid grid-cols-3 gap-1">
           {#each mediaGallery as item}
             <a
-              href={item.url}
+              href={hrefOrHash(item.url)}
               target="_blank"
               rel="noopener noreferrer"
               class="relative aspect-square overflow-hidden rounded bg-[var(--color-surface-hover)] hover:opacity-80 transition-opacity"

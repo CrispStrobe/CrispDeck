@@ -1,5 +1,6 @@
 <script lang="ts">
   import { base } from '$app/paths';
+  import { hrefOrHash } from '$lib/safe-url';
   import { fetchJson } from '$lib/http';
   import { swallow } from '$lib/debug-log';
   import { onMount } from 'svelte';
@@ -184,7 +185,7 @@
               <span>{lib.license}</span>
               <span>{lib.author}</span>
               {#if lib.link}
-                <a href={lib.link} target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">{i18n.t.about.source}</a>
+                <a href={hrefOrHash(lib.link)} target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">{i18n.t.about.source}</a>
               {/if}
             </div>
           </div>
