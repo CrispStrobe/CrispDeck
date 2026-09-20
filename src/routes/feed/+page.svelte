@@ -864,7 +864,7 @@
                     <button
                       role="menuitem"
                       onclick={() => selectFeed(choice)}
-                      class="flex-1 min-w-0 flex items-center gap-2 px-3 py-2 text-left text-xs {choice.kind === 'timeline' ? (feedMode === 'timeline' ? 'text-[var(--color-primary)]' : '') : (customFeed?.key === choice.key ? 'text-[var(--color-primary)]' : '')}"
+                      class="flex-1 min-w-0 flex items-center gap-2 px-3 py-2 text-left text-xs {choice.kind === 'timeline' ? (feedMode === 'timeline' ? 'text-[var(--color-primary-text)]' : '') : (customFeed?.key === choice.key ? 'text-[var(--color-primary-text)]' : '')}"
                     >
                       {#if choice.avatar}
                         <img src={choice.avatar} alt="" width="20" height="20" loading="lazy" decoding="async" class="w-5 h-5 rounded flex-shrink-0 bg-[var(--color-surface-hover)]" />
@@ -890,7 +890,7 @@
                         disabled={pinBusy !== null}
                         aria-label={choice.savedId ? i18n.t.feed.unpinFeed : i18n.t.feed.pinFeed}
                         title={choice.savedId ? i18n.t.feed.unpinFeed : i18n.t.feed.pinFeed}
-                        class="px-2.5 flex items-center text-[var(--color-text-muted)] hover:text-[var(--color-primary)] disabled:opacity-40"
+                        class="px-2.5 flex items-center text-[var(--color-text-muted)] hover:text-[var(--color-primary-text)] disabled:opacity-40"
                       >
                         {#if pinBusy === choice.key}
                           <Loader2 size={13} class="animate-spin" />
@@ -976,7 +976,7 @@
 
       <button
         onclick={() => showFilters = !showFilters}
-        class="p-1.5 rounded-md transition-colors {showFilters ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+        class="p-1.5 rounded-md transition-colors {showFilters ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary-text)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
         title="Filters & Sort"
       >
         <SlidersHorizontal size={16} />
@@ -984,7 +984,7 @@
 
       <button
         onclick={() => hideMedia = !hideMedia}
-        class="p-1.5 rounded-md transition-colors {hideMedia ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+        class="p-1.5 rounded-md transition-colors {hideMedia ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary-text)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
         title={i18n.t.feed.hideMediaLabel}
       >
         <EyeOff size={14} />
@@ -1009,7 +1009,7 @@
   <!-- Pull-to-refresh indicator -->
   {#if pullDistance > 0}
     <div class="flex items-center justify-center mb-2 transition-all" style="height: {pullDistance}px">
-      <RefreshCw size={20} class="text-[var(--color-primary)] {pullRefreshing ? 'animate-spin' : ''}" style="opacity: {pullDistance / 60}; transform: rotate({pullDistance * 3}deg)" />
+      <RefreshCw size={20} class="text-[var(--color-primary-text)] {pullRefreshing ? 'animate-spin' : ''}" style="opacity: {pullDistance / 60}; transform: rotate({pullDistance * 3}deg)" />
     </div>
   {/if}
 
@@ -1034,7 +1034,7 @@
     {#if newPostsAvailable > 0}
       <button
         onclick={loadNewPosts}
-        class="w-full mb-3 py-2 bg-[var(--color-primary)]/20 text-[var(--color-primary)] text-sm font-medium rounded-lg hover:bg-[var(--color-primary)]/30 transition-colors"
+        class="w-full mb-3 py-2 bg-[var(--color-primary)]/20 text-[var(--color-primary-text)] text-sm font-medium rounded-lg hover:bg-[var(--color-primary)]/30 transition-colors"
       >
         {newPostsAvailable} new post{newPostsAvailable > 1 ? 's' : ''} available — click to refresh
       </button>

@@ -264,7 +264,7 @@ function parseTargetAccounts(value: unknown): number[] {
         {#each weekDays as day, i}
           {@const dayDrafts = getDraftsForDay(day)}
           <div class="border-r border-[var(--color-border)] p-1.5 {i === 6 ? 'border-r-0' : ''} {isToday(day) ? 'bg-[var(--color-primary)]/5' : ''}">
-            <div class="text-[10px] font-medium mb-1 {isToday(day) ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'}">
+            <div class="text-[10px] font-medium mb-1 {isToday(day) ? 'text-[var(--color-primary-text)]' : 'text-[var(--color-text-muted)]'}">
               {day.getDate()}
             </div>
             {#each dayDrafts as draft}
@@ -289,7 +289,7 @@ function parseTargetAccounts(value: unknown): number[] {
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <FileText size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
       <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">{i18n.t.drafts.noDrafts}</h3>
-      <p class="text-sm text-[var(--color-text-muted)]">{i18n.t.drafts.savedFromCompose} <a href="{base}/compose" class="text-[var(--color-primary)] underline">{i18n.t.nav.compose}</a></p>
+      <p class="text-sm text-[var(--color-text-muted)]">{i18n.t.drafts.savedFromCompose} <a href="{base}/compose" class="text-[var(--color-primary-text)] underline">{i18n.t.nav.compose}</a></p>
     </div>
   {:else}
     <!-- Scheduled drafts -->
@@ -313,7 +313,7 @@ function parseTargetAccounts(value: unknown): number[] {
               <div class="flex items-center gap-1 flex-shrink-0">
                 <button
                   onclick={() => previewDraftId = previewDraftId === draft.id ? null : draft.id}
-                  class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors {previewDraftId === draft.id ? 'text-[var(--color-primary)]' : ''}"
+                  class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-primary-text)] transition-colors {previewDraftId === draft.id ? 'text-[var(--color-primary-text)]' : ''}"
                   title={i18n.t.drafts.preview}
                 >
                   <Eye size={14} />
@@ -341,7 +341,7 @@ function parseTargetAccounts(value: unknown): number[] {
                       <span class="w-2 h-2 rounded-full" style="background: var(--color-{plat})"></span>
                       <span class="text-[10px] font-medium text-[var(--color-text-muted)] capitalize">{plat}</span>
                       {#if plan.parts.length > 1}
-                        <span class="text-[10px] px-1 py-0.5 bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded">{plan.parts.length}-post thread</span>
+                        <span class="text-[10px] px-1 py-0.5 bg-[var(--color-primary)]/20 text-[var(--color-primary-text)] rounded">{plan.parts.length}-post thread</span>
                       {/if}
                       {#if draft.content_warning}
                         <span class="text-[10px] px-1 py-0.5 bg-yellow-600/20 text-yellow-400 rounded">CW: {draft.content_warning}</span>
@@ -381,14 +381,14 @@ function parseTargetAccounts(value: unknown): number[] {
               <div class="flex items-center gap-1 flex-shrink-0">
                 <a
                   href="{base}/compose?draft={draft.id}"
-                  class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors"
+                  class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-primary-text)] transition-colors"
                   title={i18n.t.drafts.edit}
                 >
                   <Edit3 size={14} />
                 </a>
                 <button
                   onclick={() => previewDraftId = previewDraftId === draft.id ? null : draft.id}
-                  class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors {previewDraftId === draft.id ? 'text-[var(--color-primary)]' : ''}"
+                  class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-primary-text)] transition-colors {previewDraftId === draft.id ? 'text-[var(--color-primary-text)]' : ''}"
                   title={i18n.t.drafts.preview}
                 >
                   <Eye size={14} />
@@ -452,7 +452,7 @@ function parseTargetAccounts(value: unknown): number[] {
                       <span class="w-2 h-2 rounded-full" style="background: var(--color-{plat})"></span>
                       <span class="text-[10px] font-medium text-[var(--color-text-muted)] capitalize">{plat}</span>
                       {#if plan.parts.length > 1}
-                        <span class="text-[10px] px-1 py-0.5 bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded">{plan.parts.length}-post thread</span>
+                        <span class="text-[10px] px-1 py-0.5 bg-[var(--color-primary)]/20 text-[var(--color-primary-text)] rounded">{plan.parts.length}-post thread</span>
                       {/if}
                       {#if draft.content_warning}
                         <span class="text-[10px] px-1 py-0.5 bg-yellow-600/20 text-yellow-400 rounded">CW: {draft.content_warning}</span>

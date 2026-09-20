@@ -76,10 +76,10 @@
       Full-featured cross-platform client with crossposting, identity mapping, translation, and smart mentions. Built with Tauri 2 + SvelteKit + Svelte 5 + Rust. {#if typeof window !== 'undefined'}Deployed on web.{/if}
     </p>
     <div class="flex gap-3 mt-3">
-      <a href="https://github.com/CrispStrobe/CrispDeck" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline">
+      <a href="https://github.com/CrispStrobe/CrispDeck" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1 text-xs text-[var(--color-primary-text)] hover:underline">
         <ExternalLink size={12} /> GitHub
       </a>
-      <a href="https://crispdeck.vercel.app" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline">
+      <a href="https://crispdeck.vercel.app" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1 text-xs text-[var(--color-primary-text)] hover:underline">
         <ExternalLink size={12} /> Web App
       </a>
       {#if __GIT_HASH__}
@@ -87,7 +87,7 @@
           <ExternalLink size={12} /> {__GIT_HASH__}
         </a>
       {/if}
-      <button onclick={() => showLogs = true} class="flex items-center gap-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors">
+      <button onclick={() => showLogs = true} class="flex items-center gap-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-primary-text)] transition-colors">
         <ScrollText size={12} /> Logs
       </button>
     </div>
@@ -115,9 +115,9 @@
   <section class="mb-6 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
     <h3 class="text-sm font-semibold mb-2 flex items-center gap-1.5"><Shield size={14} /> Privacy &amp; Legal</h3>
     <div class="flex flex-wrap gap-3 text-xs">
-      <a href="{base}/privacy" class="text-[var(--color-primary)] hover:underline">{i18n.t.about.privacyPolicy}</a>
-      <a href="https://github.com/CrispStrobe/CrispDeck/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">{i18n.t.about.agplLicense}</a>
-      <a href="https://github.com/CrispStrobe/CrispDeck/blob/main/LICENSE-COMMERCIAL" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">{i18n.t.about.appStoreLicense}</a>
+      <a href="{base}/privacy" class="text-[var(--color-primary-text)] hover:underline">{i18n.t.about.privacyPolicy}</a>
+      <a href="https://github.com/CrispStrobe/CrispDeck/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary-text)] hover:underline">{i18n.t.about.agplLicense}</a>
+      <a href="https://github.com/CrispStrobe/CrispDeck/blob/main/LICENSE-COMMERCIAL" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary-text)] hover:underline">{i18n.t.about.appStoreLicense}</a>
     </div>
   </section>
 
@@ -131,15 +131,18 @@
   <!-- License -->
   <section class="mb-6 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
     <h3 class="text-sm font-semibold mb-2 flex items-center gap-1.5"><ScrollText size={14} />{i18n.t.about.license}</h3>
+    <!-- Links inside a paragraph are underlined always, not on hover: colour
+         alone is the only cue otherwise, which a colour-blind reader cannot
+         see. Standalone links in lists above are unambiguous without it. -->
     <div class="text-xs text-[var(--color-text-muted)] leading-relaxed space-y-1">
       <p>
         <span class="font-medium text-[var(--color-text)]">{i18n.t.about.sourceCode}</span> —
-        <a href="https://github.com/CrispStrobe/CrispDeck/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">AGPL-3.0</a>
+        <a href="https://github.com/CrispStrobe/CrispDeck/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary-text)] underline">AGPL-3.0</a>
         · Free to use, modify, and redistribute under copyleft terms.
       </p>
       <p>
         <span class="font-medium text-[var(--color-text)]">{i18n.t.about.storeBinary}</span> —
-        <a href="https://github.com/CrispStrobe/CrispDeck/blob/main/LICENSE-COMMERCIAL" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">{i18n.t.about.commercialLicense}</a>
+        <a href="https://github.com/CrispStrobe/CrispDeck/blob/main/LICENSE-COMMERCIAL" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary-text)] underline">{i18n.t.about.commercialLicense}</a>
         · Distributed by Christian Ströbele under an App Store distribution exception.
       </p>
     </div>
@@ -185,7 +188,7 @@
               <span>{lib.license}</span>
               <span>{lib.author}</span>
               {#if lib.link}
-                <a href={hrefOrHash(lib.link)} target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">{i18n.t.about.source}</a>
+                <a href={hrefOrHash(lib.link)} target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary-text)] hover:underline">{i18n.t.about.source}</a>
               {/if}
             </div>
           </div>

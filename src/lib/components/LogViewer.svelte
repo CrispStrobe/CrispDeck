@@ -137,7 +137,7 @@
       <div class="flex items-center gap-1 px-5 py-2 border-b border-[var(--color-border)]">
         <button
           onclick={() => filter = 'all'}
-          class="px-2.5 py-1 text-[10px] font-medium rounded transition-colors {filter === 'all' ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+          class="px-2.5 py-1 text-[10px] font-medium rounded transition-colors {filter === 'all' ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary-text)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
         >All ({logs.length})</button>
         <button
           onclick={() => filter = 'error'}
@@ -165,7 +165,7 @@
               <span class="flex-shrink-0 text-[var(--color-text-muted)]/50 select-none w-16">{new Date(entry.timestamp).toLocaleTimeString()}</span>
               <span class="flex-shrink-0 uppercase font-bold w-10 text-[10px]">{entry.level}</span>
               {#if entry.source}
-                <span class="flex-shrink-0 text-[var(--color-primary)]/50 text-[10px]">[{entry.source}]</span>
+                <span class="flex-shrink-0 text-[var(--color-primary-text)]/50 text-[10px]">[{entry.source}]</span>
               {/if}
               <span class="break-all whitespace-pre-wrap">{entry.message}</span>
             </div>

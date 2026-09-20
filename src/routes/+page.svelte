@@ -218,7 +218,7 @@
         </a>
       </div>
     {/if}
-    <button onclick={() => showMoreActions = !showMoreActions} class="mt-2 text-xs text-[var(--color-primary)] hover:underline">
+    <button onclick={() => showMoreActions = !showMoreActions} class="mt-2 text-xs text-[var(--color-primary-text)] hover:underline">
       {showMoreActions ? 'Show less' : 'More actions...'}
     </button>
 

@@ -24,7 +24,7 @@
   <div class="flex items-center justify-between">
     <span class="text-xs text-[var(--color-text-muted)] uppercase tracking-wider font-medium">{i18n.t.compose.postTo}</span>
     {#if accounts.length > 1}
-      <button onclick={selectAll} class="text-xs text-[var(--color-primary)] hover:underline">
+      <button onclick={selectAll} class="text-xs text-[var(--color-primary-text)] hover:underline">
         Select All
       </button>
     {/if}

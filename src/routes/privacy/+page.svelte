@@ -32,7 +32,7 @@
     <p class="text-sm text-[var(--color-text-muted)] leading-relaxed">
       Christian Ströbele<br />
       Nikolausstr. 5, 70190 Stuttgart, Germany<br />
-      Email: <a href="mailto:postmaster@crispstro.be" class="text-[var(--color-primary)] hover:underline">postmaster@crispstro.be</a>
+      Email: <a href="mailto:postmaster@crispstro.be" class="text-[var(--color-primary-text)] hover:underline">postmaster@crispstro.be</a>
     </p>
   </section>
 
@@ -83,7 +83,7 @@
       <li>{p.s7Clear}</li>
       <li>{p.s7Revoke}</li>
     </ul>
-    <p class="text-sm text-[var(--color-text-muted)] leading-relaxed mt-2">{p.s7Contact} <a href="mailto:postmaster@crispstro.be" class="text-[var(--color-primary)] hover:underline">postmaster@crispstro.be</a></p>
+    <p class="text-sm text-[var(--color-text-muted)] leading-relaxed mt-2">{p.s7Contact} <a href="mailto:postmaster@crispstro.be" class="text-[var(--color-primary-text)] hover:underline">postmaster@crispstro.be</a></p>
   </section>
 
   <section class="mb-6 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">

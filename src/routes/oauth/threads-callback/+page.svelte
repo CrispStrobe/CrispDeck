@@ -102,7 +102,7 @@
 <div class="flex items-center justify-center min-h-screen bg-[var(--color-bg)]">
   <div class="max-w-md w-full mx-4 p-8 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] text-center">
     {#if status === 'loading'}
-      <Loader2 size={48} class="text-[var(--color-primary)] animate-spin mx-auto mb-4" />
+      <Loader2 size={48} class="text-[var(--color-primary-text)] animate-spin mx-auto mb-4" />
       <h2 class="text-lg font-bold mb-2">{i18n.t.oauth.connectingThreads}</h2>
       <p class="text-sm text-[var(--color-text-muted)]">{i18n.t.oauth.completingAuth}</p>
     {:else if status === 'success'}

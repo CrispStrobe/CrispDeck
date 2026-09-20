@@ -326,7 +326,7 @@
               <button type="submit" class="px-2 py-1 text-xs bg-[var(--color-primary)] text-white rounded">Go</button>
             </form>
           {:else}
-            <button onclick={() => showNewConvo = true} class="w-full px-3 py-1.5 text-xs text-[var(--color-primary)] hover:bg-[var(--color-surface-hover)] rounded transition-colors">
+            <button onclick={() => showNewConvo = true} class="w-full px-3 py-1.5 text-xs text-[var(--color-primary-text)] hover:bg-[var(--color-surface-hover)] rounded transition-colors">
               + New Conversation
             </button>
           {/if}

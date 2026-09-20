@@ -95,7 +95,7 @@
         <a
           href="{base}/settings?tab=account"
           onclick={() => showPopover = false}
-          class="flex items-center gap-2 px-3 py-2 text-[var(--color-primary)] hover:bg-[var(--color-surface-hover)] transition-colors text-xs"
+          class="flex items-center gap-2 px-3 py-2 text-[var(--color-primary-text)] hover:bg-[var(--color-surface-hover)] transition-colors text-xs"
         >
           + Add account
         </a>

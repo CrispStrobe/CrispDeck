@@ -210,7 +210,7 @@
   {:else if !hasBsky && !hasMasto}
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <TrendingUp size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
-      <p class="text-sm text-[var(--color-text-muted)]">{i18n.t.trending.addAccountToSee} <a href="{base}/settings" class="text-[var(--color-primary)] underline">{i18n.t.nav.settings}</a></p>
+      <p class="text-sm text-[var(--color-text-muted)]">{i18n.t.trending.addAccountToSee} <a href="{base}/settings" class="text-[var(--color-primary-text)] underline">{i18n.t.nav.settings}</a></p>
     </div>
   {:else}
     <!-- Combined trending (unified view) -->

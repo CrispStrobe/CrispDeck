@@ -365,7 +365,7 @@
       <div class="relative">
         <button
           onclick={cycleNotify}
-          class="p-1 transition-colors {notify !== 'off' ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+          class="p-1 transition-colors {notify !== 'off' ? 'text-[var(--color-primary-text)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
           title="Notifications: {notify}"
         >
           {#if notify === 'off'}
@@ -380,7 +380,7 @@
       <!-- Pin toggle -->
       <button
         onclick={() => onpinnedchange?.(!pinned)}
-        class="p-1 transition-colors {pinned ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+        class="p-1 transition-colors {pinned ? 'text-[var(--color-primary-text)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
         title={pinned ? 'Unpin column' : 'Pin column'}
       >
         {#if pinned}<Pin size={12} />{:else}<PinOff size={12} />{/if}
@@ -439,7 +439,7 @@
             {#each Object.entries(COLUMN_WIDTH_PRESETS) as [label, w]}
               <button
                 onclick={() => { onwidthchange?.(w); showWidthMenu = false; }}
-                class="w-full text-left px-3 py-1 text-[10px] hover:bg-[var(--color-surface-hover)] {width === w ? 'text-[var(--color-primary)] font-medium' : 'text-[var(--color-text)]'}"
+                class="w-full text-left px-3 py-1 text-[10px] hover:bg-[var(--color-surface-hover)] {width === w ? 'text-[var(--color-primary-text)] font-medium' : 'text-[var(--color-text)]'}"
               >
                 {label.charAt(0).toUpperCase() + label.slice(1)} ({w}px)
               </button>
@@ -545,7 +545,7 @@
       <div class="text-center py-8">
         <p class="text-xs text-[var(--color-text-muted)] mb-2">{filterText ? 'No matches' : 'No posts yet'}</p>
         {#if onrefresh && !filterText}
-          <button onclick={onrefresh} class="text-[10px] text-[var(--color-primary)] hover:underline">{i18n.t.deck.refreshColumn}</button>
+          <button onclick={onrefresh} class="text-[10px] text-[var(--color-primary-text)] hover:underline">{i18n.t.deck.refreshColumn}</button>
         {/if}
       </div>
     {:else}
@@ -561,7 +561,7 @@
       {#if hasMorePosts}
         <button
           onclick={() => visiblePostCount += POST_PAGE_SIZE}
-          class="w-full py-2 text-xs text-[var(--color-primary)] hover:bg-[var(--color-surface-hover)] transition-colors"
+          class="w-full py-2 text-xs text-[var(--color-primary-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
         >
           Show more ({filteredPosts.length - visiblePostCount} remaining)
         </button>

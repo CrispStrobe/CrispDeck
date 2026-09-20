@@ -316,7 +316,7 @@
         <button onclick={() => exportAsMarkdown(originalPosts, handle)} class="flex items-center gap-1 px-2 py-1 text-xs bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-md">
           <Download size={10} /> MD
         </button>
-        <button onclick={exportStatsSummary} class="flex items-center gap-1 px-2 py-1 text-xs bg-[var(--color-primary)]/20 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/30 border border-[var(--color-primary)]/30 rounded-md">
+        <button onclick={exportStatsSummary} class="flex items-center gap-1 px-2 py-1 text-xs bg-[var(--color-primary)]/20 text-[var(--color-primary-text)] hover:bg-[var(--color-primary)]/30 border border-[var(--color-primary)]/30 rounded-md">
           <Download size={10} /> Stats
         </button>
       {/if}
@@ -379,7 +379,7 @@
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
       <button onclick={() => toggleStat('posts')} class="bg-[var(--color-surface)] p-3 rounded-lg border border-[var(--color-border)] text-center hover:border-[var(--color-primary)] transition-colors {expandedStat === 'posts' ? 'border-[var(--color-primary)]' : ''}">
         <MessageCircle size={18} class="text-[var(--color-text-muted)] mx-auto mb-1" />
-        <div class="text-lg font-bold text-[var(--color-primary)]">{originalPosts.length}</div>
+        <div class="text-lg font-bold text-[var(--color-primary-text)]">{originalPosts.length}</div>
         <div class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.instance.posts}</div>
       </button>
       <button onclick={() => toggleStat('likes')} class="bg-[var(--color-surface)] p-3 rounded-lg border border-[var(--color-border)] text-center hover:border-red-500 transition-colors {expandedStat === 'likes' ? 'border-red-500' : ''}">
@@ -588,7 +588,7 @@
         <div class="flex flex-wrap gap-2">
           {#each recentMilestones as ms}
             <div class="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-xs">
-              <span class="font-bold text-[var(--color-primary)]">{ms.threshold}+</span>
+              <span class="font-bold text-[var(--color-primary-text)]">{ms.threshold}+</span>
               <span class="text-[var(--color-text-muted)]">{ms.metric}</span>
               <span class="text-[var(--color-text-muted)] text-[10px] ml-1">({ms.actualValue} actual)</span>
             </div>
@@ -608,7 +608,7 @@
           {#each insights as insight}
             <div class="p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
               <div class="flex items-center justify-between mb-1">
-                <span class="text-xs font-medium text-[var(--color-primary)] px-1.5 py-0.5 bg-[var(--color-primary)]/10 rounded">{insight.category}</span>
+                <span class="text-xs font-medium text-[var(--color-primary-text)] px-1.5 py-0.5 bg-[var(--color-primary)]/10 rounded">{insight.category}</span>
                 {#if insight.multiplier && insight.multiplier > 1}
                   <span class="text-xs font-bold text-green-400">{insight.multiplier.toFixed(1)}x</span>
                 {/if}
