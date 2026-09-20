@@ -1,5 +1,6 @@
 <script lang="ts">
   import { i18n } from '$lib/i18n.svelte';
+  import { hrefOrHash } from '$lib/safe-url';
   import { untrack } from 'svelte';
   import { X, ChevronLeft, ChevronRight, ExternalLink } from '@lucide/svelte';
   import { haptic } from '$lib/haptics';
@@ -87,7 +88,7 @@
 
     <!-- Open in browser -->
     <a
-      href={current.url}
+      href={hrefOrHash(current.url)}
       target="_blank"
       rel="noopener noreferrer"
       class="absolute top-4 right-16 z-10 p-2 text-white/70 hover:text-white bg-black/40 rounded-full transition-colors"

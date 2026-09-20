@@ -1,5 +1,6 @@
 <script lang="ts">
   import { swallow } from '$lib/debug-log';
+  import { hrefOrHash } from '$lib/safe-url';
   import { fetchOk } from '$lib/http';
   import { getSttEngine } from '$lib/settings';
   import { buildScheduledAt, minScheduleDate, formatScheduledFor } from '$lib/quick-schedule';
@@ -631,7 +632,7 @@
             <Check size={14} />
             <span>Posted to {result.platform}</span>
             {#if result.uri}
-              <a href={result.uri} target="_blank" rel="noopener noreferrer" class="underline ml-1">{i18n.t.common.view}</a>
+              <a href={hrefOrHash(result.uri)} target="_blank" rel="noopener noreferrer" class="underline ml-1">{i18n.t.common.view}</a>
             {/if}
           {:else}
             <AlertTriangle size={14} />
