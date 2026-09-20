@@ -1,4 +1,5 @@
 import { base } from '$app/paths';
+import { fetchOk } from './http';
 /**
  * Browser-side database using IndexedDB.
  * Mirrors the Rust/SQLite backend so the app works fully on Vercel.
@@ -537,7 +538,7 @@ export async function startMastodonOAuth(instanceUrl: string): Promise<{
   // dead callback into the registered app rather than failing loudly.
   const redirectUri = `${window.location.origin}${base}/oauth/callback`;
 
-  const resp = await fetch(`${instance}/api/v1/apps`, {
+  const resp = await fetchOk(`${instance}/api/v1/apps`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -546,9 +547,10 @@ export async function startMastodonOAuth(instanceUrl: string): Promise<{
       scopes: 'read write:statuses write:media write:favourites write:bookmarks',
       website: 'https://github.com/CrispStrobe/CrispDeck',
     }),
-  });
+  }, 'register app with instance');
 
   const app = await resp.json();
+  if (!app.client_id) throw new Error('Instance registered no client_id');
   const authUrl = `${instance}/oauth/authorize?client_id=${app.client_id}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent('read write:statuses write:media write:favourites write:bookmarks')}`;
 
   return {
@@ -567,7 +569,7 @@ export async function completeMastodonOAuth(params: {
   redirect_uri: string;
 }): Promise<{ access_token: string }> {
   const instance = params.instance_url.replace(/\/$/, '');
-  const resp = await fetch(`${instance}/oauth/token`, {
+  const resp = await fetchOk(`${instance}/oauth/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -578,7 +580,12 @@ export async function completeMastodonOAuth(params: {
       code: params.code,
       scope: 'read write:statuses write:media write:favourites write:bookmarks',
     }),
-  });
+  }, 'exchange authorization code');
   const data = await resp.json();
+  // Without this the account is saved with access_token: undefined and every
+  // later call fails somewhere far away from the cause.
+  if (!data.access_token) {
+    throw new Error(data.error_description ?? data.error ?? 'Instance returned no access token');
+  }
   return { access_token: data.access_token };
 }

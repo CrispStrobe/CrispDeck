@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getTtsEngine, setTtsEngine, getSttEngine, setSttEngine, getHomeMode, setHomeMode, type SpeechEngine, type HomeMode } from '$lib/settings';
+  import { fetchOk, fetchJson } from '$lib/http';
   import { apiUrl } from '$lib/api-origin';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
@@ -2124,7 +2125,7 @@
                 webPushError = '';
                 try {
                   await unsubscribeWebPush();
-                  await fetch(apiUrl('/api/push/subscribe'), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: 'default' }) });
+                  await fetchOk(apiUrl('/api/push/subscribe'), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: 'default' }) }, 'unsubscribe from push');
                   webPushSubscribed = false;
                 } catch (e) { webPushError = String(e); }
                 webPushLoading = false;
@@ -2143,11 +2144,10 @@
               webPushLoading = true;
               webPushError = '';
               try {
-                const resp = await fetch(apiUrl('/api/push/vapid-key'));
-                const { key } = await resp.json();
+                const { key } = await fetchJson<{ key: string }>(apiUrl('/api/push/vapid-key'), undefined, 'fetch VAPID key');
                 const sub = await subscribeWebPush(key);
                 if (sub) {
-                  await fetch(apiUrl('/api/push/subscribe'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub, userId: 'default' }) });
+                  await fetchOk(apiUrl('/api/push/subscribe'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub, userId: 'default' }) }, 'subscribe to push');
                   webPushSubscribed = true;
                 }
               } catch (e) { webPushError = String(e); }

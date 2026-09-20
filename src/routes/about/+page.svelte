@@ -1,5 +1,6 @@
 <script lang="ts">
   import { base } from '$app/paths';
+  import { fetchJson } from '$lib/http';
   import { swallow } from '$lib/debug-log';
   import { onMount } from 'svelte';
   import { Info, ExternalLink, Search, Shield, ScrollText } from '@lucide/svelte';
@@ -35,8 +36,7 @@
 
   onMount(async () => {
     try {
-      const resp = await fetch('/licenses.json');
-      const raw = await resp.json();
+      const raw = await fetchJson<any>('/licenses.json', undefined, 'load licenses');
       if (Array.isArray(raw)) {
         licenses = raw;
       } else if (raw && Array.isArray(raw.licenses)) {

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { swallow } from '$lib/debug-log';
+  import { fetchOk } from '$lib/http';
   import { getSttEngine } from '$lib/settings';
   import { buildScheduledAt, minScheduleDate, formatScheduledFor } from '$lib/quick-schedule';
   import { base } from '$app/paths';
@@ -426,7 +427,9 @@
   async function addGif(gif: { url: string; preview: string; width: number; height: number; title: string }) {
     if (mediaFiles.length >= 4) return;
     try {
-      const resp = await fetch(gif.url);
+      // A 404 from the GIF host returns an HTML error page, which was
+      // attached as a .gif and rejected later by the upload.
+      const resp = await fetchOk(gif.url, undefined, 'load GIF');
       const blob = await resp.blob();
       const file = new File([blob], `gif-${Date.now()}.gif`, { type: 'image/gif' });
       mediaFiles = [...mediaFiles, file];

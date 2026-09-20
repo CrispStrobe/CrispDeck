@@ -1,5 +1,6 @@
 <script lang="ts">
   import { i18n } from '$lib/i18n.svelte';
+  import { fetchJson } from '$lib/http';
   import { swallow } from '$lib/debug-log';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
@@ -37,10 +38,11 @@
       });
 
       // Fetch the user's profile to get their handle
-      const profileResp = await fetch(`${instance_url}/api/v1/accounts/verify_credentials`, {
+      // A failed verify_credentials used to yield {} here, and the account
+      // was stored under the handle "@undefined@instance".
+      const profile = await fetchJson<any>(`${instance_url}/api/v1/accounts/verify_credentials`, {
         headers: { Authorization: `Bearer ${result.access_token}` },
-      });
-      const profile = await profileResp.json();
+      }, 'verify credentials');
 
       const handle = `@${profile.acct ?? profile.username}@${new URL(instance_url).hostname}`;
 

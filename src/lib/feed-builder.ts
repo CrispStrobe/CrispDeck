@@ -1,4 +1,6 @@
 import { apiUrl } from '$lib/api-origin';
+import { fetchOk } from './http';
+import { swallow } from './debug-log';
 /**
  * Visual Bluesky feed builder — rule engine and query compiler.
  *
@@ -372,11 +374,14 @@ export async function unpublishFeedGenerator(
   rkey: string,
 ): Promise<void> {
   // 1. Remove from server storage
-  await fetch(`${FEED_API_BASE}/unpublish`, {
+  // Best-effort: deleting the PDS record below is the critical path, and a
+  // stale definition on the server is harmless once the record is gone. Still
+  // recorded, or an accumulating leak on the server is invisible.
+  await fetchOk(`${FEED_API_BASE}/unpublish`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ rkey }),
-  }).catch(() => {}); // Best-effort — PDS record deletion is the critical path
+  }, 'unpublish feed definition').catch((e) => swallow('feed-builder.unpublish', e));
 
   // 2. Delete from user's PDS
   await agent.api.com.atproto.repo.deleteRecord({
