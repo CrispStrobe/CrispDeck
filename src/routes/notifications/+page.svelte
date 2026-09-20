@@ -1,5 +1,6 @@
 <script lang="ts">
   import { swallow } from '$lib/debug-log';
+  import { readJson } from '$lib/safe-storage';
   import { sanitizeHtml } from '$lib/sanitize';
   import { toast } from '$lib/toast.svelte';
   import { base } from '$app/paths';
@@ -23,7 +24,7 @@
   let refreshing = $state(false);
   let announcements: Array<{ id: string; content: string; publishedAt: string }> = $state([]);
   const dismissedAnnouncementIds = new Set<string>(
-    JSON.parse(localStorage.getItem('crispdeck-dismissed-announcements') ?? '[]')
+    readJson<string[]>('crispdeck-dismissed-announcements', [], Array.isArray)
   );
   let expandedGroups: Set<string> = $state(new Set());
 

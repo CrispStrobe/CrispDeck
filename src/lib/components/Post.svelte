@@ -34,6 +34,7 @@
 
 <script lang="ts">
   import * as embeds from '$lib/components/post-embeds';
+  import { readJson } from '$lib/safe-storage';
   import { hrefOrHash, safeExternalUrl } from '$lib/safe-url';
   import { hasAltText } from '$lib/alt-text';
   import { formatDate, relativeTime } from '$lib/time-format';
@@ -776,7 +777,7 @@
   function getLabelPrefs(): Record<string, string> {
     const now = Date.now();
     if (_labelPrefsCache && now - _labelPrefsCache.ts < 10000) return _labelPrefsCache.prefs;
-    _labelPrefsCache = { prefs: JSON.parse(localStorage.getItem('crispdeck-label-prefs') ?? '{}'), ts: now };
+    _labelPrefsCache = { prefs: readJson<Record<string, string>>('crispdeck-label-prefs', {}), ts: now };
     return _labelPrefsCache.prefs;
   }
 

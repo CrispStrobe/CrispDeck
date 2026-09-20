@@ -1,5 +1,6 @@
 <script lang="ts">
   import { base } from '$app/paths';
+  import { readJson } from '$lib/safe-storage';
   import { onMount } from 'svelte';
   import { initAllClients, getBskyAgent, type ClientEntry } from '$lib/api/client-factory';
   import { normalizePost, sortPosts } from '$lib/api/unified';
@@ -163,8 +164,7 @@
   function addToDeck() {
     handleSave();
     // Add as a search-type deck column with the compiled query
-    const saved = localStorage.getItem('crispdeck-deck-columns');
-    const columns = saved ? JSON.parse(saved) : [];
+    const columns = readJson<any[]>('crispdeck-deck-columns', [], Array.isArray);
     columns.push({
       id: `search-${Date.now()}`,
       title: feed.name || 'Custom Feed',
