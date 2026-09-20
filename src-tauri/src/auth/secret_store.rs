@@ -366,6 +366,18 @@ mod tests {
             std::env::var("CRISPDECK_REAL_KEYCHAIN").is_ok()
         }
 
+        /// Is there a store to talk to on this platform?
+        ///
+        /// macOS has none compiled in yet, so the round-trip tests below
+        /// cannot pass there, and asserting that they should was simply
+        /// wrong — the first CI run failed on exactly that, with "no OS
+        /// secret store wired up for this platform". What macOS needs
+        /// checking for is the other half: that the fallback works on the
+        /// platform that actually depends on it.
+        fn has_store() -> bool {
+            enabled() && os_store_compiled_in()
+        }
+
         /// A key nothing else uses, so a failed run cannot poison a later one.
         fn scratch_key() -> String {
             format!(
@@ -380,8 +392,8 @@ mod tests {
 
         #[test]
         fn the_real_store_round_trips() {
-            if !enabled() {
-                eprintln!("skipped: set CRISPDECK_REAL_KEYCHAIN to run against the OS store");
+            if !has_store() {
+                eprintln!("skipped: no OS store compiled in, or CRISPDECK_REAL_KEYCHAIN unset");
                 return;
             }
             let store = OsSecretStore;
@@ -398,7 +410,7 @@ mod tests {
 
         #[test]
         fn the_real_store_keeps_entries_apart() {
-            if !enabled() {
+            if !has_store() {
                 return;
             }
             let store = OsSecretStore;
@@ -417,16 +429,39 @@ mod tests {
         fn deleting_something_absent_is_not_an_error() {
             // forget() runs on every account deletion, including ones whose
             // secret was never in the OS store.
-            if !enabled() {
+            if !has_store() {
                 return;
             }
             assert!(OsSecretStore.delete(&scratch_key()).is_ok());
         }
 
+        /// The macOS case, and any future platform without a backend.
+        ///
+        /// Falling back is the documented behaviour, so it deserves testing
+        /// on the platform that relies on it rather than only against a fake.
+        #[test]
+        fn without_an_os_store_it_falls_back_and_still_works() {
+            if !enabled() || os_store_compiled_in() {
+                return;
+            }
+            let secret = r#"{"token":"fallback-path"}"#;
+            let (column, used) =
+                store(Backend::Keychain, &OsSecretStore, "bluesky", &scratch_key(), secret)
+                    .expect("falling back must not be an error");
+
+            assert_eq!(used, Backend::Local, "must report the backend it actually used");
+            assert!(!is_keychain_ref(&column));
+            assert_eq!(load(&OsSecretStore, &column).unwrap(), secret);
+
+            // forget() runs on every account deletion; with no store to talk
+            // to it must still succeed rather than block the delete.
+            assert!(forget(&OsSecretStore, &column).is_ok());
+        }
+
         #[test]
         fn store_and_load_work_end_to_end_against_the_real_store() {
             // The layer the app actually calls, not just the trait beneath it.
-            if !enabled() {
+            if !has_store() {
                 return;
             }
             let handle = scratch_key();
