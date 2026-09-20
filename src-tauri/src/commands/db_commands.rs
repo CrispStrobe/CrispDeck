@@ -1,3 +1,4 @@
+use crate::auth::secret_store;
 use crate::db::{accounts, crossposts, drafts, follows, identities};
 use crate::AppState;
 use serde::Deserialize;
@@ -26,9 +27,21 @@ pub fn db_add_account(
 ) -> Result<accounts::Account, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
 
-    // Encrypt credentials before storing
-    let encrypted =
-        crate::auth::credentials::encrypt(&credentials).map_err(|e| e.to_string())?;
+    // Put the secret in the OS store when the user wants that and the
+    // platform has one; otherwise the local encrypted blob. `stored` is what
+    // goes in the column either way — a reference or the blob itself.
+    let preferred = preferred_backend(&conn);
+    let (stored, used) = secret_store::store(
+        preferred,
+        &secret_store::OsSecretStore,
+        &platform,
+        &handle,
+        &credentials,
+    )
+    .map_err(|e| e.to_string())?;
+    if preferred == secret_store::Backend::Keychain && used == secret_store::Backend::Local {
+        log::warn!("no OS secret store available; {handle} was saved with the local blob");
+    }
 
     accounts::insert(
         &conn,
@@ -39,7 +52,7 @@ pub fn db_add_account(
         did.as_deref(),
         mastodon_id.as_deref(),
         instance_url.as_deref(),
-        &encrypted,
+        &stored,
         is_primary.unwrap_or(false),
     )
     .map_err(|e| e.to_string())
@@ -67,14 +80,55 @@ pub fn db_update_account(
 #[tauri::command]
 pub fn db_delete_account(state: State<'_, AppState>, id: i64) -> Result<(), String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
+    // Drop the keychain entry too, or it outlives the account that owned it.
+    // Best effort: failing to tidy up must not block removing the account.
+    if let Ok(column) = accounts::get_credentials_enc(&conn, id) {
+        if let Err(e) = secret_store::forget(&secret_store::OsSecretStore, &column) {
+            log::warn!("could not remove the stored secret for account {id}: {e}");
+        }
+    }
     accounts::delete(&conn, id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn db_get_credentials(state: State<'_, AppState>, id: i64) -> Result<String, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
-    let encrypted = accounts::get_credentials_enc(&conn, id).map_err(|e| e.to_string())?;
-    crate::auth::credentials::decrypt(&encrypted).map_err(|e| e.to_string())
+    let column = accounts::get_credentials_enc(&conn, id).map_err(|e| e.to_string())?;
+    // Dispatches on what is in the column, not on the current preference, so
+    // rows written by either backend keep working after a switch.
+    secret_store::load(&secret_store::OsSecretStore, &column).map_err(|e| e.to_string())
+}
+
+/// The backend the user asked for, defaulting to the OS store where there is
+/// one to default to.
+fn preferred_backend(conn: &rusqlite::Connection) -> secret_store::Backend {
+    let default = if secret_store::os_store_compiled_in() { "keychain" } else { "local" };
+    secret_store::Backend::parse(&crate::db::get_setting(conn, CREDENTIAL_BACKEND_KEY, default))
+}
+
+const CREDENTIAL_BACKEND_KEY: &str = "credential_backend";
+
+/// What the settings screen needs: which backend is in use, and whether this
+/// build has an OS store to offer at all.
+#[tauri::command]
+pub fn credential_backend_get(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({
+        "backend": preferred_backend(&conn).as_str(),
+        "osStoreAvailable": secret_store::os_store_compiled_in(),
+    }))
+}
+
+/// Choose where new credentials are written.
+///
+/// Existing accounts are left where they are: re-homing them would mean
+/// decrypting every secret and writing it somewhere else, which is a thing to
+/// do deliberately rather than as a side effect of flicking a switch.
+#[tauri::command]
+pub fn credential_backend_set(state: State<'_, AppState>, backend: String) -> Result<(), String> {
+    let parsed = secret_store::Backend::parse(&backend);
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    crate::db::set_setting(&conn, CREDENTIAL_BACKEND_KEY, parsed.as_str()).map_err(|e| e.to_string())
 }
 
 // ── Identities ─────────────────────────────────────────────────────────────
