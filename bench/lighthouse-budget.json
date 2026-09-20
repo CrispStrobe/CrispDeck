@@ -22,10 +22,11 @@
     "unlabelled month-navigation buttons on /calendar, contrast failures on",
     "/about and /settings, links distinguished only by colour on /about.",
     "",
-    "Per-route accessibility floors are set at what each route scores today, so",
-    "CI locks in 'no worse' while the remaining debt stays visible in the job",
-    "summary rather than being averaged away. Raise them as the debt is paid.",
-    "",
+    "Per-route accessibility floors sit just under what each route scores",
+    "today, so CI locks in \"no worse\" while any remaining debt stays visible in",
+    "the job summary rather than being averaged away. Raise them as the debt is",
+    "paid -- four of the five routes moved from 0.92/0.95 to 0.98 once the",
+    "contrast tokens were split in #17.",
     "These are all logged-out views. The deck and feed with real content are",
     "still unmeasured here; that needs an authenticated run.",
     "",
@@ -47,20 +48,20 @@
     {
       "path": "/",
       "categories": {
-        "accessibility": 0.95
+        "accessibility": 0.98
       }
     },
     {
       "path": "/about",
       "categories": {
-        "accessibility": 0.92
+        "accessibility": 0.98
       },
-      "note": "contrast on link rows, and links distinguished only by colour"
+      "note": "was 0.92 for contrast on link rows and colour-only links; both fixed in #17, now 100"
     },
     {
       "path": "/compose",
       "categories": {
-        "accessibility": 0.95
+        "accessibility": 0.98
       }
     },
     {
@@ -69,14 +70,14 @@
         "accessibility": 0.95,
         "best-practices": 0.9
       },
-      "note": "best-practices is lower because /api/push/* are Vercel functions that 404 under a static preview, which trips errors-in-console"
+      "note": "95 not 98: two buttons put near-white text on the Bluesky (3.46:1) and Mastodon (4.18:1) brand colours. Fixing needs the same text/background token split as --color-primary, across 63 sites, and darkening the tokens outright would drop their 17 text uses to 3.31 and 2.90 \u2014 a decision about platform identity colour. best-practices is lower because /api/push/* are Vercel functions that 404 under a static preview, tripping errors-in-console"
     },
     {
       "path": "/calendar",
       "categories": {
-        "accessibility": 0.95
+        "accessibility": 0.98
       },
-      "note": "month arrows were unlabelled; fixed, floor raised from the 0.90 measured before"
+      "note": "was 0.95 for unlabelled month arrows and a contrast miss; both fixed, now 100"
     }
   ],
   "_mustPassNote": "errors-in-console is not here: a static preview has no /api routes, so push endpoints 404 and every page would fail it. color-contrast is not here either -- it is real debt, held by the per-route floors above rather than blocking the build today."
