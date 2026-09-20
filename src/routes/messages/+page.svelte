@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { swallow } from '$lib/debug-log';
+  import { fetchOk } from '$lib/http';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { MessageSquare, Loader2, Send, ArrowLeft } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
@@ -215,6 +217,11 @@
   async function sendMessage() {
     if (!newMessage.trim() || !selectedConvo) return;
     sending = true;
+    // Only echo the message into the thread once something actually accepted
+    // it. The Mastodon loop below can run to completion without sending —
+    // every client skipped for a missing token — and the message was shown as
+    // sent regardless.
+    let sent = false;
     try {
       if (selectedConvo.platform === 'bluesky') {
         const oauthSession = await resumeBlueskyOAuthSession();
@@ -224,6 +231,7 @@
           { convoId: selectedConvo.id, message: { text: newMessage.trim() } },
           { encoding: 'application/json', headers: proxyHeaders }
         );
+        sent = true;
       } else if (selectedConvo.platform === 'mastodon') {
         // Mastodon: create a status with direct visibility mentioning the user
         for (const [id, entry] of clientEntries) {
@@ -232,17 +240,23 @@
           const masto = entry.client as MastodonClient;
           const token = masto.getAccessToken();
           if (!token) continue;
-          await fetch(`${masto.getInstanceUrl()}/api/v1/statuses`, {
+          // The response used to be dropped, so a 401 or a 422 still appended
+          // the message to the thread and cleared the box: the user believed
+          // they had sent something that never left the device.
+          await fetchOk(`${masto.getInstanceUrl()}/api/v1/statuses`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
               status: `${selectedConvo.participant.handle} ${newMessage.trim()}`,
               visibility: 'direct',
             }),
-          });
+          }, 'send message');
+          sent = true;
           break;
         }
       }
+
+      if (!sent) throw new Error('No connected account could send this message');
 
       messages = [...messages, {
         id: `sent-${Date.now()}`,
@@ -254,6 +268,7 @@
       newMessage = '';
       scrollToLatest();
     } catch (e) {
+      swallow('messages.sendMessage', e);
       error = String(e);
     } finally {
       sending = false;

@@ -1,4 +1,5 @@
 import { createRestAPIClient, type mastodon } from 'masto';
+import { fetchOk } from '$lib/http';
 import type { MastodonFilter, CreateFilterParams } from '$lib/mastodon-filters';
 
 export type MastodonPost = mastodon.v1.Status;
@@ -229,20 +230,23 @@ export class MastodonClient {
     return resp.json();
   }
   async addToList(listId: string, accountIds: string[]): Promise<void> {
-    if (!this.accessToken) return;
-    await fetch(`${this.instanceUrl}/api/v1/lists/${listId}/accounts`, {
+    // Returning quietly without a token told the caller the accounts were
+    // added to the list. So did a 403 from the instance: the response was
+    // dropped, and fetch does not throw on one.
+    if (!this.accessToken) throw new Error('Not signed in to this Mastodon instance');
+    await fetchOk(`${this.instanceUrl}/api/v1/lists/${listId}/accounts`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${this.accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ account_ids: accountIds }),
-    });
+    }, 'add to list');
   }
   async removeFromList(listId: string, accountIds: string[]): Promise<void> {
-    if (!this.accessToken) return;
-    await fetch(`${this.instanceUrl}/api/v1/lists/${listId}/accounts`, {
+    if (!this.accessToken) throw new Error('Not signed in to this Mastodon instance');
+    await fetchOk(`${this.instanceUrl}/api/v1/lists/${listId}/accounts`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${this.accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ account_ids: accountIds }),
-    });
+    }, 'remove from list');
   }
 
   // Announcements

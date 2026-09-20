@@ -81,3 +81,15 @@ describe('real servers, real statuses', () => {
     expect(err.message).not.toContain('hunter2');
   }, 30_000);
 });
+
+describe('the Mastodon client surfaces a refused write', () => {
+  it('addToList rejects rather than resolving, against a real instance', async () => {
+    // End-to-end through the client: bad token -> 401 -> fetchOk -> caller.
+    // Before this, the response was dropped and the caller was told the
+    // accounts had been added to the list.
+    const { MastodonClient } = await import('./mastodon');
+    const client = new MastodonClient(MASTO, 'definitely-not-a-real-token');
+
+    await expect(client.addToList('1', ['1'])).rejects.toBeInstanceOf(HttpError);
+  }, 30_000);
+});
