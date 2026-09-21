@@ -1,6 +1,7 @@
 <script lang="ts">
   import { i18n } from '$lib/i18n.svelte';
-  import { removeKey } from '$lib/safe-storage';
+  import { readJson, removeKey } from '$lib/safe-storage';
+  import { verifyCallback, OAuthCallbackError, type StoredOAuthState } from '$lib/oauth-callback';
   import { fetchJson } from '$lib/http';
   import { swallow } from '$lib/debug-log';
   import { base } from '$app/paths';
@@ -15,19 +16,22 @@
   onMount(async () => {
     try {
       const params = new URLSearchParams(window.location.search);
-      const code = params.get('code');
 
-      if (!code) {
-        throw new Error('No authorization code in callback URL');
+      // readJson rather than a bare parse: a truncated or cleared entry should
+      // say so, not throw a SyntaxError from inside a callback nobody watches.
+      const stored = readJson<StoredOAuthState | null>('crispdeck-oauth-state', null);
+
+      let code: string;
+      try {
+        code = verifyCallback(params, stored);
+      } catch (e) {
+        if (e instanceof OAuthCallbackError && e.discardStored) {
+          removeKey('crispdeck-oauth-state');
+        }
+        throw e;
       }
 
-      // Retrieve the OAuth state we stored before redirecting
-      const oauthState = localStorage.getItem('crispdeck-oauth-state');
-      if (!oauthState) {
-        throw new Error('No OAuth state found. Please try connecting your account again.');
-      }
-
-      const { instance_url, client_id, client_secret, redirect_uri } = JSON.parse(oauthState);
+      const { instance_url, client_id, client_secret, redirect_uri } = stored!;
 
       // Exchange code for token
       const result = await completeMastodonOAuth({

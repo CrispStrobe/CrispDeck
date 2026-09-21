@@ -102,6 +102,7 @@
       client_id: oauthState.client_id,
       client_secret: oauthState.client_secret,
       redirect_uri: oauthState.redirect_uri,
+      state: oauthState.state,
     })) {
       throw new Error('Could not store the sign-in state — browser storage is unavailable');
     }
