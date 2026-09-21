@@ -1,5 +1,9 @@
 # CrispDeck Development Plan
 
+> Finished work lives in [HISTORY.md](HISTORY.md). This file is what is still
+> open, plus reference material that describes how the app works today.
+
+
 ## What is CrispDeck
 
 A unified Mastodon + Bluesky + Threads social media client with:
@@ -11,9 +15,10 @@ A unified Mastodon + Bluesky + Threads social media client with:
 
 **Tech stack**: SvelteKit 2, Svelte 5 (runes), Tailwind CSS 4, Vite 6, Tauri 2, TypeScript + Rust, Vitest
 
-## Current State (2026-09-20)
 
-v1.2.8 — ~1,922 unit tests across 145 files (plus 62 live-API tests that run nightly rather than on every PR) and 27 Rust tests + Playwright E2E tests, 29 pages, 20 deck column types, CI fully green, live at https://crispdeck.vercel.app. Post-v1.2.0: account switcher, multi-select, quick add-to-list, 6 perf optimizations (parallel crossposting/uploads/column-loads, normalize caches, session-scoped prefs). See CHANGELOG.md.
+## Current State (2026-09-21)
+
+v1.2.8 — ~1,942 unit tests across 147 files (plus 62 live-API tests that run nightly rather than on every PR), 69 Rust tests, and 39 Playwright E2E specs including a smoke test of every route.
 
 Recent reliability work (2026-09-18/19), merged as PRs #1–#5:
 
@@ -34,102 +39,8 @@ Recent reliability work (2026-09-18/19), merged as PRs #1–#5:
 
 ---
 
-## Completed Items (1–48, except 32)
-
-All items below are **done** and committed. This section exists as reference for context only.
-
-### Phase 1–3 (v0.1–v0.3): Core features (items 1–25)
-Analytics with full pagination, local post archive (IndexedDB), deck columns (11 types), feed improvements, DM support, profile pages, bookmarks, thread view, compose with crossposting/threading/polls/templates/drafts, emoji/GIF picker, keyboard shortcuts, i18n (8 languages), RTL, accessibility, CrispASR integration (TTS/STT/translation), starter packs, Bluesky lists/labelers/moderation lists, custom PDS resolution, alt text enforcement, cargo-license integration, voice commands, share-as-image, feed scroll/refresh performance.
-
-### Phase 4 (v0.4.0): Competitive features (items 26–41, 44–48)
-
-| # | Feature | Key files |
-|---|---------|-----------|
-| 26 | Notification grouping/batching | `src/lib/notification-grouping.ts`, notifications page, deck column |
-| 27 | Cross-network dedup (identity-enhanced) | `src/lib/api/unified.ts` (`detectCrossposts` + `buildIdentityPairs`) |
-| 28 | Catch-up mode | `src/lib/catchup.ts`, `src/routes/catchup/+page.svelte` |
-| 29 | AI compose assistance (BYOK) | `src/lib/compose/ai.ts`, compose page toolbar |
-| 31 | RSS feed integration + OPML import | `src/lib/rss.ts`, deck RSS column, settings UI |
-| 33 | "For You" algorithmic feed | `src/lib/for-you.ts`, feed page "For You" mode |
-| 34 | Bluesky Jetstream real-time counters | `src/lib/jetstream.ts`, Post component subscription |
-| 35 | OLED dark theme | `src/app.css` `[data-theme="oled"]`, layout toggle |
-| 36 | Tag groups | `src/lib/tag-groups.ts`, deck tag-group column, settings UI |
-| 37 | Post scheduling calendar view | drafts page week grid |
-| 38 | Hide engagement counts | Post component + settings toggle |
-| 39 | Thread un-rolling | thread page "Read as article" mode |
-| 40 | Cross-platform analytics comparison | analytics page: best times, day-of-week chart, hourly chart |
-| 41 | Optimal crosspost timing | `src/lib/posting-times.ts`, compose page timing hint |
-| 42 | Follower graph visualization | identities page overlap bar chart |
-| 44–48 | Polish fixes | snake_case media/cards, shortcuts dialog, For You hint, AI menu close |
-
-**Item 32 (DeepL) was implemented then reverted** — we prefer own services (CrispASR local, BYOK, MyMemory free fallback).
-
----
 
 ## Remaining Work
-
-### 30. Visual Bluesky feed builder + network publishing
-- **Status**: Done (client-side preview + deck integration + network publishing)
-- **Effort**: Medium
-- **Description**: GUI for creating custom Bluesky algorithmic feeds without coding
-- Filter by: keywords, exact phrases, language, has-media, author list, exclude terms, domain, mentions, date range
-- Live preview using `app.bsky.feed.searchPosts` (Lucene-like query syntax)
-- Save/load/duplicate/delete feed definitions (localStorage)
-- Add custom feeds as deck columns
-- **Publish to Bluesky network**: creates `app.bsky.feed.generator` record on user's PDS
-- **Feed generator server**: Vercel serverless functions at `/xrpc/` endpoints
-  - `getFeedSkeleton` looks up feed query from Vercel Blob, caches in-memory 5min + CDN 60s
-  - `describeFeedGenerator` returns service metadata
-  - `did:web:crispdeck.vercel.app` DID document at `/.well-known/did.json`
-  - Feed definitions stored in Vercel Blob (`feeds/<rkey>.json`)
-  - Human-readable rkeys (e.g. `my-svelte-feed-mq5qo7ty0`)
-  - `api/feed/publish.ts` + `api/feed/unpublish.ts` manage Blob storage
-- **Key files**: `src/lib/feed-builder.ts`, `src/routes/feed-builder/+page.svelte`, `api/xrpc/`, `api/feed/`, `static/.well-known/did.json`
-
-### 43. Threads support (hybrid: official API + ActivityPub federation)
-- **Status**: Done
-- **Effort**: Medium (single session)
-- **Description**: Add Threads as a third network using a hybrid approach
-
-#### Why hybrid?
-- The official Threads API has **no home timeline/feed endpoint** — you can post, read your own posts, search, and get insights, but cannot scroll a feed
-- However, Threads has opt-in ActivityPub federation — Threads users appear as `@user@threads.net` and their posts flow through Mastodon instances
-- **Reading**: Already works via existing Mastodon columns (federated Threads posts). Add UI to discover/follow `@user@threads.net` accounts
-- **Writing**: Use the official Threads API for crossposting from compose
-
-#### Official Threads API details
-- **Free**, no paid tiers — just rate limits
-- **Auth**: OAuth 2.0 via `threads.net/oauth/authorize`, token exchange at `graph.threads.net`
-- **Token management**: Short-lived token → immediately swap for long-lived (58-day). Refresh via `th_refresh_token` grant type (uses access token itself, no separate refresh token)
-- **Scopes**: `threads_basic`, `threads_content_publish`, `threads_manage_replies`, `threads_manage_insights`
-- **Publishing**: Container-then-publish flow (all major clients use this pattern):
-  1. Create container: `POST /{user_id}/threads` with text/media/reply context
-  2. Poll status until "FINISHED" / "PUBLISHED"
-  3. Trigger publication: `POST /{user_id}/threads_publish`
-- **Carousel posts**: Create individual item containers with `is_carousel_item=true`, then parent CAROUSEL container referencing children IDs, then publish
-- **Media**: Threads does NOT accept direct uploads — requires publicly accessible HTTPS URLs
-- **Rate limits**: 250 posts/day, 1000 replies/day, 200 requests/hour
-- **Limits**: 500-char caption max
-- **Analytics**: Per-post insights (views, likes, replies, reposts, quotes) via `/{post_id}/insights`
-
-#### Implementation plan
-1. **Threads OAuth login** — new provider in auth, store long-lived token in localStorage
-2. **Threads API client** — `src/lib/api/threads.ts` wrapping official REST API directly (existing TS SDKs are thin/unmaintained)
-3. **Crosspost adapter** — add Threads to compose page alongside Mastodon + Bluesky, handle 500-char limit, container publish flow
-4. **Identity matching** — detect `@user@threads.net` in Mastodon federation, link to Threads identity for dedup
-5. **"Find on Threads" helper** — UI to search/follow Threads users via their federated ActivityPub address
-6. **Analytics integration** — Threads post insights in analytics page alongside Mastodon + Bluesky metrics
-7. **Deck column** — "Threads" column type showing user's own Threads posts (via API) and federated Threads content (via Mastodon)
-
-#### Meta error codes to handle
-- Error code 24: API propagation delay (retry with exponential backoff)
-- Error 2207051: Community restriction
-- Error 4279013: Account block
-
-#### Reference implementations (all AGPL-3.0, license-compatible)
-- **OpenPost** (SvelteKit + Go) — cleanest adapter pattern, 3-step container flow
-- **BrightBean Studio** (Django/Python) — best carousel implementation, clean provider abstraction
-- **Postiz** (Next.js + NestJS, 31.5k stars) — most complete Threads integration with account-level + per-post analytics, 30+ platforms
 
 ### Future: Nostr support
 - **Status**: Not started
@@ -140,538 +51,6 @@ Analytics with full pagination, local post archive (IndexedDB), deck columns (11
 
 ---
 
-## Phase 5: New Features
-
-### 49. Muted words / content filters
-- **Status**: Done
-- **Effort**: Small
-- **Description**: User-defined keyword mute list that hides posts containing those words across all platforms
-- localStorage list of muted words/phrases
-- Filter applied in feed rendering pipeline (filterPosts in unified.ts)
-- Settings UI to manage muted words
-- Support regex patterns for advanced users
-
-### 50. Platform bookmarks sync
-- **Status**: Done (Mastodon import + official Bluesky app.bsky.bookmark.* since Bluesky 1.108 — write-through on bookmark, paginated import on sync)
-- **Effort**: Medium
-- **Description**: Sync local bookmarks with platform-native bookmarks
-- Import from Bluesky bookmarks API and Mastodon bookmarks API
-- Two-way sync or at least import/export
-- Currently bookmarks are local-only IndexedDB
-
-### 51. Multi-account timeline merge
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: Merge timelines from multiple accounts of the same platform
-- If user has 2 Mastodon accounts or 2 Bluesky accounts, merge their timelines
-- Account-source indicator on each post
-- Currently picks one client per platform in deck/feed
-
-### 52. Keyboard navigation (vim-style)
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: Power-user keyboard navigation for posts and deck
-- j/k to scroll through posts, n/p for next/previous column in deck
-- o to open post, r to reply, l to like, b to boost/repost
-- ? to show keyboard shortcut overlay
-- Differentiates from mobile-first competitors
-
-### 53. Post statistics overlay
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Click a post to see detailed engagement breakdown
-- Historical engagement curve if archive data exists
-- Per-platform comparison for crossposts
-- Engagement rate calculation
-
-### 54. Draft auto-save
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Periodically save compose text to localStorage
-- Survives page reloads and browser crashes
-- Restore prompt on compose page load if unsent draft exists
-- Clear on successful post
-
-### 55. Quick-follow from anywhere
-- **Status**: Done
-- **Effort**: Small
-- **Description**: One-click follow button on post author avatars
-- Available in feed, deck, search, trending — not just profile pages
-- Shows follow/unfollow state
-- Works across all platforms
-
-### 56. Export/import settings
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Backup all localStorage config to JSON file and restore
-- Includes: deck layouts, tag groups, RSS feeds, feed builder definitions, custom feeds, preferences
-- Excludes: account credentials (security)
-- Useful for device migration or backup
-
-### 57. Muted words wired into feed/deck pipelines
-- **Status**: Done
-- **Effort**: Small
-- **Description**: applyMuteFilter() integrated into feed page and deck column rendering
-
-### 58. Quick-follow API callback
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Follow button on Post avatar calls onfollow callback prop for API integration
-
-### 59. Pinned posts
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Pin/unpin posts to top via localStorage, pin button on Post component
-
-### 60. Read position sync
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Remember scroll position per context (feed, deck columns), find "left off" marker
-
-### 61. Notification sounds + desktop alerts
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Web Audio API beep + Notification API, toggle in settings
-
-### 62. Threads media posting
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Support image/video URLs + carousel in Threads container-then-publish flow
-
-### 63. Post analytics history (engagement snapshots)
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: IndexedDB storage for periodic engagement snapshots, growth curve data per post
-
----
-
-## Phase 7: Analytics & Content Management
-
-### 64. Media gallery view
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: Masonry grid view for browsing all media from a user or hashtag
-- Click to expand, swipe through images
-- Filter by media type (images, video, links)
-- Works with existing post data, new rendering mode
-
-### 65. Content calendar
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: Full month/week calendar showing past posts + scheduled drafts
-- Combines archive data with draft scheduling
-- Color-coded by platform
-- Click day to see posts, click post to open
-
-### 66. Cross-platform analytics comparison
-- **Status**: Done (already existed — best times, day-of-week, hourly charts)
-- **Effort**: Medium
-- **Description**: Side-by-side charts comparing engagement per platform
-- Bar charts for likes/reposts/replies per platform
-- Best-performing content analysis
-- Day-of-week and hourly heatmaps per platform
-
-### 67. Engagement milestones
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Alert when a post hits engagement thresholds
-- Configurable thresholds (10, 50, 100, 500 likes)
-- Uses engagement-history snapshots + notification-alerts system
-- Optional sound + desktop notification
-
-### 68. Reading lists
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: Themed post collections beyond flat bookmarks
-- Create named lists ("AI articles", "Svelte tips", "Read later")
-- Add posts to lists from Post component
-- Browse and manage lists on dedicated page
-
-## Phase 8: Future Enhancements
-
-### 69. Post templates with variables
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Extend templates with {date}, {time}, {day}, {handle} interpolation
-
-### 70. Bluesky starter pack creator
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: Build and publish starter packs from identity database
-
-### 71. Unified trending
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Merge Bluesky + Mastodon trending into one combined view
-
-### 72. PWA install support
-- **Status**: Done
-- **Effort**: Small
-- **Description**: manifest.json + service worker for "Add to Home Screen"
-
-### 73. List management
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: Create/edit/delete Mastodon lists and Bluesky lists from CrispDeck
-
-### 74. Post performance insights
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: Pattern analysis — "image posts get 3x more engagement than text-only"
-
-### 75. Cross-network thread sync
-- **Status**: Done
-- **Effort**: Large
-- **Description**: Post thread on one platform, auto-create on others with optimized formatting
-
----
-
-## Phase 9: Power-User & Real-Time Features
-
-### 76. Saved deck layouts / workspaces
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Name, save, switch between, rename, duplicate, and delete column layouts
-- Quick workspace switching between e.g. "Work", "Personal", "Monitoring"
-- Active layout persisted across reloads
-- Deep-cloned columns prevent mutation bugs
-- **Key files**: `src/lib/deck-layouts.ts`
-
-### 77. AI alt-text generation (multi-provider)
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: Generate image alt-text at compose time with 3 provider backends
-- **BYOK (OpenAI-compatible)**: Uses vision API format (image_url content type), works with GPT-4o, Ollama, llama.cpp server, etc.
-- **CrispASR (bundled llama.cpp)**: Tauri desktop only, runs LLaVA/multimodal models locally via CrispASR FFI, no API key needed
-- **mistral.rs (Rust-native)**: Tauri desktop only, Rust inference engine supporting Phi-3-Vision and similar, no API key needed
-- Also refactored AI compose to support provider selection for all actions (correct, shorten, hashtags, alt-text)
-- **Key files**: `src/lib/compose/ai.ts`
-
-### 78. Hashtag bank for compose
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Save named sets of hashtags for one-click insertion into compose
-- Auto-prefixes # on bare tags
-- Format sets as space-separated strings for insertion
-- CRUD with localStorage persistence
-- **Key files**: `src/lib/hashtag-bank.ts`
-
-### 79. Universal cross-network search
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: Single search querying Bluesky + Mastodon + Threads simultaneously
-- Bluesky: `app.bsky.feed.searchPosts` API
-- Mastodon: `/api/v2/search?type=statuses`
-- Threads: `graph.threads.net/search`
-- Merges results with engagement/recency scoring, URI-based dedup
-- Crosspost grouping via existing `detectCrossposts` at UI layer
-- **Key files**: `src/lib/universal-search.ts`
-
-### 80. Streaming timelines for deck columns
-- **Status**: Done
-- **Effort**: Medium-Large
-- **Description**: Real-time live-push of new posts in deck columns
-- Bluesky: Extends Jetstream WebSocket for `app.bsky.feed.post` events, filters by followed DIDs
-- Mastodon: `/api/v1/streaming` WebSocket (user, public, local, hashtag, list streams)
-- Stream manager coordinates per-column streams with shared connections
-- Opt-in toggle per column via `streaming` flag
-- Auto-reconnect with 5s backoff
-- **Key files**: `src/lib/streaming.ts`
-
-### 81. BYOK provider presets with model discovery
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: Provider preset system with /models endpoint polling for model selection
-- 10 presets: OpenRouter, Scaleway, Nebius, Mistral, Poe, Groq, Ollama, llama.cpp, OpenAI, Custom
-- Each preset stores: base URL, models endpoint, default model, default vision model, auth config, docs URL
-- `fetchAvailableModels()` polls `/models` endpoint and parses OpenAI-format response
-- Session-scoped model cache (5 min TTL) avoids re-fetching on settings revisit
-- Vision model selection for alt-text (e.g. GPT-4o, Pixtral, LLaVA, Phi-3-Vision)
-- Wired into AI compose config: `presetId` + `visionModel` fields
-- **Key files**: `src/lib/byok-providers.ts`, `src/lib/compose/ai.ts`
-
----
-
-## Phase 10: Keyword Monitoring & Polish
-
-### 82. Keyword monitoring deck columns
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: New `keyword-monitor` column type that searches all 3 networks for keyword matches and streams live updates
-- Comma-separated keywords with `/regex/` pattern support (OR logic)
-- Initial load searches Bluesky `searchPosts`, Mastodon `/api/v2/search`, and Threads search
-- Real-time streaming: Bluesky Jetstream firehose (unfiltered, client-side keyword filter) + Mastodon public WebSocket
-- Saved keyword sets in localStorage with CRUD (Settings UI + deck add-column picker)
-- Posts capped at 200 per column, deduped by URI
-- **Key files**: `src/lib/keyword-monitor.ts`, `src/routes/deck/+page.svelte`
-
-### 83. Live streaming indicator on deck columns
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Pulsing green "LIVE" badge in column header when streaming is active
-- Driven by `streamCleanups` map tracking active stream subscriptions per column
-- Applies to any streaming column, not just keyword monitors
-- **Key files**: `src/lib/components/deck/DeckColumn.svelte`
-
-### 84. Keyword monitor management in Settings
-- **Status**: Done
-- **Effort**: Small
-- **Description**: CRUD UI for saved keyword sets in Settings page
-- Create named sets with comma-separated keywords + regex patterns
-- List existing sets with delete buttons
-- Keyword sets included in settings export/import automatically (wildcard `crispdeck-*` pattern)
-- i18n: EN + DE
-- **Key files**: `src/routes/settings/+page.svelte`, `src/lib/keyword-monitor.ts`
-
-### 85. Media lightbox overlay
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Images in posts open in fullscreen lightbox overlay instead of browser
-- Keyboard navigation (Escape, arrows), image counter, alt text display
-- "Open in browser" fallback button in overlay
-- Settings preference: lightbox (default) vs open-in-browser
-- Works for Bluesky images, Mastodon images, and quoted post images
-- Gallery page refactored to use shared MediaLightbox component
-- **Key files**: `src/lib/components/MediaLightbox.svelte`, `src/lib/components/Post.svelte`
-
-### 86. Media Gallery fix
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Gallery was hanging with too many images
-- Added pagination (24 items at a time, "Load more" button)
-- Fixed video play icon positioning (missing `relative` on parent)
-- Replaced inline lightbox with shared MediaLightbox component
-- **Key files**: `src/routes/gallery/+page.svelte`
-
----
-
-## Phase 11: Navigation Consolidation & UX Polish
-
-Goal: reduce sidebar from 25 items to ~14 by merging related views into tabbed pages, and fix several UX issues with in-app linking and navigation.
-
-### 87. Sidebar navigation consolidation
-- **Status**: Done
-- **Effort**: Large
-- **Description**: The sidebar has 25 items — too many for usable navigation. Consolidate related views:
-
-#### Merges:
-
-| Current items | Merged into | How |
-|---|---|---|
-| Catch Up + Trending | **Discover** | Two tabs in one view |
-| Compose + Drafts | **Compose** | Drafts as collapsible panel/tab within compose |
-| Lists + Starter Packs + Feed Builder | **Lists & Feeds** | Tabs: Mastodon Lists, Bluesky Feeds, Starter Packs, Feed Builder |
-| Gallery + Archive | **Archive** | Gallery as a tab alongside archive search/export |
-| Reading Lists + Bookmarks | **Bookmarks** | Reading Lists as a tab within Bookmarks |
-| Calendar | Move into **Analytics** as a tab (past posts + scheduled = calendar, analytics = charts) |
-| Instance Info | Move into **Settings** as a section |
-| Labelers + Moderation | **Moderation** | Tabs: Blocked/Muted, Labelers |
-
-#### Resulting sidebar (~14 items):
-1. Dashboard
-2. Feed (incl. For You tab)
-3. Discover (Catch Up + Trending tabs)
-4. Deck
-5. Compose (incl. Drafts tab)
-6. Notifications
-7. Messages
-8. Bookmarks (incl. Reading Lists tab)
-9. Lists & Feeds (Lists + Starter Packs + Feed Builder tabs)
-10. Identities
-11. Search
-12. Archive (incl. Gallery tab)
-13. Analytics (incl. Calendar tab)
-14. Moderation (Blocked/Muted + Labelers tabs)
-15. Settings (incl. Instance Info section)
-16. About
-
-#### Implementation notes:
-- Each merge creates a tabbed container page that imports existing page content as components
-- Route redirects: old routes (e.g. `/gallery`) redirect to new tab routes (e.g. `/archive?tab=gallery`)
-- Mobile bottom bar stays at 5 icons: Feed, Compose, Notifications, Search, Messages
-- Preserve deep-link support: `/bookmarks?tab=reading-lists` should open the right tab
-
-### 88. In-app link routing for @handles and #hashtags in posts
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: Post HTML content contains `<a>` tags pointing to external Mastodon/Bluesky URLs for @mentions and #hashtags. These should route in-app instead.
-- **Mastodon**: Intercept `<a>` clicks in rendered HTML, match `/@user` and `/tags/tagname` patterns, route via `goto()`
-- **Bluesky**: Parse AT Protocol facets (mentions, links, tags) from post records to render rich HTML with clickable links. Fallback regex linkification for posts without facets
-- **@handles**: Click `@user@instance.social` → open CrispDeck profile page `/profile?handle=user@instance.social`
-- **#hashtags**: Click `#svelte` → open CrispDeck search `/search?q=%23svelte` or add as deck column
-- External links (URLs to articles etc.) still open in browser
-- In-app href links (starting with `/`) routed via `goto()` without full page reload
-- **Key files**: `src/lib/components/Post.svelte` (post text rendering, `getBskyHtml()`, `handlePostLinkClick()`)
-
-### 89. Platform filter shows only logged-in platforms
-- **Status**: Done
-- **Effort**: Small
-- **Description**: The All/Bluesky/Mastodon/Threads filter appears even when only one platform has a logged-in account
-- Only show filter buttons for platforms that have at least one connected account
-- If only one platform is connected, hide the filter entirely
-- **Key files**: `src/routes/feed/+page.svelte`, possibly deck and search pages
-
-### 90. "Back to feed" scroll position restore
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Navigating from a post/thread back to feed should return to the scroll position where the user was
-- Thread and profile page back buttons use `history.back()` instead of hardcoded `/feed` link
-- Preserves scroll position regardless of navigation source (feed, deck, search, etc.)
-- `src/lib/read-position.ts` already exists — wire it into feed/deck navigation
-- **Key files**: `src/routes/thread/+page.svelte`, `src/routes/profile/+page.svelte`, `src/lib/read-position.ts`
-
-### 91. Share-as-image error visibility
-- **Status**: Done
-- **Effort**: Small
-- **Description**: `handleShareAsImage()` in Post.svelte silently catches errors — user sees nothing on failure
-- Show a toast/inline error message when html2canvas fails (commonly CORS issues with cross-origin images)
-- Consider: fall back to capturing without images if CORS blocks them
-- **Key files**: `src/lib/components/Post.svelte`
-
-### 92. "For You" auto-load on visit
-- **Status**: Done
-- **Effort**: Small
-- **Description**: "For You" feed requires manual refresh before showing content — should auto-load on page visit
-- Ensure the For You ranking algorithm runs on initial mount, not just on refresh
-- **Key files**: `src/routes/feed/+page.svelte`, `src/lib/for-you.ts`
-
----
-
-## Phase 12: Test Coverage
-
-Goal: close gaps in unit test coverage for untested TypeScript modules. Current: 805 tests, 63 files, 31/38 lib/ files tested (81.6%). Target: 95%+ lib/ file coverage.
-
-### 94. Tests for engagement-history.ts
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Engagement snapshot storage, growth curves, periodic capture (10 tests)
-- **Key file**: `src/lib/engagement-history.ts`
-
-### 95. Tests for list-management.ts
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Create/edit/delete Mastodon lists and Bluesky lists (11 tests)
-- **Key file**: `src/lib/list-management.ts`
-
-### 96. Tests for starter-pack-creator.ts
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Build and publish Bluesky starter packs from identity DB (8 tests)
-- **Key file**: `src/lib/starter-pack-creator.ts`
-
-### 97. Tests for browser-db.ts
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: Core IndexedDB implementation — data model, credential formats, dispatch (9 tests)
-- **Key file**: `src/lib/browser-db.ts`
-
-### 98. Tests for bluesky-oauth.ts
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Client_id construction, metadata shape, OAuth scopes (7 tests)
-- **Key file**: `src/lib/api/bluesky-oauth.ts`
-
-### 99. Tests for compose/mentions.ts
-- **Status**: Done
-- **Effort**: Small
-- **Description**: @mention autocomplete, platform-specific handle resolution (11 tests)
-- **Key file**: `src/lib/compose/mentions.ts`
-
-### 100. Tests for db.ts (platform dispatcher)
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Platform dispatch delegation, function signatures (8 tests)
-- **Key file**: `src/lib/db.ts`
-
-### 101. Tests for store.ts
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Tauri plugin-store settings wrapper (5 tests)
-- **Key file**: `src/lib/store.ts`
-
----
-
----
-
-## Phase 13: Responsive UI & Polish
-
-### 102. Condensed mobile layout
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Mobile top bar condensed to single row (hamburger + title + theme toggle + notification bell). Bottom tab bar slimmer with smaller icons/text. Reduced content padding offsets.
-- **Key files**: `src/routes/+layout.svelte`
-
-### 103. Inline relative timestamps in posts
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Post timestamp moved from bottom of post into author line as relative time (now/5m/2h/3d/Jun 3). Full date on hover. Bottom row shows platform name on hover instead of redundant date.
-- **Key files**: `src/lib/components/Post.svelte`
-
-### 104. Compact post mode
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Optional compact post view with smaller avatars (w-7 vs w-10), tighter spacing (p-2.5 vs p-4, gap-2 vs gap-3). Settings toggle persisted in localStorage.
-- i18n: EN + DE
-- **Key files**: `src/lib/components/Post.svelte`, `src/routes/settings/+page.svelte`
-
-### 105. Identity scan follow cap
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Mastodon/Bluesky follow fetching capped at 2000 per platform to prevent UI hang when user follows hundreds of thousands of accounts.
-- **Key files**: `src/routes/identities/+page.svelte`
-
-### 106. Layout and responsive UI tests
-- **Status**: Done
-- **Effort**: Small
-- **Description**: 39 tests covering sidebar nav structure, merged route matching, mobile tab bar, relativeTime formatting, compact mode, media preview mode, platform filter visibility, formatDate.
-- **Key files**: `src/lib/layout.test.ts`
-
----
-
-### 93. MyMemory commercial use notice
-- **Status**: Done
-- **Effort**: Tiny (docs only)
-- **Description**: MyMemory free tier (5K chars/day) is for personal, non-commercial use only
-- If CrispDeck is distributed commercially, need MyMemory paid plan or drop the fallback
-- CrispASR (local) and BYOK (user's own key) have no such restriction
-- Document this limitation clearly in PLAN.md and Settings UI tooltip
-- Done: Settings tooltip now shows personal-use-only notice with link to terms
-
----
-
-## Phase 14: Infrastructure & Performance
-
-### 107. Stale-while-revalidate view cache
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: Shows cached data instantly on page load, refreshes from API in background
-- localStorage cache with per-view keys and timestamps, 5-min TTL
-- Wired into: feed, notifications, lists pages
-- `swr()` helper for easy adoption in additional views
-- 15 tests
-- **Key files**: `src/lib/view-cache.ts`
-
-### 108. Debug log viewer
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Captures console.error/warn + unhandled errors/rejections in a ring buffer (200 entries)
-- Interceptors installed at app startup in layout
-- Viewable in Settings as a scrollable monospace panel with level coloring
-- Clear button to reset log
-- 9 tests
-- **Key files**: `src/lib/debug-log.ts`, `src/routes/settings/+page.svelte`
-
-### 109. Additional translation providers
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: Add free/open translation alternatives alongside MyMemory
-- **Lingva Translate**: Google Translate proxy, free, no API key, no commercial restriction, many public instances
-- **LibreTranslate**: self-hosted or public instances, AGPL, free, fits BYOK pattern
-- **Google Cloud Translation**: 500K chars/month free tier, requires API key (BYOK)
-- **Argos Translate**: MIT-licensed, Python/CLI, potential CrispASR desktop integration
-- **Key files**: `src/lib/translate.ts`, `src/routes/settings/+page.svelte`
-
----
 
 ## Known Issues / Future Polish
 
@@ -720,6 +99,7 @@ Post component (`src/lib/components/Post.svelte`) handles:
 
 ---
 
+
 ## Competitive Position
 
 CrispDeck is the only client combining multi-column deck view + multi-network (Bluesky + Mastodon) + web-first cross-platform + analytics + free/open-source.
@@ -737,288 +117,6 @@ Key competitive advantages: deck+multi-network+Threads (unique combo), cross-pla
 
 ---
 
-## v1.0 Release Plan (2026-06-10)
-
-### R1. Move CSP headers to vercel.json
-- **Status**: Done
-- **Effort**: Small
-- **Description**: `hooks.server.ts` doesn't run with `adapter-static`. Move security headers (CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) to `vercel.json` headers config so they're actually served on the live site.
-
-### R2. Add Playwright E2E to GitHub Actions CI
-- **Status**: Done
-- **Effort**: Small
-- **Description**: The 28 E2E tests only run locally. Add a CI job to `.github/workflows/ci.yml` that builds the app, installs Chromium, and runs `npm run test:e2e`.
-
-### R3. Bundle size analysis + optimization
-- **Status**: Done (2.8MB total, well-split, no issues found)
-- **Effort**: Medium
-- **Description**: Run bundle analysis to check for oversized chunks, duplicate dependencies, or tree-shaking failures. Fix any issues found.
-
-### R4. Version bump to v1.0.0
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Update version in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`.
-
-### R5. Final docs update for v1.0
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Final README pass — update test counts, version references, stats section. Update PLAN.md and memory file.
-
----
-
-## Phase 15: Post Interactivity & Notifications (2026-07-03)
-
-### 110. Interactive embedded/quoted posts
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Embedded/quoted posts in feed were static, non-clickable previews. Now:
-- **Bluesky quotes**: Clickable button navigating to quoted post's thread view (`/thread?uri=...&platform=bluesky`)
-- **Threads quotes**: Clickable button opening quoted post's permalink on threads.com
-- Hover states (border brightens, background shifts), cursor pointer
-- Larger text (`text-sm` instead of `text-xs`), primary color, 6-line clamp (was 3)
-- Larger image previews (`max-h-48`), "+N more" indicator for multi-image quotes
-- Image clicks in quotes still open lightbox (stopPropagation prevents navigation)
-- **Key files**: `src/lib/components/Post.svelte` (`getBskyQuote()`, `getThreadsQuote()`)
-
-### 111. Better image display in posts
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Images in posts were aggressively cropped to 16:9 aspect-video, cutting off most of the content
-- Single images now show full picture scaled down (`object-contain`, `max-h-96`, dark background fill)
-- Multi-image grids use square aspect ratio (`aspect-square`) instead of video crop
-- Applies to both Bluesky and Mastodon/Threads images
-- **Key files**: `src/lib/components/Post.svelte`
-
-### 112. Bluesky rich text rendering with facets
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: Bluesky post text was rendered as plain text with no clickable elements
-- Now parses AT Protocol facets from post records for pixel-accurate rich text
-- Handles: `app.bsky.richtext.facet#link` (URLs), `#mention` (@handles → profile), `#tag` (#hashtags → search)
-- UTF-8 byte-offset indexing for correct facet positioning with unicode text
-- Fallback regex linkification for posts without facets (URLs and @handle.bsky.social patterns)
-- Same `handlePostLinkClick()` handler routes in-app links via `goto()`
-- **Key files**: `src/lib/components/Post.svelte` (`getBskyHtml()`, `escapeHtml()`, `linkifyPlainText()`)
-
-### 113. Fix notifications for OAuth Bluesky accounts
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Notifications page showed empty because OAuth Bluesky accounts used read-only BlueskyClient that threw "Auth required"
-- Root cause: `client-factory.ts` creates `BlueskyClient.readOnly()` for OAuth accounts (no `authAgent`), but stores `oauthAgent` in `ClientEntry` — never used
-- Fix: notifications page now checks for `entry.oauthAgent` and calls `agent.api.app.bsky.notification.listNotifications()` directly for OAuth accounts
-- App-password accounts continue using `BlueskyClient.getNotifications()` as before
-- **Key files**: `src/routes/notifications/+page.svelte`, `src/lib/api/client-factory.ts`
-
----
-
-## Phase 16: Performance Optimizations (2026-07-03)
-
-### 114. detectCrossposts optimization
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: O(n²) Jaro-Winkler crosspost detection was the feed's main bottleneck
-- Result caching by URI set (identical posts → instant return)
-- Platform-indexed lookup (only compare across platforms, not all-vs-all)
-- Pre-computed timestamps, text-length filter (>50% diff → skip)
-- Early exit on >0.97 match score
-- **Key files**: `src/lib/api/unified.ts`
-
-### 115. Visibility-aware polling and WebSocket management
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: All background activity now pauses when tab is hidden
-- Layout polling: 30s→60s, skips when hidden, refreshes on tab focus
-- Deck auto-refresh: 3min→5min, skips when hidden, refreshes on focus
-- Feed new-post polling: skips when hidden
-- Jetstream: WebSocket closes when hidden, reconnects on focus
-- Streaming: all deck WebSockets pause/resume on visibility
-- Saves ~70% of background API calls
-- **Key files**: `src/routes/+layout.svelte`, `src/routes/deck/+page.svelte`, `src/routes/feed/+page.svelte`, `src/lib/jetstream.ts`, `src/lib/streaming.ts`
-
-### 116. Per-component caching (Post, bookmarks, pinned)
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: Eliminated N+1 lookups in feed rendering
-- Jetstream: per-URI listener map (O(1) dispatch vs O(n) broadcast)
-- Post.svelte: shared preferences cache (3 localStorage reads → 1 cached object)
-- Bookmarks: in-memory URI Set cache (50 IndexedDB lookups → 1 batch getAllKeys)
-- Pinned posts: cached URI Set (50 JSON.parse → 1 cached Set)
-- Label prefs: cached JSON.parse with 10s TTL
-- Mute filter: compiled regex cache by word fingerprint
-- **Key files**: `src/lib/components/Post.svelte`, `src/lib/bookmarks.ts`, `src/lib/pinned-posts.ts`, `src/lib/muted-words.ts`, `src/lib/jetstream.ts`
-
-### 117. Client initialization dedup + cache invalidation
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Module-level 5min cache in initAllClients() prevents redundant DB reads and OAuth session init on page navigation
-- invalidateClientCache() called from settings on account add/remove
-- Removed redundant layout-level cache (single source of truth)
-- **Key files**: `src/lib/api/client-factory.ts`, `src/routes/settings/+page.svelte`
-
-### 118. Build optimizations
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Vite and HTML optimizations for faster loading
-- Manual chunks: @atproto/api, masto, lucide-svelte split into separate cacheable vendor bundles
-- DNS prefetch hints for bsky.social, public.api.bsky.app, jetstream2, graph.threads.net
-- DOMPurify preloaded at app startup (no HTML-strip fallback on first render)
-- sortPosts: Schwartzian transform for date sorts (parse once, not per-comparison)
-- rankForYou: inlined scoring to avoid redundant lookups
-- **Key files**: `vite.config.js`, `src/app.html`, `src/lib/sanitize.ts`, `src/lib/api/unified.ts`, `src/lib/for-you.ts`
-
-### 119. Feed cache size setting
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Configurable feed cache size (50-500 posts) in Settings UI
-- Slider control in Cache & Storage section
-- Persisted in localStorage, included in settings export/import
-- **Key files**: `src/routes/settings/+page.svelte`, `src/routes/feed/+page.svelte`
-
-### 120. Parallel notification fetching
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Notifications page fetched from accounts sequentially (N serial API calls). Now uses Promise.all() for parallel fetch across all accounts (~4x faster with 5 accounts).
-- **Key files**: `src/routes/notifications/+page.svelte`
-
-### 121. Debounced deck column filter
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Deck column filter input was re-filtering all posts on every keystroke. Now debounced at 200ms — only applies filter after user stops typing.
-- **Key files**: `src/lib/components/deck/DeckColumn.svelte`
-
-### 122. Throttled read position saves
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Read position saved to localStorage on every scroll event (sync I/O). Now uses in-memory cache with 500ms throttled writes. Added flushReadPositions() for page unload.
-- **Key files**: `src/lib/read-position.ts`
-
-### 123. Keyword matcher caching
-- **Status**: Done
-- **Effort**: Small
-- **Description**: buildKeywordMatcher() now caches compiled matchers by entry fingerprint. Avoids re-creating regex objects on repeated calls (e.g., streaming column filtering).
-- **Key files**: `src/lib/keyword-monitor.ts`
-
-## Phase 17: Deep Performance Optimizations (2026-07-03)
-
-### 124. Memory leak fixes
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Fixed three memory leaks:
-  - `setInterval` in drafts page not cleaned up on navigation (cleanup fn not returned from `onMount`)
-  - DeckColumn global `mousemove`/`mouseup` listeners not removed on component destroy mid-drag
-  - TTS `audioEl` blob URL not revoked in `onDestroy`
-- **Key files**: `src/routes/drafts/+page.svelte`, `src/lib/components/deck/DeckColumn.svelte`, `src/lib/components/Post.svelte`
-
-### 125. PBKDF2 CryptoKey caching
-- **Status**: Done
-- **Effort**: Small
-- **Description**: 600k-iteration PBKDF2 key derivation ran on every encrypt/decrypt call (~100-300ms each). Now cached in module-level variable after first derivation.
-- **Key files**: `src/lib/browser-db.ts`
-
-### 126. Feed loading parallelization
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: `loadFeed()`, `checkForNewPosts()`, and `checkUnreadMessages()` all used sequential `for...await` loops across accounts. Converted to `Promise.allSettled` for concurrent execution.
-- **Key files**: `src/routes/feed/+page.svelte`, `src/routes/+layout.svelte`
-
-### 127. Fix $derived anti-patterns
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: `$derived(() => ...)` returns a function, not a value — causing redundant re-execution on every access. Fixed across Post.svelte (postLabels: 5×→1×), analytics page (8 derived values), profile page (filteredPosts, mediaGallery), and analytics cutoffDate.
-- **Key files**: `src/lib/components/Post.svelte`, `src/routes/analytics/+page.svelte`, `src/routes/profile/+page.svelte`
-
-### 128. IndexedDB batching and singletons
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: Multiple IDB optimizations:
-  - `cacheFollows`: N+M sequential writes → single `readwrite` transaction
-  - `importPlatformBookmarks`: N sequential `addBookmark` → single batch transaction
-  - `openDB()` in browser-db.ts, archive.ts, engagement-history.ts: added module-level singleton caching (avoid repeated `indexedDB.open()`)
-- **Key files**: `src/lib/browser-db.ts`, `src/lib/bookmarks.ts`, `src/lib/archive.ts`, `src/lib/engagement-history.ts`
-
-### 129. EmojiPicker search fix
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Search filter computed query `q` but never used it — all emojis always rendered regardless of search. Fixed to filter by category name match.
-- **Key files**: `src/lib/components/EmojiPicker.svelte`
-
-### 130. Build and rendering optimizations
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Multiple build and rendering improvements:
-  - Vite: `build.target: 'es2022'` + `cssMinify: 'lightningcss'`
-  - Svelte: `compilerOptions: { runes: true }` for smaller runtime
-  - Deck columns: 50-post cap with "Show more" pagination (prevents 600+ Post components)
-  - `jaroWinkler` deduplicated to `$lib/utils/string.ts` (was in browser-db.ts + unified.ts)
-  - SW version auto-injected from git hash at build time via Vite plugin
-  - `dns-prefetch` upgraded to `preconnect` for Bluesky hosts
-  - `content-visibility: auto` on post cards for off-screen rendering skip
-  - Image optimization: `loading="lazy"`, `decoding="async"`, `width`/`height` on avatars
-- **Key files**: `vite.config.js`, `svelte.config.js`, `src/app.html`, `src/app.css`, `src/lib/components/deck/DeckColumn.svelte`, `src/lib/utils/string.ts`, `static/sw.js`
-
-### 131. Comprehensive API parallelization
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: Every remaining sequential `for...await` loop across the entire app converted to `Promise.allSettled`:
-  - `loadMore()`, `loadNewPosts()` in feed page
-  - `loadPosts()` in catchup page
-  - `loadConversations()` in messages page
-  - `handleSearch()` in search page
-  - `loadMedia()` in gallery page
-  - `loadBskyTrending`/`loadMastoTrending` in trending page (parallel)
-  - `loadLists()` in lists page (+ batch Bluesky feeds/lists)
-- **Key files**: All route pages
-
-### 132. Template computation optimizations
-- **Status**: Done
-- **Effort**: Medium
-- **Description**: Hoisted expensive computations from Svelte templates to `$derived` state:
-  - Compose page: `splitForPlatform` called 3× per render → 3 `$derived` values
-  - Post.svelte: `new URL().hostname` and `relativeTime()` → `$derived` values
-  - Trending page: `totalUses()` and `new URL().hostname` → pre-computed in `$derived` arrays
-  - Post.svelte: `getMastodonHtml()` called 3× → reuse cached `mastodonHtml`
-  - Layout keyboard handler: `querySelectorAll('[data-post-uri]')` cached with 2s TTL
-  - Settings: inline `localStorage.getItem` in template → `$state` variable
-- **Key files**: `src/routes/compose/+page.svelte`, `src/lib/components/Post.svelte`, `src/routes/trending/+page.svelte`, `src/routes/+layout.svelte`, `src/routes/settings/+page.svelte`
-
-### 133. WebSocket exponential backoff
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Fixed 5-second reconnect timer → exponential backoff (5s base, 2× per attempt, 60s cap) with reset on successful connection. Applied to MastodonStream, BlueskyStream, and JetstreamClient.
-- **Key files**: `src/lib/streaming.ts`, `src/lib/jetstream.ts`
-
-### 134. Crosspost detection cache improvements
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Two improvements:
-  - Cache key changed from O(N) string join to O(N) hash (saves ~10KB string allocation per feed update)
-  - Cache key made order-independent (hash-based) so re-sorting the same posts doesn't trigger O(N²) redetection
-- **Key files**: `src/lib/api/unified.ts`
-
-### 135. Deck column optimizations
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Three deck improvements:
-  - Client groups (allBsky/allMasto/allThreads) precomputed once after init instead of per-column load
-  - Staggered column refresh on tab re-focus (150ms between columns) to avoid thundering herd
-  - RSS importOPML: N×read+write to localStorage → single batch write
-- **Key files**: `src/routes/deck/+page.svelte`, `src/lib/rss.ts`
-
-### 136. Stale-while-revalidate page caching
-- **Status**: Done
-- **Effort**: Small
-- **Description**: Added SWR caching to high-traffic pages for instant display on revisit:
-  - Trending page: 10-minute TTL, shows cached data instantly while refreshing
-  - Profile page: 5-minute TTL per handle, shows cached profile+posts instantly
-- **Key files**: `src/routes/trending/+page.svelte`, `src/routes/profile/+page.svelte`
-
-### 137. Archive stats optimization
-- **Status**: Done
-- **Effort**: Small
-- **Description**: `getArchiveStats()` was doing `getAll()` full IDB scan to compute counts. Replaced with parallel `IDBIndex.count()` calls and cursor-based date range — O(N) → O(1).
-- **Key files**: `src/lib/archive.ts`
-
----
 
 ## Competitive Gap-Closing Plan
 
@@ -1161,6 +259,7 @@ CrispDeck has three competitive weaknesses vs dedicated native single-network cl
 
 ---
 
+
 ## Future Ideas (from Graysky comparison)
 
 ### Alt text badge overlay on images
@@ -1185,6 +284,7 @@ CrispDeck has three competitive weaknesses vs dedicated native single-network cl
 - **Key files**: `src/lib/components/AccountSwitcher.svelte`, `src/routes/+layout.svelte`
 
 ---
+
 
 ## Deck Feature Parity Audit (2026-07-04)
 
@@ -1544,30 +644,10 @@ Column chrome in mature deck clients was polished over years. Several ergonomic 
 
 ---
 
+
 ## Phase 18: Hardening & Polish (2026-07-04)
 
 The app is feature-rich (20 column types, 1,520+ tests, streaming, keyboard nav, density modes, shareable collections, Bluesky lists API). Diminishing returns on new features. Focus shifts to reliability, real-world usage, and honest PWA support.
-
-### 171. Systematic silent-error audit
-- **Status**: Done (2026-09-19, PRs #3 and #5)
-- **Effort**: Medium
-- **Priority**: Must-have
-- **Description**: ~40 empty `catch {}` blocks outside Post.svelte (in API clients, feed page, deck page, settings) silently swallow errors. Users hit failures with no feedback.
-- [x] Audit every `catch {}` and `catch (e) { console.error(...) }` in the codebase
-- [x] Replace with `toast.error()` or `toast.warning()` for user-visible operations (API calls, saves, syncs)
-- [x] Keep silent catches only for truly ignorable operations (feature detection, optional preloads)
-- [x] Add error boundary fallbacks where appropriate
-- **Outcome**: no `console.error`/`console.warn` remains in `src/` outside
-  `debug-log.ts`, and no empty `catch {}` outside tests. Both are pinned by
-  guards (`no-silent-failures.test.ts`, `swallow.test.ts`) rather than left to
-  review, since this is exactly the kind of thing that creeps back one catch
-  block at a time. Per-account loops that used to end with "Archive is up to
-  date" while an account had failed now count the failures and say so.
-- **Also found**: `pushMutedWordToServer` wrote the Bluesky preferences
-  document wholesale via `putPreferences`, which would have discarded the
-  account's saved feeds, labelers and every other muted word. It had no
-  callers, so nobody lost data. Now uses the SDK's `addMutedWord`.
-- **Key files**: `src/lib/api/mastodon.ts`, `src/lib/api/bluesky.ts`, `src/lib/api/bluesky-oauth.ts`, `src/lib/api/client-factory.ts`, `src/routes/feed/+page.svelte`, `src/routes/deck/+page.svelte`
 
 ### 172. Offline-first PWA with cached feed
 - **Status**: Not started
@@ -1581,14 +661,16 @@ The app is feature-rich (20 column types, 1,520+ tests, streaming, keyboard nav,
 - **Key files**: `static/sw.js`, `src/routes/feed/+page.svelte`, `src/routes/+layout.svelte`
 
 ### 173. Bundle analysis + Lighthouse audit
-- **Status**: Not started
+- **Status**: Done (2026-09-20, PRs #6, #10, #17, #18)
 - **Effort**: Small
 - **Priority**: Should-have
-- **Description**: Run `npx vite-bundle-visualizer` and Lighthouse on production. Let the numbers tell us where to spend time instead of guessing.
-- [ ] Run bundle analysis, document total JS size, largest chunks, tree-shaking gaps
-- [ ] Run Lighthouse (mobile + desktop), document FCP, LCP, TBT, CLS scores
-- [ ] Identify concrete opportunities (e.g., lazy-load html2canvas, split lucide icons)
-- [ ] Set Lighthouse score targets for CI gating
+- **Description**: Run bundle analysis and Lighthouse on production. Let the numbers tell us where to spend time instead of guessing.
+- [x] Bundle analysis in CI: `bench/bundle-size.mjs` reports entry weight, per-route cost and bytes by package; `bench/check-budget.mjs` gates it
+- [x] Lighthouse in CI across five routes, reporting FCP, LCP, TBT, CLS in the job summary
+- [x] Opportunities acted on: html2canvas already dynamically imported, @atproto deferred per route, i18n split per language
+- [x] Targets set from measurement rather than aspiration — see `bench/lighthouse-budget.json` for why performance gets a floor and the other three get thresholds
+- **Outcome**: /about 93 → 100 and /calendar 96 → 100 once the contrast tokens were split; floors raised to 0.98 on four of five routes.
+- **Not done**: mobile Lighthouse, and the deck and feed with real posts — the latter needs an authenticated run.
 
 ### 174. Live user testing pass
 - **Status**: Not started
@@ -1614,148 +696,51 @@ The app is feature-rich (20 column types, 1,520+ tests, streaming, keyboard nav,
 - [ ] Prototype: relay connection + event parsing in isolation before wiring into UI
 - [ ] The AT Protocol and ActivityPub abstractions are solid — adding a third protocol backend is architecturally clean but the auth paradigm is fundamentally different
 
-### 176. Wire offline-cache into feed page
-- **Status**: Done
-- **Effort**: Small (module exists, ~20 lines of wiring)
+### 185. Credentials in the OS secret store
+- **Status**: Done (2026-09-20/21, PRs #21, #22, #25, #26, #27)
+- **Effort**: Large
 - **Priority**: Must-have
-- **Description**: The `offline-cache.ts` module is built but not connected to the feed page. Wire it so:
-- [ ] On every successful `loadFeed()`, call `cacheFeed('feed', posts)` to persist the latest feed
-- [ ] On page mount, if `isOffline()` or if the live fetch fails, call `loadCachedFeed('feed')` and show an "Offline — cached from [time]" banner
-- [ ] Dismiss the banner when the connection restores and fresh data loads
-- [ ] Also wire for notifications page: `cacheFeed('notifications', ...)` on load, serve from cache when offline
-- **Key files**: `src/routes/feed/+page.svelte`, `src/routes/notifications/+page.svelte`, `src/lib/offline-cache.ts`
+- **Description**: The desktop build encrypted credentials under a passphrase of
+  `CrispDeck-v1-{hostname}` — sound cryptography, a key that is not a secret.
+- [x] Linux Secret Service and Windows Credential Manager via `keyring`
+- [x] macOS via `security-framework`, because `keyring` can only use the login
+      keychain: the modern data protection keychain, the login keychain, or a
+      keychain file the user already manages
+- [x] Settings control for the backend and, on macOS, which keychain
+- [x] A `Secret store` workflow that runs against the real stores on all three
+      platforms, with macOS covering each keychain it offers
+- **The design changed mid-flight, and the reason matters.** The first version
+  created a keychain of its own and kept its password in the login keychain. A
+  user pointed out they had once forgotten their login keychain password and it
+  had mattered little, because other keychains held what their apps needed —
+  which is exactly the dependency that design rebuilt. It now holds no keychain
+  password at all and creates no keychains: `security create-keychain` does that
+  better, and a keychain an app creates is one whose password has to live
+  somewhere.
+- **What CI settled**: the data protection keychain needs a signed build ("A
+  required entitlement isn't present"), and the fallback behaved correctly —
+  `store()` returned Local rather than claiming the keychain.
+- **Still unverified**: nobody has driven the macOS settings UI on a real Mac.
+  The Rust is tested against real keychains and the accessors against a mocked
+  invoke, but the path from clicking a radio button to a credential landing in
+  a chosen keychain has only been tested in pieces.
 
-### 177. Release v1.2.1 patch
-- **Status**: Done
-- **Effort**: Small
-- **Priority**: Must-have
-- **Description**: Meaningful post-v1.2.0 work is sitting on `main` untagged. Users on v1.2.0 don't have the poll voting auth fix (was broken for all Mastodon poll users). Warrants a patch release.
-- [ ] Version bump to 1.2.1 in package.json, Cargo.toml, tauri.conf.json
-- [ ] Update CHANGELOG Unreleased → v1.2.1 with date
-- [ ] `git tag v1.2.1 && git push --tags` to trigger release builds
-- [ ] Verify CI, release binaries, Vercel deploy
-- Contents: account switcher, poll voting fix, 6 perf optimizations, a11y fixes, Bluesky lists API, error toasts, offline cache module, page-error helpers, 15 new E2E tests
-
-### 178. Lighthouse in the Perf CI job
-- **Status**: Done (2026-09-19)
-- **Effort**: Small
-- **Priority**: Nice-to-have
-- **Description**: The Perf workflow measured deck rendering and bundle weight
-  but nothing about the page a first-time visitor actually gets.
-- [x] Run Lighthouse against the preview the job already serves, reusing
-      Playwright's Chromium rather than installing a second browser
-- [x] `bench/check-lighthouse.mjs` + `bench/lighthouse-budget.json`, gated
-- [x] Scores and metrics in the job summary; report kept as an artifact
-- **Thresholds came from measurement, not aspiration**: four runs of one
-  unchanged build scored performance 99, 99, 95, 97, while accessibility,
-  best-practices and SEO returned 100 every time. So the three stable
-  categories are gated near 100 and performance gets a floor (0.8) well below
-  the noise — it catches a collapse, and is explicitly not a target. A guard
-  that fails at random gets ignored, which costs more than it is worth.
-- **Key files**: `.github/workflows/perf.yml`, `bench/check-lighthouse.mjs`,
-  `bench/lighthouse-budget.json`, `src/lib/lighthouse-budget.test.ts`
-
-### 179. Silent-success audit: writes that were never checked
-- **Status**: Done (2026-09-20, PRs #8 and #9)
-- **Effort**: Medium
-- **Priority**: Must-have
-- **Description**: Item 171 fixed catch blocks that only reached the console.
-  This is the failure mode underneath it: code paths that never threw at all.
-  `fetch` resolves for a 401/403/500, and a guard clause that skips the request
-  leaves the success message running anyway.
-- [x] Every `fetch` whose response is discarded or never tested (11 sites)
-- [x] Guard clauses whose success message sat outside the guard (follow,
-      block, mute, DM send)
-- [x] `src/lib/http.ts` — `fetchOk`/`fetchJson`, which strip the query string
-      before a URL reaches an error message, since tokens travel there and
-      these messages land in the log viewer users paste into bug reports
-- [x] `unchecked-fetch.test.ts` pins two unambiguous shapes: a discarded
-      response, and one assigned to a variable never tested in the file
-- **Deliberately not** a blanket "no bare fetch" rule — ~100 of the calls here
-  do check, and an allowlist of ninety entries guards nothing.
-
-### 180. Accessibility: routes nobody was scoring
-- **Status**: Done (2026-09-20, PR #10)
+### 186. Identity detection: tests, and the bio match it depends on
+- **Status**: Done (2026-09-21, PR #28)
 - **Effort**: Small
 - **Priority**: Should-have
-- **Description**: The Lighthouse gate added in #6 only ever scored `/`, which
-  logged out is a 200-element shell. Most accessibility audits had nothing to
-  judge, so the 100 it reported meant very little.
-- [x] Score /about, /compose, /settings and /calendar as well
-- [x] Fix the seven unlabelled icon-only buttons this found (calendar month
-      arrows, archive search, deck refresh and remove, and the close buttons on
-      FloatingCompose, MediaLightbox and DeckColumn)
-- [x] `icon-button-labels.test.ts` so the pattern cannot come back
-- **Still open**: contrast debt on /about (93) and /settings (96), and links in
-  text distinguished only by colour on /about. Held at today's scores by
-  per-route floors so it cannot get worse, and visible in the job summary.
-- **Still unmeasured**: deck and feed carrying real posts. That needs an
-  authenticated run.
-
-### 181. Live API suites off the required check
-- **Status**: Done (2026-09-20, PR #10)
-- **Effort**: Small
-- **Priority**: Should-have
-- **Description**: Seven suites hit real Bluesky/Mastodon/PLC endpoints inside
-  the required `Frontend build` check. mastodon.social timing out at 15s had
-  turned a run red twice with nothing wrong in the repo.
-- [x] Gated behind `CRISPDECK_LIVE`; nightly `Live APIs` workflow plus manual
-      dispatch
-- [x] `live-test-gating.test.ts` — a new live suite cannot quietly rejoin the
-      PR path, and a suite that is gated but listed in no workflow fails too
-      (it would look like coverage while never running)
-- **Side effect**: PR suite ~240s → ~145s.
-
-### 182. Two HTML injection paths, and a per-post listener leak
-- **Status**: Done (2026-09-20, PR #12)
-- **Effort**: Medium
-- **Priority**: Must-have
-- [x] `{@html ann.content}` on the notifications page rendered instance
-      announcements — HTML written by the instance admin — with no sanitizer
-- [x] Custom emoji were spliced into already-sanitized HTML as a string, with
-      an unescaped remote URL. Reproduced: a URL of
-      `https://x/a.png" onerror="alert(1)` produced a live event handler,
-      *after* DOMPurify had run. Now injected through the parsed DOM, inside
-      text nodes only
-- [x] `escapeHtml(uri)` stops attribute breakout and says nothing about the
-      scheme; `href="javascript:..."` runs on click. 10 sites now use
-      `safeExternalUrl`
-- [x] The post-preferences "singleton" sat in the instance `<script>`, which
-      in Svelte 5 runs per component instance. Measured: 10 posts produced 10
-      listeners and 30 localStorage reads, none released on unmount. Moved to
-      `<script module>`; both counts are 0 and asserted
-
-### 183. Rust side: tests that never ran, and a broken feature behind them
-- **Status**: Done (2026-09-20, PR #15)
-- **Effort**: Medium
-- **Priority**: Must-have
-- **Description**: CI ran `cargo check`, which type-checks and stops — it
-  never built the test binaries, so the 5 tests in src-tauri had never run in
-  CI at all.
-- [x] CI runs `cargo test --lib` as well as `cargo check`
-- [x] **Threads accounts could not be saved on desktop**: migration 001 wrote
-      `CHECK (platform IN ('bluesky','mastodon'))` and Threads support was
-      added later without widening it. The browser build stores accounts in
-      IndexedDB and never noticed. Migration 002 fixes it
-- [x] Tests 5 → 27, covering AEAD tamper rejection, truncated input, and the
-      db layer against the real migrations over in-memory SQLite
-- **Documented, not fixed**: nothing stops two primary accounts on one
-  platform — neither insert nor update demotes the other.
-
-### 184. Dependency advisories, storage writes, contrast
-- **Status**: Done (2026-09-20, PRs #13, #14, #16, #17)
-- [x] 7 undici advisories (1 high) through `@vercel/blob`, a prod dependency
-      used by four serverless routes. `npm audit --production` now reports 0
-- [x] 11 `JSON.parse` of stored values with no guard — the worst in
-      `+layout.svelte` at shell init, where one corrupt value meant every page
-      failed to render
-- [x] All 64 `localStorage.setItem` calls through checked helpers
-- [x] `--color-primary` failed contrast both ways at once (4.47:1 under white
-      text, 4.00:1 as text). Split into background and text tokens
-- **Still open**: two /settings buttons put near-white text on the Bluesky
-  (3.46:1) and Mastodon (4.18:1) brand colours. Needs the same split across 63
-  sites, and darkening the tokens would drop their 17 text uses to 3.31 and
-  2.90. A decision about platform identity colour.
+- **Description**: `detect_commands.rs` decides whether the app tells someone two
+  accounts are the same person, and had no tests.
+- [x] Scoring extracted into `score_pair` so it can be tested at all
+- [x] 19 tests covering the ceiling, false positives and the helpers
+- [x] Fixed `bio_mentions_handle`, which stripped `@` from the handle and not
+      from the bio, so `@alice@mastodon.social` never matched a bio that wrote
+      the handle the ordinary way
+- **The arithmetic worth knowing**: display name is weighted 0.5 and username
+  0.3 against a threshold of 0.85, so those two cannot qualify a pair on their
+  own — a bio cross-reference is required in practice. That is deliberate and
+  now documented: "alex" and "alex" both displaying "Alex" score 0.80 and are
+  probably different people.
 
 ### Branch cleanup (2026-09-19)
 
