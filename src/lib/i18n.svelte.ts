@@ -871,7 +871,7 @@ export const translations = {
       pageTitle: 'CrispDeck — Privacy Policy',
       metaDescription: 'CrispDeck privacy policy — how your data is handled.',
     },
-    common: { removeColumn: 'Remove column', close: 'Close', refreshColumn: 'Refresh column', nextMonth: 'Next month', previousMonth: 'Previous month', someAccountsFailed: '{count} account(s) could not be reached',
+    common: { toggleActive: 'Turn on or off', nextImage: 'Next image', previousImage: 'Previous image', remove: 'Remove', removeColumn: 'Remove column', close: 'Close', refreshColumn: 'Refresh column', nextMonth: 'Next month', previousMonth: 'Previous month', someAccountsFailed: '{count} account(s) could not be reached',
       create: 'Create',
       switchAccount: 'Switch account',
       scrollToTop: 'Scroll to top',

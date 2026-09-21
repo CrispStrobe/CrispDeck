@@ -288,7 +288,7 @@
           <div class="flex items-center gap-2">
             <input type="text" bind:value={contentWarning} placeholder={i18n.t.compose.cwPlaceholder}
               class="flex-1 px-3 py-1.5 bg-[var(--color-bg)] border border-yellow-600 rounded-md text-xs text-[var(--color-text)] focus:outline-none" />
-            <button onclick={() => { showCW = false; contentWarning = ''; }} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+            <button onclick={() => { showCW = false; contentWarning = ''; }} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)]" aria-label={i18n.t.common.close}>
               <X size={12} />
             </button>
           </div>
@@ -356,7 +356,7 @@
                   {:else}
                     <img loading="lazy" src={preview} alt={altTexts[i] || ''} class="w-full h-full object-cover" />
                   {/if}
-                  <button onclick={() => removeMedia(i)} class="absolute top-1 right-1 p-0.5 bg-black/70 rounded-full text-white hover:bg-black">
+                  <button onclick={() => removeMedia(i)} class="absolute top-1 right-1 p-0.5 bg-black/70 rounded-full text-white hover:bg-black" aria-label={i18n.t.common.close}>
                     <X size={10} />
                   </button>
                 </div>

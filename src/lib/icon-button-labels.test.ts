@@ -14,9 +14,17 @@ import { join } from 'node:path';
  * whose sole child is a component element.
  */
 
-// \w* not \w+: lucide's close icon is a single character, <X />, and a
-// pattern needing two would skip every close button in the app.
-const ICON_ONLY = /<button\b([^>]*)>\s*<([A-Z]\w*)\s[^>]*\/>\s*<\/button>/gs;
+// Two things this pattern has been wrong about, both found the hard way:
+//
+// \w* not \w+, because lucide's close icon is a single character, <X />, and
+// a pattern needing two skipped every close button in the app.
+//
+// (?:[^>]|=>)*? for the attributes, because an inline handler contains an
+// arrow — onclick={() => ...} — and [^>]* stops at its >. That hid 24
+// unlabelled buttons while the guard reported none: a green check that was
+// checking almost nothing. It surfaced only when an end-to-end test could not
+// find a button by name.
+const ICON_ONLY = /<button\b((?:[^>]|=>)*?)>\s*<([A-Z]\w*)\s[^>]*\/>\s*<\/button>/gs;
 
 /** @returns one message per unlabelled icon-only button */
 export function findUnlabelledIconButtons(source: string, file = ''): string[] {
@@ -44,6 +52,20 @@ describe('findUnlabelledIconButtons', () => {
   it('flags an icon-only button with no label', () => {
     expect(findUnlabelledIconButtons('<button onclick={x}><ChevronLeft size={18} /></button>'))
       .toHaveLength(1);
+  });
+
+  it('flags a button whose handler contains an arrow function', () => {
+    // onclick={() => ...} has a > in it, which an [^>]* attribute pattern
+    // reads as the end of the tag. 24 buttons hid behind that.
+    expect(
+      findUnlabelledIconButtons('<button onclick={() => close()}><X size={16} /></button>'),
+    ).toHaveLength(1);
+  });
+
+  it('still accepts a labelled button with an arrow handler', () => {
+    expect(
+      findUnlabelledIconButtons('<button onclick={() => close()} aria-label="Close"><X size={16} /></button>'),
+    ).toEqual([]);
   });
 
   it('flags a single-letter icon component too', () => {

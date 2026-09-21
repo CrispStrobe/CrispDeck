@@ -478,7 +478,7 @@
             {#each identity.tags as tag}
               <span class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-[var(--color-primary)]/20 text-[var(--color-primary-text)] rounded">
                 {tag}
-                <button onclick={() => handleRemoveTag(identity.id, tag)} class="hover:text-[var(--color-danger)]">
+                <button onclick={() => handleRemoveTag(identity.id, tag)} class="hover:text-[var(--color-danger)]" aria-label={i18n.t.common.close}>
                   <X size={10} />
                 </button>
               </span>

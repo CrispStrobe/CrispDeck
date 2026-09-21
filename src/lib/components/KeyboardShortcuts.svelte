@@ -83,7 +83,7 @@
     <div class="relative bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] shadow-2xl p-6 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-bold">{i18n.t.app.keyboardShortcuts}</h2>
-        <button onclick={() => show = false} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+        <button onclick={() => show = false} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)]" aria-label={i18n.t.common.close}>
           <X size={18} />
         </button>
       </div>
