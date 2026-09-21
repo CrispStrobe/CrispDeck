@@ -49,18 +49,31 @@ export function findUncheckedFetches(source: string, file = ''): string[] {
     if (line.includes('fetchOk') || line.includes('fetchJson')) return;
 
     // A — a statement whose value goes nowhere.
-    if (/^(await\s+|void\s+)?fetch\(/.test(line)) {
-      let previous = '';
-      for (let j = i - 1; j >= 0; j--) {
-        if (lines[j].trim()) { previous = lines[j].trimEnd(); break; }
+    //
+    // Keyed on the statement boundary before the call rather than on the call
+    // starting a line: `const f = async () => { await fetch(url); };` has the
+    // fetch mid-line, and an earlier version that required a line start
+    // missed it. Found by planting one, after the icon-label guard turned out
+    // to be blind to 24 buttons for a comparable reason.
+    const call = /(^|[{};]|=>)\s*(?:await\s+|void\s+)?fetch\(/.exec(line);
+    if (call) {
+      // Not an assignment or an argument: `= fetch(`, `(fetch(`, `, fetch(`
+      // and `return fetch(` all hand the response to someone.
+      //
+      // When nothing precedes the call on its own line, the context is on the
+      // line above — Promise.all([ opens on one line and the calls follow on
+      // the next, and treating those as discarded was the first fix's mistake.
+      let before = line.slice(0, call.index + call[0].length - 'fetch('.length);
+      if (!before.trim()) {
+        for (let j = i - 1; j >= 0; j--) {
+          if (lines[j].trim()) { before = lines[j].trimEnd(); break; }
+        }
       }
-      // An argument position (Promise.all([...]), a helper call) means the
-      // caller collects the response, so it is not discarded here.
-      const isArgument = /[([,=]$|=>$|return$/.test(previous);
-      if (!isArgument) {
-        offenders.push(`${file}:${i + 1}: response discarded — ${line.slice(0, 60)}`);
+      const consumed = /[=([,]\s*(?:await\s+|void\s+)?$|\breturn\s+(?:await\s+)?$|=>\s*$/.test(before);
+      if (!consumed) {
+        offenders.push(`${file}:${i + 1}: response discarded — ${line.trim().slice(0, 60)}`);
+        return;
       }
-      return;
     }
 
     // B — assigned but never tested.
@@ -78,6 +91,13 @@ export function findUncheckedFetches(source: string, file = ''): string[] {
 }
 
 describe('findUncheckedFetches', () => {
+  it('flags a discarded response inside a single-line arrow body', () => {
+    // The shape the line-start rule missed.
+    expect(
+      findUncheckedFetches('const f = async () => { await fetch(url, { method: "POST" }); };'),
+    ).toHaveLength(1);
+  });
+
   it('flags a discarded response', () => {
     expect(findUncheckedFetches('async function f() {\n  await fetch(url, { method: "POST" });\n}'))
       .toHaveLength(1);
