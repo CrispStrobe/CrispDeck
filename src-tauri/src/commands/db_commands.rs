@@ -240,7 +240,10 @@ fn validate_mac_keychain(choice: &str) -> Result<(), String> {
         "" => return Err("Choose a keychain.".into()),
         _ => {}
     }
-    if !choice.contains('/') {
+    // A separator is what distinguishes a path from a bare word. Checking only
+    // for '/' turned out to be a test that passes on the platform this feature
+    // is for and fails on the one that runs CI — Windows temp paths use '\\'.
+    if !choice.contains('/') && !choice.contains(std::path::MAIN_SEPARATOR) {
         return Err(format!(
             "{choice:?} is not a keychain. Use \"login\", \"data-protection\", \
              or the full path to a keychain you created."
