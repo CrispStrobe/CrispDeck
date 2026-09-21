@@ -1,4 +1,4 @@
-import { corsFor, preflight } from '../_lib/cors.js';
+import { corsFor, preflight, isAllowedRedirect, safeError } from '../_lib/cors.js';
 /**
  * Vercel serverless function: Threads OAuth token exchange.
  *
@@ -32,6 +32,13 @@ export async function POST(request: Request) {
     if (action === 'exchange' || !action) {
       if (!code || !redirect_uri) {
         return new Response(JSON.stringify({ error: 'Missing code or redirect_uri' }), { status: 400, headers: corsFor(request, 'POST, OPTIONS') });
+      }
+
+      // The code is spent against this URI with our client_secret. Same
+      // reasoning as auth-url: do not take a stranger's word for where the
+      // callback lives.
+      if (!isAllowedRedirect(redirect_uri)) {
+        return new Response(JSON.stringify({ error: 'redirect_uri is not one of ours' }), { status: 400, headers: corsFor(request, 'POST, OPTIONS') });
       }
 
       // Step 1: Exchange code for short-lived token
@@ -121,7 +128,7 @@ export async function POST(request: Request) {
 
     return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), { status: 400, headers: corsFor(request, 'POST, OPTIONS') });
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: corsFor(request, 'POST, OPTIONS') });
+    return new Response(JSON.stringify({ error: safeError('Threads token exchange', e) }), { status: 500, headers: corsFor(request, 'POST, OPTIONS') });
   }
 }
 
