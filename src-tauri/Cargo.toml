@@ -68,16 +68,23 @@ hostname = "0.4"
 git      = "https://github.com/CrispStrobe/CrispASR"
 optional = true
 
-# OS secret store. Linux and Windows only, deliberately.
+# OS secret store, one crate per platform.
 #
-# macOS is missing from this list because the keyring crate uses the default
-# login keychain and offers no way to choose another. A dedicated CrispDeck
-# keychain needs security-framework directly, and that is not code to ship
-# without a Mac to test it on — so macOS keeps the local encrypted blob until
-# that can be written and verified properly.
+# keyring covers Linux and Windows. It is not used on macOS because it takes
+# the default login keychain and offers no way to choose another, and a
+# keychain that locks independently of login is the point — so macOS goes
+# through security-framework directly. See auth/mac_keychain.rs.
 #
 # sync-secret-service talks D-Bus through zbus in pure Rust, so the Linux
 # build needs no extra system library.
+[target.'cfg(target_os = "macos")'.dependencies]
+# OSX_10_15 gates use_protected_keychain, which is how the data protection
+# keychain is reached. On macOS the method does not exist without it:
+#   #[cfg(any(feature = "OSX_10_15", not(target_os = "macos")))]
+# CI found that; it is not something the docs page makes obvious, because
+# docs.rs renders the version built with the feature on.
+security-framework = { version = "3", features = ["OSX_10_15"] }
+
 [target.'cfg(target_os = "linux")'.dependencies]
 keyring = { version = "3", default-features = false, features = ["sync-secret-service", "crypto-rust"] }
 
