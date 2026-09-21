@@ -82,7 +82,7 @@ pub fn list(conn: &Connection, filter: Option<IdentityFilter>) -> Result<Vec<Ide
                 row.get(6)?,
                 row.get(7)?,
             ))
-        })?.filter_map(|r| r.ok()).collect();
+        })?.collect::<rusqlite::Result<Vec<_>>>()?;
 
     let mut identities = Vec::new();
     for (id, display_name, notes, auto_detected, confirmed, confidence, created_at, updated_at) in identity_rows {
@@ -222,8 +222,7 @@ pub fn resolve_handle(conn: &Connection, handle: &str, target_platform: &str) ->
 fn get_tags(conn: &Connection, identity_id: i64) -> Result<Vec<String>> {
     let mut stmt = conn.prepare("SELECT tag FROM identity_tags WHERE identity_id = ?1 ORDER BY tag")?;
     let tags = stmt.query_map(params![identity_id], |row| row.get(0))?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(tags)
 }
 
@@ -248,7 +247,7 @@ fn get_links(conn: &Connection, identity_id: i64) -> Result<Vec<IdentityLink>> {
             bio: row.get(10)?,
             created_at: row.get(11)?,
         })
-    })?.filter_map(|r| r.ok()).collect();
+    })?.collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(links)
 }
 

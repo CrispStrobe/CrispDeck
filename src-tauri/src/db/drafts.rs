@@ -49,7 +49,7 @@ pub fn list(conn: &Connection) -> Result<Vec<Draft>> {
             created_at: row.get(7)?,
             updated_at: row.get(8)?,
         })
-    })?.filter_map(|r| r.ok()).collect();
+    })?.collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(rows)
 }
 

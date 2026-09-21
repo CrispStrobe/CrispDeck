@@ -40,7 +40,7 @@ pub fn list(conn: &Connection) -> Result<Vec<Account>> {
         })
     })?;
 
-    Ok(rows.filter_map(|r| r.ok()).collect())
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
 pub fn insert(
