@@ -650,27 +650,34 @@ Column chrome in mature deck clients was polished over years. Several ergonomic 
 The app is feature-rich (20 column types, 1,520+ tests, streaming, keyboard nav, density modes, shareable collections, Bluesky lists API). Diminishing returns on new features. Focus shifts to reliability, real-world usage, and honest PWA support.
 
 ### 172. Offline-first PWA with cached feed
-- **Status**: Not started
+- **Status**: Done (2026-09-21, PR #35), bar one checkbox that should not be built
 - **Effort**: Medium
 - **Priority**: Must-have
 - **Description**: The service worker caches the app shell but not feed data. PWA users who lose connection see a blank feed. The "offline support" claim is not honest.
-- [ ] Cache last-known feed state in IndexedDB (posts, notifications, trending) on each successful load
-- [ ] On offline load: serve cached feed with "Offline — showing cached from [time]" banner
-- [ ] Stale-while-revalidate for API responses in service worker (60s cache + network refresh)
-- [ ] Clear offline indicator when connection restores, auto-refresh
-- **Key files**: `static/sw.js`, `src/routes/feed/+page.svelte`, `src/routes/+layout.svelte`
-
-### 173. Bundle analysis + Lighthouse audit
-- **Status**: Done (2026-09-20, PRs #6, #10, #17, #18)
-- **Effort**: Small
-- **Priority**: Should-have
-- **Description**: Run bundle analysis and Lighthouse on production. Let the numbers tell us where to spend time instead of guessing.
-- [x] Bundle analysis in CI: `bench/bundle-size.mjs` reports entry weight, per-route cost and bytes by package; `bench/check-budget.mjs` gates it
-- [x] Lighthouse in CI across five routes, reporting FCP, LCP, TBT, CLS in the job summary
-- [x] Opportunities acted on: html2canvas already dynamically imported, @atproto deferred per route, i18n split per language
-- [x] Targets set from measurement rather than aspiration — see `bench/lighthouse-budget.json` for why performance gets a floor and the other three get thresholds
-- **Outcome**: /about 93 → 100 and /calendar 96 → 100 once the contrast tokens were split; floors raised to 0.98 on four of five routes.
-- **Not done**: mobile Lighthouse, and the deck and feed with real posts — the latter needs an authenticated run.
+- [x] Cache last-known feed state in IndexedDB on each successful load —
+      `src/lib/offline-cache.ts`, capped at 100 posts
+- [x] On offline load: serve cached feed with an "Offline — showing cached data
+      from [time]" banner
+- [x] Notifications and trending say the same thing. They were already showing
+      localStorage-backed SWR data when offline, silently, which is how an
+      hour-old page passes for live — the data was there, the honesty was not.
+- [x] Clear the indicator when the connection returns, and auto-refresh
+- [ ] ~~Stale-while-revalidate for API responses in the service worker~~ —
+      **not doing this, and the reason should outlive the checkbox.** The SW
+      skips cross-origin requests, and every feed API here *is* cross-origin
+      (bsky.social, each Mastodon instance). Caching those would mean storing
+      opaque responses it cannot read, keyed by URLs carrying auth, for an
+      offline case the IndexedDB snapshot already covers properly. The only
+      same-origin `/api/` route is the Threads proxy, which is an auth
+      exchange and must not be cached at all.
+- **The bug this turned up**: there were two pieces of offline state and only
+  one reacted to reconnecting. The layout cleared its own `offline` flag on the
+  `online` event; the feed's `offlineBanner` was separate and nothing cleared
+  it. A reconnected user went on reading cached posts under an "Offline" sign
+  until they noticed the Retry link — worse than showing nothing, because it
+  looks like a working feed that has gone quiet.
+- **Key files**: `src/lib/offline-cache.ts`, `src/lib/offline-status.ts`,
+  `src/routes/{feed,notifications,trending}/+page.svelte`
 
 ### 174. Live user testing pass
 - **Status**: Not started

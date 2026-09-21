@@ -4,7 +4,9 @@
   import { sanitizeHtml } from '$lib/sanitize';
   import { toast } from '$lib/toast.svelte';
   import { base } from '$app/paths';
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import { watchConnection, cachedDataBanner } from '$lib/offline-status';
+  import { formatCachedTime, isOffline } from '$lib/offline-cache';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Bell, Heart, Repeat, UserPlus, MessageCircle, AtSign, Loader2, Quote, ChevronDown, ChevronUp, RefreshCw, CheckCheck } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
@@ -27,6 +29,8 @@
     readJson<string[]>('crispdeck-dismissed-announcements', [], Array.isArray)
   );
   let expandedGroups: Set<string> = $state(new Set());
+  let offlineBanner = $state('');
+  let stopWatchingConnection: (() => void) | undefined;
 
   let clientEntries: Map<number, ClientEntry> = new Map();
 
@@ -40,11 +44,34 @@
       accounts = result.accounts;
       clientEntries = result.clients;
       await loadNotifications();
+      offlineBanner = '';
     } catch (e) {
-      error = String(e);
+      // Offline with something cached is not an error to put in front of the
+      // user — but showing that cache silently is how "offline support" comes
+      // to mean "an hour-old page that looks live". Say which it is.
+      offlineBanner = cachedDataBanner(
+        isOffline(), cached?.cachedAt ?? null, i18n.t.feed.offlineCached, formatCachedTime
+      );
+      if (!offlineBanner) error = String(e);
     } finally {
       loading = false;
     }
+
+    stopWatchingConnection = watchConnection({
+      onOnline: async () => {
+        if (!offlineBanner) return;
+        offlineBanner = i18n.t.feed.reconnected;
+        try {
+          await loadNotifications();
+          offlineBanner = '';
+        } catch (e) { swallow('notifications.reconnect', e); }
+      },
+    });
+  });
+
+  onDestroy(() => {
+    stopWatchingConnection?.();
+    stopWatchingConnection = undefined;
   });
 
   async function loadNotifications() {
@@ -291,6 +318,14 @@
   {#if error}
     <div class="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">{error}</div>
   {/if}
+
+  {#if offlineBanner}
+    <div class="mb-4 p-3 bg-yellow-900/50 border border-yellow-700 rounded-lg text-yellow-200 text-sm flex items-center justify-between">
+      <span>{offlineBanner}</span>
+      <button onclick={() => { offlineBanner = ''; loadNotifications(); }} class="underline ml-2">{i18n.t.feed.retry}</button>
+    </div>
+  {/if}
+
 
   {#if loading}
     <DelayedSpinner>

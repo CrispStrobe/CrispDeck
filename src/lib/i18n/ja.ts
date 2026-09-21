@@ -37,7 +37,9 @@ export default {
       translatedFrom: '{lang}から翻訳',
       sharedVia: 'CrispDeckで共有',
     },
-    feed: { savedFeedsFailed: '保存したフィードを読み込めませんでした', pinFailed: 'ピン留めしたフィードを変更できませんでした', sortTopEngagement: '並び替え: 反応が多い順', sortMostReposted: '並び替え: リポストが多い順', sortMostLiked: '並び替え: いいねが多い順', socialFeed: 'ソーシャルフィード', searchInPosts: '投稿を検索…', retry: '再試行', minLikes: '最小いいね数', hideReposts: 'リポストを隠す', hideReplies: '返信を隠す', hideMediaLabel: 'メディアを隠す', hasMedia: 'メディアあり', forYouHint: 'まずアーカイブを作成すると、よく交流する相手に基づく並び替えが使えます。', forYou: 'おすすめ', filterMasto: 'Masto', filterBsky: 'Bsky', buildArchive: 'アーカイブを作成',
+    feed: {
+      offlineCached: 'オフライン — {time}のキャッシュを表示中',
+      reconnected: 'オンラインに復帰 — 更新中', savedFeedsFailed: '保存したフィードを読み込めませんでした', pinFailed: 'ピン留めしたフィードを変更できませんでした', sortTopEngagement: '並び替え: 反応が多い順', sortMostReposted: '並び替え: リポストが多い順', sortMostLiked: '並び替え: いいねが多い順', socialFeed: 'ソーシャルフィード', searchInPosts: '投稿を検索…', retry: '再試行', minLikes: '最小いいね数', hideReposts: 'リポストを隠す', hideReplies: '返信を隠す', hideMediaLabel: 'メディアを隠す', hasMedia: 'メディアあり', forYouHint: 'まずアーカイブを作成すると、よく交流する相手に基づく並び替えが使えます。', forYou: 'おすすめ', filterMasto: 'Masto', filterBsky: 'Bsky', buildArchive: 'アーカイブを作成',
       title: 'フィード', timeline: 'タイムライン', switchFeed: 'フィードを切り替え', savedNotPinned: '保存済み', searchFeeds: 'フィードを検索…', noFeedsFound: '該当するフィードはありません。', feedSearchFailed: 'フィード検索を利用できません。', pinFeed: 'マイフィードに追加', unpinFeed: 'マイフィードから削除', feeds: 'フィード', discoverFeeds: 'フィードを探す →', myPosts: '自分の投稿', all: 'すべて',
       noAccounts: 'アカウント未接続', addAccountsFirst: '設定でアカウントを追加してください。',
       loadingTimeline: 'タイムラインを読み込み中...', loadingYourPosts: '投稿を読み込み中...',

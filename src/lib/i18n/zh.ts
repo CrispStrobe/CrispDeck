@@ -36,7 +36,9 @@ export default {
       show: '显示', votes: '票', closed: '已结束', voted: '已投票', open: '进行中',
       translatedFrom: '翻译自{lang}', sharedVia: '通过CrispDeck分享',
     },
-    feed: { savedFeedsFailed: '无法加载已保存的信息流', pinFailed: '无法更改已固定的信息流', sortTopEngagement: '排序：互动最高', sortMostReposted: '排序：转发最多', sortMostLiked: '排序：点赞最多', socialFeed: '社交信息流', searchInPosts: '在帖子中搜索…', retry: '重试', minLikes: '最少点赞', hideReposts: '隐藏转发', hideReplies: '隐藏回复', hideMediaLabel: '隐藏媒体', hasMedia: '含媒体', forYouHint: '请先建立存档，以启用基于互动对象的个性化排序。', forYou: '为你推荐', filterMasto: 'Masto', filterBsky: 'Bsky', buildArchive: '建立存档',
+    feed: {
+      offlineCached: '离线 — 显示 {time} 的缓存内容',
+      reconnected: '已恢复联网 — 正在刷新', savedFeedsFailed: '无法加载已保存的信息流', pinFailed: '无法更改已固定的信息流', sortTopEngagement: '排序：互动最高', sortMostReposted: '排序：转发最多', sortMostLiked: '排序：点赞最多', socialFeed: '社交信息流', searchInPosts: '在帖子中搜索…', retry: '重试', minLikes: '最少点赞', hideReposts: '隐藏转发', hideReplies: '隐藏回复', hideMediaLabel: '隐藏媒体', hasMedia: '含媒体', forYouHint: '请先建立存档，以启用基于互动对象的个性化排序。', forYou: '为你推荐', filterMasto: 'Masto', filterBsky: 'Bsky', buildArchive: '建立存档',
       title: '信息流', timeline: '时间线', switchFeed: '切换信息源', savedNotPinned: '已保存', searchFeeds: '搜索信息源…', noFeedsFound: '没有匹配的信息源。', feedSearchFailed: '信息源搜索暂时不可用。', pinFeed: '添加到我的信息源', unpinFeed: '从我的信息源移除', feeds: '信息源', discoverFeeds: '发现更多信息源 →', myPosts: '我的帖子', all: '全部',
       noAccounts: '未连接账户', addAccountsFirst: '请先在设置中添加账户。',
       loadingTimeline: '正在加载时间线...', loadingYourPosts: '正在加载您的帖子...',

@@ -548,7 +548,9 @@ export const translations = {
       noLicenses: 'No licenses.json found. Run node scripts/generate-licenses.js to generate.',
       generated: 'Generated',
     },
-    feed: { savedFeedsFailed: 'Could not load your saved feeds', pinFailed: 'Could not change your pinned feeds',
+    feed: {
+      offlineCached: 'Offline — showing cached data from {time}',
+      reconnected: 'Back online — refreshing', savedFeedsFailed: 'Could not load your saved feeds', pinFailed: 'Could not change your pinned feeds',
       filterBsky: 'Bsky',
       filterMasto: 'Masto',
       retry: 'Retry',

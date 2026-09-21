@@ -30,6 +30,7 @@
   import { pickAnchor, measureItems, restoreAnchor, type ScrollAnchor } from '$lib/feed-scroll';
   import { toTime, isNewerThan } from '$lib/post-time';
   import { cacheFeed, loadCachedFeed, formatCachedTime, isOffline } from '$lib/offline-cache';
+  import { watchConnection, cachedDataBanner } from '$lib/offline-status';
 
   // 'custom' delegates to a Bluesky feed generator or list; which ones are on
   // offer comes from the account's own pinned feeds, see $lib/bluesky-feeds.
@@ -71,6 +72,7 @@
   let loadingMore = $state(false);
   let mastodonFilters: MastodonFilter[] = $state([]);
   let offlineBanner = $state(''); // "Offline — cached from 5 min ago"
+  let stopWatchingConnection: (() => void) | undefined;
 
   let filters: Filters = $state({
     searchTerm: '',
@@ -259,9 +261,22 @@
       if (!document.hidden) checkForNewPosts();
     }, 60000);
     document.addEventListener('visibilitychange', onVisibilityChange);
+
+    // The banner used to stay up after the connection came back: the layout
+    // cleared its own offline flag and nothing cleared this one, so a
+    // reconnected user went on reading cached posts under an "Offline" sign.
+    stopWatchingConnection = watchConnection({
+      onOnline: () => {
+        if (!offlineBanner) return;
+        offlineBanner = i18n.t.feed.reconnected;
+        loadFeed();
+      },
+    });
   });
 
   onDestroy(() => {
+    stopWatchingConnection?.();
+    stopWatchingConnection = undefined;
     observer?.disconnect();
     if (pollInterval) clearInterval(pollInterval);
     pollInterval = undefined;
@@ -549,7 +564,7 @@
       const cached = await loadCachedFeed('feed');
       if (cached && cached.posts.length > 0) {
         posts = cached.posts;
-        offlineBanner = `Offline — showing cached feed from ${formatCachedTime(cached.cachedAt)}`;
+        offlineBanner = cachedDataBanner(true, cached.cachedAt, i18n.t.feed.offlineCached, formatCachedTime);
       }
     }
     newPostsAvailable = 0;
