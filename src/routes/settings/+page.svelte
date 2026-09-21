@@ -3,7 +3,7 @@
   import { toast } from '$lib/toast.svelte';
   import { removeKey, writeJson, writeString } from '$lib/safe-storage';
   import { fetchOk, fetchJson } from '$lib/http';
-  import { getCredentialBackend, setCredentialBackend, type CredentialBackendInfo } from '$lib/db';
+  import { getCredentialBackend, setCredentialBackend, setMacosKeychain, type CredentialBackendInfo } from '$lib/db';
   import { apiUrl } from '$lib/api-origin';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
@@ -140,11 +140,43 @@
 
   // Web Push
   let webPushSubscribed = $state(false);
-  let credentialBackend: CredentialBackendInfo = $state({ backend: 'local', osStoreAvailable: false });
+  let credentialBackend: CredentialBackendInfo = $state({ backend: 'local', osStoreAvailable: false, macosKeychainChoices: [] });
   let credentialBackendBusy = $state(false);
+  /** The path field, only meaningful when the path option is selected. */
+  let macosKeychainPath = $state('');
+
+  const macosChoices = $derived(credentialBackend.macosKeychainChoices ?? []);
+  /** 'login' | 'data-protection' | 'path' — which radio is on. */
+  const macosSelected = $derived.by(() => {
+    const current = credentialBackend.macosKeychain ?? 'login';
+    return current === 'login' || current === 'data-protection' ? current : 'path';
+  });
+
+  async function chooseMacosKeychain(choice: string) {
+    if (credentialBackendBusy) return;
+    // The path option needs a path before it means anything.
+    const value = choice === 'path' ? macosKeychainPath.trim() : choice;
+    if (!value) return;
+    credentialBackendBusy = true;
+    try {
+      await setMacosKeychain(value);
+      credentialBackend = { ...credentialBackend, macosKeychain: value };
+      toast.success(i18n.t.settings.macosKeychain);
+    } catch (e) {
+      swallow('settings.macosKeychain', e);
+      toast.error(i18n.t.settings.macosKeychain);
+    } finally {
+      credentialBackendBusy = false;
+    }
+  }
 
   async function loadCredentialBackend() {
     credentialBackend = await getCredentialBackend();
+    const current = credentialBackend.macosKeychain ?? '';
+    // Seed the field so an existing path is visible rather than blank.
+    if (current && current !== 'login' && current !== 'data-protection') {
+      macosKeychainPath = current;
+    }
   }
 
   async function chooseCredentialBackend(backend: 'keychain' | 'local') {
@@ -2175,6 +2207,73 @@
             </div>
           {:else}
             <p class="text-[10px] text-[var(--color-text-muted)] mt-2">{i18n.t.settings.credentialNoKeychain}</p>
+          {/if}
+
+          <!-- Which macOS keychain. Only macOS reports any choices, so every
+               other build renders nothing rather than an inert control. -->
+          {#if macosChoices.length > 0 && credentialBackend.backend === 'keychain'}
+            <fieldset class="mt-3 border-t border-[var(--color-border)] pt-3">
+              <legend class="text-xs text-[var(--color-text-muted)]">{i18n.t.settings.macosKeychain}</legend>
+
+              <label class="flex items-start gap-2 mt-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="macos-keychain"
+                  checked={macosSelected === 'login'}
+                  onchange={() => chooseMacosKeychain('login')}
+                  disabled={credentialBackendBusy}
+                  class="mt-0.5"
+                />
+                <span class="text-xs">{i18n.t.settings.macosKeychainLogin}</span>
+              </label>
+
+              {#if macosChoices.includes('data-protection')}
+                <label class="flex items-start gap-2 mt-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="macos-keychain"
+                    checked={macosSelected === 'data-protection'}
+                    onchange={() => chooseMacosKeychain('data-protection')}
+                    disabled={credentialBackendBusy}
+                    class="mt-0.5"
+                  />
+                  <span class="text-xs">
+                    {i18n.t.settings.macosKeychainDataProtection}
+                    <span class="block text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.macosKeychainSignedOnly}</span>
+                  </span>
+                </label>
+              {/if}
+
+              <label class="flex items-start gap-2 mt-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="macos-keychain"
+                  checked={macosSelected === 'path'}
+                  onchange={() => macosKeychainPath.trim() && chooseMacosKeychain('path')}
+                  disabled={credentialBackendBusy}
+                  class="mt-0.5"
+                />
+                <span class="text-xs">{i18n.t.settings.macosKeychainPath}</span>
+              </label>
+
+              <div class="flex gap-2 mt-2 ml-5">
+                <input
+                  type="text"
+                  bind:value={macosKeychainPath}
+                  placeholder="~/Library/Keychains/Work.keychain-db"
+                  aria-label={i18n.t.settings.macosKeychainPath}
+                  class="flex-1 px-2 py-1 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md"
+                />
+                <button
+                  onclick={() => chooseMacosKeychain('path')}
+                  disabled={credentialBackendBusy || !macosKeychainPath.trim()}
+                  class="px-3 py-1 text-xs bg-[var(--color-primary)] text-white rounded-md disabled:opacity-40"
+                >
+                  {i18n.t.settings.macosKeychainApply}
+                </button>
+              </div>
+              <p class="text-[10px] text-[var(--color-text-muted)] mt-1 ml-5">{i18n.t.settings.macosKeychainPathHint}</p>
+            </fieldset>
           {/if}
         </div>
       {/if}

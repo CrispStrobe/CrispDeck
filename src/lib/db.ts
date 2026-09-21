@@ -289,8 +289,18 @@ export async function completeMastodonOAuth(params: {
 export interface CredentialBackendInfo {
   /** 'keychain' = the OS secret store; 'local' = the encrypted blob in the DB. */
   backend: 'keychain' | 'local';
-  /** Whether this build has an OS store at all. False on macOS and the web. */
+  /** Whether this build has an OS store at all. False on the web. */
   osStoreAvailable: boolean;
+  /**
+   * macOS only: 'login', 'data-protection', or a path to a keychain the user
+   * manages. Empty elsewhere.
+   */
+  macosKeychain?: string;
+  /**
+   * Which macOS keychains this build can offer. Empty off macOS, which is how
+   * the settings screen knows to show nothing rather than an inert control.
+   */
+  macosKeychainChoices?: string[];
 }
 
 /**
@@ -301,8 +311,23 @@ export interface CredentialBackendInfo {
  * hides the control rather than showing one that cannot do anything.
  */
 export async function getCredentialBackend(): Promise<CredentialBackendInfo> {
-  if (!isTauri()) return { backend: 'local', osStoreAvailable: false };
+  if (!isTauri()) return { backend: 'local', osStoreAvailable: false, macosKeychainChoices: [] };
   return invoke('credential_backend_get');
+}
+
+/**
+ * Choose which macOS keychain new credentials go to.
+ *
+ * Takes 'login', 'data-protection', or a path to a keychain the user already
+ * manages — the case this exists for, where someone keeps app secrets out of
+ * their login keychain on purpose.
+ *
+ * Accounts already connected stay where they are. Each stored row records
+ * which backend wrote it, so they keep loading from wherever they went.
+ */
+export async function setMacosKeychain(keychain: string): Promise<void> {
+  if (!isTauri()) return;
+  return invoke('macos_keychain_set', { keychain });
 }
 
 /**

@@ -32,6 +32,10 @@ describe('in the browser build', () => {
     await expect(getCredentialBackend()).resolves.toEqual({
       backend: 'local',
       osStoreAvailable: false,
+      // An empty list is how a non-macOS build says there is no keychain
+      // choice to make; the settings screen renders nothing on the strength
+      // of it, so it is part of the contract rather than incidental.
+      macosKeychainChoices: [],
     });
   });
 
@@ -89,5 +93,62 @@ describe('in the desktop build', () => {
 
     const info = await getCredentialBackend();
     expect(info.osStoreAvailable).toBe(false);
+  });
+});
+
+describe('the macOS keychain choice', () => {
+  it('is empty in the browser build, so the settings screen shows nothing', async () => {
+    // macosKeychainChoices drives whether the control renders at all. An
+    // empty list is how a non-macOS build says "no choice to make here".
+    isTauri.mockReturnValue(false);
+    const { getCredentialBackend } = await subject();
+
+    const info = await getCredentialBackend();
+    expect(info.macosKeychainChoices).toEqual([]);
+  });
+
+  it('passes a reserved name straight through', async () => {
+    isTauri.mockReturnValue(true);
+    invoke.mockResolvedValue(undefined);
+    const { setMacosKeychain } = await subject();
+
+    await setMacosKeychain('data-protection');
+    expect(invoke.mock.calls[0][0]).toBe('macos_keychain_set');
+    expect(invoke.mock.calls[0][1]).toEqual({ keychain: 'data-protection' });
+  });
+
+  it('passes a path through unchanged', async () => {
+    // The case this exists for: someone keeping app secrets out of their
+    // login keychain on purpose. The path is the user's, not ours to rewrite.
+    isTauri.mockReturnValue(true);
+    invoke.mockResolvedValue(undefined);
+    const { setMacosKeychain } = await subject();
+
+    const path = '/Users/someone/Library/Keychains/Work.keychain-db';
+    await setMacosKeychain(path);
+    expect(invoke.mock.calls[0][1]).toEqual({ keychain: path });
+  });
+
+  it('does nothing in the browser build rather than throwing', async () => {
+    isTauri.mockReturnValue(false);
+    const { setMacosKeychain } = await subject();
+
+    await expect(setMacosKeychain('login')).resolves.toBeUndefined();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('reports which keychains a macOS build offers', async () => {
+    isTauri.mockReturnValue(true);
+    invoke.mockResolvedValue({
+      backend: 'keychain',
+      osStoreAvailable: true,
+      macosKeychain: 'login',
+      macosKeychainChoices: ['login', 'data-protection', 'path'],
+    });
+    const { getCredentialBackend } = await subject();
+
+    const info = await getCredentialBackend();
+    expect(info.macosKeychainChoices).toContain('path');
+    expect(info.macosKeychain).toBe('login');
   });
 });
