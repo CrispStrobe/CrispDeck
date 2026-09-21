@@ -680,15 +680,24 @@ The app is feature-rich (20 column types, 1,520+ tests, streaming, keyboard nav,
   `src/routes/{feed,notifications,trending}/+page.svelte`
 
 ### 174. Live user testing pass
-- **Status**: Not started
+- **Status**: Open — this is yours to run; the checklist is ready
 - **Effort**: Small (but high value)
 - **Priority**: Must-have
 - **Description**: Connect real accounts, use the deck for a full day, document friction.
-- [ ] Test all 20 column types with real data
-- [ ] Test floating compose with real reply/quote workflows
-- [ ] Test keyboard navigation end-to-end on deck
-- [ ] Test mobile PWA (install, offline, notifications)
-- [ ] Test multi-account scenarios (2 Bluesky + 1 Mastodon)
+- **Work through [TESTING.md](TESTING.md)**, which is generated from the source
+  by `scripts/testing-checklist.mjs` and pinned by
+  `src/lib/testing-checklist.test.ts`. It covers all 20 column types, all 31
+  routes, every shortcut the help dialog claims, and the flows that cross
+  pages. A hand-written checklist goes stale the way `deck.test.ts` did when it
+  asserted "all 14 column types" against an app that had grown to 20 — except
+  quietly, because nothing runs a checklist.
+- [ ] All 20 column types with real data
+- [ ] Floating compose with real reply/quote workflows
+- [ ] Keyboard navigation end-to-end on deck
+- [ ] Mobile PWA (install, offline, notifications)
+- [ ] Multi-account (2 Bluesky + 1 Mastodon)
+- [ ] Export the in-app log viewer at the end — a day of use should leave a
+      file, not impressions
 - [ ] Document: what's confusing, what's broken, what's unused
 - This is the highest-value activity — code is ahead of the product
 
