@@ -1,3 +1,4 @@
+import { safeError } from '../_lib/cors.js';
 /**
  * Vercel serverless function: Bluesky Feed Generator — getFeedSkeleton
  *
@@ -104,7 +105,7 @@ export async function GET(request: Request) {
       cursor: data.cursor,
     }), { status: 200, headers: corsHeaders });
   } catch (e) {
-    return new Response(JSON.stringify({ error: 'Feed generation failed', detail: String(e) }), { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: safeError('Feed generation', e) }), { status: 500, headers: corsHeaders });
   }
 }
 

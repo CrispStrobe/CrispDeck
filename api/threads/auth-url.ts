@@ -1,4 +1,4 @@
-import { corsFor, preflight } from '../_lib/cors.js';
+import { corsFor, preflight, isAllowedRedirect } from '../_lib/cors.js';
 /**
  * Vercel serverless function: Generate Threads OAuth authorization URL.
  *
@@ -28,6 +28,14 @@ export async function GET(request: Request) {
 
   if (!redirectUri || !state) {
     return new Response(JSON.stringify({ error: 'Missing redirect_uri or state' }), { status: 400, headers: corsFor(request, 'GET, OPTIONS') });
+  }
+
+  // This builds an authorization URL with *our* client_id. Without this check
+  // any caller could aim it at a callback of their own, and whether that
+  // worked depended entirely on Meta's registered-URI list — a control in
+  // someone else's console that this repo cannot see or test.
+  if (!isAllowedRedirect(redirectUri)) {
+    return new Response(JSON.stringify({ error: 'redirect_uri is not one of ours' }), { status: 400, headers: corsFor(request, 'GET, OPTIONS') });
   }
 
   const params = new URLSearchParams({

@@ -1,4 +1,4 @@
-import { corsFor, preflight } from '../_lib/cors.js';
+import { corsFor, preflight, safeError } from '../_lib/cors.js';
 /**
  * Vercel serverless function: Resolve Threads repost permalink to original post.
  *
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
       original_shortcode: match[2],
     }), { status: 200, headers: corsFor(request, 'GET, OPTIONS') });
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: corsFor(request, 'GET, OPTIONS') });
+    return new Response(JSON.stringify({ error: safeError('Resolving the repost', e) }), { status: 500, headers: corsFor(request, 'GET, OPTIONS') });
   }
 }
 

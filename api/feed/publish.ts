@@ -1,4 +1,4 @@
-import { corsFor, preflight } from '../_lib/cors.js';
+import { corsFor, preflight, safeError } from '../_lib/cors.js';
 /**
  * Vercel serverless function: Store a feed definition in Vercel Blob.
  *
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
 
     return new Response(JSON.stringify({ ok: true, url: blob.url }), { status: 200, headers: corsFor(request, 'POST, OPTIONS') });
   } catch (e) {
-    return new Response(JSON.stringify({ error: 'Failed to store feed definition', detail: String(e) }), { status: 500, headers: corsFor(request, 'POST, OPTIONS') });
+    return new Response(JSON.stringify({ error: safeError('Publishing the feed definition', e) }), { status: 500, headers: corsFor(request, 'POST, OPTIONS') });
   }
 }
 

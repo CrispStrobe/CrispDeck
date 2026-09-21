@@ -60,10 +60,69 @@ export function corsFor(request: Request, methods = 'POST, OPTIONS'): Record<str
     Vary: 'Origin',
   };
   const origin = request.headers.get('origin');
-  if (origin && (allowed().includes(origin.replace(/\/$/, '')) || LOCALHOST.test(origin))) {
+  if (origin && allowedOrigin(origin)) {
     headers['Access-Control-Allow-Origin'] = origin;
   }
   return headers;
+}
+
+/**
+ * May an OAuth redirect_uri point here?
+ *
+ * `auth-url` builds a Threads authorization URL with *our* client_id and
+ * whatever redirect_uri the caller supplies, and `token` spends a code against
+ * whatever redirect_uri it is given. Nothing checked either. That left the
+ * question of whether a stranger could aim our app at their own callback
+ * entirely to Meta's registered-URI list — a control in someone else's
+ * console, which this repo cannot see, test, or notice changing.
+ *
+ * The origin has to be one we would talk to anyway, so the same allowlist
+ * answers both questions.
+ */
+export function isAllowedRedirect(redirectUri: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(redirectUri);
+  } catch {
+    return false;
+  }
+  // The allowlist is the whole test, with no scheme rule layered on top. An
+  // earlier version here required https, which would have rejected
+  // `tauri://localhost` — the origin the desktop webview presents, and one the
+  // allowlist already trusts. A rule that duplicates the allowlist only gets a
+  // chance to disagree with it.
+  //
+  // `tauri://localhost` has no origin as far as the URL spec is concerned —
+  // only "special" schemes (http, https, ws, ftp, file) get one, and
+  // everything else parses to the string "null". The allowlist stores it the
+  // way a browser sends it in an Origin header, so rebuild that shape from
+  // the protocol and host when the parser declines to.
+  //
+  // javascript: and data: come through here as "javascript://" and "data://",
+  // which are in no allowlist and so are refused by the same check.
+  const originish =
+    parsed.origin !== 'null' ? parsed.origin : `${parsed.protocol}//${parsed.host}`;
+  return allowedOrigin(originish);
+}
+
+/** Is this exact origin one we deal with? Shared by CORS and the redirect check. */
+function allowedOrigin(origin: string): boolean {
+  const normalised = origin.replace(/\/$/, '');
+  return allowed().includes(normalised) || LOCALHOST.test(normalised);
+}
+
+/**
+ * What to tell a client when something threw.
+ *
+ * Five endpoints answered with `String(e)`. An exception's text is written for
+ * whoever is reading the logs, not for the caller: it carries whatever the
+ * runtime felt like including, and the Threads long-lived-token exchange puts
+ * the client secret in a query string, so the URL appearing in an error is a
+ * secret appearing in a response body. The detail belongs in the log.
+ */
+export function safeError(context: string, e: unknown): string {
+  console.error(`[${context}]`, e);
+  return `${context} failed. If this persists, check the server logs.`;
 }
 
 /** Answer a CORS preflight. */

@@ -1,4 +1,4 @@
-import { corsFor, preflight } from '../_lib/cors.js';
+import { corsFor, preflight, safeError } from '../_lib/cors.js';
 /**
  * Vercel serverless function: Remove a feed definition from Vercel Blob.
  *
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
 
     return new Response(JSON.stringify({ ok: true }), { status: 200, headers: corsFor(request, 'POST, OPTIONS') });
   } catch (e) {
-    return new Response(JSON.stringify({ error: 'Failed to delete feed definition', detail: String(e) }), { status: 500, headers: corsFor(request, 'POST, OPTIONS') });
+    return new Response(JSON.stringify({ error: safeError('Deleting the feed definition', e) }), { status: 500, headers: corsFor(request, 'POST, OPTIONS') });
   }
 }
 
