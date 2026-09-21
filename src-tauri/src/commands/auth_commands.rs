@@ -24,10 +24,16 @@ pub async fn auth_complete_mastodon_oauth(
 
 /// Wait for the OAuth callback on the localhost redirect server.
 /// This should be called after opening the auth URL in the browser.
+///
+/// `state` is the value `auth_start_mastodon_oauth` returned. A callback that
+/// does not carry it is refused: the port is on loopback, but anything running
+/// as this user can reach loopback.
 #[tauri::command]
-pub async fn auth_wait_for_callback(redirect_uri: String) -> Result<String, String> {
+pub async fn auth_wait_for_callback(redirect_uri: String, state: String) -> Result<String, String> {
     // Run the blocking listener in a spawned blocking task
-    tokio::task::spawn_blocking(move || mastodon_oauth::wait_for_oauth_callback(&redirect_uri))
+    tokio::task::spawn_blocking(move || {
+        mastodon_oauth::wait_for_oauth_callback(&redirect_uri, &state)
+    })
         .await
         .map_err(|e| e.to_string())?
         .map_err(|e| e.to_string())

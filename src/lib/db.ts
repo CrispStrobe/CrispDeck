@@ -269,6 +269,8 @@ export async function startMastodonOAuth(instanceUrl: string): Promise<{
   client_id: string;
   client_secret: string;
   redirect_uri: string;
+  /** Echoed back by the instance; the callback page refuses anything else. */
+  state: string;
 }> {
   if (!isTauri()) return browserDb.startMastodonOAuth(instanceUrl);
   return invoke('auth_start_mastodon_oauth', { instance_url: instanceUrl });

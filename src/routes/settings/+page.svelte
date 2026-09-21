@@ -457,6 +457,7 @@
     client_id: string;
     client_secret: string;
     redirect_uri: string;
+    state: string;
   } | null = $state(null);
 
   onMount(loadAccounts);
@@ -565,6 +566,7 @@
         client_id: mastoOAuthState!.client_id,
         client_secret: mastoOAuthState!.client_secret,
         redirect_uri: mastoOAuthState!.redirect_uri,
+        state: mastoOAuthState!.state,
       })) {
         throw new Error('Could not store the sign-in state — browser storage is unavailable');
       }

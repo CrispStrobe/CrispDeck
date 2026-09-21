@@ -533,8 +533,14 @@ export async function startMastodonOAuth(instanceUrl: string): Promise<{
   client_id: string;
   client_secret: string;
   redirect_uri: string;
+  state: string;
 }> {
   const instance = instanceUrl.replace(/\/$/, '');
+  // Without a state the callback page takes whatever code lands on it, so
+  // anyone who can get the browser to open /oauth/callback?code=... attaches
+  // this client to an account they control. The instance echoes this back and
+  // the callback page refuses anything else.
+  const state = randomState();
   // The instance stores this at registration, so getting it wrong bakes a
   // dead callback into the registered app rather than failing loudly.
   const redirectUri = `${window.location.origin}${base}/oauth/callback`;
@@ -552,14 +558,22 @@ export async function startMastodonOAuth(instanceUrl: string): Promise<{
 
   const app = await resp.json();
   if (!app.client_id) throw new Error('Instance registered no client_id');
-  const authUrl = `${instance}/oauth/authorize?client_id=${app.client_id}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent('read write:statuses write:media write:favourites write:bookmarks')}`;
+  const authUrl = `${instance}/oauth/authorize?client_id=${app.client_id}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent('read write:statuses write:media write:favourites write:bookmarks')}&state=${encodeURIComponent(state)}`;
 
   return {
     auth_url: authUrl,
     client_id: app.client_id,
     client_secret: app.client_secret,
     redirect_uri: redirectUri,
+    state,
   };
+}
+
+/** 32 random bytes as hex. Matches what the desktop build generates. */
+export function randomState(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 export async function completeMastodonOAuth(params: {
