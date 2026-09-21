@@ -107,16 +107,50 @@ fn preferred_backend(conn: &rusqlite::Connection) -> secret_store::Backend {
 }
 
 const CREDENTIAL_BACKEND_KEY: &str = "credential_backend";
+/// Which macOS keychain: "login", "data-protection", or a path to one the
+/// user manages. Ignored on other platforms.
+const MAC_KEYCHAIN_KEY: &str = "macos_keychain";
 
-/// What the settings screen needs: which backend is in use, and whether this
-/// build has an OS store to offer at all.
+/// What the settings screen needs: which backend is in use, whether this build
+/// has an OS store to offer at all, and on macOS which keychain.
 #[tauri::command]
 pub fn credential_backend_get(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     Ok(serde_json::json!({
         "backend": preferred_backend(&conn).as_str(),
         "osStoreAvailable": secret_store::os_store_compiled_in(),
+        "macosKeychain": crate::db::get_setting(&conn, MAC_KEYCHAIN_KEY, "login"),
+        // The data protection keychain needs a keychain-access-groups
+        // entitlement, so an unsigned build cannot use it. CI proved that:
+        // "A required entitlement isn't present." Offering it there would be
+        // offering a switch that silently falls back to the weaker store.
+        "macosKeychainChoices": mac_keychain_choices(),
     }))
+}
+
+/// Which macOS keychains this build can actually use.
+fn mac_keychain_choices() -> Vec<&'static str> {
+    if cfg!(target_os = "macos") {
+        // data-protection is listed; whether it works depends on signing, and
+        // store() reports the backend it really used so the UI can say so.
+        vec!["login", "data-protection", "path"]
+    } else {
+        vec![]
+    }
+}
+
+/// Choose which macOS keychain new credentials go to.
+///
+/// Accepts "login", "data-protection", or a path. Existing accounts stay
+/// where they are — load() dispatches on what wrote each row.
+#[tauri::command]
+pub fn macos_keychain_set(state: State<'_, AppState>, keychain: String) -> Result<(), String> {
+    {
+        let conn = state.db.lock().map_err(|e| e.to_string())?;
+        crate::db::set_setting(&conn, MAC_KEYCHAIN_KEY, &keychain).map_err(|e| e.to_string())?;
+    }
+    secret_store::set_mac_keychain_choice(&keychain);
+    Ok(())
 }
 
 /// Choose where new credentials are written.

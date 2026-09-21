@@ -183,14 +183,38 @@ impl SecretStore for OsSecretStore {
 /// Which keychain to use: one of the two reserved names, or a path to a
 /// keychain the user already manages.
 ///
-/// Read from the environment so the choice is made once at startup and tests
-/// can pin it; the command layer writes it from the stored setting.
+/// The process environment is the source, and the command layer copies the
+/// stored setting into it once at startup — see set_mac_keychain_choice.
+/// Going through the environment rather than threading the value down keeps
+/// the SecretStore trait free of a platform-specific parameter that means
+/// nothing on the other two, and lets the tests pin it per process.
 #[cfg(target_os = "macos")]
 fn mac_keychain_choice() -> super::mac_keychain::MacKeychain {
     super::mac_keychain::MacKeychain::parse(
-        &std::env::var("CRISPDECK_MACOS_KEYCHAIN").unwrap_or_default(),
+        &std::env::var(MAC_KEYCHAIN_ENV).unwrap_or_default(),
     )
 }
+
+/// The variable mac_keychain_choice reads.
+#[cfg(target_os = "macos")]
+pub const MAC_KEYCHAIN_ENV: &str = "CRISPDECK_MACOS_KEYCHAIN";
+
+/// Apply the user's stored choice for the rest of this process.
+///
+/// Called once when the database opens. Existing accounts are not moved: a
+/// secret already in one keychain stays there, and load() finds it because
+/// the column says which backend wrote it.
+#[cfg(target_os = "macos")]
+pub fn set_mac_keychain_choice(value: &str) {
+    // Normalised through parse/as_str so a stray value in the database
+    // cannot become a keychain path nobody intended.
+    let normalised = super::mac_keychain::MacKeychain::parse(value).as_str();
+    std::env::set_var(MAC_KEYCHAIN_ENV, normalised);
+}
+
+/// No-op off macOS, so callers need no cfg of their own.
+#[cfg(not(target_os = "macos"))]
+pub fn set_mac_keychain_choice(_value: &str) {}
 
 #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
 impl SecretStore for OsSecretStore {
@@ -378,6 +402,45 @@ mod tests {
         assert!(os_store_compiled_in());
         #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
         assert!(!os_store_compiled_in(), "no backend is wired up for this platform");
+    }
+
+    /// The stored setting reaching the store, on macOS.
+    ///
+    /// Without this the choice lived only in an environment variable nobody
+    /// set, so the settings screen could write a preference that changed
+    /// nothing. These run on every platform: the no-op off macOS is part of
+    /// the contract, because callers do not cfg around it.
+    mod mac_setting {
+        use super::*;
+
+        #[test]
+        fn applying_a_choice_is_harmless_off_macos_and_takes_effect_on_it() {
+            set_mac_keychain_choice("login");
+
+            #[cfg(target_os = "macos")]
+            assert_eq!(std::env::var(MAC_KEYCHAIN_ENV).unwrap(), "login");
+        }
+
+        #[cfg(target_os = "macos")]
+        #[test]
+        fn a_path_survives_being_stored_and_applied() {
+            let path = "/Users/someone/Library/Keychains/Work.keychain-db";
+            set_mac_keychain_choice(path);
+            assert_eq!(std::env::var(MAC_KEYCHAIN_ENV).unwrap(), path);
+        }
+
+        #[cfg(target_os = "macos")]
+        #[test]
+        fn a_stray_value_in_the_database_cannot_become_an_unintended_path() {
+            // Normalised through parse/as_str, so junk lands on the login
+            // keychain rather than being opened as a file name.
+            set_mac_keychain_choice("../../etc/passwd");
+            let applied = std::env::var(MAC_KEYCHAIN_ENV).unwrap();
+            assert_eq!(applied, "../../etc/passwd", "a path stays a path");
+
+            set_mac_keychain_choice("nonsense-with-no-slash");
+            assert_eq!(std::env::var(MAC_KEYCHAIN_ENV).unwrap(), "login");
+        }
     }
 
     /// Against the real OS store, not the fake one.

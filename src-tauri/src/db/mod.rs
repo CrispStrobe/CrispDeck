@@ -44,6 +44,11 @@ pub fn open_and_migrate(db_path: &Path) -> Result<Connection> {
 
     apply_migrations(&conn)?;
 
+    // Apply the stored macOS keychain choice for the rest of this process, so
+    // the first credential written goes where the user asked rather than to
+    // the default. A no-op on the other platforms.
+    crate::auth::secret_store::set_mac_keychain_choice(&get_setting(&conn, "macos_keychain", "login"));
+
     Ok(conn)
 }
 
