@@ -211,7 +211,7 @@
               {#each savedSearches as s}
                 <div class="flex items-center justify-between px-3 py-1.5 hover:bg-[var(--color-surface-hover)]">
                   <button onclick={() => handleLoadSavedSearch(s.query)} class="flex-1 text-left text-xs truncate">{s.query}</button>
-                  <button onclick={() => handleDeleteSavedSearch(s.id)} class="ml-2 text-[var(--color-text-muted)] hover:text-[var(--color-danger)]">
+                  <button onclick={() => handleDeleteSavedSearch(s.id)} class="ml-2 text-[var(--color-text-muted)] hover:text-[var(--color-danger)]" aria-label={i18n.t.common.close}>
                     <X size={10} />
                   </button>
                 </div>

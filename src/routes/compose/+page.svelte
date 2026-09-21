@@ -704,7 +704,7 @@ function parseTargetAccounts(value: unknown): number[] {
               placeholder={i18n.t.compose.cwPlaceholder}
               class="flex-1 px-3 py-2 bg-[var(--color-bg)] border border-yellow-600 rounded-md text-sm text-[var(--color-text)] focus:outline-none"
             />
-            <button onclick={() => { showCW = false; contentWarning = ''; }} class="p-2 text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+            <button onclick={() => { showCW = false; contentWarning = ''; }} class="p-2 text-[var(--color-text-muted)] hover:text-[var(--color-text)]" aria-label={i18n.t.common.close}>
               <X size={14} />
             </button>
           </div>
@@ -786,7 +786,7 @@ function parseTargetAccounts(value: unknown): number[] {
                   <button
                     onclick={() => removeMedia(i)}
                     class="absolute top-1 right-1 p-1 bg-black/70 rounded-full text-white hover:bg-black"
-                  >
+                   aria-label={i18n.t.common.close}>
                     <X size={12} />
                   </button>
                 </div>
@@ -906,7 +906,7 @@ function parseTargetAccounts(value: unknown): number[] {
                         >
                           {tpl.name}
                         </button>
-                        <button onclick={() => { deleteTemplate(tpl.id); templates = listTemplates(); }} class="text-[var(--color-text-muted)] hover:text-[var(--color-danger)] ml-1">
+                        <button onclick={() => { deleteTemplate(tpl.id); templates = listTemplates(); }} class="text-[var(--color-text-muted)] hover:text-[var(--color-danger)] ml-1" aria-label={i18n.t.common.close}>
                           <X size={10} />
                         </button>
                       </div>
@@ -1046,7 +1046,7 @@ function parseTargetAccounts(value: unknown): number[] {
               <span class="text-xs font-medium text-[var(--color-mastodon)] flex items-center gap-1">
                 <BarChart3 size={12} /> Poll (Mastodon)
               </span>
-              <button onclick={() => showPoll = false} class="text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+              <button onclick={() => showPoll = false} class="text-[var(--color-text-muted)] hover:text-[var(--color-text)]" aria-label={i18n.t.common.close}>
                 <X size={12} />
               </button>
             </div>

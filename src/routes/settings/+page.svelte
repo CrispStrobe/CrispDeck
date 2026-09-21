@@ -1323,7 +1323,7 @@
           {#each mutedWords as word}
             <div class="flex items-center justify-between p-2 bg-[var(--color-bg)] rounded-md {!word.enabled ? 'opacity-50' : ''}">
               <div class="flex items-center gap-2 min-w-0">
-                <button onclick={() => { mutedWords = toggleMutedWord(word.id); }} class="text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+                <button onclick={() => { mutedWords = toggleMutedWord(word.id); }} class="text-[var(--color-text-muted)] hover:text-[var(--color-text)]" aria-label={i18n.t.common.toggleActive}>
                   <EyeOff size={12} />
                 </button>
                 <span class="text-sm truncate">{word.value}</span>
@@ -1334,7 +1334,7 @@
               <button
                 onclick={() => { mutedWords = removeMutedWord(word.id); }}
                 class="text-[var(--color-text-muted)] hover:text-[var(--color-danger)] p-1 flex-shrink-0"
-              >
+               aria-label={i18n.t.common.remove}>
                 <Trash2 size={12} />
               </button>
             </div>
@@ -1363,7 +1363,7 @@
           }}
           disabled={!newMutedWord.trim()}
           class="px-3 py-1.5 text-xs bg-[var(--color-primary)] text-white rounded-md disabled:opacity-30"
-        >
+         aria-label={i18n.t.common.add}>
           <Plus size={12} />
         </button>
       </div>
@@ -1416,7 +1416,7 @@
               <button
                 onclick={() => deleteServerFilter(filter.id)}
                 class="text-[var(--color-text-muted)] hover:text-[var(--color-danger)] p-1 flex-shrink-0"
-              >
+               aria-label={i18n.t.common.remove}>
                 <Trash2 size={12} />
               </button>
             </div>
@@ -1525,7 +1525,7 @@
               <button
                 onclick={() => { deleteTagGroup(group.id); tagGroups = listTagGroups(); }}
                 class="text-[var(--color-text-muted)] hover:text-[var(--color-danger)] p-1"
-              >
+               aria-label={i18n.t.common.remove}>
                 <Trash2 size={12} />
               </button>
             </div>
@@ -1557,7 +1557,7 @@
           }}
           disabled={!newGroupName.trim() || !newGroupTags.trim()}
           class="px-3 py-1.5 text-xs bg-[var(--color-primary)] text-white rounded-md disabled:opacity-30"
-        >
+         aria-label={i18n.t.common.add}>
           <Plus size={12} />
         </button>
       </div>
@@ -1581,7 +1581,7 @@
               <button
                 onclick={() => { removeFeed(feed.id); rssFeeds = listFeeds(); }}
                 class="text-[var(--color-text-muted)] hover:text-[var(--color-danger)] p-1 flex-shrink-0"
-              >
+               aria-label={i18n.t.common.remove}>
                 <Trash2 size={12} />
               </button>
             </div>
@@ -1604,7 +1604,7 @@
           }}
           disabled={!newFeedUrl.trim()}
           class="px-3 py-1.5 text-xs bg-[var(--color-primary)] text-white rounded-md disabled:opacity-30"
-        >
+         aria-label={i18n.t.common.add}>
           <Plus size={12} />
         </button>
       </div>
@@ -2035,7 +2035,7 @@
               <button
                 onclick={() => { deleteHashtagSet(set.id); hashtagSets = listHashtagSets(); }}
                 class="text-[var(--color-text-muted)] hover:text-[var(--color-danger)] p-1"
-              >
+               aria-label={i18n.t.common.remove}>
                 <Trash2 size={12} />
               </button>
             </div>
@@ -2072,7 +2072,7 @@
           }}
           disabled={!newHashtagSetName.trim() || !newHashtagSetTags.trim()}
           class="px-3 py-1.5 text-xs bg-[var(--color-primary)] text-white rounded-md disabled:opacity-30"
-        >
+         aria-label={i18n.t.common.add}>
           <Plus size={12} />
         </button>
       </div>
@@ -2101,7 +2101,7 @@
               <button
                 onclick={() => { removeKeywordSet(set.id); keywordSets = listKeywordSets(); }}
                 class="text-[var(--color-text-muted)] hover:text-[var(--color-danger)] p-1 flex-shrink-0"
-              >
+               aria-label={i18n.t.common.remove}>
                 <Trash2 size={12} />
               </button>
             </div>

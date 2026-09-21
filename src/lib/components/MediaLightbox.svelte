@@ -110,7 +110,7 @@
       <button
         onclick={(e) => { e.stopPropagation(); prev(); }}
         class="absolute left-4 z-10 p-2 text-white/70 hover:text-white bg-black/40 rounded-full transition-colors"
-      >
+       aria-label={i18n.t.common.previousImage}>
         <ChevronLeft size={24} />
       </button>
     {/if}
@@ -120,7 +120,7 @@
       <button
         onclick={(e) => { e.stopPropagation(); next(); }}
         class="absolute right-4 z-10 p-2 text-white/70 hover:text-white bg-black/40 rounded-full transition-colors"
-      >
+       aria-label={i18n.t.common.nextImage}>
         <ChevronRight size={24} />
       </button>
     {/if}

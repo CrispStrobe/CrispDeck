@@ -114,7 +114,7 @@
               <button
                 onclick={(e) => { e.stopPropagation(); handleDelete(list.id); }}
                 class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-danger)]"
-              >
+               aria-label={i18n.t.common.remove}>
                 <Trash2 size={12} />
               </button>
             </div>
@@ -150,7 +150,7 @@
                     <button
                       onclick={() => handleRemovePost(selectedList!.id, post.uri)}
                       class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] flex-shrink-0"
-                    >
+                     aria-label={i18n.t.common.close}>
                       <X size={12} />
                     </button>
                   </div>
