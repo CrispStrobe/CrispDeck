@@ -4,7 +4,9 @@
   import { toast } from '$lib/toast.svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { base } from '$app/paths';
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import { watchConnection, cachedDataBanner } from '$lib/offline-status';
+  import { formatCachedTime, isOffline } from '$lib/offline-cache';
   import { initAllClients, getBskyClient, getMastoClient, type ClientEntry } from '$lib/api/client-factory';
   import { TrendingUp, Loader2, Hash, Link2, Rss } from '@lucide/svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
@@ -34,6 +36,8 @@
   let hasMasto = $state(false);
 
   let clientEntries: Map<number, ClientEntry> = new Map();
+  let offlineBanner = $state('');
+  let stopWatchingConnection: (() => void) | undefined;
 
   const filteredTags = $derived(filterLatin ? tags.filter(t => isLatinScript(t.name)) : tags);
   const filteredLinks = $derived(filterLatin ? links.filter(l => isLatinScript(l.title || l.url)) : links);
@@ -78,12 +82,47 @@
 
       if (!hasBsky && hasMasto) activeTab = 'tags';
       else activeTab = 'combined';
+      offlineBanner = '';
     } catch (e) {
-      error = String(e);
+      // Trending already showed the cache above. Going quiet about that is
+      // how a ten-minute-old "what's happening now" passes for live.
+      offlineBanner = cachedDataBanner(
+        isOffline(), cached?.cachedAt ?? null, i18n.t.feed.offlineCached, formatCachedTime
+      );
+      if (!offlineBanner) error = String(e);
     } finally {
       loading = false;
     }
+
+    stopWatchingConnection = watchConnection({
+      onOnline: () => {
+        if (!offlineBanner) return;
+        offlineBanner = i18n.t.feed.reconnected;
+        refresh();
+      },
+    });
   });
+
+  onDestroy(() => {
+    stopWatchingConnection?.();
+    stopWatchingConnection = undefined;
+  });
+
+  /** Re-run the load that onMount does, for the Retry link and reconnection. */
+  async function refresh() {
+    try {
+      const bskyClient = getBskyClient(clientEntries);
+      const mastoClient = getMastoClient(clientEntries);
+      await Promise.all([
+        bskyClient ? loadBskyTrending(bskyClient).then(() => { hasBsky = true; }) : Promise.resolve(),
+        mastoClient ? loadMastoTrending(mastoClient).then(() => { hasMasto = true; }) : Promise.resolve(),
+      ]);
+      setCache('trending', { bskyTopics, tags, links, trendingPosts });
+      offlineBanner = '';
+    } catch (e) {
+      swallow('trending.refresh', e);
+    }
+  }
 
   async function loadBskyTrending(client: BlueskyClient) {
     try {
@@ -172,6 +211,13 @@
 
   {#if error}
     <div class="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">{error}</div>
+  {/if}
+
+  {#if offlineBanner}
+    <div class="mb-4 p-3 bg-yellow-900/50 border border-yellow-700 rounded-lg text-yellow-200 text-sm flex items-center justify-between">
+      <span>{offlineBanner}</span>
+      <button onclick={() => { offlineBanner = ''; refresh(); }} class="underline ml-2">{i18n.t.feed.retry}</button>
+    </div>
   {/if}
 
   <!-- Tabs -->

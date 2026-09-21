@@ -11,6 +11,18 @@ material that is still true.
 
 ## Remaining Work — the items that are no longer remaining
 
+### 173. Bundle analysis + Lighthouse audit
+- **Status**: Done (2026-09-20, PRs #6, #10, #17, #18)
+- **Effort**: Small
+- **Priority**: Should-have
+- **Description**: Run bundle analysis and Lighthouse on production. Let the numbers tell us where to spend time instead of guessing.
+- [x] Bundle analysis in CI: `bench/bundle-size.mjs` reports entry weight, per-route cost and bytes by package; `bench/check-budget.mjs` gates it
+- [x] Lighthouse in CI across five routes, reporting FCP, LCP, TBT, CLS in the job summary
+- [x] Opportunities acted on: html2canvas already dynamically imported, @atproto deferred per route, i18n split per language
+- [x] Targets set from measurement rather than aspiration — see `bench/lighthouse-budget.json` for why performance gets a floor and the other three get thresholds
+- **Outcome**: /about 93 → 100 and /calendar 96 → 100 once the contrast tokens were split; floors raised to 0.98 on four of five routes.
+- **Not done**: mobile Lighthouse, and the deck and feed with real posts — the latter needs an authenticated run.
+
 ### 185. Credentials in the OS secret store
 - **Status**: Done (2026-09-20/21, PRs #21, #22, #25, #26, #27)
 - **Effort**: Large
