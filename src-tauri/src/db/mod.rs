@@ -11,6 +11,7 @@ use std::path::Path;
 const MIGRATION_001: &str = include_str!("../../migrations/001_initial.sql");
 const MIGRATION_002: &str = include_str!("../../migrations/002_threads_platform.sql");
 const MIGRATION_003: &str = include_str!("../../migrations/003_app_settings.sql");
+const MIGRATION_004: &str = include_str!("../../migrations/004_threads_identity_links.sql");
 
 pub fn open_and_migrate(db_path: &Path) -> Result<Connection> {
     let conn = Connection::open(db_path)?;
@@ -61,6 +62,7 @@ pub fn apply_migrations(conn: &Connection) -> Result<()> {
     for (id, name, sql) in [
         (2i64, "002_threads_platform", MIGRATION_002),
         (3i64, "003_app_settings", MIGRATION_003),
+        (4i64, "004_threads_identity_links", MIGRATION_004),
     ] {
         let done: bool = conn.query_row(
             "SELECT EXISTS(SELECT 1 FROM _migrations WHERE id = ?1)",
