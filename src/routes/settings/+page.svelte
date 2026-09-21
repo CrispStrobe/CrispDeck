@@ -164,7 +164,11 @@
       toast.success(i18n.t.settings.macosKeychain);
     } catch (e) {
       swallow('settings.macosKeychain', e);
-      toast.error(i18n.t.settings.macosKeychain);
+      // The backend now says *why* — "there is no keychain at /foo, create it
+      // with security create-keychain". Showing only the label would throw
+      // away the one part the user can act on.
+      const reason = String((e as Error)?.message ?? e).replace(/^Error:\s*/, '');
+      toast.error(reason ? `${i18n.t.settings.macosKeychain}: ${reason}` : i18n.t.settings.macosKeychain);
     } finally {
       credentialBackendBusy = false;
     }

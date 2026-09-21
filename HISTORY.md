@@ -11,6 +11,113 @@ material that is still true.
 
 ## Remaining Work — the items that are no longer remaining
 
+### 185. Credentials in the OS secret store
+- **Status**: Done (2026-09-20/21, PRs #21, #22, #25, #26, #27)
+- **Effort**: Large
+- **Priority**: Must-have
+- **Description**: The desktop build encrypted credentials under a passphrase of
+  `CrispDeck-v1-{hostname}` — sound cryptography, a key that is not a secret.
+- [x] Linux Secret Service and Windows Credential Manager via `keyring`
+- [x] macOS via `security-framework`, because `keyring` can only use the login
+      keychain: the modern data protection keychain, the login keychain, or a
+      keychain file the user already manages
+- [x] Settings control for the backend and, on macOS, which keychain
+- [x] A `Secret store` workflow that runs against the real stores on all three
+      platforms, with macOS covering each keychain it offers
+- **The design changed mid-flight, and the reason matters.** The first version
+  created a keychain of its own and kept its password in the login keychain. A
+  user pointed out they had once forgotten their login keychain password and it
+  had mattered little, because other keychains held what their apps needed —
+  which is exactly the dependency that design rebuilt. It now holds no keychain
+  password at all and creates no keychains: `security create-keychain` does that
+  better, and a keychain an app creates is one whose password has to live
+  somewhere.
+- **What CI settled**: the data protection keychain needs a signed build ("A
+  required entitlement isn't present"), and the fallback behaved correctly —
+  `store()` returned Local rather than claiming the keychain.
+- **Still unverified**: nobody has driven the macOS settings UI on a real Mac.
+  The Rust is tested against real keychains and the accessors against a mocked
+  invoke, but the path from clicking a radio button to a credential landing in
+  a chosen keychain has only been tested in pieces.
+
+### 186. Identity detection: tests, and the bio match it depends on
+- **Status**: Done (2026-09-21, PR #28)
+- **Effort**: Small
+- **Priority**: Should-have
+- **Description**: `detect_commands.rs` decides whether the app tells someone two
+  accounts are the same person, and had no tests.
+- [x] Scoring extracted into `score_pair` so it can be tested at all
+- [x] 19 tests covering the ceiling, false positives and the helpers
+- [x] Fixed `bio_mentions_handle`, which stripped `@` from the handle and not
+      from the bio, so `@alice@mastodon.social` never matched a bio that wrote
+      the handle the ordinary way
+- **The arithmetic worth knowing**: display name is weighted 0.5 and username
+  0.3 against a threshold of 0.85, so those two cannot qualify a pair on their
+  own — a bio cross-reference is required in practice. That is deliberate and
+  now documented: "alex" and "alex" both displaying "Alex" score 0.80 and are
+  probably different people.
+
+### 187. Rust coverage: the four modules that had none (2026-09-21, PRs #31–#33)
+
+`db/follows.rs`, `db/crossposts.rs`, `auth/mastodon_oauth.rs` and
+`commands/db_commands.rs` were the last Rust modules without tests. Writing
+them turned up seven defects, which is roughly the point.
+
+**The cache was not a transaction** (`cache_follows`). DELETE then INSERT as
+separate statements, so a row SQLite refused left the cache holding part of a
+refresh that had failed, with the previous contents already gone. Identity
+detection reads that table, so the symptom is suggestions quietly drying up.
+
+**The crosspost history listed a burst backwards.** `posted_at` defaults to
+`datetime('now')` — second resolution — so crossposts sent in the same second
+share a timestamp, and SQLite broke the tie oldest-first. Ordering by id as
+well makes the order total, which also makes LIMIT/OFFSET paging safe.
+
+**Five list functions dropped unreadable rows in silence** via
+`filter_map(|r| r.ok())`. For `accounts.rs` that is an account missing from
+the UI with no error anywhere.
+
+**Mastodon OAuth had no CSRF state on either path.** The callback page
+exchanged whatever `code` arrived, and the desktop listener accepted whatever
+reached its loopback port — loopback is not private. Anyone able to get the
+browser to open `/oauth/callback?code=…`, or any process running as the same
+user, got CrispDeck to spend a code of their choosing and attach the client to
+an account they controlled. Both paths mint 32 random bytes per attempt now.
+An attempt stored by an older build has no state to compare, so it is refused
+rather than waved through.
+
+Three more from the same module: `accept()` had no timeout despite a comment
+claiming the OS provided one, so an abandoned authorization blocked forever;
+instance replies were parsed straight into the success struct, turning a 403
+from a closed instance into "missing field `client_id`"; and Cancel reported
+"no code in OAuth callback" rather than `access_denied`.
+
+**Re-adding a connected account wiped its secret.** The keychain key is derived
+from platform and handle rather than the row id — deliberately, so it survives
+a re-add — which means a second account on the same handle overwrote the first
+one's secret before `UNIQUE(platform, handle)` refused the insert.
+
+**Worth recording because the test caught me making it worse.** The first fix
+for the orphaned-secret problem was to clean up after a failed insert. That
+deleted the shared key outright, so the connected account could no longer read
+its credentials at all — a live account broken by the fix. The test reported 0
+entries where 1 was expected. Refusing the duplicate before anything is
+written avoids both, and says "@me@x.social is already connected" instead of a
+constraint message.
+
+`macos_keychain_set` also took any string: a mistyped path was stored happily
+and surfaced later as a keychain error during an account save, with nothing to
+connect it to the setting that caused it.
+
+`db_commands.rs` had no tests because its commands take `State<AppState>`. The
+logic is split into plain functions over a `Connection` and a `&dyn
+SecretStore`; the commands are one line each.
+
+Rust suite: 82 → 126. Plus 11 TypeScript tests on `verifyCallback`, extracted
+from the Svelte component so the check is testable without a browser — nine of
+the eleven fail against the old take-whatever-arrives behaviour.
+
+
 ### 30. Visual Bluesky feed builder + network publishing
 - **Status**: Done (client-side preview + deck integration + network publishing)
 - **Effort**: Medium

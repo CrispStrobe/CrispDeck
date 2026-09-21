@@ -18,7 +18,7 @@ A unified Mastodon + Bluesky + Threads social media client with:
 
 ## Current State (2026-09-21)
 
-v1.2.8 — ~1,942 unit tests across 147 files (plus 62 live-API tests that run nightly rather than on every PR), 69 Rust tests, and 39 Playwright E2E specs including a smoke test of every route.
+v1.2.8 — ~1,953 unit tests across 148 files (plus 62 live-API tests that run nightly rather than on every PR), 126 Rust tests, and 39 Playwright E2E specs including a smoke test of every route.
 
 Recent reliability work (2026-09-18/19), merged as PRs #1–#5:
 
@@ -696,51 +696,19 @@ The app is feature-rich (20 column types, 1,520+ tests, streaming, keyboard nav,
 - [ ] Prototype: relay connection + event parsing in isolation before wiring into UI
 - [ ] The AT Protocol and ActivityPub abstractions are solid — adding a third protocol backend is architecturally clean but the auth paradigm is fundamentally different
 
-### 185. Credentials in the OS secret store
-- **Status**: Done (2026-09-20/21, PRs #21, #22, #25, #26, #27)
-- **Effort**: Large
-- **Priority**: Must-have
-- **Description**: The desktop build encrypted credentials under a passphrase of
-  `CrispDeck-v1-{hostname}` — sound cryptography, a key that is not a secret.
-- [x] Linux Secret Service and Windows Credential Manager via `keyring`
-- [x] macOS via `security-framework`, because `keyring` can only use the login
-      keychain: the modern data protection keychain, the login keychain, or a
-      keychain file the user already manages
-- [x] Settings control for the backend and, on macOS, which keychain
-- [x] A `Secret store` workflow that runs against the real stores on all three
-      platforms, with macOS covering each keychain it offers
-- **The design changed mid-flight, and the reason matters.** The first version
-  created a keychain of its own and kept its password in the login keychain. A
-  user pointed out they had once forgotten their login keychain password and it
-  had mattered little, because other keychains held what their apps needed —
-  which is exactly the dependency that design rebuilt. It now holds no keychain
-  password at all and creates no keychains: `security create-keychain` does that
-  better, and a keychain an app creates is one whose password has to live
-  somewhere.
-- **What CI settled**: the data protection keychain needs a signed build ("A
-  required entitlement isn't present"), and the fallback behaved correctly —
-  `store()` returned Local rather than claiming the keychain.
-- **Still unverified**: nobody has driven the macOS settings UI on a real Mac.
-  The Rust is tested against real keychains and the accessors against a mocked
-  invoke, but the path from clicking a radio button to a credential landing in
-  a chosen keychain has only been tested in pieces.
-
-### 186. Identity detection: tests, and the bio match it depends on
-- **Status**: Done (2026-09-21, PR #28)
+### 188. Drive the macOS keychain settings on a real Mac
+- **Status**: Open
 - **Effort**: Small
 - **Priority**: Should-have
-- **Description**: `detect_commands.rs` decides whether the app tells someone two
-  accounts are the same person, and had no tests.
-- [x] Scoring extracted into `score_pair` so it can be tested at all
-- [x] 19 tests covering the ceiling, false positives and the helpers
-- [x] Fixed `bio_mentions_handle`, which stripped `@` from the handle and not
-      from the bio, so `@alice@mastodon.social` never matched a bio that wrote
-      the handle the ordinary way
-- **The arithmetic worth knowing**: display name is weighted 0.5 and username
-  0.3 against a threshold of 0.85, so those two cannot qualify a pair on their
-  own — a bio cross-reference is required in practice. That is deliberate and
-  now documented: "alex" and "alex" both displaying "Alex" score 0.80 and are
-  probably different people.
+- **Description**: The Rust in item 185 is tested against real keychains on CI
+  and the accessors against a mocked invoke, but nobody has clicked the radio
+  button on a Mac and watched a credential land in the keychain they chose.
+  The path is tested in pieces, not end to end, and the pieces are where it
+  would work while the join does not.
+- [ ] Point the build at a keychain created with `security create-keychain`,
+      add an account, and confirm with `security find-generic-password` that
+      the secret is in that keychain and not the login one
+- [ ] Confirm the error when the chosen keychain is locked says so
 
 ### Branch cleanup (2026-09-19)
 
