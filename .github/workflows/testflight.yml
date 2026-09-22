@@ -1,4 +1,4 @@
-# Put an uploaded build in front of external TestFlight testers.
+# Put an uploaded build in front of TestFlight testers, internal or external.
 #
 # mobile.yml and macos-appstore.yml build, sign and upload. That is only half
 # the job: an uploaded build reaches *internal* testers once it finishes
@@ -16,7 +16,7 @@
 # dry_run defaults to TRUE: it reads the state and prints exactly what it would
 # do, changing nothing. Turn it off when you mean it.
 
-name: TestFlight (external)
+name: TestFlight
 
 on:
   workflow_dispatch:
@@ -25,6 +25,11 @@ on:
         description: 'Report what would happen, change nothing'
         type: boolean
         default: true
+      mode:
+        description: 'Who to distribute to'
+        type: choice
+        options: [internal, external, both]
+        default: internal
       platform:
         description: 'Which build to distribute'
         type: choice
@@ -34,18 +39,18 @@ on:
         description: 'Build id to use (blank = the newest one that is ready)'
         type: string
         default: ''
-      group_name:
-        description: 'External tester group'
-        type: string
-        default: 'External Testers'
       whats_new:
-        description: 'What to test, shown to every tester'
-        type: string
-        required: true
-      testers:
-        description: 'Tester emails, comma separated (blank = leave the group as it is)'
+        description: 'What to test, shown to every tester (external only)'
         type: string
         default: ''
+      internal_testers:
+        description: 'Internal tester emails, comma separated. Must be App Store Connect team members.'
+        type: string
+        default: ''
+      external_testers:
+        description: 'External tester emails, comma separated. Anyone; no ASC account needed.'
+        type: string
+        default: ''    
 
 jobs:
   submit:
@@ -69,18 +74,18 @@ jobs:
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
           APP_ID: ${{ vars.APPSTORE_APP_ID }}
           DRY_RUN: ${{ inputs.dry_run }}
+          MODE: ${{ inputs.mode }}
           PLATFORM: ${{ inputs.platform }}
           BUILD_ID: ${{ inputs.build_id }}
-          GROUP_NAME: ${{ inputs.group_name }}
           WHATS_NEW: ${{ inputs.whats_new }}
-          TESTERS: ${{ inputs.testers }}
-          # Beta App Review needs a human to contact and, for an app that
-          # requires connecting an account, a way in. Held as secrets because
-          # they are a name, a phone number and a working login.
-          REVIEW_CONTACT_FIRST: ${{ secrets.BETA_REVIEW_FIRST_NAME }}
-          REVIEW_CONTACT_LAST: ${{ secrets.BETA_REVIEW_LAST_NAME }}
-          REVIEW_CONTACT_PHONE: ${{ secrets.BETA_REVIEW_PHONE }}
-          REVIEW_CONTACT_EMAIL: ${{ secrets.BETA_REVIEW_EMAIL }}
-          DEMO_ACCOUNT_NAME: ${{ secrets.BETA_DEMO_ACCOUNT_NAME }}
-          DEMO_ACCOUNT_PASSWORD: ${{ secrets.BETA_DEMO_ACCOUNT_PASSWORD }}
-        run: python3 scripts/testflight_external.py
+          INTERNAL_TESTERS: ${{ inputs.internal_testers }}
+          EXTERNAL_TESTERS: ${{ inputs.external_testers }}
+          # Beta App Review needs someone to contact. The name lives in
+          # scripts/testflight.json (it is already the copyright line); the
+          # email and phone are personal data and this repository is public.
+          # No demo account: CrispDeck signs in to the reviewer's own social
+          # account, so there is nothing to hand out — scripts/testflight.json
+          # says exactly that in the review notes.
+          BETA_REVIEW_EMAIL: ${{ secrets.BETA_REVIEW_EMAIL }}
+          BETA_REVIEW_PHONE: ${{ secrets.BETA_REVIEW_PHONE }}
+        run: python3 scripts/testflight.py

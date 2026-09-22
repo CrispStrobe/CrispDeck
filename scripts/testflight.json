@@ -1,0 +1,24 @@
+{
+  "_comment": [
+    "Non-secret TestFlight metadata for CrispDeck, from the values recorded in",
+    "appstore.md's CrispDeck addendum. The review contact's email and phone are",
+    "NOT here — they are personal data and this repository is public, so they",
+    "come from the BETA_REVIEW_EMAIL / BETA_REVIEW_PHONE secrets.",
+    "",
+    "demoAccountRequired is false deliberately: CrispDeck connects to the",
+    "reviewer's own Mastodon, Bluesky or Threads account, and there is no",
+    "CrispDeck account to hand out. The notes have to say so, or a reviewer",
+    "opens the app, sees nothing, and fails it."
+  ],
+  "appId": "6789569440",
+  "internalGroupName": "Internal Testers",
+  "internalGroupId": "3ec60b7e-9ddc-4c14-82c0-dd194ec52089",
+  "externalGroupName": "External Testers",
+  "contactFirstName": "Christian",
+  "contactLastName": "Ströbele",
+  "demoAccountRequired": false,
+  "privacyPolicyUrl": "https://crispdeck.vercel.app/privacy",
+  "marketingUrl": "https://crispdeck.vercel.app",
+  "betaAppDescription": "CrispDeck is a multi-column client for Mastodon, Bluesky and Threads. Connect one or more accounts, arrange columns for timelines, mentions, searches, hashtags and lists, and crosspost to several networks at once with automatic thread splitting. Credentials are held in the operating system's keychain and nothing is sent to our servers.",
+  "reviewNotes": "Connect any Mastodon, Bluesky, or Threads account to test. No demo account is provided — CrispDeck has no accounts of its own; it signs in to the reviewer's existing account on those networks. If you do not have one, a free account on mastodon.social takes about a minute and is enough to exercise the whole app.\n\nSuggested path: Settings -> add a Mastodon account -> enter the instance (e.g. mastodon.social) -> authorise in the browser -> the feed, deck and compose screens then populate.\n\nAll credentials are stored in the OS keychain on the device. The only first-party network calls are an optional Threads OAuth proxy and an optional web-push relay; everything else goes directly to the social network the user chose."
+}
