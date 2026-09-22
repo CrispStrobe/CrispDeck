@@ -1,0 +1,86 @@
+# Put an uploaded build in front of external TestFlight testers.
+#
+# mobile.yml and macos-appstore.yml build, sign and upload. That is only half
+# the job: an uploaded build reaches *internal* testers once it finishes
+# processing, but external testers need an external group, the beta review
+# details filled in, and a pass through Apple's Beta App Review. None of that
+# existed anywhere in this repo, so it was being done by hand or not at all.
+#
+# Everything here is the App Store Connect API — no Xcode, no Mac, no browser.
+# Runs on ubuntu because nothing is compiled.
+#
+# Deliberately workflow_dispatch only. Submitting to Beta App Review is an
+# outward-facing action against Apple under a real developer account; it should
+# be somebody pressing a button, never a side effect of pushing a tag.
+#
+# dry_run defaults to TRUE: it reads the state and prints exactly what it would
+# do, changing nothing. Turn it off when you mean it.
+
+name: TestFlight (external)
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Report what would happen, change nothing'
+        type: boolean
+        default: true
+      platform:
+        description: 'Which build to distribute'
+        type: choice
+        options: [IOS, MAC_OS]
+        default: IOS
+      build_id:
+        description: 'Build id to use (blank = the newest one that is ready)'
+        type: string
+        default: ''
+      group_name:
+        description: 'External tester group'
+        type: string
+        default: 'External Testers'
+      whats_new:
+        description: 'What to test, shown to every tester'
+        type: string
+        required: true
+      testers:
+        description: 'Tester emails, comma separated (blank = leave the group as it is)'
+        type: string
+        default: ''
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pip install --quiet cryptography requests
+
+      - name: Submit for external testing
+        env:
+          # The .p8 is stored raw, not base64 — see the note in
+          # macos-appstore.yml about altool and error 259.
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          APP_ID: ${{ vars.APPSTORE_APP_ID }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          PLATFORM: ${{ inputs.platform }}
+          BUILD_ID: ${{ inputs.build_id }}
+          GROUP_NAME: ${{ inputs.group_name }}
+          WHATS_NEW: ${{ inputs.whats_new }}
+          TESTERS: ${{ inputs.testers }}
+          # Beta App Review needs a human to contact and, for an app that
+          # requires connecting an account, a way in. Held as secrets because
+          # they are a name, a phone number and a working login.
+          REVIEW_CONTACT_FIRST: ${{ secrets.BETA_REVIEW_FIRST_NAME }}
+          REVIEW_CONTACT_LAST: ${{ secrets.BETA_REVIEW_LAST_NAME }}
+          REVIEW_CONTACT_PHONE: ${{ secrets.BETA_REVIEW_PHONE }}
+          REVIEW_CONTACT_EMAIL: ${{ secrets.BETA_REVIEW_EMAIL }}
+          DEMO_ACCOUNT_NAME: ${{ secrets.BETA_DEMO_ACCOUNT_NAME }}
+          DEMO_ACCOUNT_PASSWORD: ${{ secrets.BETA_DEMO_ACCOUNT_PASSWORD }}
+        run: python3 scripts/testflight_external.py

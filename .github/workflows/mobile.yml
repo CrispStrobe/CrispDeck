@@ -88,6 +88,16 @@ jobs:
           fi
           /usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "$PLIST"
 
+          # CFBundleVersion is the *build* number, and it was committed as "1"
+          # with nothing ever bumping it. App Store Connect requires it to be
+          # unique and increasing within a marketing version, so the first
+          # upload of 1.2.8 worked and every later one was refused — which is
+          # precisely the loop TestFlight puts you in: ship, get feedback, fix,
+          # ship again. The run number is monotonic per repository and needs no
+          # state kept anywhere.
+          /usr/libexec/PlistBuddy -c "Set CFBundleVersion ${{ github.run_number }}" "$PLIST"
+          echo "build number: $(/usr/libexec/PlistBuddy -c "Print CFBundleVersion" "$PLIST")"
+
       # Inject PrivacyInfo.xcprivacy into the Xcode project target
       - name: Inject PrivacyInfo.xcprivacy
         run: python3 scripts/patch-ios-privacy.py
