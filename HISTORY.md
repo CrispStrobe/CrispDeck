@@ -11,6 +11,60 @@ material that is still true.
 
 ## Remaining Work — the items that are no longer remaining
 
+### 189. TestFlight: internal and external, driven from Linux (2026-09-22, PRs #38–#42)
+
+`mobile.yml` and `macos-appstore.yml` already built, signed and uploaded —
+that pipeline was mature and had shipped 1.2.8 to App Store Connect in August.
+What nobody had built was the other half: an uploaded build reaches no one on
+its own. Internal testers need the build added to a group; external testers
+need a beta app description, the review contact, an external group and a pass
+through Beta App Review. `grep -rl "betaGroups|betaAppReview" .github/workflows/`
+returned nothing.
+
+`scripts/testflight.py` does all of it through the App Store Connect API, from
+a `workflow_dispatch`-only workflow with `dry_run` defaulting to true.
+
+**The agent could not read the key, and it did not matter.** The `.p8` on the
+VPS is `-rw------- root root`. Dispatching a workflow that holds the key as a
+secret does the whole job without the key ever being readable locally — worth
+remembering as a pattern rather than treating an unreadable credential as a
+dead end.
+
+**Two pre-flight defects, both found by reading rather than running.**
+`CFBundleVersion` was committed as `1` with nothing incrementing it; build
+numbers must be unique and increasing within a marketing version, so the first
+upload of 1.2.8 worked and every later one would have been refused — exactly
+the loop TestFlight puts you in. And `NSFaceIDUsageDescription` claimed
+"CrispDeck uses Face ID to protect your stored credentials" while the app
+contains no biometric code whatsoever: a promise about credential protection,
+shown in a system prompt, that the app does not keep.
+
+**Reading appstore.md corrected three things I had already built.** The
+external submission would have 422'd without a `betaAppLocalizations` entry,
+which my first version never created — and it must exist in the app's *primary*
+locale, not just en-US. The demo account I had flagged as a blocker was a
+phantom: the playbook records `demoAccountRequired: false` for CrispDeck,
+because it signs in to the reviewer's own social account. My version warned
+about missing demo credentials and would have had someone manufacture an
+account for no reason. And the internal group already existed.
+
+**The verification failed the thing it verified.** `GET builds/<id>/betaGroups`
+is refused — the relationship is writable from the build and only readable from
+the group — and my read-back exited non-zero on it. Every write had succeeded,
+the build was in both groups and approved, and the run reported failure because
+the summary could not print. A report that can sink what it reports on is worse
+than no report; those reads are soft now.
+
+**Outcome, read back from Apple rather than assumed:** build 1.2.8 in both
+`Internal Testers` and `External Testers`, Beta App Review `APPROVED`, public
+link `https://testflight.apple.com/join/hYwFh4Ut`.
+
+**Why this was safe to ship despite item 188.** `os_store_compiled_in()` is
+`cfg!(any(linux, windows, macos))` — iOS is not in it, so an iOS build keeps
+credentials in the AES-256-GCM blob that the Rust tests cover. The untested
+macOS keychain path is not in an iOS build. It *is* in a macOS one, so item 188
+still gates `platform: MAC_OS`.
+
 ### 173. Bundle analysis + Lighthouse audit
 - **Status**: Done (2026-09-20, PRs #6, #10, #17, #18)
 - **Effort**: Small

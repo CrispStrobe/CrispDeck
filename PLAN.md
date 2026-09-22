@@ -713,7 +713,10 @@ The app is feature-rich (20 column types, 1,520+ tests, streaming, keyboard nav,
 - [ ] The AT Protocol and ActivityPub abstractions are solid — adding a third protocol backend is architecturally clean but the auth paradigm is fundamentally different
 
 ### 188. Drive the macOS keychain settings on a real Mac
-- **Status**: Open
+- **Status**: Open — and now blocking the macOS TestFlight, not just tidiness
+- **Blocks**: a `platform: MAC_OS` run of `.github/workflows/testflight.yml`.
+  iOS was safe to ship because `os_store_compiled_in()` excludes iOS, so an
+  iOS build never touches this code. A macOS build does.
 - **Effort**: Small
 - **Priority**: Should-have
 - **Description**: The Rust in item 185 is tested against real keychains on CI
