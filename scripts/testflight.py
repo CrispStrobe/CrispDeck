@@ -359,6 +359,37 @@ if WANT_EXTERNAL:
         if group.get("publicLink"):
             print(f"\n  public join link: {group['publicLink']}")
 
+# ── Read back what is actually true ─────────────────────────────────────────
+# Writes returning 2xx is not the same as the build being installable. Ask.
+if not DRY_RUN:
+    print("\n" + "=" * 62)
+    print("State after this run, read back from Apple")
+    print("=" * 62)
+
+    groups = get(f"builds/{build_id}/betaGroups")["data"]
+    if groups:
+        for g in groups:
+            a = g["attributes"]
+            kind = "internal" if a.get("isInternalGroup") else "external"
+            print(f"  in group {a.get('name')!r} ({kind})")
+            if a.get("publicLink"):
+                print(f"    public link: {a['publicLink']}")
+    else:
+        print("  ::warning:: the build is in NO group — nobody can install it")
+
+    submission = (get(f"builds/{build_id}/betaAppReviewSubmission").get("data") or {})
+    state = submission.get("attributes", {}).get("betaReviewState")
+    print(f"  beta review state: {state or 'not submitted'}")
+    if state == "APPROVED":
+        print("    external testers can install")
+    elif state == "WAITING_FOR_REVIEW":
+        print("    waiting on Apple — usually same-day")
+    elif state in ("REJECTED", "INVALID"):
+        print(f"    ::warning:: review said {state}; external installs are blocked")
+
+    testers = get(f"builds/{build_id}/individualTesters")
+    print(f"  individually assigned testers: {len(testers.get('data', []))}")
+
 # ── Report ──────────────────────────────────────────────────────────────────
 if DRY_RUN:
     print("\n" + "-" * 62)
