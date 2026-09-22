@@ -37,8 +37,6 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>CrispDeck needs camera access to take photos for posts.</string>
-	<key>NSFaceIDUsageDescription</key>
-	<string>CrispDeck uses Face ID to protect your stored credentials.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>CrispDeck needs microphone access for voice dictation.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
