@@ -11,6 +11,55 @@ material that is still true.
 
 ## Remaining Work — the items that are no longer remaining
 
+### 190. v1.2.9 to TestFlight, and the tooling I duplicated (2026-09-22, PRs #44, #45)
+
+TestFlight was serving a build from 30 August while `main` sat 129 commits
+ahead. Testers were exercising code without the Mastodon OAuth callback fix,
+without the credential-overwrite fix, without the offline work — and would have
+been reporting bugs already fixed. Bumped to 1.2.9, tagged, built, uploaded, and
+distributed: internal live immediately, external `WAITING_FOR_REVIEW` and
+confirmed on re-read.
+
+`CFBundleVersion` came out as 56 (the run number), which is the fix from #38
+doing its job. Committed as `1` and never incremented, the second upload of any
+marketing version would have been refused.
+
+**I duplicated tooling that already existed.** `scripts/testflight.py` was
+written without finding `tools/asc/testflight.py`, which had been in the repo
+since "tools(asc): script the TestFlight steps that were being done by hand" and
+is better: it explains `ANOTHER_BUILD_IN_REVIEW` and `CLOSED_VERSION`, warns
+when an internal group has no testers and lists who is eligible, and already
+re-read the submission because "a 201 is not proof" — the same insight I added
+to mine in #41 believing it was new. Mine is deleted; the one thing it had that
+the real one lacked was a dry run, ported across. The lesson is cheap to state
+and was not applied: look for the thing before building it.
+
+**The duplicate was hiding a live defect.** `tools/asc/metadata.json` had
+`demoAccountRequired: true` with `demoAccountName` and `demoAccountPassword`
+both empty strings, and review notes instructing the reviewer to sign in as
+`DEMO_BSKY_HANDLE` with password `DEMO_BSKY_APP_PASSWORD`. Running it would have
+promised Apple a demo account and supplied placeholders — a rejection, answered
+by email days later. CrispDeck has no accounts of its own; it signs in to one
+the reviewer already holds, and the notes say so now.
+
+**Two workflows referenced secrets that do not exist.**
+`appstore-screenshots.yml`'s upload step wanted `ASC_API_KEY_P8_BASE64`,
+`ASC_KEY_ID`, `ASC_ISSUER_ID`; this repo has `APPLE_API_KEY_*`. It had never
+been run with `upload` enabled, so nobody had found out. Both workflows now
+write the key to the file `client.py` already checks rather than re-encoding it
+into an environment variable — GitHub masks a secret in logs but would not mask
+a base64 of it.
+
+**The screenshot check passed while the screenshot was wrong.** The manifest
+verification proves a PNG is the right size and not blank, which the iPhone deck
+shot was. Looking at it showed one column plus a 160pt slice of the next, author
+names truncated to "To..." and "@tom...". The widths carry a comment saying they
+were chosen for the iPad; nobody chose anything for the phone. On iPhone the
+first column now fills the width, less a few points so the next column's edge
+still signals that the deck scrolls. A check that only proves "not blank" does
+not prove "good".
+
+
 ### 189. TestFlight: internal and external, driven from Linux (2026-09-22, PRs #38–#42)
 
 `mobile.yml` and `macos-appstore.yml` already built, signed and uploaded —
