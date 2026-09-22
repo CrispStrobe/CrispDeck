@@ -16,9 +16,9 @@ A unified Mastodon + Bluesky + Threads social media client with:
 **Tech stack**: SvelteKit 2, Svelte 5 (runes), Tailwind CSS 4, Vite 6, Tauri 2, TypeScript + Rust, Vitest
 
 
-## Current State (2026-09-21)
+## Current State (2026-09-22)
 
-v1.2.8 — ~1,953 unit tests across 148 files (plus 62 live-API tests that run nightly rather than on every PR), 126 Rust tests, and 39 Playwright E2E specs including a smoke test of every route.
+v1.2.9 — ~2,000 unit tests across 151 files (plus 62 live-API tests that run nightly rather than on every PR), 126 Rust tests, and 49 Playwright E2E specs including a smoke test of every route and the OAuth callback page.
 
 Recent reliability work (2026-09-18/19), merged as PRs #1–#5:
 
