@@ -25,6 +25,7 @@ Usage:
     python3 tools/asc/testflight.py macos        # newest macOS build
     python3 tools/asc/testflight.py ios --build 12345
     python3 tools/asc/testflight.py ios --internal-only
+    python3 tools/asc/testflight.py ios --dry-run   # reads real, writes nothing
 """
 
 from __future__ import annotations
@@ -41,6 +42,34 @@ HERE = pathlib.Path(__file__).resolve().parent
 META = json.loads((HERE / "metadata.json").read_text())
 LOCALE = META["primaryLocale"]
 PLATFORM = {"ios": "IOS", "macos": "MAC_OS"}
+
+DRY = False
+
+
+def enable_dry_run() -> None:
+    """
+    Let every GET through and intercept every write.
+
+    The report is therefore real — it reads Apple's actual state — while
+    nothing is changed. appstore.md is emphatic that this earns its keep:
+    on Kerotakis the dispatch dry run passed and the tag run then failed at
+    the last step, with no build number consumed. A build number cannot be
+    reused and an upload cannot be undone, so the cheap run goes first.
+    """
+    global DRY
+    DRY = True
+    real = client.call
+
+    def guarded(method: str, path: str, body: dict | None = None):
+        if method == "GET":
+            return real(method, path, body)
+        print(f"   [dry run] {method} {path}")
+        # Shaped enough for the callers that read the response back.
+        return (201 if method == "POST" else 200), {
+            "data": {"id": "dry-run", "type": "unknown", "attributes": {}}
+        }
+
+    client.call = guarded
 
 
 def platform_of(build_id: str) -> str | None:
@@ -244,6 +273,9 @@ def submit_for_beta_review(build_id: str) -> None:
                 print("     (that version has already shipped; bump "
                       "CFBundleShortVersionString and upload again)")
         raise SystemExit(1)
+    if DRY:
+        print("   beta review: would submit (dry run, so no re-read)")
+        return
     print(f"   beta review: submitted, {doc['data']['attributes']['betaReviewState']}")
 
     # A 201 is not proof. Submitting kicks off a re-validation, and a build
@@ -267,11 +299,16 @@ def main() -> int:
     ap.add_argument("--build", help="a specific build id (default: the newest live one)")
     ap.add_argument("--internal-only", action="store_true",
                     help="stop after the internal group; no Beta App Review")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="read Apple's real state, write nothing")
     ap.add_argument("--tester", action="append", metavar="EMAIL", default=[],
                     help="add an App Store Connect team member to the internal "
                          "group (repeatable). Internal testing needs no Apple "
                          "review, so this is what makes a build installable now.")
     args = ap.parse_args()
+    if args.dry_run:
+        enable_dry_run()
+        print("DRY RUN — reads are real, writes are not\n")
 
     app = client.app_id(META["bundleId"])
     if not app:
@@ -330,6 +367,8 @@ def main() -> int:
 
     link = external["attributes"].get("publicLink")
     print(f"\nOK. Public link: {link or '(re-read the group once Apple mints it)'}")
+    if DRY:
+        print("Dry run — nothing above was actually written.")
     print("Beta App Review is same-day-ish, unlike full App Store review.")
     return 0
 
