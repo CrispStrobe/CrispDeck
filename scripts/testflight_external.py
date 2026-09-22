@@ -41,16 +41,36 @@ def fail(message: str) -> None:
     sys.exit(1)
 
 
+MISSING: list[str] = []
+
+
 def env(name: str, *, required: bool = True) -> str:
+    """
+    On a real run a missing secret is fatal. On a dry run it is collected and
+    reported at the end instead, because the point of a dry run is to learn
+    everything that is not ready — stopping at the first gap means three runs
+    to discover three gaps.
+    """
     value = os.environ.get(name, "").strip()
     if required and not value:
+        if DRY_RUN:
+            if name not in MISSING:
+                MISSING.append(name)
+            return f"<{name} not set>"
         fail(f"{name} is not set")
     return value
 
 
+def fail_missing(name: str) -> str:
+    fail(f"{name} is not set — nothing can be read without it")
+    return ""  # unreachable; fail() exits
+
+
 def token() -> str:
     """A 20-minute ES256 JWT. Apple refuses anything longer."""
-    key_pem = env("APPLE_API_KEY_P8")
+    key_pem = os.environ.get("APPLE_API_KEY_P8", "").strip()
+    if not key_pem:
+        fail("APPLE_API_KEY_P8 is not set — nothing can be read without it")
     if "BEGIN PRIVATE KEY" not in key_pem:
         fail("APPLE_API_KEY_P8 is not a PEM private key — it is stored raw, not base64")
     key = serialization.load_pem_private_key(key_pem.encode(), password=None)
@@ -59,9 +79,9 @@ def token() -> str:
         return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
 
     now = int(time.time())
-    header = {"alg": "ES256", "kid": env("APPLE_API_KEY_ID"), "typ": "JWT"}
+    header = {"alg": "ES256", "kid": env("APPLE_API_KEY_ID", required=False) or fail_missing("APPLE_API_KEY_ID"), "typ": "JWT"}
     payload = {
-        "iss": env("APPLE_API_ISSUER_ID"),
+        "iss": env("APPLE_API_ISSUER_ID", required=False) or fail_missing("APPLE_API_ISSUER_ID"),
         "iat": now,
         "exp": now + 1190,
         "aud": "appstoreconnect-v1",
@@ -322,4 +342,20 @@ if not DRY_RUN:
 else:
     print("  [dry run] POST betaAppReviewSubmissions")
 
-print("\nDone." if not DRY_RUN else "\nDry run complete — nothing was changed.")
+if DRY_RUN:
+    print("\n" + "-" * 60)
+    if MISSING:
+        print("NOT READY — these secrets are unset:\n")
+        for name in MISSING:
+            print(f"  {name}")
+        print(
+            "\nAdd them with `gh secret set <NAME>`, then run this again.\n"
+            "The demo account is the one that decides whether a reviewer sees "
+            "the app or an empty screen."
+        )
+    else:
+        print("Ready. Re-run with dry_run unchecked to submit.")
+    print("-" * 60)
+    print("\nDry run complete — nothing was changed.")
+else:
+    print("\nDone.")
