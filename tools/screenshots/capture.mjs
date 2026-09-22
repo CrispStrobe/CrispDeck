@@ -106,8 +106,14 @@ const SCENES = [
 ];
 
 /**
- * Narrow enough that three columns and a sliver of the fourth fit on an iPad,
- * which is what actually communicates "this is a deck".
+ * Column widths were tuned for the iPad, where three and a sliver of a fourth
+ * fit and the shot reads as "this is a deck". Nobody tuned the iPhone, and at
+ * 440pt those same widths put one column plus a 160pt sliver of the next on
+ * screen — author names truncated to "To..." and "@tom...", the second column
+ * sliced down the middle. It is honest about what the app does at that width,
+ * and it is the first screenshot a customer sees.
+ *
+ * On a phone a person uses one column at a time, so show one, full width.
  */
 const DECK_COLUMNS = [
   { id: 'c1', title: 'Home', type: 'timeline', width: 280, streaming: true },
@@ -116,6 +122,18 @@ const DECK_COLUMNS = [
   { id: 'c4', title: 'Watching "alt text"', type: 'keyword-monitor', query: 'alt text', width: 260, streaming: true, color: '#e8663d' },
   { id: 'c5', title: 'Notifications', type: 'notifications', width: 260 },
 ];
+
+/**
+ * The deck as it should appear on a given device: full-bleed single column on
+ * a phone, several side by side on a tablet.
+ */
+function deckColumnsFor(device) {
+  if (device.suffix !== 'iphone') return DECK_COLUMNS;
+  // Leave a few points so the next column's edge hints at horizontal scroll
+  // without any of its text being cut mid-word.
+  const width = device.viewport.width - 24;
+  return DECK_COLUMNS.map((column, i) => (i === 0 ? { ...column, width } : column));
+}
 
 /** localStorage the app should start from, so no first-run wizard is in shot. */
 const STORAGE = {
@@ -317,7 +335,8 @@ async function main() {
     await routes(context);
     await context.addInitScript((storage) => {
       for (const [k, v] of Object.entries(storage)) localStorage.setItem(k, v);
-    }, STORAGE);
+    }, { ...STORAGE,
+         'crispdeck-deck-columns': JSON.stringify(deckColumnsFor(device)) });
 
     const page = await context.newPage();
     page.on('pageerror', (error) => console.warn(`  ! ${device.suffix}: ${error.message}`));
