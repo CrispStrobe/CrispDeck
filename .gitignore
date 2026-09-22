@@ -38,3 +38,7 @@ playwright-results/
 store/appeal-*.md
 # Screenshot capture output (regenerate with tools/screenshots/capture.mjs)
 appstore-shots/
+
+# Python bytecode from scripts/
+__pycache__/
+*.pyc
