@@ -135,6 +135,30 @@ def get(path: str):
     return request("GET", path)
 
 
+def get_soft(path: str):
+    """
+    A read for the report. By the time these run the writes have happened, so
+    a failure here is a reporting problem, not a failed submission — say so
+    and carry on rather than exiting non-zero over it.
+    """
+    url = f"{API}/{path}"
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=60)
+    except requests.RequestException as e:
+        print(f"  ::warning::could not read {path}: {e}")
+        return None
+    if resp.status_code >= 400:
+        try:
+            detail = "; ".join(
+                f"{e.get('title')}: {e.get('detail')}" for e in resp.json().get("errors", [])
+            )
+        except ValueError:
+            detail = resp.text[:200]
+        print(f"  ::warning::could not read {path}: {resp.status_code}: {detail}")
+        return None
+    return resp.json()
+
+
 def write(method: str, path: str, body: dict, *, allow: tuple[int, ...] = ()):
     if DRY_RUN:
         print(f"    [dry run] {method} {path}")
@@ -366,7 +390,11 @@ if not DRY_RUN:
     print("State after this run, read back from Apple")
     print("=" * 62)
 
-    groups = get(f"builds/{build_id}/betaGroups")["data"]
+    # Asked from the group side. `GET builds/<id>/betaGroups` is refused with
+    # "The relationship 'betaGroups' does not allow 'GET_RELATED'. Allowed
+    # operations are: CREATE, DELETE" — the link is writable from the build
+    # and only readable from the group.
+    groups = (get_soft(f"betaGroups?filter%5Bbuilds%5D={build_id}&limit=200") or {}).get("data")
     if groups:
         for g in groups:
             a = g["attributes"]
@@ -374,10 +402,10 @@ if not DRY_RUN:
             print(f"  in group {a.get('name')!r} ({kind})")
             if a.get("publicLink"):
                 print(f"    public link: {a['publicLink']}")
-    else:
-        print("  ::warning:: the build is in NO group — nobody can install it")
+    elif groups is not None:
+        print("  ::warning::the build is in NO group — nobody can install it")
 
-    submission = (get(f"builds/{build_id}/betaAppReviewSubmission").get("data") or {})
+    submission = ((get_soft(f"builds/{build_id}/betaAppReviewSubmission") or {}).get("data") or {})
     state = submission.get("attributes", {}).get("betaReviewState")
     print(f"  beta review state: {state or 'not submitted'}")
     if state == "APPROVED":
@@ -387,8 +415,9 @@ if not DRY_RUN:
     elif state in ("REJECTED", "INVALID"):
         print(f"    ::warning:: review said {state}; external installs are blocked")
 
-    testers = get(f"builds/{build_id}/individualTesters")
-    print(f"  individually assigned testers: {len(testers.get('data', []))}")
+    testers = get_soft(f"builds/{build_id}/individualTesters")
+    if testers is not None:
+        print(f"  individually assigned testers: {len(testers.get('data', []))}")
 
 # ── Report ──────────────────────────────────────────────────────────────────
 if DRY_RUN:
