@@ -166,12 +166,18 @@ def app_localization(app: str) -> None:
         print(f"   beta app localization ({LOCALE}): created")
 
 
-def build_localization(build_id: str) -> None:
+def build_localization(build_id: str, platform: str) -> None:
     existing = {
         loc["attributes"]["locale"]: loc
         for loc in client.paged(f"/v1/builds/{build_id}/betaBuildLocalizations")
     }
+    # The two platforms do not store credentials the same way, and on macOS
+    # that code has never been run on a real Mac. Testers should be told which
+    # part of the build is the unproven one rather than finding out.
     whats_new = META["beta"]["whatToTest"]
+    extra = META["beta"].get(f"whatToTestExtra_{platform}")
+    if extra:
+        whats_new = f"{whats_new}\n\n{extra}"
     if LOCALE in existing:
         loc_id = existing[LOCALE]["id"]
         client.expect("PATCH", f"/v1/betaBuildLocalizations/{loc_id}",
@@ -331,7 +337,7 @@ def main() -> int:
 
     print("\n== the build")
     export_compliance(build)
-    build_localization(build["id"])
+    build_localization(build["id"], args.platform)
 
     print("\n== the app")
     review_detail(app)

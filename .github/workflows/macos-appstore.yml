@@ -113,6 +113,17 @@ jobs:
           [ -n "$APP" ] || { echo "::error::no .app produced"; exit 1; }
           cp /tmp/crispdeck.provisionprofile "$APP/Contents/embedded.provisionprofile"
 
+          # Tauri writes CFBundleVersion from tauri.conf.json, so it equals the
+          # marketing version and never changes within one. App Store Connect
+          # wants the build number unique and increasing inside a marketing
+          # version, so the first upload of 1.2.9 works and every later one is
+          # refused — the same trap mobile.yml had. Set here, before the
+          # re-sign below, because editing Info.plist after signing invalidates
+          # the signature. The run number is monotonic and needs no state.
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" \
+            "$APP/Contents/Info.plist"
+          echo "build number: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Contents/Info.plist")"
+
           security cms -D -i /tmp/crispdeck.provisionprofile \
             | plutil -extract Entitlements xml1 -o /tmp/profile-entitlements.plist -
           cp src-tauri/entitlements.plist /tmp/merged-entitlements.plist
@@ -190,7 +201,7 @@ jobs:
             --type macos \
             --apple-id ${{ vars.APPSTORE_APP_ID }} \
             --bundle-id ${{ env.BUNDLE_ID }} \
-            --bundle-version "$VERSION" \
+            --bundle-version "${{ github.run_number }}" \
             --bundle-short-version-string "$VERSION" \
             --api-key ${{ secrets.APPLE_API_KEY_ID }} \
             --api-issuer ${{ secrets.APPLE_API_ISSUER_ID }}
