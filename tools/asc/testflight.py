@@ -184,12 +184,40 @@ def build_localization(build_id: str, platform: str) -> None:
                       {"data": {"type": "betaBuildLocalizations", "id": loc_id,
                                 "attributes": {"whatsNew": whats_new}}})
         print(f"   what to test ({LOCALE}): updated")
+        if not DRY:
+            _confirm_whats_new(build_id, whats_new)
     else:
         client.expect("POST", "/v1/betaBuildLocalizations",
                       {"data": {"type": "betaBuildLocalizations",
                                 "attributes": {"whatsNew": whats_new, "locale": LOCALE},
                                 "relationships": {"build": {"data": {"type": "builds", "id": build_id}}}}})
         print(f"   what to test ({LOCALE}): created")
+        if not DRY:
+            _confirm_whats_new(build_id, whats_new)
+
+
+def _confirm_whats_new(build_id: str, expected: str) -> None:
+    """
+    Read back what Apple actually stored.
+
+    The macOS note tells testers that credential handling is the part nobody
+    has run on real hardware. Saying "updated" because a PATCH returned 200 is
+    not the same as that text being in front of them, and this is the kind of
+    claim worth checking rather than asserting — the build number looked fine
+    in the log while the binary carried something else.
+    """
+    stored = {
+        loc["attributes"]["locale"]: loc["attributes"].get("whatsNew") or ""
+        for loc in client.paged(f"/v1/builds/{build_id}/betaBuildLocalizations")
+    }
+    got = stored.get(LOCALE, "")
+    if got.strip() != expected.strip():
+        print(f"   ::warning::what to test did not store as sent "
+              f"({len(got)} chars stored, {len(expected)} sent)")
+        return
+    first = expected.strip().splitlines()[0]
+    print(f"   what to test: confirmed on re-read, {len(got)} chars, "
+          f"starting {first[:60]!r}")
 
 
 def ensure_group(app: str, name: str, internal: bool) -> dict:
