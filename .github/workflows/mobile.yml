@@ -95,8 +95,11 @@ jobs:
           # precisely the loop TestFlight puts you in: ship, get feedback, fix,
           # ship again. The run number is monotonic per repository and needs no
           # state kept anywhere.
+          # Kept for a local `tauri ios build`, which does read this file. CI
+          # cannot rely on it: the bundler regenerates the plist, so the value
+          # that reaches the binary is the one set on the archive below.
           /usr/libexec/PlistBuddy -c "Set CFBundleVersion ${{ github.run_number }}" "$PLIST"
-          echo "build number: $(/usr/libexec/PlistBuddy -c "Print CFBundleVersion" "$PLIST")"
+          echo "source plist build number: $(/usr/libexec/PlistBuddy -c "Print CFBundleVersion" "$PLIST")"
 
       # Inject PrivacyInfo.xcprivacy into the Xcode project target
       - name: Inject PrivacyInfo.xcprivacy
@@ -243,6 +246,21 @@ jobs:
           ARCHIVE=$(find src-tauri -name "*.xcarchive" -type d 2>/dev/null | head -1)
           echo "Archive: $ARCHIVE"
 
+          # The build number has to be set HERE, on the archive, not on
+          # src-tauri/gen/apple/*/Info.plist before the build: `tauri ios build`
+          # regenerates that file, so the value written earlier never reached
+          # the binary. App Store Connect reported the first 1.2.9 iOS build as
+          # version "1.2.9" while the macOS one — where the plist is edited
+          # after the bundler has run — correctly reported its run number.
+          # Same class of mistake as editing a generated file anywhere else.
+          #
+          # -exportArchive re-signs, so editing the plist now is safe; editing
+          # it after export would invalidate the signature.
+          APP_PLIST=$(find "$ARCHIVE/Products/Applications" -name Info.plist -maxdepth 2 | head -1)
+          [ -n "$APP_PLIST" ] || { echo "::error::no app Info.plist inside the archive"; exit 1; }
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" "$APP_PLIST"
+          echo "archive build number: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PLIST")"
+
           # Write ExportOptions.plist
           python3 -c "
           import os
@@ -276,6 +294,16 @@ jobs:
             # Verify signature
             mkdir -p /tmp/ipa_check && cd /tmp/ipa_check
             unzip -q "$GITHUB_WORKSPACE/CrispDeck_${VERSION}_ios-appstore.ipa"
+
+            # Assert, because the last attempt at this looked fine in the log
+            # and shipped the wrong number anyway. A duplicate build number is
+            # refused by App Store Connect and the upload cannot be undone.
+            GOT=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" Payload/*.app/Info.plist)
+            echo "IPA build number: $GOT"
+            [ "$GOT" = "${{ github.run_number }}" ] || {
+              echo "::error::IPA carries CFBundleVersion $GOT, expected ${{ github.run_number }}"
+              exit 1
+            }
             codesign --verify --deep --strict --verbose=2 Payload/*.app 2>&1 | tail -5
           else
             echo "ERROR: exportArchive produced no IPA"
@@ -305,7 +333,7 @@ jobs:
             --type ios \
             --apple-id 6789569440 \
             --bundle-id com.christianstrobele.crispdeck \
-            --bundle-version "$VERSION" \
+            --bundle-version "${{ github.run_number }}" \
             --bundle-short-version-string "$VERSION" \
             --apiKey "$APPLE_API_KEY_ID" \
             --apiIssuer "$APPLE_API_ISSUER_ID"
