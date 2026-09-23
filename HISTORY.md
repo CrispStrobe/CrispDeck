@@ -11,6 +11,43 @@ material that is still true.
 
 ## Remaining Work — the items that are no longer remaining
 
+### 191. macOS to TestFlight, and the iOS build number that was never fixed (2026-09-23, PRs #47, #48)
+
+macOS 1.2.9 (build 6) is in both groups, internal live, external
+`WAITING_FOR_REVIEW` and confirmed on re-read.
+
+**Item 188 was shipped knowingly, not quietly.** The macOS build stores
+credentials in the Keychain and nobody has driven that from the settings screen
+on real hardware — CI covers it against real keychains, and the accessors are
+covered through a mocked invoke, but not the join between them. That was
+flagged as gating this release and the decision was taken to ship anyway. The
+right way to take that decision is to tell the people who would be affected, so
+`whatToTest` gained a per-platform addendum and the macOS one says plainly
+which part is unproven, gives three things to try, and names the report most
+wanted: an account that disappears after a restart.
+
+**My iOS build-number fix from #38 had never worked, and comparing the two
+platforms is what showed it.** App Store Connect reported the iOS 1.2.9 build
+as `version: 1.2.9` and the macOS one as `version: 6`. `version` on an ASC
+build is the build number; the macOS one was right. The difference is where the
+plist is edited: macOS edits the bundle after the bundler produced it, iOS
+edited `src-tauri/gen/apple/CrispDeck_iOS/Info.plist` before `tauri ios build`,
+which regenerates that file. Writing to a generated file and expecting the write
+to survive generation.
+
+The consequence was not cosmetic: the next 1.2.9 iOS upload would have been
+refused for a duplicate build number, which is the exact failure #38 existed to
+prevent — still present, and now believed fixed, which is worse than never
+having tried. It is set on the `.xcarchive` before `-exportArchive` now, and
+the IPA is unzipped afterwards and its `CFBundleVersion` **asserted** against
+the run number, because the previous attempt printed a plausible number in the
+log and shipped a different one. An upload cannot be undone.
+
+macOS had the same latent problem from the other direction — `CFBundleVersion`
+was never set at all there, so it equalled the marketing version — fixed in the
+same pass.
+
+
 ### 190. v1.2.9 to TestFlight, and the tooling I duplicated (2026-09-22, PRs #44, #45)
 
 TestFlight was serving a build from 30 August while `main` sat 129 commits
