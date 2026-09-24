@@ -102,10 +102,28 @@ def pricing(app: str) -> bool:
     return False
 
 
+def versions_for(app: str, platform: str) -> list:
+    """
+    Every App Store version for one platform, filtered here rather than by
+    Apple.
+
+    `filter[platform]` on this collection answers PARAMETER_ERROR.ILLEGAL.
+    testflight.py already carries the same lesson for builds — Apple's
+    platform filters are unreliable and the relationship is not — so ask for
+    the collection and read the attribute.
+    """
+    out = [v for v in _all_versions(app)
+           if v["attributes"].get("platform") == platform]
+    out.sort(key=lambda v: v["attributes"].get("createdDate") or "", reverse=True)
+    return out
+
+
+def _all_versions(app: str) -> list:
+    return client.paged(f"/v1/apps/{app}/appStoreVersions?limit=50")
+
+
 def version_for(app: str, platform: str) -> dict | None:
-    versions = client.paged(
-        f"/v1/apps/{app}/appStoreVersions?filter[platform]={platform}"
-        "&limit=5&sort=-createdDate")
+    versions = versions_for(app, platform)
     return versions[0] if versions else None
 
 
