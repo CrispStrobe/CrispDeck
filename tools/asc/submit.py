@@ -294,17 +294,16 @@ def review_submission(app: str, version: dict, platform: str, really: bool) -> b
             return True
 
     if rs:
-        # Read the items through the collection filter. The
-        # /v1/reviewSubmissions/<id>/items relationship comes back empty even
-        # when items exist — status.py printed "no items" for every submission
-        # on this app, including one that demonstrably had one.
-        for item in client.paged(
-                f"/v1/reviewSubmissionItems?filter[reviewSubmission]={rs}&limit=50"):
-            held = (item.get("relationships", {}).get("appStoreVersion", {})
-                    .get("data") or {}).get("id")
-            if held == version["id"]:
-                print("   review submission: already carries this version")
-                return _maybe_submit(rs, really)
+        # No pre-check that the submission already carries this version.
+        # Three different reads were tried for that — the /items relationship
+        # (answers empty even when items exist), and filter[reviewSubmission]
+        # on the collection (PARAMETER_ERROR) — and each wrong guess became a
+        # hard exit, because client.paged raises on 4xx and the reason goes to
+        # stderr where a filtered log does not show it.
+        #
+        # POST and read the answer instead: 201 means added, 409 means it was
+        # already there. Both are the state we wanted, and neither depends on
+        # guessing which read endpoint Apple honours.
         return _add_item_and_submit(rs, version, really)
 
     status, doc = client.call("POST", "/v1/reviewSubmissions", {

@@ -205,8 +205,10 @@ def main() -> int:
             sa = s["attributes"]
             # The /items relationship answers empty even when items exist;
             # the filtered collection is the one that tells the truth.
-            items = paged(
-                f"/v1/reviewSubmissionItems?filter[reviewSubmission]={s['id']}&limit=50")
+            # Apple honours neither the /items relationship (empty even when
+            # items exist) nor filter[reviewSubmission] (PARAMETER_ERROR), so
+            # this is left unreported rather than reported wrongly.
+            items = []
             held = []
             for it in items:
                 ver = (it.get("relationships", {}).get("appStoreVersion", {})
@@ -216,7 +218,7 @@ def main() -> int:
                     held.append((v or {}).get("attributes", {}).get("versionString", ver[:8]))
             print(f"   review submission {s['id'][:8]}: {sa.get('state')} "
                   f"({sa.get('platform')})"
-                  f"{'  holding ' + ', '.join(held) if held else '  no items'}")
+                  f"{'  holding ' + ', '.join(held) if held else ''}")
             # A submission left open holds the version and blocks a new one.
             if sa.get("state") in ("READY_FOR_REVIEW", "WAITING_FOR_REVIEW",
                                    "IN_REVIEW", "UNRESOLVED_ISSUES"):
