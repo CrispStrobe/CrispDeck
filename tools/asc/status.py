@@ -78,6 +78,12 @@ def _all_versions(app: str) -> list:
     return paged(f"/v1/apps/{app}/appStoreVersions?limit=50")
 
 
+def _platform_of(build_id: str) -> str | None:
+    """Walk the relationship; Apple's platform filters on builds are unreliable."""
+    d = one(f"/v1/builds/{build_id}/preReleaseVersion")
+    return (d or {}).get("attributes", {}).get("platform")
+
+
 def report_platform(app: str, name: str, platform: str) -> list[str]:
     """Returns the list of things blocking a submission on this platform."""
     blockers: list[str] = []
@@ -102,6 +108,16 @@ def report_platform(app: str, name: str, platform: str) -> list[str]:
     if build:
         ba = build["attributes"]
         print(f"   build attached: {ba.get('version')} ({ba.get('processingState')})")
+        newest = [b for b in paged(f"/v1/apps/{app}/builds?limit=50")
+                  if b["attributes"].get("processingState") == "VALID"
+                  and not b["attributes"].get("expired")]
+        newest = [b for b in newest if _platform_of(b["id"]) == platform]
+        if newest and newest[0]["id"] != build["id"]:
+            print(f"   NEWER build available: {newest[0]['attributes'].get('version')}"
+                  f" — the version would ship {ba.get('version')}")
+            blockers.append(
+                f"{name}: the version carries build {ba.get('version')} but "
+                f"{newest[0]['attributes'].get('version')} is uploaded and newer")
     else:
         print("   build attached: NONE")
         blockers.append(f"{name}: no build attached to the version")
@@ -170,7 +186,10 @@ def main() -> int:
         if not age:
             blockers.append("no age rating declaration")
 
-    price = paged(f"/v1/apps/{app}/appPriceSchedule?limit=1")
+    # A to-one relationship: ?limit=1 on it answers PARAMETER_ERROR.ILLEGAL,
+    # and the resulting "NOT SET" then reads as a finding rather than as the
+    # query being wrong. Second time today.
+    price = one(f"/v1/apps/{app}/appPriceSchedule")
     print(f"   price schedule: {'set' if price else 'NOT SET'}")
     if not price:
         blockers.append("no price schedule (even free needs one)")
