@@ -58,15 +58,32 @@ def one(path: str):
     return (doc or {}).get("data")
 
 
+def versions_for(app: str, platform: str) -> list:
+    """
+    Every App Store version for one platform, filtered here rather than by
+    Apple.
+
+    `filter[platform]` on this collection answers PARAMETER_ERROR.ILLEGAL.
+    testflight.py already carries the same lesson for builds — Apple's
+    platform filters are unreliable and the relationship is not — so ask for
+    the collection and read the attribute.
+    """
+    out = [v for v in _all_versions(app)
+           if v["attributes"].get("platform") == platform]
+    out.sort(key=lambda v: v["attributes"].get("createdDate") or "", reverse=True)
+    return out
+
+
+def _all_versions(app: str) -> list:
+    return paged(f"/v1/apps/{app}/appStoreVersions?limit=50")
+
+
 def report_platform(app: str, name: str, platform: str) -> list[str]:
     """Returns the list of things blocking a submission on this platform."""
     blockers: list[str] = []
     print(f"\n── {name} ─────────────────────────────────────────")
 
-    versions = paged(
-        f"/v1/apps/{app}/appStoreVersions?filter[platform]={platform}"
-        "&limit=5&sort=-createdDate"
-    )
+    versions = versions_for(app, platform)
     if not versions:
         print("   no App Store version for this platform")
         blockers.append(f"{name}: no App Store version exists")
@@ -162,14 +179,23 @@ def main() -> int:
     if subs:
         for s in subs:
             sa = s["attributes"]
+            items = paged(f"/v1/reviewSubmissions/{s['id']}/items")
+            held = []
+            for it in items:
+                ver = (it.get("relationships", {}).get("appStoreVersion", {})
+                       .get("data") or {}).get("id")
+                if ver:
+                    v = one(f"/v1/appStoreVersions/{ver}")
+                    held.append((v or {}).get("attributes", {}).get("versionString", ver[:8]))
             print(f"   review submission {s['id'][:8]}: {sa.get('state')} "
-                  f"({sa.get('platform')})")
+                  f"({sa.get('platform')})"
+                  f"{'  holding ' + ', '.join(held) if held else '  no items'}")
             # A submission left open holds the version and blocks a new one.
             if sa.get("state") in ("READY_FOR_REVIEW", "WAITING_FOR_REVIEW",
-                                   "UNRESOLVED_ISSUES"):
+                                   "IN_REVIEW", "UNRESOLVED_ISSUES"):
                 blockers.append(
-                    f"an open review submission ({sa.get('state')}) holds this app — "
-                    "it must be completed or cancelled before another")
+                    "an open review submission holds this app — only one may be "
+                    "open at a time, so the others must be completed or cancelled")
     else:
         print("   review submissions: none")
 
@@ -179,7 +205,11 @@ def main() -> int:
     print("\n" + "=" * 54)
     if blockers:
         print("NOT SUBMITTABLE — outstanding:\n")
+        seen = []
         for b in blockers:
+            if b not in seen:
+                seen.append(b)
+        for b in seen:
             print(f"   - {b}")
     else:
         print("Nothing the API can see is missing.")
