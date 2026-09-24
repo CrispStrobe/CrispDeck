@@ -203,7 +203,10 @@ def main() -> int:
     if subs:
         for s in subs:
             sa = s["attributes"]
-            items = paged(f"/v1/reviewSubmissions/{s['id']}/items")
+            # The /items relationship answers empty even when items exist;
+            # the filtered collection is the one that tells the truth.
+            items = paged(
+                f"/v1/reviewSubmissionItems?filter[reviewSubmission]={s['id']}&limit=50")
             held = []
             for it in items:
                 ver = (it.get("relationships", {}).get("appStoreVersion", {})
