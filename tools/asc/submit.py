@@ -33,8 +33,14 @@ META = json.loads((HERE / "metadata.json").read_text())
 APP_VERSION = json.loads(
     (HERE.parent.parent / "package.json").read_text())["version"]
 PLATFORM = {"ios": "IOS", "macos": "MAC_OS"}
+# States in which the version's own fields can still be changed.
 EDITABLE = {"PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED",
             "METADATA_REJECTED", "INVALID_BINARY"}
+# READY_FOR_REVIEW means the version is already staged in a review submission
+# and only the submission itself remains to be flipped. Nothing about it can be
+# edited, but it is exactly the state from which submitting is the next step —
+# so bailing on "not editable" skipped the only work left to do.
+STAGED = "READY_FOR_REVIEW"
 
 
 def show_errors(doc: dict, indent: str = "     ") -> None:
@@ -71,7 +77,15 @@ def age_rating(app: str) -> bool:
         print(f"   age rating: HTTP {status}")
         show_errors(doc)
         return False
-    print("   age rating: no editable appInfo")
+    # No editable appInfo means the app is past the point of editing it. That
+    # is only a problem if the declaration was never set — returning False
+    # regardless made a finished step look like a failed one and exited 1.
+    for info in client.paged(f"/v1/apps/{app}/appInfos"):
+        status, doc = client.call("GET", f"/v1/appInfos/{info['id']}/ageRatingDeclaration")
+        if (doc or {}).get("data"):
+            print("   age rating: already set, and no appInfo is editable now")
+            return True
+    print("   age rating: no editable appInfo and no declaration anywhere")
     return False
 
 
@@ -383,13 +397,15 @@ def main() -> int:
         state = va.get("appStoreState") or va.get("appVersionState")
         print(f"   version {va.get('versionString')}, state {state}")
 
-        if state not in EDITABLE:
-            print(f"   not editable in {state} — skipping the rest")
-            ok = False
+        if state in EDITABLE:
+            ok = sync_version_string(version, APP_VERSION) and ok
+            ok = attach_build(version, app, platform) and ok
+        elif state == STAGED:
+            print("   staged for review — leaving its fields alone")
+        else:
+            print(f"   nothing to do in state {state}")
             continue
 
-        ok = sync_version_string(version, APP_VERSION) and ok
-        ok = attach_build(version, app, platform) and ok
         ok = review_submission(app, version, platform, args.really_submit) and ok
 
     print("\n" + "=" * 54)
