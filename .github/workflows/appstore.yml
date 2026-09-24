@@ -23,7 +23,9 @@ on:
           - status              # read-only: what does Apple hold?
           - listing-dry-run     # show what pushing metadata would change
           - listing             # push name, description, keywords, URLs, contact
+          - cancel-open         # pull open review submissions out of Apple's queue
           - submit              # age rating, price, attach build, review submission
+          - submit-for-real     # ...and actually submit it
         default: status
       platform:
         description: 'Platform (status and submit)'
@@ -81,7 +83,9 @@ jobs:
             status)          python3 tools/asc/status.py "${plat[@]}" ;;
             listing-dry-run) python3 tools/asc/listing.py --dry-run ;;
             listing)         python3 tools/asc/listing.py ;;
+            cancel-open)     python3 tools/asc/submit.py "${plat[@]}" --cancel-open ;;
             submit)          python3 tools/asc/submit.py "${plat[@]}" ;;
+            submit-for-real) python3 tools/asc/submit.py "${plat[@]}" --really-submit ;;
           esac
 
       - name: Remove the key
