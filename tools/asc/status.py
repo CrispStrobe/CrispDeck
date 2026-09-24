@@ -112,6 +112,11 @@ def report_platform(app: str, name: str, platform: str) -> list[str]:
                   if b["attributes"].get("processingState") == "VALID"
                   and not b["attributes"].get("expired")]
         newest = [b for b in newest if _platform_of(b["id"]) == platform]
+        # Sort, rather than trusting the order Apple returned. Taking [0] of an
+        # unsorted list reported 1.2.7 as "newer" than the attached 1.2.8 —
+        # a claim that is not merely wrong but backwards, and would have sent
+        # someone to re-attach an older build.
+        newest.sort(key=lambda b: b["attributes"].get("uploadedDate") or "", reverse=True)
         if newest and newest[0]["id"] != build["id"]:
             print(f"   NEWER build available: {newest[0]['attributes'].get('version')}"
                   f" — the version would ship {ba.get('version')}")
