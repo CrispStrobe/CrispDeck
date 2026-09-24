@@ -200,25 +200,54 @@ def version_for(app: str, platform: str) -> dict | None:
     return versions[0] if versions else None
 
 
-def attach_build(version: dict, platform: str) -> bool:
-    status, doc = client.call("GET", f"/v1/appStoreVersions/{version['id']}/build")
-    if (doc or {}).get("data"):
-        print(f"   build: already attached ({doc['data']['attributes'].get('version')})")
-        return True
+def newest_build(app: str, platform: str) -> dict | None:
     builds = client.paged(
-        f"/v1/builds?filter[app]={version['relationships']['app']['data']['id']}"
-        f"&filter[preReleaseVersion.platform]={platform}&sort=-uploadedDate&limit=20")
+        f"/v1/builds?filter[app]={app}&sort=-uploadedDate&limit=50")
     ready = [b for b in builds
              if b["attributes"].get("processingState") == "VALID"
-             and not b["attributes"].get("expired")]
-    if not ready:
+             and not b["attributes"].get("expired")
+             and platform_of(b["id"]) == platform]
+    ready.sort(key=lambda b: b["attributes"].get("uploadedDate") or "", reverse=True)
+    return ready[0] if ready else None
+
+
+def platform_of(build_id: str) -> str | None:
+    """Walk the relationship; Apple's platform filter on builds is unreliable."""
+    status, doc = client.call("GET", f"/v1/builds/{build_id}/preReleaseVersion")
+    if status != 200 or not (doc or {}).get("data"):
+        return None
+    return doc["data"]["attributes"].get("platform")
+
+
+def attach_build(version: dict, app: str, platform: str) -> bool:
+    """
+    Attach the newest build, replacing a stale one.
+
+    This used to return success as soon as *any* build was attached, which is
+    how a version labelled 1.2.9 kept shipping build 1.2.8: something was
+    attached, so it looked done. "A build is attached" and "the right build is
+    attached" are different questions, and only the second one matters.
+    """
+    newest = newest_build(app, platform)
+    if not newest:
         print("   build: none VALID to attach")
         return False
+
+    status, doc = client.call("GET", f"/v1/appStoreVersions/{version['id']}/build")
+    current = (doc or {}).get("data")
+    if current and current["id"] == newest["id"]:
+        print(f"   build: {current['attributes'].get('version')} already attached "
+              f"and is the newest")
+        return True
+    if current:
+        print(f"   build: replacing {current['attributes'].get('version')} with "
+              f"{newest['attributes'].get('version')}")
+
     status, doc = client.call(
         "PATCH", f"/v1/appStoreVersions/{version['id']}/relationships/build",
-        {"data": {"type": "builds", "id": ready[0]["id"]}})
+        {"data": {"type": "builds", "id": newest["id"]}})
     if status in (200, 204):
-        print(f"   build: attached {ready[0]['attributes'].get('version')}")
+        print(f"   build: attached {newest['attributes'].get('version')}")
         return True
     print(f"   build: HTTP {status}")
     show_errors(doc)
@@ -231,14 +260,33 @@ def review_submission(app: str, version: dict, platform: str, really: bool) -> b
     is three calls: create the submission, add the version as an item, then
     flip submitted.
     """
-    for s in client.paged(f"/v1/apps/{app}/reviewSubmissions?limit=10"):
-        if s["attributes"].get("platform") != platform:
+    # Reuse an open submission rather than create a second one — only one may
+    # be open at a time. But "one exists" is not "one carries this version":
+    # the three sitting on this app were READY_FOR_REVIEW with no items at
+    # all, and returning success on finding one meant the version was never
+    # added to anything.
+    rs = None
+    for sub in client.paged(f"/v1/apps/{app}/reviewSubmissions?limit=20"):
+        if sub["attributes"].get("platform") != platform:
             continue
-        state = s["attributes"].get("state")
-        if state in ("READY_FOR_REVIEW", "WAITING_FOR_REVIEW", "IN_REVIEW",
-                     "UNRESOLVED_ISSUES"):
-            print(f"   review submission: one already exists, state {state}")
+        if sub["attributes"].get("state") in ("READY_FOR_REVIEW",):
+            rs = sub["id"]
+            print(f"   review submission: reusing {rs[:8]} (READY_FOR_REVIEW)")
+            break
+        if sub["attributes"].get("state") in ("WAITING_FOR_REVIEW", "IN_REVIEW",
+                                              "UNRESOLVED_ISSUES"):
+            print(f"   review submission: {sub['id'][:8]} is already "
+                  f"{sub['attributes'].get('state')} — nothing to do")
             return True
+
+    if rs:
+        for item in client.paged(f"/v1/reviewSubmissions/{rs}/items"):
+            held = (item.get("relationships", {}).get("appStoreVersion", {})
+                    .get("data") or {}).get("id")
+            if held == version["id"]:
+                print("   review submission: already carries this version")
+                return _maybe_submit(rs, really)
+        return _add_item_and_submit(rs, version, really)
 
     status, doc = client.call("POST", "/v1/reviewSubmissions", {
         "data": {"type": "reviewSubmissions", "attributes": {"platform": platform},
@@ -249,7 +297,10 @@ def review_submission(app: str, version: dict, platform: str, really: bool) -> b
         return False
     rs = doc["data"]["id"]
     print(f"   review submission: created {rs[:8]}")
+    return _add_item_and_submit(rs, version, really)
 
+
+def _add_item_and_submit(rs: str, version: dict, really: bool) -> bool:
     status, doc = client.call("POST", "/v1/reviewSubmissionItems", {
         "data": {"type": "reviewSubmissionItems", "relationships": {
             "reviewSubmission": {"data": {"type": "reviewSubmissions", "id": rs}},
@@ -259,7 +310,10 @@ def review_submission(app: str, version: dict, platform: str, really: bool) -> b
         show_errors(doc)
         return False
     print("   review submission: version added as an item")
+    return _maybe_submit(rs, really)
 
+
+def _maybe_submit(rs: str, really: bool) -> bool:
     if not really:
         print("   review submission: NOT submitted — pass --really-submit for that.\n"
               "     Apple will also refuse until the App Privacy nutrition label\n"
@@ -335,7 +389,7 @@ def main() -> int:
             continue
 
         ok = sync_version_string(version, APP_VERSION) and ok
-        ok = attach_build(version, platform) and ok
+        ok = attach_build(version, app, platform) and ok
         ok = review_submission(app, version, platform, args.really_submit) and ok
 
     print("\n" + "=" * 54)
