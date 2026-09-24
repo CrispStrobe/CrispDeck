@@ -76,7 +76,12 @@ def age_rating(app: str) -> bool:
 
 
 def pricing(app: str) -> bool:
-    if client.paged(f"/v1/apps/{app}/appPriceSchedule?limit=1"):
+    # A to-one relationship. `?limit=1` answers PARAMETER_ERROR.ILLEGAL, and
+    # client.paged turns that into SystemExit — so this aborted the whole run
+    # before reaching anything else. Fixed in status.py and left here, which
+    # is how a fix becomes half a fix.
+    status, doc = client.call("GET", f"/v1/apps/{app}/appPriceSchedule")
+    if status == 200 and (doc or {}).get("data"):
         print("   price: already scheduled")
         return True
     territory = META["pricing"]["baseTerritory"]
@@ -289,8 +294,27 @@ def main() -> int:
         raise SystemExit(f"no App Store Connect record for {META['bundleId']}")
     print(f"app {META['app']['name']} = {app}\n")
 
+    ok = True
+
+    # Cancelling comes first and alone. It was running after the app-level
+    # steps, which fail *because* the app is in review — so the one operation
+    # that would end that state was unreachable behind it. The age rating and
+    # price also cannot be set while an appInfo is in review, so there is
+    # nothing to do at app level until the cancel has landed.
+    if args.cancel_open:
+        for key in wanted:
+            print(f"== cancelling open submissions: {key}")
+            ok = cancel_open(app, PLATFORM[key]) and ok
+            version = version_for(app, PLATFORM[key])
+            if version:
+                va = version["attributes"]
+                print(f"   version {va.get('versionString')} is now "
+                      f"{va.get('appStoreState') or va.get('appVersionState')}")
+        print("\nCancelled. Re-run without --cancel-open to correct and resubmit.")
+        return 0 if ok else 1
+
     print("== app level")
-    ok = age_rating(app)
+    ok = age_rating(app) and ok
     ok = pricing(app) and ok
 
     for key in wanted:
@@ -304,14 +328,6 @@ def main() -> int:
         va = version["attributes"]
         state = va.get("appStoreState") or va.get("appVersionState")
         print(f"   version {va.get('versionString')}, state {state}")
-
-        if args.cancel_open:
-            ok = cancel_open(app, platform) and ok
-            # Re-read: cancelling is what makes the version editable again.
-            version = version_for(app, platform) or version
-            va = version["attributes"]
-            state = va.get("appStoreState") or va.get("appVersionState")
-            print(f"   version now {va.get('versionString')}, state {state}")
 
         if state not in EDITABLE:
             print(f"   not editable in {state} — skipping the rest")
