@@ -199,6 +199,7 @@ def main() -> int:
     if not price:
         blockers.append("no price schedule (even free needs one)")
 
+    submitted = False
     subs = paged(f"/v1/apps/{app}/reviewSubmissions?limit=5")
     if subs:
         for s in subs:
@@ -220,6 +221,8 @@ def main() -> int:
                   f"({sa.get('platform')})"
                   f"{'  holding ' + ', '.join(held) if held else ''}")
             # A submission left open holds the version and blocks a new one.
+            if sa.get("state") in ("WAITING_FOR_REVIEW", "IN_REVIEW"):
+                submitted = True
             if sa.get("state") in ("READY_FOR_REVIEW", "WAITING_FOR_REVIEW",
                                    "IN_REVIEW", "UNRESOLVED_ISSUES"):
                 blockers.append(
@@ -232,6 +235,9 @@ def main() -> int:
         blockers += report_platform(app, key, PLATFORM[key])
 
     print("\n" + "=" * 54)
+    if submitted:
+        print("SUBMITTED — a version is with Apple now.")
+        print("Anything below is about a *future* submission, not this one.\n")
     if blockers:
         print("NOT SUBMITTABLE — outstanding:\n")
         seen = []

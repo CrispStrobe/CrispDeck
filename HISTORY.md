@@ -11,6 +11,50 @@ material that is still true.
 
 ## Remaining Work — the items that are no longer remaining
 
+### 192. iOS 1.2.9 to the App Store, and seven bugs in the tool that got it there (2026-09-24, PRs #51–#60)
+
+Both TestFlight builds came back APPROVED, so external testers have 1.2.9 on
+both platforms. Then the App Store, where the record turned out to be wrong in
+a way nobody had noticed.
+
+**An iOS submission was already in Apple's queue, for the wrong build.** The
+version record was labelled 1.2.6 and carried build 1.2.8 — the build replaced
+precisely because it lacks the Mastodon OAuth callback fix and the
+credential-overwrite fix. Had that review passed, Apple would have shipped it.
+Three empty READY_FOR_REVIEW submissions were also sitting on the app, which is
+the stale-submission trap appstore.md warns about.
+
+Cancelled it, which returned the version to DEVELOPER_REJECTED and editable;
+pushed the listing, which set the missing primary category; corrected the label
+to 1.2.9; replaced the attached build with 1.2.9; and submitted. It is
+WAITING_FOR_REVIEW with the right binary now.
+
+**The tool written to do this was wrong seven times, and the pattern matters
+more than any one bug.** Three were bad reads that printed confident
+absences — `filter[platform]` on appStoreVersions, `?limit=1` on a to-one
+relationship, and an unsorted list that called 1.2.7 newer than 1.2.8. "No App
+Store version exists" and "price schedule NOT SET" were both about to be
+reported as facts about Apple's record when they were facts about my query.
+
+Three more were the same error of substance: treating the existence of a thing
+as evidence about its contents. `attach_build` returned success because *a*
+build was attached, which is how a version labelled 1.2.9 kept carrying 1.2.8.
+`review_submission` returned success because *a* submission existed, though it
+had no items. `--cancel-open` ran after the app-level steps, which fail
+precisely because the app is in review — the one operation that would end that
+state sat behind the state it was meant to clear.
+
+The seventh is the one worth remembering. Three separate attempts to read
+whether a submission already carried a version each failed silently, because
+`client.paged` raises on 4xx and the reason goes to stderr — which the filtered
+log I was reading did not show. I made the same class of mistake three times
+without noticing, because I had filtered the evidence out of my own view. The
+fix was to stop reading at all: POST the item and let 201 or 409 answer.
+
+**macOS has no App Store version at all**, so it was not submitted. That is
+separate work, and item 188 still argues against it.
+
+
 ### 191. macOS to TestFlight, and the iOS build number that was never fixed (2026-09-23, PRs #47, #48)
 
 macOS 1.2.9 (build 6) is in both groups, internal live, external
