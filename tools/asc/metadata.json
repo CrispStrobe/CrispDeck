@@ -45,5 +45,35 @@
   "groups": {
     "internal": "Internal Testers",
     "external": "External Testers"
+  },
+  "ageRating": {
+    "_comment": "The human decision, recorded so it is reviewable in git rather than typed into a browser. appstore.md records: all NONE/false except unrestrictedWebAccess and userGeneratedContent. Both are true here — CrispDeck renders posts from arbitrary fediverse users and opens links to arbitrary sites. DEVIATION: messagingAndChat is also true, which appstore.md does not list. The app has direct messages (a /messages route and a DMs tab), so declaring false would be inaccurate. Flagged rather than changed quietly, because an age-rating answer is a declaration to Apple and is the user's to make. ageAssurance must be present or the PATCH 409s; ageRatingOverride V1 must NOT be sent alongside V2.",
+    "alcoholTobaccoOrDrugUseOrReferences": "NONE",
+    "contests": "NONE",
+    "gamblingSimulated": "NONE",
+    "horrorOrFearThemes": "NONE",
+    "matureOrSuggestiveThemes": "NONE",
+    "medicalOrTreatmentInformation": "NONE",
+    "profanityOrCrudeHumor": "NONE",
+    "sexualContentGraphicAndNudity": "NONE",
+    "sexualContentOrNudity": "NONE",
+    "violenceCartoonOrFantasy": "NONE",
+    "violenceRealistic": "NONE",
+    "violenceRealisticProlongedGraphicOrSadistic": "NONE",
+    "gunsOrOtherWeapons": "NONE",
+    "advertising": false,
+    "ageAssurance": false,
+    "gambling": false,
+    "healthOrWellnessTopics": false,
+    "lootBox": false,
+    "messagingAndChat": true,
+    "parentalControls": false,
+    "unrestrictedWebAccess": true,
+    "userGeneratedContent": true
+  },
+  "pricing": {
+    "_comment": "Free. Apple has no 'free' flag; a schedule pointing at the $0.00 price point for the base territory is how it is expressed.",
+    "baseTerritory": "USA",
+    "free": true
   }
 }
