@@ -294,7 +294,12 @@ def review_submission(app: str, version: dict, platform: str, really: bool) -> b
             return True
 
     if rs:
-        for item in client.paged(f"/v1/reviewSubmissions/{rs}/items"):
+        # Read the items through the collection filter. The
+        # /v1/reviewSubmissions/<id>/items relationship comes back empty even
+        # when items exist — status.py printed "no items" for every submission
+        # on this app, including one that demonstrably had one.
+        for item in client.paged(
+                f"/v1/reviewSubmissionItems?filter[reviewSubmission]={rs}&limit=50"):
             held = (item.get("relationships", {}).get("appStoreVersion", {})
                     .get("data") or {}).get("id")
             if held == version["id"]:
@@ -319,6 +324,12 @@ def _add_item_and_submit(rs: str, version: dict, really: bool) -> bool:
         "data": {"type": "reviewSubmissionItems", "relationships": {
             "reviewSubmission": {"data": {"type": "reviewSubmissions", "id": rs}},
             "appStoreVersion": {"data": {"type": "appStoreVersions", "id": version["id"]}}}}})
+    if status == 409:
+        # Apple refuses a duplicate item with RELATIONSHIP.INVALID.NOT_ALLOWED
+        # and no detail. That is not a failure: it means the thing we wanted
+        # is already true, which is the whole point of an idempotent step.
+        print("   review submission: version is already an item (409)")
+        return _maybe_submit(rs, really)
     if status != 201:
         print(f"   review submission item: HTTP {status}")
         show_errors(doc)
