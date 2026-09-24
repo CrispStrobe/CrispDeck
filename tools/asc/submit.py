@@ -28,6 +28,10 @@ import client  # noqa: E402
 
 HERE = pathlib.Path(__file__).resolve().parent
 META = json.loads((HERE / "metadata.json").read_text())
+# The version the repository is at. The App Store record's label had drifted
+# three releases behind the binary attached to it.
+APP_VERSION = json.loads(
+    (HERE.parent.parent / "package.json").read_text())["version"]
 PLATFORM = {"ios": "IOS", "macos": "MAC_OS"}
 EDITABLE = {"PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED",
             "METADATA_REJECTED", "INVALID_BINARY"}
@@ -122,6 +126,70 @@ def _all_versions(app: str) -> list:
     return client.paged(f"/v1/apps/{app}/appStoreVersions?limit=50")
 
 
+def cancel_open(app: str, platform: str) -> bool:
+    """
+    Cancel every open review submission for a platform.
+
+    Only one may be open at a time, so a stale one blocks the next — and
+    appstore.md records that a cancelled submission can itself leave a stale
+    record behind, which is the likeliest explanation for the three empty
+    READY_FOR_REVIEW submissions already on this app.
+
+    Cancelling a submission that is WAITING_FOR_REVIEW pulls the version out
+    of Apple's queue and back to an editable state. That is the point: the
+    version in review is labelled 1.2.6 and carries a build we have since
+    replaced.
+    """
+    open_states = ("READY_FOR_REVIEW", "WAITING_FOR_REVIEW", "UNRESOLVED_ISSUES",
+                   "IN_REVIEW")
+    ok = True
+    found = False
+    for sub in client.paged(f"/v1/apps/{app}/reviewSubmissions?limit=50"):
+        if sub["attributes"].get("platform") != platform:
+            continue
+        state = sub["attributes"].get("state")
+        if state not in open_states:
+            continue
+        found = True
+        status, doc = client.call(
+            "PATCH", f"/v1/reviewSubmissions/{sub['id']}",
+            {"data": {"type": "reviewSubmissions", "id": sub["id"],
+                      "attributes": {"canceled": True}}})
+        if status in (200, 204):
+            print(f"   cancelled {sub['id'][:8]} (was {state})")
+        else:
+            ok = False
+            print(f"   {sub['id'][:8]} (was {state}): HTTP {status}")
+            show_errors(doc)
+    if not found:
+        print("   no open review submissions for this platform")
+    return ok
+
+
+def sync_version_string(version: dict, target: str) -> bool:
+    """
+    The version record's label, which is not the binary's.
+
+    They had drifted: the record said 1.2.6 while the attached build was
+    1.2.8. Apple compares CFBundleShortVersionString against this, so a
+    record behind the binary is ITMS-90062 waiting to happen.
+    """
+    current = version["attributes"].get("versionString")
+    if current == target:
+        print(f"   version string: already {target}")
+        return True
+    status, doc = client.call(
+        "PATCH", f"/v1/appStoreVersions/{version['id']}",
+        {"data": {"type": "appStoreVersions", "id": version["id"],
+                  "attributes": {"versionString": target}}})
+    if status in (200, 204):
+        print(f"   version string: {current} -> {target}")
+        return True
+    print(f"   version string: HTTP {status} (wanted {target}, record says {current})")
+    show_errors(doc)
+    return False
+
+
 def version_for(app: str, platform: str) -> dict | None:
     versions = versions_for(app, platform)
     return versions[0] if versions else None
@@ -210,6 +278,9 @@ def main() -> int:
     ap.add_argument("--platform", choices=sorted(PLATFORM), action="append")
     ap.add_argument("--really-submit", action="store_true",
                     help="flip submitted:true — puts the app in front of App Review")
+    ap.add_argument("--cancel-open", action="store_true",
+                    help="cancel open review submissions first, pulling a version "
+                         "back out of Apple's queue so it can be corrected")
     args = ap.parse_args()
     wanted = args.platform or sorted(PLATFORM)
 
@@ -233,9 +304,21 @@ def main() -> int:
         va = version["attributes"]
         state = va.get("appStoreState") or va.get("appVersionState")
         print(f"   version {va.get('versionString')}, state {state}")
+
+        if args.cancel_open:
+            ok = cancel_open(app, platform) and ok
+            # Re-read: cancelling is what makes the version editable again.
+            version = version_for(app, platform) or version
+            va = version["attributes"]
+            state = va.get("appStoreState") or va.get("appVersionState")
+            print(f"   version now {va.get('versionString')}, state {state}")
+
         if state not in EDITABLE:
-            print(f"   not editable in {state} — skipping")
+            print(f"   not editable in {state} — skipping the rest")
+            ok = False
             continue
+
+        ok = sync_version_string(version, APP_VERSION) and ok
         ok = attach_build(version, platform) and ok
         ok = review_submission(app, version, platform, args.really_submit) and ok
 
