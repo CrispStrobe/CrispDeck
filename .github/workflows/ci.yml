@@ -12,8 +12,9 @@ concurrency:
 
 jobs:
   frontend:
-    name: Frontend build
+    name: Frontend and browser tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
 
@@ -23,27 +24,26 @@ jobs:
           cache: npm
 
       - run: npm ci
+      - name: Release submission guards
+        run: |
+          python3 -m unittest discover -s tools/asc -p 'test_*.py'
+          python3 -m unittest discover -s scripts -p 'test_*.py'
       - run: npm run check
       - run: npm test -- --maxWorkers=2
       - run: npx svelte-kit sync
       - run: npx vite build
-
-  e2e:
-    name: Playwright E2E
-    runs-on: ubuntu-latest
-    needs: frontend
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: lts/*
-          cache: npm
-
-      - run: npm ci
-      - run: npx svelte-kit sync && npx vite build
+      - run: bash scripts/ci-apt.sh
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test --reporter=list
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-test-results
+          path: |
+            playwright-results/
+            playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
 
   rust-check:
     name: Rust check (${{ matrix.platform }})
@@ -55,6 +55,7 @@ jobs:
           - platform: macos-14
           - platform: windows-latest
     runs-on: ${{ matrix.platform }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
 
@@ -67,8 +68,9 @@ jobs:
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
         run: |
+          bash scripts/ci-apt.sh
           sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \

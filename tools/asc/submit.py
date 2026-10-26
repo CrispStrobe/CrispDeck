@@ -217,10 +217,16 @@ def version_for(app: str, platform: str) -> dict | None:
 def newest_build(app: str, platform: str) -> dict | None:
     builds = client.paged(
         f"/v1/builds?filter[app]={app}&sort=-uploadedDate&limit=50")
-    ready = [b for b in builds
-             if b["attributes"].get("processingState") == "VALID"
-             and not b["attributes"].get("expired")
-             and platform_of(b["id"]) == platform]
+    ready = []
+    for build in builds:
+        if build["attributes"].get("processingState") != "VALID" or build["attributes"].get("expired"):
+            continue
+        status, doc = client.call("GET", f"/v1/builds/{build['id']}/preReleaseVersion")
+        release = (doc.get("data") or {}).get("attributes", {}) if status == 200 else {}
+        # CFBundleVersion is a CI run number, not the marketing version. Both
+        # platform AND preReleaseVersion.version must match this repository.
+        if release.get("platform") == platform and release.get("version") == APP_VERSION:
+            ready.append(build)
     ready.sort(key=lambda b: b["attributes"].get("uploadedDate") or "", reverse=True)
     return ready[0] if ready else None
 
@@ -244,7 +250,7 @@ def attach_build(version: dict, app: str, platform: str) -> bool:
     """
     newest = newest_build(app, platform)
     if not newest:
-        print("   build: none VALID to attach")
+        print(f"   build: no VALID {platform} build for {APP_VERSION} to attach")
         return False
 
     status, doc = client.call("GET", f"/v1/appStoreVersions/{version['id']}/build")
@@ -408,9 +414,17 @@ def main() -> int:
         print(f"   version {va.get('versionString')}, state {state}")
 
         if state in EDITABLE:
-            ok = sync_version_string(version, APP_VERSION) and ok
-            ok = attach_build(version, app, platform) and ok
+            prepared = sync_version_string(version, APP_VERSION)
+            prepared = attach_build(version, app, platform) and prepared
+            if not prepared:
+                ok = False
+                print("   review submission: skipped until the correct build is attached")
+                continue
         elif state == STAGED:
+            if va.get("versionString") != APP_VERSION:
+                ok = False
+                print(f"   staged version does not match {APP_VERSION}; resolve it before submitting")
+                continue
             print("   staged for review — leaving its fields alone")
         else:
             print(f"   nothing to do in state {state}")

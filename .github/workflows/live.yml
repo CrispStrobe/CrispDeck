@@ -48,7 +48,7 @@ jobs:
             src/lib/api/mastodon.integration.test.ts \
             src/lib/api/ordering.test.ts \
             src/lib/api/http.live.test.ts \
-            --reporter=verbose 2>&1 | tee live.log
+            --maxWorkers=2 --reporter=verbose 2>&1 | tee live.log
 
       - name: Summarise
         if: always()

@@ -23,16 +23,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-14
-            rust_target: aarch64-apple-darwin
-            tauri_args: '--target aarch64-apple-darwin'
-            artifact_suffix: macos-arm64
-          # Intel build cross-compiles on an arm64 runner — GitHub retired
-          # the macos-13 (Intel) runners, jobs targeting them queue forever
-          - platform: macos-14
-            rust_target: x86_64-apple-darwin
-            tauri_args: '--target x86_64-apple-darwin'
-            artifact_suffix: macos-x64
+          # macOS is built, signed and notarized by macos-dmg.yml.
           - platform: windows-latest
             rust_target: x86_64-pc-windows-msvc
             tauri_args: ''
@@ -43,6 +34,7 @@ jobs:
             artifact_suffix: linux-x64
 
     runs-on: ${{ matrix.platform }}
+    timeout-minutes: 90
 
     env:
       APPIMAGE_EXTRACT_AND_RUN: '1'
@@ -61,8 +53,9 @@ jobs:
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
         run: |
+          bash scripts/ci-apt.sh
           sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
@@ -86,7 +79,7 @@ jobs:
 
       - name: Run tests
         if: runner.os == 'Linux'
-        run: npm test
+        run: npm test -- --maxWorkers=2
 
       - uses: tauri-apps/tauri-action@v0
         env:
@@ -96,6 +89,7 @@ jobs:
           releaseName: 'CrispDeck ${{ inputs.tag || ''v__VERSION__'' }}'
           releaseBody: |
             See the [CHANGELOG](https://github.com/CrispStrobe/CrispDeck/blob/main/CHANGELOG.md) for what's new in this release.
-          releaseDraft: false
+          # Assemble all platforms before publishing the release.
+          releaseDraft: true
           prerelease: false
           args: ${{ matrix.tauri_args }}

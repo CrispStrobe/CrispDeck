@@ -31,6 +31,20 @@ const OUT = path.resolve(process.argv[2] ?? 'appstore-shots');
  */
 const DEVICES = [
   {
+    suffix: 'mac',
+    displayType: 'APP_DESKTOP',
+    viewport: { width: 1440, height: 900 },
+    scale: 1,
+    pixels: [1440, 900],
+  },
+  {
+    suffix: 'iphone-medium',
+    displayType: 'APP_IPHONE_61',
+    viewport: { width: 393, height: 852 },
+    scale: 3,
+    pixels: [1179, 2556],
+  },
+  {
     suffix: 'iphone',
     displayType: 'APP_IPHONE_67',
     viewport: { width: 440, height: 956 },

@@ -18,7 +18,7 @@ import client  # noqa: E402
 META = json.loads((pathlib.Path(__file__).resolve().parent / "metadata.json").read_text())
 APP = META["appId"]
 PLATFORM = {"APP_IPHONE_67": "IOS", "APP_IPHONE_65": "IOS",
-            "APP_IPAD_PRO_3GEN_129": "IOS", "APP_DESKTOP": "MAC_OS"}
+            "APP_IPAD_PRO_3GEN_129": "IOS", "APP_IPHONE_61": "IOS", "APP_DESKTOP": "MAC_OS"}
 
 
 # A rejected version is still editable, and it is the one being fixed here.
