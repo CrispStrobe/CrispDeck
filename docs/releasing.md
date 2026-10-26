@@ -14,11 +14,14 @@ gh workflow run coordinated-release.yml --ref main -f publish=false
 The preparation job checks package/Tauri/Cargo versions and obtains the next
 unused iOS build number from Apple's build list. It counts expired builds and
 filters both platform and marketing version. The coordinator serializes runs
-to avoid two uploads choosing the same number. Build-only runs never upload
-to Apple, replace release assets or notify TestFlight testers.
+to avoid two uploads choosing the same number. Build-only runs never upload builds
+to App Store Connect, replace release assets or notify TestFlight testers.
+Mac code notarization still sends the candidate DMG to Apple’s notary service.
 
-All builders check out the preparation job's full commit SHA. Full CI runs
-before compilation. Native checks then include:
+All builders check out the preparation job's full commit SHA. Full CI and
+platform builds run in parallel after preparation. Aggregation requires CI and
+every platform check to pass before either store upload or publication.
+Native checks include:
 
 - Linux DEB installation/upgrade, installed version, a visible native window,
   startup survival and an application-data marker.
@@ -34,6 +37,9 @@ before compilation. Native checks then include:
   version, ZIP integrity, 16 KiB ZIP/ELF alignment and emulator installation,
   launch and restart of that exact APK.
 - A complete static web ZIP; the same source passes browser workflows in CI.
+
+The same candidate also renders the draft Google Play listing assets from its
+source commit. Those assets remain a separate workflow artifact for owner review.
 
 Platform receipts bind check results to source, version, size and SHA-256.
 The aggregation job rejects missing platforms, changed packages, mixed source

@@ -2,7 +2,18 @@
 
 ## Unreleased
 
+### Compose
+
+- Character counters sit below the full and floating editors, keeping long
+  draft text readable on narrow screens and while scrolling.
+
 ### Release automation and native validation
+
+- Google Play tooling verifies published Android packages, validates access with
+  a discarded temporary edit and can publish only to the internal track.
+  Listing copy, a feature graphic and phone/tablet capture tooling are included.
+- Review instructions describe optional OAuth/push processing accurately and
+  keep secrets out of source-controlled review metadata.
 
 - One coordinator builds all six platforms from one source commit and verifies
   platform receipts, identities and SHA-256 hashes before publication.
@@ -11,9 +22,10 @@
 - Windows app binaries and installers support timestamped PFX or Azure Artifact
   Signing. Publication requires publisher signing; unsigned build-only
   candidates remain explicitly marked and cannot be promoted.
-- Apple uploads happen after all package checks; published GitHub artifacts
+- App Store Connect uploads happen after all package checks; published GitHub artifacts
   cannot be replaced by the new publisher. Manual candidate builds do not
-  upload to Apple or notify TestFlight testers.
+  upload to App Store Connect or notify TestFlight testers. Mac notarization
+  still uses Apple’s notary service.
 - The physical-device/live-account validation matrix remains pending until
   dedicated accounts and device access are available.
 

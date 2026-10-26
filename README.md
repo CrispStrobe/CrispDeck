@@ -447,6 +447,9 @@ signing, the retained Apple/Android identities and matching package/Tauri/Cargo
 versions. A published release cannot be replaced by this tool. Child builders
 no longer publish independently or trigger duplicate tag builds.
 
+See [Google Play setup](docs/google-play.md) for offline verification, store
+assets and the internal-track workflow.
+
 See [device validation](docs/validation.md) for the live-account/physical-device
 matrix. TestFlight and App Store approval are separate from GitHub publication;
 a GitHub IPA is an App Store archive, not a sideload installer. Heavy compilation

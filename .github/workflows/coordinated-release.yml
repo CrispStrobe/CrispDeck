@@ -60,7 +60,7 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   desktop:
-    needs: [prepare, ci]
+    needs: prepare
     permissions:
       contents: read
       id-token: write
@@ -71,7 +71,7 @@ jobs:
     secrets: inherit
 
   mobile:
-    needs: [prepare, ci]
+    needs: prepare
     uses: ./.github/workflows/mobile.yml
     with:
       source_sha: ${{ needs.prepare.outputs.commit }}
@@ -80,14 +80,14 @@ jobs:
     secrets: inherit
 
   macos:
-    needs: [prepare, ci]
+    needs: prepare
     uses: ./.github/workflows/macos-dmg.yml
     with:
       source_sha: ${{ needs.prepare.outputs.commit }}
     secrets: inherit
 
   web:
-    needs: [prepare, ci]
+    needs: prepare
     uses: ./.github/workflows/web-release.yml
     with:
       source_sha: ${{ needs.prepare.outputs.commit }}
@@ -98,8 +98,14 @@ jobs:
     with:
       source_sha: ${{ needs.prepare.outputs.commit }}
 
+  listing_assets:
+    needs: prepare
+    uses: ./.github/workflows/store-assets.yml
+    with:
+      source_sha: ${{ needs.prepare.outputs.commit }}
+
   verify:
-    needs: [prepare, desktop, mobile, macos, web, android_smoke]
+    needs: [prepare, ci, desktop, mobile, macos, web, android_smoke, listing_assets]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
