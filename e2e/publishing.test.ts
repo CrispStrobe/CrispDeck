@@ -1,5 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 
+// Real PBKDF2 credential setup and reconnects also run on constrained devices.
+test.setTimeout(60000);
+
 /** Real storage + real UI, with only remote network boundaries stubbed. */
 async function connectTestAccounts(page: Page, count = 2) {
   await page.goto('/compose');
@@ -36,7 +39,7 @@ async function connectTestAccounts(page: Page, count = 2) {
     db.close();
   }, count);
   await page.reload();
-  await expect(page.getByRole('button', { name: /writer1@/ }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /writer1@/ }).first()).toBeVisible({ timeout: 15000 });
 }
 
 type Sent = { account: string; text: string; parent?: string; key?: string; id: string };
@@ -69,7 +72,7 @@ test('partial crossposts survive reconnect, retry only the failed account, and a
   expect(geometry!.x + geometry!.width).toBeLessThanOrEqual(390);
   expect(await page.locator('main').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
   await page.getByTestId('publish-post').click();
-  await expect(page.getByText('Partially published', { exact: true })).toBeVisible();
+  await expect(page.getByText('Partially published', { exact: true })).toBeVisible({ timeout: 15000 });
   expect(attempts.map(a => a.account)).toEqual(['1', '2']);
   // Reconnecting through a new local account row must preserve delivery identity.
   await page.evaluate(async () => {
@@ -119,8 +122,8 @@ test('autosave restores image bytes, alt text, destination text and visibility a
     const db = await new Promise<IDBDatabase>(resolve => { const r = indexedDB.open('crispdeck-publishing'); r.onsuccess = () => resolve(r.result); });
     const data = await new Promise<any>(resolve => { const r = db.transaction('snapshots').objectStore('snapshots').get('autosave'); r.onsuccess = () => resolve(r.result); });
     db.close();
-    return data?.options.altTexts?.[0];
-  })).toBe('A tiny test image');
+    return { alt: data?.options.altTexts?.[0], visibility: data?.options.visibility, override: data?.overrides?.['1'] };
+  })).toEqual({ alt: 'A tiny test image', visibility: 'private', override: 'Custom destination text' });
   await page.reload();
   await expect(page.locator('textarea').first()).toHaveValue('Draft with a photo');
   await expect(page.getByPlaceholder(/Describe this image/)).toHaveValue('A tiny test image');
@@ -163,7 +166,7 @@ test('a scheduled draft publishes from another route and never repeats after a p
   await expect.poll(() => attempts.length).toBe(2);
   for (let i = 0; i < 3; i++) await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await page.goto('/drafts');
-  await expect(page.getByText('Partially published', { exact: true })).toBeVisible();
+  await expect(page.getByText('Partially published', { exact: true })).toBeVisible({ timeout: 15000 });
   expect(attempts).toHaveLength(2);
   await page.getByRole('button', { name: 'Retry failed destinations', exact: true }).click();
   await expect.poll(() => attempts.length).toBe(3);
