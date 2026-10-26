@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Mobile layout
+
+- Keep the mobile header, tabs and menu controls inside the device safe areas.
+  Fit scrollable content within the inset viewport so the final controls remain
+  reachable above the home indicator.
+
 ### Compose
 
 - Character counters sit below the full and floating editors, keeping long

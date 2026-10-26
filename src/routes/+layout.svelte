@@ -296,7 +296,7 @@
 
 <a href="#main-content" class="skip-to-content">{i18n.t.app.skipToContent}</a>
 
-<div class="flex h-screen" dir={i18n.dir}>
+<div class="flex h-full" dir={i18n.dir}>
   <!-- Desktop sidebar -->
   <nav aria-label={i18n.t.app.mainNavigation} class="hidden md:flex {collapsed ? 'w-14' : 'w-52'} bg-[var(--color-surface)] border-r border-[var(--color-border)] flex-col transition-all duration-200 flex-shrink-0">
     <div class="flex items-center justify-between px-3 py-3 border-b border-[var(--color-border)]">
@@ -353,9 +353,9 @@
   </nav>
 
   <!-- Mobile top bar (condensed single row) -->
-  <div class="md:hidden fixed top-0 left-0 right-0 z-50 bg-[var(--color-surface)] border-b border-[var(--color-border)] px-3 py-1.5 flex items-center justify-between">
+  <header class="mobile-top-bar md:hidden fixed top-0 left-0 right-0 z-50 bg-[var(--color-surface)] border-b border-[var(--color-border)] px-3 py-1.5 flex items-center justify-between">
     <div class="flex items-center gap-2">
-      <button onclick={() => mobileMenuOpen = !mobileMenuOpen} class="p-1 text-[var(--color-text-muted)]">
+      <button onclick={() => mobileMenuOpen = !mobileMenuOpen} aria-label={i18n.t.app.mainNavigation} aria-expanded={mobileMenuOpen} aria-controls="mobile-navigation" class="p-1 text-[var(--color-text-muted)]">
         {#if mobileMenuOpen}<X size={18} />{:else}<Menu size={18} />{/if}
       </button>
       <a href={base || "/"} class="text-sm font-bold text-[var(--color-text)]">CrispDeck</a>
@@ -368,12 +368,12 @@
         <Bell size={14} />
       </a>
     </div>
-  </div>
+  </header>
 
   <!-- Mobile slide-out menu -->
   {#if mobileMenuOpen}
     <div class="md:hidden fixed inset-0 z-40 flex {mobileMenuClosing ? 'mobile-menu-backdrop-out' : 'mobile-menu-backdrop'}">
-      <div class="w-64 bg-[var(--color-surface)] border-r border-[var(--color-border)] pt-14 overflow-y-auto {mobileMenuClosing ? 'mobile-menu-slide-out' : 'mobile-menu-slide'}">
+      <div id="mobile-navigation" class="mobile-menu-panel w-64 bg-[var(--color-surface)] border-r border-[var(--color-border)] pt-14 overflow-y-auto {mobileMenuClosing ? 'mobile-menu-slide-out' : 'mobile-menu-slide'}">
         <a href="{base}/compose" onclick={closeMobileMenu} class="block mx-3 mt-3 px-4 py-2.5 text-center rounded-lg bg-[var(--color-primary)] text-white">{i18n.t.nav.compose}</a>
         <AppNavigation items={visibleNavItems} simple={simpleMode} path={routePath(page.url?.pathname ?? '/')} onnavigate={closeMobileMenu} />
       </div>
@@ -400,7 +400,7 @@
   <ScrollToTop />
 
   <!-- Mobile bottom tab bar (compact) -->
-  <nav class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[var(--color-surface)] border-t border-[var(--color-border)] flex items-center justify-around px-1 safe-area-bottom">
+  <nav class="mobile-tab-bar md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[var(--color-surface)] border-t border-[var(--color-border)] flex items-center justify-around px-1 safe-area-bottom">
     {#each mobileTabItems as item}
       <a
         href={`${base}${item.href}`.replace(/\/$/, "") || "/"}
