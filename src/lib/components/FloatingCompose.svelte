@@ -388,7 +388,7 @@
         <!-- Account picker -->
         <AccountPicker {accounts} bind:selected={selectedAccountIds} />
         <details><summary class="text-sm cursor-pointer">{i18n.t.compose.preview}</summary>
-          <DestinationPreviews {accounts} selected={selectedAccountIds} sharedText={text} bind:overrides {mediaPreviews} mediaTypes={mediaFiles.map(f => f.type)} {altTexts}
+          <DestinationPreviews {accounts} selected={selectedAccountIds} sharedText={text} bind:overrides {threadsMediaUrl} {mediaPreviews} mediaTypes={mediaFiles.map(f => f.type)} {altTexts}
             {visibility} contentWarning={showCW ? contentWarning : ''} threadGate="everyone" disableQuotes={false} selfLabel="none" />
         </details>
         {#if hasThreads}

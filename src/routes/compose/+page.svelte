@@ -1060,7 +1060,7 @@
       <div class="space-y-4">
         <AccountPicker {accounts} bind:selected={selectedAccountIds} />
 
-        <DestinationPreviews {accounts} selected={selectedAccountIds} sharedText={text} bind:overrides {mediaPreviews} mediaTypes={mediaFiles.map(f => f.type)} {altTexts}
+        <DestinationPreviews {accounts} selected={selectedAccountIds} sharedText={text} bind:overrides {threadsMediaUrl} {mediaPreviews} mediaTypes={mediaFiles.map(f => f.type)} {altTexts}
           {visibility} contentWarning={showCW ? contentWarning : ''} {threadGate} {disableQuotes} {selfLabel} />
         {#if hasThreads}
           <label class="block text-sm space-y-2">

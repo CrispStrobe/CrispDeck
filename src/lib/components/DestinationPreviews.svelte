@@ -4,9 +4,9 @@
   import { resolveMentionsForPlatform } from '$lib/compose/mentions';
   import { splitForPlatform, type ThreadPlan } from '$lib/compose/thread';
   import type { ThreadGate } from '$lib/compose/adapter';
-  let { accounts, selected, sharedText, overrides = $bindable({}), mediaPreviews = [], mediaTypes = [], altTexts = [], visibility, contentWarning, threadGate, disableQuotes, selfLabel }: {
+  let { accounts, selected, sharedText, overrides = $bindable({}), mediaPreviews = [], mediaTypes = [], altTexts = [], threadsMediaUrl = '', visibility, contentWarning, threadGate, disableQuotes, selfLabel }: {
     accounts: Account[]; selected: number[]; sharedText: string; overrides: Record<string, string>;
-    mediaPreviews?: string[]; mediaTypes?: string[]; altTexts?: string[]; visibility: string; contentWarning: string;
+    mediaPreviews?: string[]; mediaTypes?: string[]; altTexts?: string[]; threadsMediaUrl?: string; visibility: string; contentWarning: string;
     threadGate: ThreadGate; disableQuotes: boolean; selfLabel: string;
   } = $props();
   let plans: Record<string, ThreadPlan> = $state({});
@@ -40,9 +40,10 @@
         {/if}
       </p>
       {#if account.platform === 'mastodon' && contentWarning}<p class="text-xs">{i18n.t.post.contentWarning}: {contentWarning}</p>{/if}
+      {#if account.platform === 'threads' && mediaPreviews.length && !threadsMediaUrl.trim()}<p class="text-xs text-[var(--color-text-muted)]">{i18n.t.workflow.threadsMediaHint}</p>{/if}
       <div class="grid grid-cols-2 gap-1">
-        {#each mediaPreviews as url, index}
-          {#if mediaTypes[index]?.startsWith('video/')}
+        {#each account.platform === 'threads' ? (threadsMediaUrl.trim() ? [threadsMediaUrl.trim()] : []) : mediaPreviews as url, index}
+          {#if account.platform === 'threads' ? /\.(mp4|mov|webm)(?:[?#]|$)/i.test(url) : mediaTypes[index]?.startsWith('video/')}
             <video src={url} controls class="rounded max-h-36 w-full"><track kind="captions" /></video>
           {:else}
             <img src={url} alt={altTexts[index] ?? ''} class="rounded max-h-36 w-full object-contain" />
