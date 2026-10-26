@@ -15,6 +15,10 @@ on:
 permissions:
   contents: write
 
+defaults:
+  run:
+    shell: bash
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Required GitHub Secrets (see /mnt/volume1/appstore.md for full playbook):
 #
