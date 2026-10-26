@@ -944,7 +944,7 @@
             </div>
           {/if}
 
-          <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2 min-w-0">
             {#if videoUploadStatus}
               <span class="flex items-center gap-1.5 text-xs text-blue-300">
                 <Loader2 size={12} class="animate-spin" />

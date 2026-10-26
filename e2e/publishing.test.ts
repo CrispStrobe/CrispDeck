@@ -63,7 +63,11 @@ test('partial crossposts survive reload and retry only the failed account', asyn
   let rejected = false;
   const attempts = await fakeNetworks(page, sent => sent.account === '2' && !rejected && (rejected = true));
   await connectTestAccounts(page);
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('textarea').first().fill('A durable crosspost');
+  const geometry = await page.getByTestId('publish-post').boundingBox();
+  expect(geometry!.x + geometry!.width).toBeLessThanOrEqual(390);
+  expect(await page.locator('main').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
   await page.getByTestId('publish-post').click();
   await expect(page.getByText('Partially published', { exact: true })).toBeVisible();
   expect(attempts.map(a => a.account)).toEqual(['1', '2']);
