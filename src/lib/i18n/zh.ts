@@ -1,5 +1,8 @@
 export default {
     workflow: {
+      loadMore: "加载更多",
+      samplePost: "今天向社区分享一点项目进展。大家最近在忙什么？",
+      sampleReply: "谢谢分享！我已保存，稍后阅读。",
       library: "资料库",
       publishing: "发布管理",
       tools: "工具与设置",

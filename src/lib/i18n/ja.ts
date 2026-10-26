@@ -1,5 +1,8 @@
 export default {
     workflow: {
+      loadMore: "さらに読み込む",
+      samplePost: "今日はプロジェクトの小さな進捗をコミュニティに共有します。皆さんは何に取り組んでいますか？",
+      sampleReply: "共有ありがとうございます！後で読むために保存しました。",
       library: "ライブラリ",
       publishing: "投稿管理",
       tools: "ツールと設定",

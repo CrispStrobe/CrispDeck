@@ -11,6 +11,11 @@
   import { Columns3, Plus, Loader2 } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import StarterWorkspaces from '$lib/components/StarterWorkspaces.svelte';
+  import { STARTER_WORKSPACES, type WorkspaceId } from '$lib/starter-workspaces';
+  function layoutLabel(name: string) {
+    const key = name.replace(/^starter:/, '') as WorkspaceId;
+    return name.startsWith('starter:') && STARTER_WORKSPACES.includes(key) ? i18n.t.workflow[key] : name;
+  }
   let showStarters = $state(false);
   function applyStarter(next: DeckColumnConfig[]) {
     streamManager.disconnectAll(); streamCleanups.clear();
@@ -1228,7 +1233,7 @@
         >
           <option value="">{i18n.t.deck.loadLayoutPlaceholder}</option>
           {#each savedLayoutNames as name}
-            <option value={name}>{name}</option>
+            <option value={name}>{layoutLabel(name)}</option>
           {/each}
         </select>
       {/if}

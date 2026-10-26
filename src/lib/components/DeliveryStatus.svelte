@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { base } from '$app/paths';
   import { i18n } from '$lib/i18n.svelte';
   import { hrefOrHash } from '$lib/safe-url';
   import { cancelJob, getJob, needsReview, type PublishJob } from '$lib/publishing/outbox';
@@ -10,6 +12,19 @@
     try { await cancelJob(job.id); job = await getJob(job.id) ?? job; }
     catch (e) { error = String(e); }
   }
+  onMount(() => {
+    let disposed = false;
+    let sequence = 0;
+    async function refresh() {
+      const id = job.id; const request = ++sequence;
+      const current = await getJob(id);
+      if (!disposed && request === sequence && current && job.id === id) job = current;
+    }
+    const update = () => { void refresh().catch(e => { error = String(e); }); };
+    window.addEventListener('crispdeck-outbox-change', update);
+    window.addEventListener('focus', update);
+    return () => { disposed = true; window.removeEventListener('crispdeck-outbox-change', update); window.removeEventListener('focus', update); };
+  });
   const review = $derived(needsReview(job));
 </script>
 
@@ -25,9 +40,9 @@
         <div class="pl-3 border-l-2 border-[var(--color-border)]">
           <span>{index + 1}/{destination.parts.length} · {i18n.t.workflow[part.status]}</span>
           {#if part.result?.success && part.result.uri}
-            <a class="underline ml-2" href={hrefOrHash(part.result.uri)} target="_blank" rel="noopener noreferrer">{i18n.t.common.view}</a>
+            <a class="underline ml-2" href={hrefOrHash(part.result.uri.startsWith('at://') ? `https://bsky.app/profile/${part.result.uri.split('/')[2]}/post/${part.result.uri.split('/').pop()}` : part.result.uri)} target="_blank" rel="noopener noreferrer">{i18n.t.common.view}</a>
           {/if}
-          {#if part.error}<p class="text-xs text-[var(--color-text-muted)] break-words">{part.error}</p>{/if}
+          {#if part.error}<p class="text-xs text-[var(--color-text-muted)] break-words">{part.error} <a href="{base}/settings?tab=account" class="underline">{i18n.t.nav.settings}</a></p>{/if}
         </div>
       {/each}
     </div>

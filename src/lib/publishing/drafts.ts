@@ -3,6 +3,7 @@ import type { Draft } from '$lib/types';
 import { snapshot, saveSnapshot, loadSnapshot, deleteSnapshot, type ComposerSnapshot } from './snapshots';
 import { createJob, getJob, deliverJob, isComplete, type PublishJob } from './outbox';
 import { initAllClients } from '$lib/api/client-factory';
+import { swallow } from '$lib/debug-log';
 import { exclusive } from './storage';
 
 import { SCHEDULER_CHANGE } from './events';
@@ -24,7 +25,9 @@ export async function persistDraft(saved: ComposerSnapshot, scheduledAt: string 
         media_paths: [payloadId], visibility: saved.options.visibility,
         content_warning: saved.options.contentWarning ?? null, scheduled_at: scheduledAt,
       });
-      if (previous && paths(previous)[0]?.startsWith('draft')) await deleteSnapshot(paths(previous)[0]);
+      if (previous && paths(previous)[0]?.startsWith('draft')) {
+        await deleteSnapshot(paths(previous)[0]).catch(e => swallow('drafts.cleanup', e));
+      }
       draftsChanged();
       return draftId;
     } catch (error) {

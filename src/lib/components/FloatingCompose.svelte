@@ -4,16 +4,15 @@
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import AccountPicker from '$lib/components/AccountPicker.svelte';
   import EmojiPicker from '$lib/components/EmojiPicker.svelte';
-  import { crosspostThread, graphemeLength, type PostResult, type ComposeOptions } from '$lib/compose/adapter';
-  import { splitForPlatform } from '$lib/compose/thread';
+  import { graphemeLength } from '$lib/compose/adapter';
   import { validateMediaFile, createPreviewUrl, revokePreviewUrl, isVideoFile } from '$lib/compose/media';
   import { toast } from '$lib/toast.svelte';
-  import { logCrosspost } from '$lib/db';
   import { onDestroy } from 'svelte';
-  import { snapshot, saveSnapshot, loadSnapshot, deleteSnapshot, restoreFiles, type ComposerSnapshot } from '$lib/publishing/snapshots';
+  import { snapshot, saveSnapshot, loadSnapshot, deleteSnapshot, restoreFiles, type ComposerSnapshot, type StoredOptions } from '$lib/publishing/snapshots';
   import { createJob, deliverJob, getJob, isComplete, type PublishJob } from '$lib/publishing/outbox';
   import DeliveryStatus from './DeliveryStatus.svelte';
   import DestinationPreviews from './DestinationPreviews.svelte';
+  let restoredOptions: StoredOptions | null = $state(null);
   let pendingJob: PublishJob | null = $state(null);
   let overrides: Record<string, string> = $state({});
   let threadsMediaUrl = $state('');
@@ -24,13 +23,13 @@
     return snapshot('floating-compose', text, selectedAccountIds, overrides, {
       visibility, contentWarning: showCW ? contentWarning : undefined, mediaFiles, altTexts,
       mediaUrls: threadsMediaUrl.trim() ? [threadsMediaUrl.trim()] : undefined,
-      quoteUri: quotePost?.platform === 'bluesky' ? quotePost.uri : undefined,
-      quoteCid: (quotePost?.raw as any)?.post?.cid ?? (quotePost?.raw as any)?.cid,
-      quoteUrl: quotePost?.uri?.startsWith('https://') ? quotePost.uri : undefined,
+      quoteUri: quotePost?.platform === 'bluesky' ? quotePost.uri : restoredOptions?.quoteUri,
+      quoteCid: (quotePost?.raw as any)?.post?.cid ?? (quotePost?.raw as any)?.cid ?? restoredOptions?.quoteCid,
+      quoteUrl: quotePost?.uri?.startsWith('https://') ? quotePost.uri : restoredOptions?.quoteUrl,
       replyTo: replyToPost ? {
-        uri: replyToPost.uri, id: (replyToPost.raw as any)?.id,
+        uri: replyToPost.uri, platform: replyToPost.platform, id: (replyToPost.raw as any)?.id,
         cid: (replyToPost.raw as any)?.post?.cid ?? (replyToPost.raw as any)?.cid,
-      } : undefined,
+      } : restoredOptions?.replyTo,
     }, pendingJob && !isComplete(pendingJob) ? pendingJob.id : undefined);
   }
   function persistFloating(saved: ComposerSnapshot) {
@@ -52,7 +51,7 @@
     mediaPreviews.forEach(revokePreviewUrl);
   });
 
-  import type { Account, Platform, UnifiedPost } from '$lib/types';
+  import type { Account, UnifiedPost } from '$lib/types';
 
   let {
     open = $bindable(false),
@@ -149,6 +148,7 @@
       if (saved && !replyToPost && !quotePost) {
         pendingJob = saved.jobId ? await getJob(saved.jobId) ?? null : null;
         if (!pendingJob || !isComplete(pendingJob)) {
+          restoredOptions = saved.options;
           text = saved.text; selectedAccountIds = saved.accountIds; overrides = saved.overrides;
           visibility = saved.options.visibility ?? 'public';
           contentWarning = saved.options.contentWarning ?? ''; showCW = !!contentWarning;
@@ -192,6 +192,7 @@
     if (missing && altMode === 'warn' && !confirm(i18n.t.compose.missingAltConfirm)) return;
     posting = true; error = '';
     try {
+      clearTimeout(saveTimer); await savedWrites;
       pendingJob = await createJob(floatingSnapshot(), accounts);
       await saveSnapshot({ ...floatingSnapshot(), jobId: pendingJob.id });
       await finishDelivery(false);
@@ -223,7 +224,7 @@
     mediaFiles = [];
     mediaPreviews = [];
     altTexts = [];
-    error = ''; overrides = {}; threadsMediaUrl = '';
+    error = ''; overrides = {}; threadsMediaUrl = ''; restoredOptions = null;
   }
 
   function handleClose() {

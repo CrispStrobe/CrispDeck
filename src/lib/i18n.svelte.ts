@@ -7,6 +7,9 @@ const RTL_LANGUAGES: Language[] = ['ar'];
 export const translations = {
   en: {
     workflow: {
+      loadMore: "Load more",
+      samplePost: "Sharing a small project update with the community today. What have you been working on?",
+      sampleReply: "Thanks for sharing! I saved this to read later.",
       library: "Library",
       publishing: "Publishing",
       tools: "Tools & settings",

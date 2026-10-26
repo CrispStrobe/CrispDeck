@@ -19,7 +19,7 @@
     const existing = readJson<DeckColumnConfig[]>('crispdeck-deck-columns', [], Array.isArray);
     if (existing.length && !confirm(i18n.t.workflow.replaceWorkspace)) return;
     try {
-      applyWorkspace(selected, i18n.t.workflow[selected], columns);
+      applyWorkspace(selected, columns);
       if (onapply) { onapply(columns); preview = false; }
       else if (connected) await goto(`${base}/deck`);
       else preview = true;
@@ -49,7 +49,7 @@
             {#each [1, 2] as n}
               <div class="p-3 border-t border-[var(--color-border)] space-y-2">
                 <div class="flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-[var(--color-primary)]/20"></span><span class="text-xs font-medium">@{['alex', 'sam', 'robin'][index]}.example</span></div>
-                <p class="text-xs text-[var(--color-text-muted)]">{n === 1 ? i18n.t.workflow.starterHint : i18n.t.workflow.overrideHint}</p>
+                <p class="text-xs text-[var(--color-text-muted)]">{n === 1 ? i18n.t.workflow.samplePost : i18n.t.workflow.sampleReply}</p>
               </div>
             {/each}
           </div>

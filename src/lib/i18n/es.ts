@@ -1,5 +1,8 @@
 export default {
     workflow: {
+      loadMore: "Cargar más",
+      samplePost: "Hoy comparto un pequeño avance de mi proyecto con la comunidad. ¿En qué estáis trabajando?",
+      sampleReply: "¡Gracias por compartir! Lo he guardado para leerlo después.",
       library: "Biblioteca",
       publishing: "Publicación",
       tools: "Herramientas y ajustes",

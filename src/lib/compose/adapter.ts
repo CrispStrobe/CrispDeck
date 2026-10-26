@@ -26,7 +26,7 @@ export interface ComposeOptions {
   text: string;
   deliveryKey?: string;
   createdAt?: string;
-  replyTo?: { uri: string; cid?: string; id?: string; rootUri?: string; rootCid?: string };
+  replyTo?: { uri: string; cid?: string; id?: string; rootUri?: string; rootCid?: string; platform?: Platform };
   visibility?: 'public' | 'unlisted' | 'private' | 'direct';
   contentWarning?: string;
   mediaFiles?: File[];
@@ -333,14 +333,14 @@ export async function postToThreads(
         await client.waitForContainer(id);
         childIds.push(id);
       }
-      containerId = await client.createCarouselContainer(childIds, options.text);
+      containerId = await client.createCarouselContainer(childIds, options.text, options.replyTo?.id);
     } else if (mediaUrls && mediaUrls.length === 1) {
       // Single image or video
       const url = mediaUrls[0];
       const isVideo = /\.(mp4|mov)$/i.test(url);
       containerId = isVideo
-        ? await client.createVideoContainer(url, options.text)
-        : await client.createImageContainer(url, options.text);
+        ? await client.createVideoContainer(url, options.text, options.replyTo?.id)
+        : await client.createImageContainer(url, options.text, options.replyTo?.id);
     } else {
       // Text-only
       containerId = await client.createTextContainer(options.text, options.replyTo?.id);
@@ -349,11 +349,14 @@ export async function postToThreads(
     await client.waitForContainer(containerId);
     publishing = true;
     const result = await client.publishContainer(containerId);
+    publishing = false;
+    let permalink: string | undefined;
+    try { permalink = (await client.getPost(result.id)).permalink; } catch { /* the post is already published */ }
 
     return {
       platform: 'threads',
       success: true,
-      uri: `https://www.threads.net/post/${result.id}`,
+      uri: permalink,
       id: String(result.id),
     };
   } catch (e) {

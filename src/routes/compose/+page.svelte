@@ -7,7 +7,7 @@
   import { buildScheduledAt, minScheduleDate, formatScheduledFor } from '$lib/quick-schedule';
   import { base } from '$app/paths';
   import { onMount, onDestroy } from 'svelte';
-  import { logCrosspost, saveDraft as dbSaveDraft, listDrafts, deleteDraft as dbDeleteDraft } from '$lib/db';
+  import { listDrafts } from '$lib/db';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { PenSquare, Send, Loader2, X, ImagePlus, AlertTriangle, Check, BarChart3, Shield, Mic, MicOff, Sparkles, Clock } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
@@ -16,10 +16,7 @@
   import EmojiPicker from '$lib/components/EmojiPicker.svelte';
   import GifPicker from '$lib/components/GifPicker.svelte';
   import { listTemplates, saveTemplate, deleteTemplate, type PostTemplate } from '$lib/templates';
-  import { BlueskyClient } from '$lib/api/bluesky';
-  import { MastodonClient } from '$lib/api/mastodon';
-  import { crosspostThread, graphemeLength, type PostResult, type ComposeOptions, type ThreadGate, type PollOptions } from '$lib/compose/adapter';
-  import { splitForPlatform, planThread, type ThreadPlan } from '$lib/compose/thread';
+  import { graphemeLength, type ThreadGate } from '$lib/compose/adapter';
   import { validateMediaFile, createPreviewUrl, revokePreviewUrl, isVideoFile } from '$lib/compose/media';
   import { tryVoiceCommand, looksLikeCommand } from '$lib/voice-commands';
   import { runAIAction, isAIConfigured, type AIAction } from '$lib/compose/ai';
@@ -42,17 +39,18 @@
 
   function currentSnapshot(id = 'autosave') {
     const quoteUrl = quoteUri && quoteAuthor ? `https://bsky.app/profile/${quoteAuthor}/post/${quoteUri.split('/').pop()}` : undefined;
-    return snapshot(id, text, selectedAccountIds, overrides, {
+    return { ...snapshot(id, text, selectedAccountIds, overrides, {
       visibility, contentWarning: showCW ? contentWarning : undefined,
       mediaFiles, altTexts, mediaUrls: threadsMediaUrl.trim() ? [threadsMediaUrl.trim()] : undefined,
       quoteUri: quoteUri || undefined, quoteCid: quoteCid || undefined, quoteUrl,
       threadGate, selfLabel: selfLabel === 'none' ? undefined : selfLabel, disableQuotes,
-      replyTo: replyTo ? { uri: replyTo } : undefined,
+      replyTo: replyTo ? { uri: replyTo, platform: replyPlatform as Platform } : undefined,
       poll: showPoll ? { options: pollOptions.filter(o => o.trim()), expiresIn: pollExpiry, multiple: pollMultiple } : undefined,
-    }, pendingJob && !isComplete(pendingJob) ? pendingJob.id : undefined);
+    }, pendingJob && !isComplete(pendingJob) ? pendingJob.id : undefined), context: { quoteAuthor, quoteText, replyAuthor } };
   }
 
   function applySnapshot(saved: ComposerSnapshot) {
+    quoteAuthor = saved.context?.quoteAuthor ?? ''; quoteText = saved.context?.quoteText ?? ''; replyAuthor = saved.context?.replyAuthor ?? '';
     text = saved.text; selectedAccountIds = saved.accountIds; overrides = saved.overrides;
     visibility = saved.options.visibility ?? 'public';
     contentWarning = saved.options.contentWarning ?? ''; showCW = !!contentWarning;
@@ -67,7 +65,7 @@
     pollExpiry = saved.options.poll?.expiresIn ?? 86400;
     pollMultiple = saved.options.poll?.multiple ?? false;
     quoteUri = saved.options.quoteUri ?? ''; quoteCid = saved.options.quoteCid ?? '';
-    replyTo = saved.options.replyTo?.uri ?? '';
+    replyTo = saved.options.replyTo?.uri ?? ''; replyPlatform = saved.options.replyTo?.platform ?? '';
   }
 
   $effect(() => {
@@ -83,30 +81,11 @@
   });
 
 
-/**
- * A draft's target_accounts is an array, or the JSON text of one when it came
- * back from the database as a string. A corrupt value used to throw straight
- * out of the render path and take the page with it; an empty selection is
- * recoverable, a blank page is not.
- */
-function parseTargetAccounts(value: unknown): number[] {
-  if (Array.isArray(value)) return value as number[];
-  if (typeof value !== 'string') return [];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (e) {
-    swallow('drafts.targetAccounts', e);
-    return [];
-  }
-}
-
   let accounts: Account[] = $state([]);
   let selectedAccountIds: number[] = $state([]);
   let loading = $state(true);
   let posting = $state(false);
   let error = $state('');
-  let results: PostResult[] = $state([]);
 
   // Auto-save key
   const AUTOSAVE_KEY = 'crispdeck-compose-autosave';
@@ -221,7 +200,7 @@ function parseTargetAccounts(value: unknown): number[] {
     text = ''; contentWarning = ''; showCW = false;
     mediaPreviews.forEach(revokePreviewUrl); mediaFiles = []; mediaPreviews = []; altTexts = [];
     overrides = {}; editingDraftId = null; threadsMediaUrl = '';
-    quoteUri = ''; quoteCid = ''; quoteAuthor = ''; replyTo = '';
+    quoteUri = ''; quoteCid = ''; quoteAuthor = ''; quoteText = ''; replyTo = ''; replyAuthor = ''; replyPlatform = '';
   }
   function newDraft() { resetComposer(); pendingJob = null; void clearAutoSave(); }
 
@@ -277,18 +256,18 @@ function parseTargetAccounts(value: unknown): number[] {
       }
 
       // Reply context
-      replyTo = params.get('replyTo') ?? '';
-      replyAuthor = params.get('author') ?? '';
-      replyPlatform = params.get('platform') ?? '';
+      replyTo = params.get('replyTo') ?? replyTo;
+      replyAuthor = params.get('author') ?? replyAuthor;
+      replyPlatform = params.get('platform') ?? replyPlatform;
       if (replyAuthor && !text) {
         text = `@${replyAuthor} `;
       }
 
       // Quote context
-      quoteUri = params.get('quoteUri') ?? '';
-      quoteCid = params.get('quoteCid') ?? '';
-      quoteAuthor = params.get('quoteAuthor') ?? '';
-      quoteText = params.get('quoteText') ?? '';
+      quoteUri = params.get('quoteUri') ?? quoteUri;
+      quoteCid = params.get('quoteCid') ?? quoteCid;
+      quoteAuthor = params.get('quoteAuthor') ?? quoteAuthor;
+      quoteText = params.get('quoteText') ?? quoteText;
 
       // Handle shared content from PWA share_target
       const sharedText = params.get('text') ?? '';
@@ -389,8 +368,10 @@ function parseTargetAccounts(value: unknown): number[] {
   async function handlePost() {
     if (posting || pendingJob && !isComplete(pendingJob)) return;
     if ((!text.trim() && !mediaFiles.length) || !checkAltText()) return;
-    posting = true; error = ''; results = [];
+    posting = true; error = '';
     try {
+      if (autoSaveTimer) clearTimeout(autoSaveTimer);
+      await autoSaveWrite;
       const saved = currentSnapshot();
       pendingJob = await createJob(saved, accounts, editingDraftId ?? undefined);
       await saveSnapshot({ ...saved, jobId: pendingJob.id });
@@ -405,8 +386,9 @@ function parseTargetAccounts(value: unknown): number[] {
     try {
       pendingJob = await deliverJob(pendingJob.id, undefined, allow);
       if (isComplete(pendingJob)) {
-        if (editingDraftId !== null) {
-          const draft = (await listDrafts()).find(d => d.id === editingDraftId);
+        const completedDraftId = pendingJob.draftId ?? editingDraftId;
+        if (completedDraftId !== null && completedDraftId !== undefined) {
+          const draft = (await listDrafts()).find(d => d.id === completedDraftId);
           if (draft) await removeDraft(draft);
         }
         toast.success(i18n.t.workflow.posted);
@@ -589,15 +571,11 @@ function parseTargetAccounts(value: unknown): number[] {
   const hasBsky = $derived(selectedAccounts.some(a => a.platform === 'bluesky'));
   const hasMasto = $derived(selectedAccounts.some(a => a.platform === 'mastodon'));
   const hasThreads = $derived(selectedAccounts.some(a => a.platform === 'threads'));
-  const trimmedText = $derived(text.trim());
   const bskyLen = $derived(graphemeLength(text));
   const mastoLen = $derived(text.length);
   const threadsLen = $derived(text.length);
   const bskyNeedsThread = $derived(hasBsky && bskyLen > 300);
   const mastoNeedsThread = $derived(hasMasto && mastoLen > 500);
-  const bskyPlan = $derived(hasBsky && trimmedText ? splitForPlatform(trimmedText, 'bluesky') : null);
-  const mastoPlan = $derived(hasMasto && trimmedText ? splitForPlatform(trimmedText, 'mastodon') : null);
-  const threadsPlan = $derived(hasThreads && trimmedText ? splitForPlatform(trimmedText, 'threads') : null);
   const threadsNeedsThread = $derived(hasThreads && threadsLen > 500);
   const needsThread = $derived(bskyNeedsThread || mastoNeedsThread || threadsNeedsThread);
 </script>
@@ -673,7 +651,7 @@ function parseTargetAccounts(value: unknown): number[] {
         {#if editingDraftId}
           <div class="p-2 bg-yellow-950/30 border border-yellow-700/30 rounded-lg text-xs text-yellow-300 flex items-center justify-between">
             <span>Editing draft #{editingDraftId}</span>
-            <button onclick={async () => { await dbDeleteDraft(editingDraftId!); editingDraftId = null; }} class="text-yellow-400 hover:text-yellow-200 underline">{i18n.t.compose.discardDraft}</button>
+            <button onclick={async () => { const draft = (await listDrafts()).find(d => d.id === editingDraftId); if (draft) await removeDraft(draft); editingDraftId = null; }} class="text-yellow-400 hover:text-yellow-200 underline">{i18n.t.compose.discardDraft}</button>
           </div>
         {/if}
 
@@ -789,8 +767,8 @@ function parseTargetAccounts(value: unknown): number[] {
         {/if}
 
         <!-- Toolbar -->
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-2">
             <label class="p-2 text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] rounded-md cursor-pointer transition-colors {mediaFiles.length >= 4 ? 'opacity-50 pointer-events-none' : ''}">
               <ImagePlus size={18} />
               <input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" multiple class="hidden" onchange={addMedia} />
@@ -901,7 +879,7 @@ function parseTargetAccounts(value: unknown): number[] {
             </div>
 
             <details class="relative">
-              <summary class="text-xs cursor-pointer">{i18n.t.workflow.advanced}</summary>
+              <summary class="text-xs cursor-pointer whitespace-nowrap">{i18n.t.workflow.advanced}</summary>
               <div class="absolute z-30 right-0 w-64 p-3 space-y-3 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xl">
             {#if hasMasto}
               <select
@@ -931,7 +909,7 @@ function parseTargetAccounts(value: unknown): number[] {
               >
                 <option value="everyone">{i18n.t.compose.anyoneCanReply}</option>
                 <option value="mentioned">{i18n.t.compose.mentionedOnly}</option>
-                <option value="following">{i18n.t.compose.followersOnlyVis}</option>
+                <option value="following">{i18n.t.workflow.followingReplies}</option>
                 <option value="nobody">{i18n.t.compose.noReplies}</option>
               </select>
               <select
@@ -976,7 +954,7 @@ function parseTargetAccounts(value: unknown): number[] {
             <button
               onclick={handleSaveDraft}
               disabled={!text.trim()}
-              class="px-3 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] disabled:opacity-30"
+              class="px-3 py-2 text-sm whitespace-nowrap text-[var(--color-text-muted)] hover:text-[var(--color-text)] disabled:opacity-30"
             >
               Save Draft
             </button>
@@ -1016,7 +994,7 @@ function parseTargetAccounts(value: unknown): number[] {
               onclick={handlePost}
               data-testid="publish-post"
               disabled={posting || (!text.trim() && mediaFiles.length === 0) || selectedAccountIds.length === 0}
-              class="flex items-center gap-2 px-5 py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm font-medium rounded-md disabled:opacity-50 transition-colors"
+              class="flex items-center gap-2 whitespace-nowrap px-5 py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm font-medium rounded-md disabled:opacity-50 transition-colors"
             >
               {#if posting}
                 <Loader2 size={14} class="animate-spin" />

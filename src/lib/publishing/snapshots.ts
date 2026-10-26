@@ -11,6 +11,7 @@ export interface ComposerSnapshot {
   media: Array<{ blob: Blob; name: string; lastModified: number }>;
   savedAt: string;
   jobId?: string;
+  context?: { quoteAuthor: string; quoteText: string; replyAuthor: string };
 }
 
 export function snapshot(id: string, text: string, accountIds: number[], overrides: Record<string, string>, options: Omit<ComposeOptions, 'text'>, jobId?: string): ComposerSnapshot {

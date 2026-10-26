@@ -59,9 +59,9 @@ export async function remove(store: string, id: string): Promise<void> {
 }
 
 /** Web Locks coordinate tabs. The IDB lease also covers older webviews. */
-export async function exclusive<T>(name: string, work: () => Promise<T>): Promise<T | undefined> {
+export async function exclusive<T>(name: string, work: (guard: () => Promise<void>) => Promise<T>): Promise<T | undefined> {
   if (typeof navigator !== 'undefined' && navigator.locks) {
-    return navigator.locks.request(`crispdeck-${name}`, { ifAvailable: true }, lock => lock ? work() : undefined);
+    return navigator.locks.request(`crispdeck-${name}`, { ifAvailable: true }, lock => lock ? work(async () => {}) : undefined);
   }
   const db = await open();
   const owner = crypto.randomUUID();
@@ -81,9 +81,27 @@ export async function exclusive<T>(name: string, work: () => Promise<T>): Promis
     tx.onabort = tx.onerror = () => reject(tx.error);
   });
   if (!acquired) return undefined;
-  const heartbeat = setInterval(() => {
-    void write('leases', { id: name, owner, until: Date.now() + leaseMs } as { id: string }).catch(() => {});
-  }, 15_000);
-  try { return await work(); }
-  finally { clearInterval(heartbeat); await remove('leases', name); }
+  async function ownLease(release = false): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('leases', 'readwrite');
+      const store = tx.objectStore('leases');
+      const request = store.get(name);
+      let owned = false;
+      request.onsuccess = () => {
+        if (request.result?.owner === owner) {
+          owned = true;
+          if (release) store.delete(name);
+          else store.put({ id: name, owner, until: Date.now() + leaseMs });
+        }
+      };
+      tx.oncomplete = () => resolve(owned);
+      tx.onabort = tx.onerror = () => reject(tx.error);
+    });
+  }
+  async function guard() {
+    if (!await ownLease()) throw new Error('Another window took over this delivery. Refresh its status before continuing.');
+  }
+  const heartbeat = setInterval(() => { void ownLease().catch(() => {}); }, 15_000);
+  try { return await work(guard); }
+  finally { clearInterval(heartbeat); await ownLease(true); }
 }

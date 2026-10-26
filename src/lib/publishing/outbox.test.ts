@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Account } from '$lib/types';
 import type { ClientEntry } from '$lib/api/client-factory';
 import { snapshot } from './snapshots';
-import { all, remove } from './storage';
+import { all, remove, write } from './storage';
 
 const writers = vi.hoisted(() => ({ bluesky: vi.fn(), mastodon: vi.fn(), threads: vi.fn() }));
 vi.mock('$lib/compose/adapter', () => ({
@@ -82,6 +82,46 @@ describe('durable delivery', () => {
     await deliverJob(job.id, clients(a));
     await deliverJob(job.id, clients(a));
     expect(writers.mastodon).toHaveBeenCalledTimes(1);
+  });
+
+  it('coordinates simultaneous retries across windows', async () => {
+    const a = account(1);
+    const job = await createJob(snapshot('test', 'Hello', [1], {}, {}), [a]);
+    let release!: () => void;
+    const response = new Promise<void>(resolve => { release = resolve; });
+    writers.mastodon.mockImplementation(async () => {
+      await response;
+      return { platform: 'mastodon', success: true, id: '11', uri: 'https://social.example/11' };
+    });
+    const first = deliverJob(job.id, clients(a));
+    await vi.waitFor(() => expect(writers.mastodon).toHaveBeenCalledTimes(1));
+    const second = await deliverJob(job.id, clients(a));
+    expect(second.destinations[0].parts[0].status).toBe('sending');
+    release();
+    expect(isComplete(await first)).toBe(true);
+    expect(writers.mastodon).toHaveBeenCalledTimes(1);
+  });
+
+  it('requires verification after Mastodon duplicate protection has expired', async () => {
+    const a = account(1);
+    const job = await createJob(snapshot('test', 'Hello', [1], {}, {}), [a]);
+    job.destinations[0].parts[0].status = 'failed';
+    job.destinations[0].parts[0].attemptedAt = new Date(Date.now() - 7_200_000).toISOString();
+    await write('jobs', job);
+    expect(needsReview(job)).toBe(true);
+    const resumed = await deliverJob(job.id, clients(a));
+    expect(resumed.destinations[0].parts[0].status).toBe('uncertain');
+    expect(writers.mastodon).not.toHaveBeenCalled();
+  });
+
+  it('can retry after reconnecting the same handle under a new local account id', async () => {
+    const original = account(1);
+    const job = await createJob(snapshot('test', 'Hello', [1], {}, {}), [original]);
+    const reconnected = { ...original, id: 7 };
+    writers.mastodon.mockResolvedValue({ platform: 'mastodon', success: true, id: '11', uri: 'https://social.example/11' });
+    expect(isComplete(await deliverJob(job.id, clients(reconnected)))).toBe(true);
+    expect(writers.mastodon.mock.calls[0][0].id).toBe(7);
+    expect(writers.mastodon.mock.calls[0][1].deliveryKey).toContain(`${job.id}-1-0`);
   });
 
   it('retains destination overrides in the durable plan', async () => {

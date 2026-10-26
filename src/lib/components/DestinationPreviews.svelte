@@ -32,7 +32,7 @@
     <section class="p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] space-y-2" aria-label={`${i18n.t.compose.preview} @${account.handle}`}>
       <div class="text-sm font-medium">@{account.handle} <span class="text-xs text-[var(--color-text-muted)]">· {account.platform}</span></div>
       <p class="text-xs text-[var(--color-text-muted)]">
-        {account.platform === 'mastodon' ? visibility : 'public'}
+        {account.platform !== 'mastodon' || visibility === 'public' ? i18n.t.compose.public : visibility === 'private' ? i18n.t.compose.followersOnlyVis : visibility === 'unlisted' ? i18n.t.compose.unlisted : i18n.t.compose.direct}
         {#if account.platform === 'bluesky'}
           · {threadGate === 'nobody' ? i18n.t.workflow.nobodyReplies : threadGate === 'following' ? i18n.t.workflow.followingReplies : threadGate === 'mentioned' ? i18n.t.workflow.mentionedReplies : i18n.t.workflow.allReplies}
           {#if disableQuotes} · {i18n.t.compose.disableQuoting}{/if}

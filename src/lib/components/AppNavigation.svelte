@@ -8,14 +8,17 @@
   let { items, simple, collapsed = false, path, onnavigate }: {
     items: Item[]; simple: boolean; collapsed?: boolean; path: string; onnavigate?: () => void;
   } = $props();
+  function active(href: string) {
+    return path === href || !items.some(i => i.href === path) && isNavItemActive(href, path);
+  }
   const primary = $derived(items.filter(i => i.href !== '/compose' && (!simple || PRIMARY_ROUTES.includes(i.href))));
 </script>
 
 {#snippet link(item: Item)}
   <a href={`${base}${item.href}`.replace(/\/$/, '') || '/'} onclick={onnavigate}
-    aria-current={isNavItemActive(item.href, path) ? 'page' : undefined}
+    aria-current={active(item.href) ? 'page' : undefined}
     title={collapsed ? item.label : undefined}
-    class="flex items-center gap-2.5 px-3 py-2.5 text-sm transition-colors {isNavItemActive(item.href, path) ? 'text-[var(--color-primary-text)] bg-[var(--color-primary)]/10' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'}">
+    class="flex items-center gap-2.5 px-3 py-2.5 text-sm transition-colors {active(item.href) ? 'text-[var(--color-primary-text)] bg-[var(--color-primary)]/10' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'}">
     <item.icon size={17} class="flex-shrink-0" />
     {#if !collapsed}
       <span class="truncate flex-1">{item.label}</span>
@@ -31,7 +34,7 @@
       {@const children = items.filter(i => group.routes.includes(i.href))}
       {#if children.length}
         <li>
-          <details open={children.some(i => isNavItemActive(i.href, path))}>
+          <details open={children.some(i => active(i.href))}>
             <summary class="px-3 py-2.5 text-xs font-semibold cursor-pointer text-[var(--color-text-muted)]" title={i18n.t.workflow[group.key]}>
               {collapsed ? i18n.t.workflow[group.key].slice(0, 1) : i18n.t.workflow[group.key]}
             </summary>

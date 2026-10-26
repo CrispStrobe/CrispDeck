@@ -1,3 +1,5 @@
+import { logCrosspost } from '$lib/db';
+import { swallow } from '$lib/debug-log';
 import type { Account, Platform } from '$lib/types';
 import type { ComposeOptions, PostResult } from '$lib/compose/adapter';
 import { postToBluesky, postToMastodon, postToThreads } from '$lib/compose/adapter';
@@ -32,6 +34,7 @@ export interface PublishJob {
   createdAt: string;
   updatedAt: string;
   draftId?: number;
+  historyLogged?: boolean;
 }
 
 export const getJob = (id: string) => read<PublishJob>('jobs', id);
@@ -51,30 +54,35 @@ async function persist(job: PublishJob) {
 export async function createJob(saved: ComposerSnapshot, accounts: Account[], draftId?: number): Promise<PublishJob> {
   const id = draftId === undefined ? crypto.randomUUID() : `draft-${draftId}`;
   const prepared = await exclusive(`prepare-${id}`, async () => {
-  const existing = await getJob(id);
-  if (existing) return existing;
-  const targets = saved.accountIds.map(accountId => {
-    const account = accounts.find(a => a.id === accountId);
-    if (!account) throw new Error(`Account #${accountId} is no longer connected. Reconnect it before publishing.`);
-    return account;
-  });
-  if (!targets.length) throw new Error('Select at least one account to post to.');
-  // Freeze mention resolution and splitting before the first network write.
-  const destinations = await Promise.all(targets.map(async account => {
-    const text = saved.overrides[String(account.id)] ?? saved.text;
-    if (!text.trim() && !saved.media.length) throw new Error(`Add text or media for ${account.handle}.`);
-    const resolved = await resolveMentionsForPlatform(text, account.platform);
-    return {
-      accountId: account.id, handle: account.handle, platform: account.platform,
-      parts: splitForPlatform(resolved, account.platform).parts.map(p => ({ text: p.text, status: 'pending' as const })),
+    const existing = await getJob(id);
+    if (existing) return existing;
+    const targets = saved.accountIds.map(accountId => {
+      const account = accounts.find(a => a.id === accountId);
+      if (!account) throw new Error(`Account #${accountId} is no longer connected. Reconnect it before publishing.`);
+      return account;
+    });
+    if (!targets.length) throw new Error('Select at least one account to post to.');
+    // Freeze mention resolution and splitting before the first network write.
+    const destinations = await Promise.all(targets.map(async account => {
+      const text = saved.overrides[String(account.id)] ?? saved.text;
+      if (!text.trim() && !saved.media.length) throw new Error(`Add text or media for ${account.handle}.`);
+      if (account.platform === 'threads') {
+        const urls = saved.options.mediaUrls ?? [];
+        if (saved.media.length && !urls.length) throw new Error('Threads needs a public HTTPS media URL. Add it in the composer before publishing.');
+        if (urls.some(url => { try { return new URL(url).protocol !== 'https:'; } catch { return true; } })) throw new Error('Threads media URLs must use HTTPS.');
+      }
+      const resolved = await resolveMentionsForPlatform(text, account.platform);
+      return {
+        accountId: account.id, handle: account.handle, platform: account.platform,
+        parts: splitForPlatform(resolved, account.platform).parts.map(p => ({ text: p.text, status: 'pending' as const })),
+      };
+    }));
+    const job: PublishJob = {
+      id, snapshot: saved, destinations, status: 'queued', draftId,
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     };
-  }));
-  const job: PublishJob = {
-    id, snapshot: saved, destinations, status: 'queued', draftId,
-    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-  };
-  await persist(job);
-  return job;
+    await persist(job);
+    return job;
   });
   if (prepared) return prepared;
   const existing = await getJob(id);
@@ -84,15 +92,17 @@ export async function createJob(saved: ComposerSnapshot, accounts: Account[], dr
 
 /** Every successful part is committed before the next part is sent. */
 export async function deliverJob(id: string, clients?: Map<number, ClientEntry>, allowUncertain = false): Promise<PublishJob> {
-  const completed = await exclusive(`publish-${id}`, async () => {
+  const completed = await exclusive(`publish-${id}`, async guard => {
     const job = await getJob(id);
     if (!job) throw new Error('The publishing job could not be found.');
     if (isComplete(job) || job.status === 'cancelled') return job;
+    const saveProgress = async () => { await guard(); await persist(job); };
     const entries = clients ?? (await initAllClients()).clients;
     job.status = 'sending';
-    await persist(job);
+    await saveProgress();
     for (const destination of job.destinations) {
-      const entry = entries.get(destination.accountId);
+      const handle = (value: string) => value.replace(/^@/, '').toLowerCase();
+      const entry = entries.get(destination.accountId) ?? [...entries.values()].find(e => e.platform === destination.platform && handle(e.handle) === handle(destination.handle));
       for (let index = 0; index < destination.parts.length; index++) {
         const part = destination.parts[index];
         if (part.status === 'posted') continue;
@@ -114,7 +124,7 @@ export async function deliverJob(id: string, clients?: Map<number, ClientEntry>,
         part.status = 'sending';
         part.attemptedAt ??= new Date().toISOString();
         part.error = undefined;
-        await persist(job);
+        await saveProgress();
         const previous = destination.parts[index - 1]?.result;
         const first = destination.parts[0]?.result;
         const options: ComposeOptions = {
@@ -129,10 +139,20 @@ export async function deliverJob(id: string, clients?: Map<number, ClientEntry>,
           quoteUrl: index === 0 ? job.snapshot.options.quoteUrl : undefined,
           poll: index === 0 ? job.snapshot.options.poll : undefined,
           threadGate: index === 0 ? job.snapshot.options.threadGate : undefined,
-          replyTo: previous ? { uri: previous.uri!, cid: previous.cid, id: previous.id, rootUri: first?.uri, rootCid: first?.cid } : job.snapshot.options.replyTo,
+          replyTo: previous ? { uri: previous.uri ?? '', cid: previous.cid, id: previous.id, rootUri: job.snapshot.options.replyTo?.rootUri ?? first?.uri, rootCid: job.snapshot.options.replyTo?.rootCid ?? first?.cid } : job.snapshot.options.replyTo?.platform && job.snapshot.options.replyTo.platform !== destination.platform ? undefined : job.snapshot.options.replyTo,
         };
         let result: PostResult;
         try {
+          if (index === 0 && destination.platform === 'bluesky' && options.replyTo && !options.replyTo.rootCid) {
+            const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
+            const response = await agent.getPostThread({ uri: options.replyTo.uri, depth: 0, parentHeight: 0 });
+            const thread = response.data.thread as { post?: { uri: string; cid: string; record: unknown } };
+            if (!thread.post) throw new Error('The post being replied to is unavailable.');
+            const record = thread.post.record as { reply?: { root: { uri: string; cid: string } } };
+            options.replyTo = { ...options.replyTo, cid: thread.post.cid, rootUri: record.reply?.root.uri ?? thread.post.uri, rootCid: record.reply?.root.cid ?? thread.post.cid, platform: 'bluesky' };
+            job.snapshot.options.replyTo = options.replyTo;
+            await saveProgress();
+          }
           result = destination.platform === 'bluesky'
             ? await postToBluesky(entry.client as BlueskyClient, options, entry.oauthAgent)
             : destination.platform === 'mastodon'
@@ -144,12 +164,25 @@ export async function deliverJob(id: string, clients?: Map<number, ClientEntry>,
         part.result = result;
         part.status = result.success ? 'posted' : result.uncertain && destination.platform === 'threads' ? 'uncertain' : 'failed';
         part.error = result.error;
-        await persist(job);
+        await saveProgress();
         if (!result.success) break;
       }
     }
     job.status = isComplete(job) ? 'posted' : job.destinations.some(d => d.parts.some(p => p.status === 'posted')) ? 'partial' : 'failed';
-    await persist(job);
+    await saveProgress();
+    if (job.status === 'posted' && !job.historyLogged) {
+      const result = (platform: Platform) => job.destinations.find(d => d.platform === platform)?.parts[0].result;
+      try {
+        await logCrosspost({
+          draft_id: job.draftId, text_preview: job.snapshot.text.slice(0, 280), media_count: job.snapshot.media.length,
+          bluesky_uri: result('bluesky')?.uri, bluesky_cid: result('bluesky')?.cid,
+          mastodon_uri: result('mastodon')?.uri, mastodon_id: result('mastodon')?.id,
+          threads_uri: result('threads')?.uri, threads_id: result('threads')?.id, status: 'success',
+        });
+        job.historyLogged = true;
+        await saveProgress();
+      } catch (error) { swallow('publishing.history', error); }
+    }
     return job;
   });
   if (completed) return completed;

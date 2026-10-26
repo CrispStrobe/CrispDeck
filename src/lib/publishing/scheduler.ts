@@ -16,7 +16,8 @@ export function startScheduler(): () => void {
         const drafts = await listDrafts();
         for (const draft of drafts) {
           if (stopped) break;
-          if (!draft.scheduled_at || draft.is_sent || Date.parse(draft.scheduled_at) > Date.now()) continue;
+          const due = draft.scheduled_at ? Date.parse(draft.scheduled_at) : NaN;
+          if (!Number.isFinite(due) || draft.is_sent || due > Date.now()) continue;
           const { getJob, isComplete } = await import('./outbox');
           const { publishDraft } = await import('./drafts');
           const job = await getJob(`draft-${draft.id}`);

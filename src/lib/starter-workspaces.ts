@@ -26,7 +26,7 @@ export function workspaceColumns(id: WorkspaceId, labels: { feed: string; notifi
   return columns[id].map((column, index) => ({ ...column, id: `${id}-${index}-${crypto.randomUUID()}`, width: 350 }));
 }
 
-export function applyWorkspace(id: WorkspaceId, name: string, columns: DeckColumnConfig[]) {
+export function applyWorkspace(id: WorkspaceId, columns: DeckColumnConfig[]) {
   if (!writeJson('crispdeck-deck-columns', columns)) throw new Error('Could not save the workspace on this device.');
   // Starter layouts have stable keys so selecting another never overwrites a user's named layout.
   saveLayout(`starter:${id}`, columns);

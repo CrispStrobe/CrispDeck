@@ -111,6 +111,12 @@ test('autosave restores image bytes, alt text, destination text and visibility a
   await expect(page.locator('select').filter({ has: page.locator('option[value=private]') })).toHaveValue('private');
   await page.getByText('Destination text', { exact: true }).click();
   await expect(page.getByLabel('Destination text · @writer1@1.social.test')).toHaveValue('Custom destination text');
+  await page.getByRole('button', { name: 'Save Draft', exact: true }).click();
+  await expect(page.getByText('Draft saved with media and destination settings.', { exact: true })).toBeVisible();
+  await page.locator('main a[href="/drafts"]').click();
+  await page.locator('main a[href*="/compose?draft="]').first().click();
+  await expect(page.getByPlaceholder(/Describe this image/)).toHaveValue('A tiny test image');
+  await expect(page.locator('img[alt="A tiny test image"]').first()).toBeVisible();
 });
 
 test('a scheduled draft publishes from another route and never repeats after a partial failure', async ({ page }) => {
@@ -156,4 +162,28 @@ test('starter preview needs no account and the chosen workspace is usable in Dec
   await page.locator('nav[aria-label="Main navigation"] a[href="/deck"]').click();
   await expect(page).toHaveTitle(/Deck/);
   await expect(page.getByRole('button', { name: 'Add Column', exact: true })).toBeVisible();
+});
+
+test('overdue drafts wait offline and resume on reconnect', async ({ page, context }) => {
+  const attempts = await fakeNetworks(page);
+  await connectTestAccounts(page, 1);
+  await page.locator('textarea').first().fill('Resume after offline');
+  await page.getByRole('button', { name: 'Save Draft', exact: true }).click();
+  await expect(page.getByText('Draft saved with media and destination settings.', { exact: true })).toBeVisible();
+  await context.setOffline(true);
+  await page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>(resolve => { const r = indexedDB.open('crispdeck'); r.onsuccess = () => resolve(r.result); });
+    await new Promise<void>(resolve => {
+      const tx = db.transaction('drafts', 'readwrite'); const store = tx.objectStore('drafts');
+      const r = store.getAll(); r.onsuccess = () => { for (const draft of r.result) store.put({ ...draft, scheduled_at: new Date(Date.now() - 60_000).toISOString() }); };
+      tx.oncomplete = () => resolve();
+    }); db.close();
+    window.dispatchEvent(new Event('crispdeck-drafts-change'));
+  });
+  await expect(page.getByText(/You're offline/)).toBeVisible();
+  expect(attempts).toHaveLength(0);
+  await context.setOffline(false);
+  await expect.poll(() => attempts.length).toBe(1);
+  await page.goto('/drafts');
+  await expect(page.getByText('Published · Resume after offline', { exact: true })).toBeVisible();
 });
