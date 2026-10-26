@@ -463,7 +463,16 @@ jobs:
       - run: npm ci
 
       - name: Initialize Android project
-        run: npx tauri android init
+        run: |
+          set -euo pipefail
+          MANIFEST=src-tauri/gen/android/app/src/main/AndroidManifest.xml
+          cp "$MANIFEST" "$RUNNER_TEMP/crispdeck-manifest.xml"
+          # The repository carries a customized manifest, not a full generated
+          # Java/Gradle project. Initialize in a clean disposable CI directory.
+          rm -rf src-tauri/gen/android
+          npx tauri icon static/icon-1024.png
+          npx tauri android init --ci --skip-targets-install
+          python3 scripts/merge-android-manifest.py "$RUNNER_TEMP/crispdeck-manifest.xml" "$MANIFEST"
 
       # ── Production keystore (Play Store) ─────────────────────────────────
       - name: Setup production keystore
