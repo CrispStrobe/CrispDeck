@@ -316,19 +316,28 @@ async function seedAccounts(page, accounts) {
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
     });
+    if (!db.objectStoreNames.contains('accounts')) {
+      db.close();
+      throw new Error('The app account database was not initialized; check the target URL and deployment access.');
+    }
     const now = new Date().toISOString();
-    const tx = db.transaction('accounts', 'readwrite');
-    const store = tx.objectStore('accounts');
+    const encryptedRows = [];
     for (const row of rows) {
       const { credentials, ...rest } = row;
-      store.put({ ...rest, threads_user_id: rest.threads_user_id ?? null,
-                  created_at: now, updated_at: now,
-                  credentials_enc: await encrypt(JSON.stringify(credentials)) });
+      encryptedRows.push({ ...rest, threads_user_id: rest.threads_user_id ?? null,
+                          created_at: now, updated_at: now,
+                          credentials_enc: await encrypt(JSON.stringify(credentials)) });
     }
+    // Crypto promises may outlive an IndexedDB transaction. Finish encryption
+    // before opening it so the browser cannot auto-commit an empty transaction.
+    const tx = db.transaction('accounts', 'readwrite');
+    const store = tx.objectStore('accounts');
+    for (const row of encryptedRows) store.put(row);
     await new Promise((resolve, reject) => {
       tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
+      tx.onabort = tx.onerror = () => reject(tx.error);
     });
+    db.close();
   }, accounts);
 }
 
@@ -368,6 +377,9 @@ async function main() {
     // First load creates the IndexedDB at the schema version the app expects;
     // only then can the fixture accounts be written into it.
     await page.goto('/', { waitUntil: 'networkidle' });
+    if (new URL(page.url()).origin !== new URL(BASE).origin) {
+      throw new Error(`Screenshot target redirected to ${new URL(page.url()).origin}; deployment access is required.`);
+    }
     await seedAccounts(page, ACCOUNTS);
 
     for (const scene of SCENES) {
