@@ -5,9 +5,10 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -28,6 +29,7 @@ jobs:
         run: |
           python3 -m unittest discover -s tools/asc -p 'test_*.py'
           python3 -m unittest discover -s scripts -p 'test_*.py'
+          python3 -m unittest discover -s tools/release -p 'test_*.py'
       - run: npm run check
       - run: npm test -- --maxWorkers=2
       - run: npx svelte-kit sync
@@ -82,6 +84,16 @@ jobs:
       # Rust side holds credential encryption, the Mastodon OAuth exchange
       # and the whole local database, so it is the last place that should be
       # unverified.
+      - name: Parse Windows release helpers
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          foreach ($file in @('tools/release/sign_windows.ps1', 'tools/release/windows_smoke.ps1')) {
+            $errors = $null; $tokens = $null
+            [Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file), [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) { throw ($errors | Out-String) }
+          }
+
       - name: cargo test
         working-directory: src-tauri
         run: cargo test --lib --locked

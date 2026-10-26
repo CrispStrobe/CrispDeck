@@ -11,22 +11,29 @@ name: macOS DMG (Developer ID, notarized)
 # valid for the other.
 #
 # Triggers:
-#   * push a tag matching v*  -> build, notarize, attach to the release
-#   * manual "Run workflow"   -> same, minus the release upload
+#   * the coordinated release workflow calls this builder
+#   * manual "Run workflow" builds without publishing
 #
 # Notarization uses the SAME App Store Connect API key as everything else, so no
 # app-specific password is involved.
 
 on:
-  push:
-    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  workflow_call:
+    inputs:
+      source_sha:
+        type: string
+        required: true
   workflow_dispatch:
 
 permissions:
-  contents: write        # attach the .dmg to the release
+  contents: read
 
 env:
   PRODUCT_NAME: CrispDeck
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   dmg:
@@ -34,6 +41,8 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
 
       - uses: actions/setup-node@v4
         with:
@@ -48,6 +57,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          cache-on-failure: true
 
       - name: Install dependencies
         run: npm ci
@@ -131,16 +141,26 @@ jobs:
           hdiutil detach "$MNT"
           echo "notarized, stapled, Gatekeeper-accepted, universal"
 
-      - uses: actions/upload-artifact@v4
-        continue-on-error: true
-        with:
-          name: crispdeck-macos-dmg
-          path: ${{ env.DMG_PATH }}
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Attach to the GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Install, replace and launch the notarized app
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${GITHUB_REF_NAME}" "$DMG_PATH" --clobber
+        run: |
+          python3 tools/release/desktop_smoke.py macos "$DMG_PATH" --output "$RUNNER_TEMP/macos-smoke"
+          mkdir -p release-assets
+          cp "$DMG_PATH" release-assets/
+          python3 tools/release/manifest.py receipt macos release-assets --check codesign --check notarization --check gatekeeper --check universal --check install_smoke --checks-file "$RUNNER_TEMP/macos-smoke/checks.json"
+      - name: Retain Mac installer smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-macos
+          path: |
+            ${{ runner.temp }}/macos-smoke/*.json
+            ${{ runner.temp }}/macos-smoke/*.png
+            ${{ runner.temp }}/macos-smoke/*.log
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-macos
+          path: release-assets/
+          if-no-files-found: error

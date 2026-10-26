@@ -35,6 +35,9 @@ def _private_key_pem() -> bytes:
     env = os.environ.get("ASC_API_KEY_P8_BASE64")
     if env:
         return base64.b64decode(env)
+    raw = os.environ.get("ASC_API_KEY_P8")
+    if raw:
+        return raw.encode()
     candidates = [
         ROOT / ".appstoreconnect" / f"AuthKey_{KEY_ID}.p8",
         pathlib.Path.home() / ".appstoreconnect" / "private_keys" / f"AuthKey_{KEY_ID}.p8",

@@ -1,0 +1,57 @@
+# Release validation
+
+Automated CI and device/account validation are different evidence. Native
+installer, simulator and emulator checks run in the coordinated release;
+browser tests intercept provider boundaries. Neither is a live posting test.
+
+Dedicated Mastodon/Bluesky/Threads accounts and physical iPhone/Android access
+are currently unavailable to the agent (confirmed by the user). The matrix
+below is pending until those resources are available. Do not change it to
+passed based on mocked browser tests, an emulator screenshot or Apple upload
+acceptance.
+
+## Ready-to-run device/account session
+
+Use dedicated accounts with content that can be deleted afterward. Keep tokens,
+app passwords and account storage out of repository files, screenshots, traces
+and exported reports. Use a local private credential store or GitHub secrets
+for any later automated live-account job.
+
+| Case | iPhone | Android | macOS | Windows | Linux | Web |
+|---|---|---|---|---|---|---|
+| Install/upgrade and first launch | Pending | Pending | Pending | Pending | Pending | Pending |
+| Connect Mastodon; OAuth return completes | Pending | Pending | Pending | Pending | Pending | Pending |
+| Connect Bluesky with supported native/web method | Pending | Pending | Pending | Pending | Pending | Pending |
+| Connect Threads using configured OAuth service | Pending | Pending | Pending | Pending | Pending | Pending |
+| Quit/reopen; accounts still authenticate | Pending | Pending | Pending | Pending | Pending | Pending |
+| Image draft, alt text and per-network text survive restart | Pending | Pending | Pending | Pending | Pending | Pending |
+| Real media crosspost and long Bluesky thread | Pending | Pending | Pending | Pending | Pending | Pending |
+| Interrupt after one destination; retry does not duplicate completed work | Pending | Pending | Pending | Pending | Pending | Pending |
+| Uncertain provider response requires explicit review | Pending | Pending | Pending | Pending | Pending | Pending |
+| Schedule, change route and keep app open; publish once | Pending | Pending | Pending | Pending | Pending | Pending |
+| Sleep/offline; resume and handle overdue work once | Pending | Pending | Pending | Pending | Pending | Pending |
+| Mobile keyboard, rotation, safe areas and media permission denial | Pending | Pending | N/A | N/A | N/A | Pending |
+
+Record the exact release/commit, device model/OS, install source, account
+provider/instance (no secrets), case result, expected/actual outcome and a
+redacted debug-log reference. Record native restart tests on actual devices,
+not a browser page reload. The on-device scheduler requires the app to remain
+open; closing the app is not expected to publish in the background.
+
+Delete test posts after recording their public IDs or links. Native Bluesky
+sign-in currently uses an App Password; browser OAuth is available on the web.
+Threads needs the separately configured OAuth service; a static ZIP alone does
+not provide server endpoints.
+
+## Automated scope
+
+The `smoke-*` artifacts record native startup, screenshot and installer evidence
+from hosted runners. Desktop upgrade checks select the latest older published
+package that matches the platform. If no suitable older package exists, the
+report explicitly records that no upgrade was exercised. A data marker checks
+installer preservation of application data; it is not a real credential test.
+
+Android emulator checks install the signed APK and force-stop/relaunch it.
+iPhone Simulator checks build and launch the simulator app; production IPA
+signature and metadata checks apply separately to the exported device archive.
+All reports explicitly mark physical-device and authenticated workflows false.
