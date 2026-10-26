@@ -11,6 +11,8 @@ import zipfile
 
 
 def run(command):
+    if command[0] == 'jarsigner' and shutil.which('jarsigner') is None:
+        command = ['java', '-Xmx256m', '-m', 'jdk.jartool/sun.security.tools.jarsigner.Main', *command[1:]]
     return subprocess.check_output([str(arg) for arg in command], text=True)
 
 
@@ -28,8 +30,8 @@ def collect(platform, root):
         shutil.copy2(files[0], root / files[0].name)
 
 
-def android(root, sdk, expected):
-    version = json.loads(Path('package.json').read_text())['version']
+def android(root, sdk, expected, version=None):
+    version = version or json.loads(Path('package.json').read_text())['version']
     apk = root / f'CrispDeck_{version}_android_release.apk'
     aab = root / f'CrispDeck_{version}_android_release.aab'
     toolsets = sorted((sdk / 'build-tools').iterdir(), key=lambda path: tuple(int(part) for part in re.findall(r'\d+', path.name)))
@@ -66,6 +68,7 @@ def android(root, sdk, expected):
                     raise ValueError('APK and AAB native libraries differ')
     (root / f'CrispDeck_{version}_android-cert.sha256').write_text(expected + '\n')
     print(f'Android {version} ({version_code}): APK/AAB signatures, identity, ZIP integrity and 16 KiB alignment verified')
+    return version_code
 
 
 if __name__ == '__main__':
@@ -74,6 +77,7 @@ if __name__ == '__main__':
     parser.add_argument('directory', type=Path)
     parser.add_argument('--sdk', type=Path)
     parser.add_argument('--certificate')
+    parser.add_argument('--version')
     args = parser.parse_args()
-    if args.platform == 'android': android(args.directory, args.sdk, args.certificate)
+    if args.platform == 'android': android(args.directory, args.sdk, args.certificate, args.version)
     else: collect(args.platform, args.directory)

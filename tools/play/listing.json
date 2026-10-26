@@ -1,0 +1,13 @@
+{
+  "packageName": "com.christianstrobele.crispdeck",
+  "language": "en-US",
+  "title": "CrispDeck",
+  "shortDescription": "Mastodon, Bluesky and Threads: read, crosspost and organize your feeds.",
+  "fullDescription": "Bring Mastodon, Bluesky and Threads into one workspace.\n\nREAD YOUR WAY\nFollow multiple accounts in Feed or organize timelines, mentions, searches, hashtags, lists and RSS in a multi-column Deck. Save layouts as workspaces and choose the home screen that fits your day.\n\nCOMPOSE FOR EACH NETWORK\nWrite a post once, preview each destination, and adjust text for individual networks. Add images, alt text and supported advanced options. Long Bluesky posts can be split into threads.\n\nRECOVER YOUR WORK\nMedia drafts retain their attached files and editing options. Publishing records progress for each account and thread part so you can reconnect and retry unfinished destinations. Uncertain provider responses require review before retrying.\n\nSCHEDULE ON THIS DEVICE\nSchedule posts, move between screens and resume after offline periods. CrispDeck must remain open to publish scheduled posts; a closed app does not post in the background.\n\nYOUR ACCOUNTS, YOUR DEVICE\nConnect existing social-network accounts. CrispDeck stores credentials on your device and encrypts them. It has no CrispDeck account signup, advertising or analytics.\n\nCrispDeck is open source under AGPL-3.0. Features and provider support can vary between networks. Support and source: https://github.com/CrispStrobe/CrispDeck",
+  "category": "SOCIAL",
+  "website": "https://crispdeck.vercel.app",
+  "privacyPolicyUrl": "https://crispdeck.vercel.app/privacy",
+  "supportEmail": "postmaster@crispstro.be",
+  "releaseNotes": "Recover media drafts, preview destination text, resume unfinished crossposts and threads, and schedule posts while keeping CrispDeck open. Improved Feed/Deck navigation and starter workspaces.",
+  "status": "Draft copy; no Play Console record or publication has been created."
+}

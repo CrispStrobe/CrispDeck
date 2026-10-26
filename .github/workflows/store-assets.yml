@@ -1,0 +1,38 @@
+name: Google Play Listing Assets
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  assets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm ci
+      - run: npx svelte-kit sync && npx vite build
+      - run: bash scripts/ci-apt.sh
+      - run: npx playwright install --with-deps chromium
+      - name: Render listing assets and real UI screenshots
+        env:
+          SHOT_PROFILE: google-play
+        run: |
+          set -euo pipefail
+          node tools/play/assets.mjs play-store-assets
+          npm run preview -- --host 127.0.0.1 > /tmp/play-assets-preview.log 2>&1 &
+          PREVIEW_PID=$!
+          trap 'kill "$PREVIEW_PID" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do curl -fsS http://localhost:4173/ >/dev/null && break; sleep 1; done
+          node tools/screenshots/capture.mjs play-store-assets/screenshots
+      - uses: actions/upload-artifact@v4
+        with:
+          name: google-play-store-assets
+          path: play-store-assets/
+          if-no-files-found: error

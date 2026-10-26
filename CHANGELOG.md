@@ -4,6 +4,12 @@
 
 ### Release automation and native validation
 
+- Google Play tooling verifies published Android packages, validates access with
+  a discarded temporary edit and can publish only to the internal track.
+  Listing copy, a feature graphic and phone/tablet capture tooling are included.
+- Review instructions describe optional OAuth/push processing accurately and
+  keep secrets out of source-controlled review metadata.
+
 - One coordinator builds all six platforms from one source commit and verifies
   platform receipts, identities and SHA-256 hashes before publication.
 - Native installer/startup smoke checks cover Linux, Windows and Mac; iPhone

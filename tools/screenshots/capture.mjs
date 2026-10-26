@@ -29,7 +29,10 @@ const OUT = path.resolve(process.argv[2] ?? 'appstore-shots');
  * scale factor does the rest, so the app lays itself out as a phone or a tablet
  * rather than as a very large desktop window.
  */
-const DEVICES = [
+const DEVICES = process.env.SHOT_PROFILE === 'google-play' ? [
+  { suffix: 'android-phone', displayType: 'GOOGLE_PLAY_PHONE', viewport: { width: 360, height: 640 }, scale: 3, pixels: [1080, 1920] },
+  { suffix: 'android-tablet', displayType: 'GOOGLE_PLAY_TABLET', viewport: { width: 768, height: 1024 }, scale: 2, pixels: [1536, 2048] },
+] : [
   {
     suffix: 'mac',
     displayType: 'APP_DESKTOP',
@@ -142,7 +145,7 @@ const DECK_COLUMNS = [
  * a phone, several side by side on a tablet.
  */
 function deckColumnsFor(device) {
-  if (device.suffix !== 'iphone') return DECK_COLUMNS;
+  if (!device.suffix.startsWith('iphone') && device.suffix !== 'android-phone') return DECK_COLUMNS;
   // Leave a few points so the next column's edge hints at horizontal scroll
   // without any of its text being cut mid-word.
   const width = device.viewport.width - 24;
@@ -338,8 +341,8 @@ async function main() {
     const context = await browser.newContext({
       viewport: device.viewport,
       deviceScaleFactor: device.scale,
-      isMobile: device.suffix === 'iphone',
-      hasTouch: true,
+      isMobile: device.suffix.startsWith('iphone') || device.suffix.startsWith('android'),
+      hasTouch: device.suffix !== 'mac',
       colorScheme: 'dark',
       locale: 'en-US',
       timezoneId: 'Europe/Berlin',
