@@ -427,44 +427,33 @@ scripts/
 
 - **CI** (`ci.yml`): frontend tests, one shared production build and Playwright run,
   release-script guards, and parallel Rust checks on Linux/macOS/Windows.
-- **Mobile** (`mobile.yml`): iOS + Android builds via Tauri 2 — triggers on `v*` tags
-- **Release** (`release.yml`): Windows installers and Linux DEB on `v*` tags.
+- **Mobile** (`mobile.yml`): reusable, production-signed iOS + Android builders
+- **Desktop packages** (`release.yml`): reusable Windows installers and Linux DEB.
   `macos-dmg.yml` builds a signed, notarized universal DMG. `web-release.yml`
   packages the static site; Vercel and Pages deploy from main.
 
 ### Creating a release
 
-```bash
-# Update package.json, package-lock.json, Tauri config, Cargo.toml/Cargo.lock,
-# CHANGELOG and App Store beta notes. Keep iOS customizations in Info.ios.plist.
-git tag v1.3.0
-git push origin v1.3.0
-gh release create v1.3.0 --verify-tag --draft --title 'CrispDeck v1.3.0' --notes-file /path/to/release-notes
+[Coordinated releases](docs/releasing.md) build all six platforms from one source
+commit, retain native smoke evidence, verify signatures and hashes, and publish
+only after the complete package set passes. Run a build-only candidate with:
 
-# After the desktop, mobile, notarization and web jobs succeed:
-gh release download v1.3.0 --dir /tmp/crispdeck-v1.3.0
-python3 tools/release/verify.py 1.3.0 /tmp/crispdeck-v1.3.0
-gh release upload v1.3.0 /tmp/crispdeck-v1.3.0/SHA256SUMS
-gh release edit v1.3.0 --draft=false --latest
+```bash
+gh workflow run coordinated-release.yml --ref main -f publish=false
 ```
 
-Android tagged releases require all four `ANDROID_KEYSTORE_*`/`ANDROID_KEY_*`
-secrets described in `mobile.yml`. Retain the original keystore and passwords
-privately for future updates, and pin its certificate SHA-256 in the repository
-variable `ANDROID_RELEASE_CERT_SHA256`. Debug keys are only for manual QA builds.
-Windows installers currently have no configured Authenticode certificate.
+Tagging a new version starts publication mode. It requires Windows publisher
+signing, the retained Apple/Android identities and matching package/Tauri/Cargo
+versions. A published release cannot be replaced by this tool. Child builders
+no longer publish independently or trigger duplicate tag builds.
 
-For Apple stores, dispatch `macos-appstore.yml` with `dry_run=false` on the release
-tag; iOS upload is part of `mobile.yml`. Wait for Apple processing, prepare the
-platform versions (`tools/asc/prepare.py`), apply the listing and screenshots,
-and run `tools/asc/status.py`. TestFlight and App Store review are separate
-dispatch workflows. A GitHub IPA asset is an App Store archive, not a sideload
-installer. Upload success does not mean Apple has approved or published it.
+See [device validation](docs/validation.md) for the live-account/physical-device
+matrix. TestFlight and App Store approval are separate from GitHub publication;
+a GitHub IPA is an App Store archive, not a sideload installer. Heavy compilation
+and emulators run in GitHub Actions.
 
-Scheduling in this release remains on-device. A closed-app scheduler would need
-an opt-in authenticated service, encrypted credential storage, a durable worker
-and cancellation/retry guarantees, plus matching privacy disclosures. The current
-push cron is not a posting worker. No server scheduling service is enabled.
+Scheduling remains on-device and requires CrispDeck to stay open. No posting
+backend is enabled.
 
 ### Mobile builds (Tauri 2)
 
@@ -489,7 +478,7 @@ The `crispdeck://` scheme is registered for native callbacks. Mastodon uses the 
 
 ## Stats
 
-- 1,520 frontend unit tests + 44 Playwright E2E tests + 15 Rust tests
+- 2,026 frontend unit tests + 92 Playwright browser checks + Rust tests on three operating systems
 - 29 pages, 15 deck column types
 - 3 networks: Bluesky (OAuth + app password), Mastodon (OAuth), Threads (OAuth with server proxy)
 - 8 UI languages (EN, DE, ES, FR, JA, PT, ZH, AR — all 100%) with RTL support

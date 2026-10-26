@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Release automation and native validation
+
+- One coordinator builds all six platforms from one source commit and verifies
+  platform receipts, identities and SHA-256 hashes before publication.
+- Native installer/startup smoke checks cover Linux, Windows and Mac; iPhone
+  Simulator and Android emulator checks retain screenshots and logs.
+- Windows app binaries and installers support timestamped PFX or Azure Artifact
+  Signing. Publication requires publisher signing; unsigned build-only
+  candidates remain explicitly marked and cannot be promoted.
+- Apple uploads happen after all package checks; published GitHub artifacts
+  cannot be replaced by the new publisher. Manual candidate builds do not
+  upload to Apple or notify TestFlight testers.
+- The physical-device/live-account validation matrix remains pending until
+  dedicated accounts and device access are available.
+
 ## v1.3.0 — 2026-10-26
 
 ### Publishing and daily workflows

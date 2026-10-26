@@ -1,0 +1,43 @@
+name: Android Emulator Smoke
+
+on:
+  workflow_call:
+    inputs:
+      source_sha:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.source_sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: package-android
+          path: release-assets
+      - name: Enable KVM for the ephemeral emulator host
+        run: sudo chmod 666 /dev/kvm
+      - name: Install, launch and restart the actual signed APK
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: python3 tools/validation/mobile_smoke.py android --output android-smoke
+      - name: Retain native emulator evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-android
+          path: android-smoke/
+          if-no-files-found: warn

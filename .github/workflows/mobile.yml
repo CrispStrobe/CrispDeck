@@ -1,11 +1,23 @@
 name: Mobile Build
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_call:
+    inputs:
+      source_sha:
+        type: string
+        required: true
+      platform:
+        type: string
+        default: both
+      build_number:
+        type: string
+        required: true
   workflow_dispatch:
     inputs:
+      build_number:
+        description: iOS build number for build-only output
+        type: string
+        default: ''
       platform:
         description: 'Platform to build'
         type: choice
@@ -13,7 +25,7 @@ on:
         default: both
 
 permissions:
-  contents: write
+  contents: read
 
 defaults:
   run:
@@ -34,15 +46,15 @@ defaults:
 #   ANDROID_KEY_ALIAS          – key alias within the keystore
 #   ANDROID_KEY_PASSWORD       – key password
 #
-# When iOS signing secrets are absent the workflow produces an unsigned .ipa
-# for sideloading / QA only.  Android falls back to a debug-keystore APK.
+# This builder only emits production-signed packages. It never publishes or
+# uploads to Apple; the coordinator owns distribution after all six pass.
 # ─────────────────────────────────────────────────────────────────────────────
 
 jobs:
   # ───────────────────────────── iOS ────────────────────────────────────────
   ios:
     name: iOS Build
-    if: github.event_name == 'push' || inputs.platform != 'android'
+    if: inputs.platform != 'android'
     runs-on: macos-26
     timeout-minutes: 60
     env:
@@ -52,15 +64,18 @@ jobs:
       APPLE_TEAM_ID:       ${{ secrets.APPLE_TEAM_ID }}
       IOS_DIST_P12:        ${{ secrets.IOS_DIST_P12 }}
       IOS_DIST_P12_PASSWORD: ${{ secrets.IOS_DIST_P12_PASSWORD }}
+      IOS_BUILD_NUMBER: ${{ inputs.build_number || github.run_number }}
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
 
-      - name: Require production signing for tagged releases
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Require production signing credentials
         run: |
           test -n "$APPLE_API_KEY_P8" && test -n "$APPLE_API_KEY_ID" && test -n "$APPLE_API_ISSUER_ID" && test -n "$APPLE_TEAM_ID" && test -n "$IOS_DIST_P12" && test -n "$IOS_DIST_P12_PASSWORD" \
-            || { echo "::error::Tagged iOS releases require Apple signing credentials"; exit 1; }
+            || { echo "::error::iOS packages require Apple signing credentials"; exit 1; }
+          [[ "$IOS_BUILD_NUMBER" =~ ^[1-9][0-9]{0,3}$ ]] || { echo "::error::Invalid iOS build number"; exit 1; }
 
       - uses: actions/setup-node@v5
         with:
@@ -69,11 +84,12 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
+          cache-on-failure: true
 
       - run: npm ci
 
@@ -246,8 +262,8 @@ jobs:
           APP_PLIST=$(find "$ARCHIVE/Products/Applications" -name Info.plist -maxdepth 2 | head -1)
           [ -n "$APP_PLIST" ] || { echo "::error::no app Info.plist inside the archive"; exit 1; }
           python3 scripts/ios-release-metadata.py apply "$APP_PLIST" src-tauri/Info.ios.plist
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" "$APP_PLIST"
-          /usr/libexec/PlistBuddy -c "Set :ApplicationProperties:CFBundleVersion ${{ github.run_number }}" "$ARCHIVE/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $IOS_BUILD_NUMBER" "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c "Set :ApplicationProperties:CFBundleVersion $IOS_BUILD_NUMBER" "$ARCHIVE/Info.plist"
           echo "archive build number: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PLIST")"
 
           # Write ExportOptions.plist
@@ -290,12 +306,12 @@ jobs:
             # refused by App Store Connect and the upload cannot be undone.
             GOT=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" Payload/*.app/Info.plist)
             echo "IPA build number: $GOT"
-            [ "$GOT" = "${{ github.run_number }}" ] || {
-              echo "::error::IPA carries CFBundleVersion $GOT, expected ${{ github.run_number }}"
+            [ "$GOT" = "$IOS_BUILD_NUMBER" ] || {
+              echo "::error::IPA carries CFBundleVersion $GOT, expected $IOS_BUILD_NUMBER"
               exit 1
             }
             python3 "$GITHUB_WORKSPACE/scripts/ios-release-metadata.py" verify \
-              "$GITHUB_WORKSPACE/CrispDeck_${VERSION}_ios-appstore.ipa" "$VERSION" "${{ github.run_number }}"
+              "$GITHUB_WORKSPACE/CrispDeck_${VERSION}_ios-appstore.ipa" "$VERSION" "$IOS_BUILD_NUMBER"
             codesign --verify --deep --strict --verbose=2 Payload/*.app 2>&1 | tail -5
           else
             echo "ERROR: exportArchive produced no IPA"
@@ -305,84 +321,34 @@ jobs:
             exit 1
           fi
 
-      # Upload to App Store Connect (validate then upload)
-      - name: Upload IPA to App Store Connect
-        if: env.SIGNING_CONFIGURED == 'true'
+      - name: Build and launch the native iPhone simulator app
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          IPA="CrispDeck_${VERSION}_ios-appstore.ipa"
-          [ -f "$IPA" ] || { echo "::error::No IPA to upload"; exit 1; }
-
-          echo "=== Validating IPA ==="
-          xcrun altool --validate-app \
-            -f "$IPA" \
-            --type ios \
-            --apiKey "$APPLE_API_KEY_ID" \
-            --apiIssuer "$APPLE_API_ISSUER_ID"
-
-          echo "=== Uploading to App Store Connect ==="
-          xcrun altool --upload-package "$IPA" \
-            --type ios \
-            --apple-id 6789569440 \
-            --bundle-id com.christianstrobele.crispdeck \
-            --bundle-version "${{ github.run_number }}" \
-            --bundle-short-version-string "$VERSION" \
-            --apiKey "$APPLE_API_KEY_ID" \
-            --apiIssuer "$APPLE_API_ISSUER_ID"
-
-          echo "Upload complete — build will process in 15-60 min"
-
-      # ── Unsigned fallback (no API key secrets) ───────────────────────────
-      - name: Build unsigned iOS (no signing secrets)
-        if: env.SIGNING_CONFIGURED != 'true'
-        run: |
-          cd src-tauri/gen/apple
-          XCPROJ=$(ls -d *.xcodeproj 2>/dev/null | head -1)
-          if [ -n "$XCPROJ" ]; then
-            sed -i '' 's/CODE_SIGN_IDENTITY = .*/CODE_SIGN_IDENTITY = "";/g' \
-              "$XCPROJ/project.pbxproj" 2>/dev/null || true
-            sed -i '' 's/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = "";/g' \
-              "$XCPROJ/project.pbxproj" 2>/dev/null || true
-          fi
-          cd "$GITHUB_WORKSPACE"
-          npx tauri ios build 2>&1 | tail -50 || true
-
-      - name: Package unsigned IPA
-        if: env.SIGNING_CONFIGURED != 'true'
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          APP=$(find src-tauri/gen/apple -name "*.app" -type d 2>/dev/null | head -1)
-          IPA=$(find src-tauri -name "*.ipa" -type f 2>/dev/null | head -1)
-          if [ -n "$APP" ]; then
-            mkdir -p Payload && cp -R "$APP" Payload/
-            zip -ryq "CrispDeck_${VERSION}_ios-unsigned.ipa" Payload
-          elif [ -n "$IPA" ]; then
-            cp "$IPA" "CrispDeck_${VERSION}_ios-unsigned.ipa"
-          else
-            echo "No .app or .ipa found"
-          fi
-
-      - name: Upload IPA to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          for ipa in CrispDeck_*_ios-*.ipa; do
-            [ -f "$ipa" ] || { echo "::error::iOS release IPA missing"; exit 1; }
-            gh release upload "${{ github.ref_name }}" "$ipa" --clobber
-          done
-
-      - name: Upload iOS artifact
+          if [ "$(uname -m)" = arm64 ]; then TARGET=aarch64-sim; else TARGET=x86_64; fi
+          npx tauri ios build --target "$TARGET" 2>&1 | tail -70
+          python3 tools/validation/mobile_smoke.py ios --output "$RUNNER_TEMP/ios-smoke"
+      - name: Retain iPhone simulator evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ios-build
-          path: CrispDeck_*_ios-*.ipa
+          name: smoke-ios
+          path: ${{ runner.temp }}/ios-smoke/
+          if-no-files-found: warn
+      - name: Collect verified iOS package and source receipt
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          mkdir -p ios-artifacts
+          cp "CrispDeck_${VERSION}_ios-appstore.ipa" ios-artifacts/
+          python3 tools/release/manifest.py receipt ios ios-artifacts --check codesign --check metadata --build-number "$IOS_BUILD_NUMBER" --checks-file "$RUNNER_TEMP/ios-smoke/checks.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-ios
+          path: ios-artifacts/
           if-no-files-found: error
 
   # ─────────────────────────── Android ─────────────────────────────────────
   android:
     name: Android Build
-    if: github.event_name == 'push' || inputs.platform != 'ios'
+    if: inputs.platform != 'ios'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
@@ -394,12 +360,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
 
-      - name: Require production signing for tagged releases
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Require production signing credentials
         run: |
           test -n "$ANDROID_KEYSTORE_BASE64" && test -n "$ANDROID_KEYSTORE_PASSWORD" && test -n "$ANDROID_KEY_ALIAS" && test -n "$ANDROID_KEY_PASSWORD" \
-            || { echo "::error::Tagged Android releases require a retained production keystore"; exit 1; }
+            || { echo "::error::Android packages require a retained production keystore"; exit 1; }
           test -n "$ANDROID_RELEASE_CERT_SHA256" \
             || { echo "::error::Pin the production certificate in ANDROID_RELEASE_CERT_SHA256"; exit 1; }
 
@@ -465,19 +432,6 @@ jobs:
           echo "ANDROID_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
           echo "SIGNING_CONFIGURED=true" >> "$GITHUB_ENV"
 
-      # ── Debug-keystore fallback ──────────────────────────────────────────
-      - name: Setup debug keystore fallback
-        if: env.SIGNING_CONFIGURED != 'true'
-        run: |
-          mkdir -p ~/.android
-          keytool -genkeypair -v \
-            -keystore ~/.android/debug.keystore \
-            -alias androiddebugkey \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass android -keypass android \
-            -dname "CN=Android Debug,O=Android,C=US" \
-            2>/dev/null || true
-
       - name: Patch Gradle signing config
         run: python3 scripts/patch-android-signing.py
         env:
@@ -510,49 +464,16 @@ jobs:
           fi
           ls -lh android-artifacts/ || echo "No artifacts"
 
-      - name: Verify Android signatures
+      - name: Verify Android signatures, identity and 16 KiB compatibility
         run: |
-          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
-          test -n "$APKSIGNER"
-          for apk in android-artifacts/*.apk; do
-            "$APKSIGNER" verify --verbose --print-certs "$apk" | tee "$RUNNER_TEMP/apk-signature.txt"
-            if [ "$SIGNING_CONFIGURED" = "true" ]; then
-              # New apksigner versions label scheme signers as "V2 Signer:";
-              # older versions use "Signer #1". Reject multiple identities.
-              GOT=$(sed -nE 's/^(Signer #[0-9]+|V[0-9.]+ Signer:?) certificate SHA-256 digest: //p' "$RUNNER_TEMP/apk-signature.txt" | sort -u)
-              [ "$GOT" = "$ANDROID_RELEASE_CERT_SHA256" ] \
-                || { echo "::error::APK certificate differs from the retained release identity"; exit 1; }
-              VERSION=$(node -p "require('./package.json').version")
-              echo "$GOT" > "android-artifacts/CrispDeck_${VERSION}_android-cert.sha256"
-            fi
-          done
-          if [ "$SIGNING_CONFIGURED" = "true" ]; then
-            for aab in android-artifacts/*.aab; do
-              jarsigner -verify "$aab" > "$RUNNER_TEMP/aab-signature.txt" 2>&1
-              cat "$RUNNER_TEMP/aab-signature.txt"
-              grep -q 'jar verified' "$RUNNER_TEMP/aab-signature.txt"
-              keytool -printcert -jarfile "$aab" -rfc > "$RUNNER_TEMP/aab-cert.pem"
-              GOT=$(openssl x509 -in "$RUNNER_TEMP/aab-cert.pem" -noout -fingerprint -sha256 | cut -d= -f2 | tr -d ':' | tr '[:upper:]' '[:lower:]')
-              [ "$GOT" = "$ANDROID_RELEASE_CERT_SHA256" ] \
-                || { echo "::error::AAB certificate differs from the retained release identity"; exit 1; }
-            done
-          fi
-
-      - name: Upload Android artifacts to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          for f in android-artifacts/*; do
-            [ -f "$f" ] || { echo "::error::Android release artifacts missing"; exit 1; }
-            gh release upload "${{ github.ref_name }}" "$f" --clobber
-          done
+          python3 tools/release/packages.py android android-artifacts --sdk "$ANDROID_HOME" --certificate "$ANDROID_RELEASE_CERT_SHA256"
+          python3 tools/release/manifest.py receipt android android-artifacts --check apk_signature --check aab_signature --check certificate --check alignment --check metadata --certificate "$ANDROID_RELEASE_CERT_SHA256"
 
       - name: Upload Android artifact
         # Retain failed candidates for diagnosis; release upload still requires verification.
         if: always() && steps.collect.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: android-build
+          name: package-android
           path: android-artifacts/
           if-no-files-found: error

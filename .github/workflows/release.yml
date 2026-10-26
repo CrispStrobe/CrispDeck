@@ -1,95 +1,158 @@
-name: Release
+name: Desktop Packages
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_call:
+    inputs:
+      source_sha:
+        type: string
+        required: true
+      require_windows_signing:
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
-      tag:
-        description: 'Tag to build (e.g. v0.2.0). If omitted, uses the current HEAD.'
-        required: false
-        default: ''
+      require_windows_signing:
+        description: Require production Windows signing
+        type: boolean
+        default: false
 
-concurrency:
-  group: release
-  cancel-in-progress: true
+permissions:
+  contents: read
+  id-token: write
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   release:
-    permissions:
-      contents: write
     strategy:
       fail-fast: false
       matrix:
         include:
-          # macOS is built, signed and notarized by macos-dmg.yml.
-          - platform: windows-latest
-            rust_target: x86_64-pc-windows-msvc
-            tauri_args: ''
-            artifact_suffix: windows-x64
-          - platform: ubuntu-24.04
-            rust_target: x86_64-unknown-linux-gnu
-            tauri_args: '--bundles deb'
-            artifact_suffix: linux-x64
-
-    runs-on: ${{ matrix.platform }}
+          - runner: windows-latest
+            os_name: windows
+            target: x86_64-pc-windows-msvc
+          - runner: ubuntu-24.04
+            os_name: linux
+            target: x86_64-unknown-linux-gnu
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
-
     env:
-      APPIMAGE_EXTRACT_AND_RUN: '1'
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      WINDOWS_SIGNING_MODE: ${{ vars.WINDOWS_SIGNING_MODE }}
       NO_STRIP: 'true'
-
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.tag || github.ref }}
-
+          ref: ${{ inputs.source_sha || github.sha }}
       - uses: actions/setup-node@v5
         with:
           node-version: lts/*
           cache: npm
-
-      - name: Install Linux system dependencies
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+          cache-on-failure: true
+      - name: Linux build and installer smoke dependencies
         if: runner.os == 'Linux'
         run: |
           bash scripts/ci-apt.sh
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libwebkit2gtk-4.1-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            libssl-dev \
-            build-essential \
-            curl \
-            wget \
-            file
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.rust_target }}
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-          key: ${{ matrix.rust_target }}
-
-      - run: npm ci
-
-      - name: Run tests
-        if: runner.os == 'Linux'
-        run: npm test -- --maxWorkers=2
-
-      - uses: tauri-apps/tauri-action@v0
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev patchelf xvfb xauth xdotool imagemagick
+      - name: Check Windows signing configuration and helper syntax
+        if: runner.os == 'Windows'
+        shell: pwsh
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REQUIRE_SIGNING: ${{ inputs.require_windows_signing }}
+          HAS_PFX: ${{ secrets.WINDOWS_CERT_PFX_BASE64 != '' && secrets.WINDOWS_CERT_PASSWORD != '' }}
+        run: |
+          foreach ($file in @('tools/release/sign_windows.ps1', 'tools/release/windows_smoke.ps1')) {
+            $errors = $null; $tokens = $null
+            [Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file), [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) { throw ($errors | Out-String) }
+          }
+          if ($env:REQUIRE_SIGNING -eq 'true' -and ($env:WINDOWS_SIGNING_MODE -notin 'pfx', 'azure')) { throw 'Publisher signing is required for release publication.' }
+          if ($env:WINDOWS_SIGNING_MODE -eq 'pfx' -and $env:HAS_PFX -ne 'true') { throw 'Configured PFX credentials are missing.' }
+      - run: npm ci
+      - name: Build Windows executable
+        if: runner.os == 'Windows'
+        run: npx tauri build --no-bundle
+      - name: Authenticate Azure publisher signing
+        if: runner.os == 'Windows' && env.WINDOWS_SIGNING_MODE == 'azure'
+        uses: azure/login@v2
         with:
-          tagName: ${{ inputs.tag || 'v__VERSION__' }}
-          releaseName: 'CrispDeck ${{ inputs.tag || ''v__VERSION__'' }}'
-          releaseBody: |
-            See the [CHANGELOG](https://github.com/CrispStrobe/CrispDeck/blob/main/CHANGELOG.md) for what's new in this release.
-          # Assemble all platforms before publishing the release.
-          releaseDraft: true
-          prerelease: false
-          args: ${{ matrix.tauri_args }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      - name: Sign Windows executable using publisher PFX
+        if: runner.os == 'Windows' && env.WINDOWS_SIGNING_MODE == 'pfx'
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: ./tools/release/sign_windows.ps1 -File src-tauri/target/release/crispdeck.exe
+      - name: Sign Windows executable using Azure Artifact Signing
+        if: runner.os == 'Windows' && env.WINDOWS_SIGNING_MODE == 'azure'
+        uses: azure/trusted-signing-action@v2.0.0
+        with:
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_CERTIFICATE_PROFILE }}
+          files: ${{ github.workspace }}/src-tauri/target/release/crispdeck.exe
+      - name: Bundle signed Windows executable
+        if: runner.os == 'Windows'
+        run: npx tauri bundle --bundles nsis,msi
+      - name: Build Linux package
+        if: runner.os == 'Linux'
+        run: npx tauri build --bundles deb
+      - name: Collect final desktop installers
+        run: python3 tools/release/packages.py '${{ matrix.os_name }}' release-assets
+      - name: Sign Windows installers using publisher PFX
+        if: runner.os == 'Windows' && env.WINDOWS_SIGNING_MODE == 'pfx'
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: ./tools/release/sign_windows.ps1 -Directory release-assets
+      - name: Sign Windows installers using Azure Artifact Signing
+        if: runner.os == 'Windows' && env.WINDOWS_SIGNING_MODE == 'azure'
+        uses: azure/trusted-signing-action@v2.0.0
+        with:
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_CERTIFICATE_PROFILE }}
+          files-folder: ${{ github.workspace }}/release-assets
+          files-folder-filter: exe,msi
+      - name: Install, upgrade and launch Windows app
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./tools/release/windows_smoke.ps1 -Output "$env:RUNNER_TEMP/windows-smoke"
+          python tools/release/manifest.py receipt windows release-assets --checks-file "$env:RUNNER_TEMP/windows-smoke/checks.json"
+      - name: Install, upgrade and launch Linux app
+        if: runner.os == 'Linux'
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          test "$(dpkg-deb -f release-assets/*.deb Version)" = "$VERSION"
+          test "$(dpkg-deb -f release-assets/*.deb Architecture)" = amd64
+          xvfb-run -a python3 tools/release/desktop_smoke.py linux release-assets/*.deb --output "$RUNNER_TEMP/linux-smoke"
+          python3 tools/release/manifest.py receipt linux release-assets --check package_metadata --check install_smoke --checks-file "$RUNNER_TEMP/linux-smoke/checks.json"
+      - name: Retain installer smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ matrix.os_name }}
+          path: |
+            ${{ runner.temp }}/${{ matrix.os_name }}-smoke/*.json
+            ${{ runner.temp }}/${{ matrix.os_name }}-smoke/*.png
+            ${{ runner.temp }}/${{ matrix.os_name }}-smoke/*.log
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.os_name }}
+          path: release-assets/
+          if-no-files-found: error

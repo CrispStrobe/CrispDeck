@@ -1,0 +1,193 @@
+name: Coordinated Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish verified packages (requires matching version tag and Windows signing)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crispdeck-release-coordinator
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.source.outputs.version }}
+      commit: ${{ steps.source.outputs.commit }}
+      ios_build: ${{ steps.source.outputs.ios_build }}
+      publish: ${{ steps.source.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install --quiet cryptography
+      - name: Validate source, version, store build number and publication prerequisites
+        id: source
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_PUBLISH: ${{ github.event_name == 'push' || inputs.publish }}
+          ASC_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          ANDROID_RELEASE_CERT_SHA256: ${{ vars.ANDROID_RELEASE_CERT_SHA256 }}
+          WINDOWS_SIGNING_MODE: ${{ vars.WINDOWS_SIGNING_MODE }}
+          WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          AZURE_CERTIFICATE_PROFILE: ${{ vars.AZURE_CERTIFICATE_PROFILE }}
+        run: python3 tools/release/prepare.py
+
+  ci:
+    needs: prepare
+    uses: ./.github/workflows/ci.yml
+
+  desktop:
+    needs: [prepare, ci]
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/release.yml
+    with:
+      source_sha: ${{ needs.prepare.outputs.commit }}
+      require_windows_signing: ${{ needs.prepare.outputs.publish == 'true' }}
+    secrets: inherit
+
+  mobile:
+    needs: [prepare, ci]
+    uses: ./.github/workflows/mobile.yml
+    with:
+      source_sha: ${{ needs.prepare.outputs.commit }}
+      platform: both
+      build_number: ${{ needs.prepare.outputs.ios_build }}
+    secrets: inherit
+
+  macos:
+    needs: [prepare, ci]
+    uses: ./.github/workflows/macos-dmg.yml
+    with:
+      source_sha: ${{ needs.prepare.outputs.commit }}
+    secrets: inherit
+
+  web:
+    needs: [prepare, ci]
+    uses: ./.github/workflows/web-release.yml
+    with:
+      source_sha: ${{ needs.prepare.outputs.commit }}
+
+  android_smoke:
+    needs: [prepare, mobile]
+    uses: ./.github/workflows/android-smoke.yml
+    with:
+      source_sha: ${{ needs.prepare.outputs.commit }}
+
+  verify:
+    needs: [prepare, desktop, mobile, macos, web, android_smoke]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          merge-multiple: true
+          path: release-assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: smoke-android
+          path: android-smoke
+      - name: Include emulator verification report
+        run: cp android-smoke/android-emulator-smoke.json release-assets/
+      - name: Verify all platforms, source receipts, identities and checksums
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          SOURCE_SHA: ${{ needs.prepare.outputs.commit }}
+          IOS_BUILD: ${{ needs.prepare.outputs.ios_build }}
+          PUBLISH: ${{ needs.prepare.outputs.publish }}
+          ANDROID_RELEASE_CERT_SHA256: ${{ vars.ANDROID_RELEASE_CERT_SHA256 }}
+        run: |
+          FLAGS=()
+          if [ "$PUBLISH" = true ]; then FLAGS+=(--require-windows-signing); fi
+          python3 scripts/ios-release-metadata.py verify "release-assets/CrispDeck_${VERSION}_ios-appstore.ipa" "$VERSION" "$IOS_BUILD"
+          python3 tools/release/manifest.py verify "$VERSION" release-assets --commit "$SOURCE_SHA" --build-number "$IOS_BUILD" --android-certificate "$ANDROID_RELEASE_CERT_SHA256" "${FLAGS[@]}"
+          (cd release-assets && sha256sum --check SHA256SUMS)
+          {
+            echo '### Six-platform candidate verified'
+            echo "Source: $SOURCE_SHA"
+            echo "Publish requested: $PUBLISH"
+            echo 'Windows publisher signatures are mandatory for publication; unsigned build-only candidates are identified in release-evidence.json.'
+            echo 'Physical-device and authenticated publishing validation are separate; see docs/validation.md.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-release
+          path: release-assets/
+          if-no-files-found: error
+
+  apple_upload:
+    needs: [prepare, verify]
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-release
+          path: release-assets
+      - name: Upload the verified IPA after all platforms pass
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          IOS_BUILD: ${{ needs.prepare.outputs.ios_build }}
+        run: |
+          (cd release-assets && shasum -a 256 --check SHA256SUMS)
+          umask 077
+          mkdir -p ~/.appstoreconnect/private_keys
+          printf '%s' "$APPLE_API_KEY_P8" > ~/.appstoreconnect/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8
+          IPA="release-assets/CrispDeck_${VERSION}_ios-appstore.ipa"
+          xcrun altool --validate-app -f "$IPA" --type ios --apiKey "$APPLE_API_KEY_ID" --apiIssuer "$APPLE_API_ISSUER_ID"
+          xcrun altool --upload-package "$IPA" --type ios --apple-id 6789569440 --bundle-id com.christianstrobele.crispdeck --bundle-version "$IOS_BUILD" --bundle-short-version-string "$VERSION" --apiKey "$APPLE_API_KEY_ID" --apiIssuer "$APPLE_API_ISSUER_ID"
+          echo 'Apple accepted the upload; TestFlight processing, beta review and App Store review remain separate.' >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    needs: [prepare, verify, apple_upload]
+    if: always() && needs.prepare.outputs.publish == 'true' && needs.verify.result == 'success' && needs.apple_upload.result == 'success'
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-release
+          path: release-assets
+      - name: Publish exactly the verified package set
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_SHA: ${{ needs.prepare.outputs.commit }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: python3 tools/release/publish.py release-assets --version "$VERSION" --commit "$SOURCE_SHA"
