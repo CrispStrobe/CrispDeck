@@ -27,8 +27,9 @@ Native checks include:
   startup survival and an application-data marker.
 - Windows MSI installation/upgrade, app/installer version and executable-byte
   checks, a visible native window, startup and publisher signatures/timestamps
-  when configured. The executable is signed before bundling; installers are
-  signed afterward.
+  when configured. Tauri's signing callback runs after each format-specific
+  executable patch and on the resulting installers. Per-format snapshots bind
+  the installed MSI executable to its exact packaged bytes.
 - Mac universal architecture, code signature, notarization/stapling, Gatekeeper,
   app replacement and native startup.
 - Exported iOS identity/build number, permission descriptions, callback scheme,
@@ -91,7 +92,11 @@ Choose one supported configuration:
 | PFX | Variable `WINDOWS_SIGNING_MODE=pfx`; secrets `WINDOWS_CERT_PFX_BASE64` and `WINDOWS_CERT_PASSWORD` for an existing valid code-signing identity |
 | Azure Artifact Signing | Variable `WINDOWS_SIGNING_MODE=azure`; variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT`, `AZURE_CERTIFICATE_PROFILE`; configure GitHub OIDC trust and the certificate-profile signing role |
 
-The Azure path uses `azure/login` OIDC and Microsoft's Artifact Signing action.
+The Azure path uses `azure/login` OIDC and Microsoft's pinned `ArtifactSigning`
+PowerShell module (0.1.8, the same version as the v2.0.0 signing action). The
+callback uses the Azure CLI credential from that login. PFX signing uses the
+same callback with the retained certificate, including NSIS uninstaller signing.
+Unsigned build-only callbacks record hashes without claiming publisher signatures.
 It needs an already created signing account, completed identity validation and
 a public-trust certificate profile. Creating an Azure subscription or buying a
 certificate is not part of this workflow. Microsoft's current public-trust
@@ -103,3 +108,10 @@ and [signing integrations](https://learn.microsoft.com/en-us/azure/trusted-signi
 Android's existing retained signing key and backups remain documented in the
 shared `/mnt/volume1/appstore.md` playbook. This workflow does not mint, replace
 or revoke signing identities.
+
+Tauri restores the unpatched build executable after packaging each format.
+Do not sign only before `tauri bundle`, or compare the installed executable to
+that restored file: NSIS/MSI bundle markers deliberately differ. The callback
+records source-bound hashes after patching/signing. Smoke checks compare the
+installed MSI app to its MSI snapshot and retain verbose installation logs.
+Failed package candidates are retained for diagnosis and cannot be published.
