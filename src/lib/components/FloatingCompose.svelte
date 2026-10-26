@@ -4,12 +4,54 @@
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import AccountPicker from '$lib/components/AccountPicker.svelte';
   import EmojiPicker from '$lib/components/EmojiPicker.svelte';
-  import { crosspostThread, graphemeLength, type PostResult, type ComposeOptions } from '$lib/compose/adapter';
-  import { splitForPlatform } from '$lib/compose/thread';
+  import { graphemeLength } from '$lib/compose/adapter';
   import { validateMediaFile, createPreviewUrl, revokePreviewUrl, isVideoFile } from '$lib/compose/media';
   import { toast } from '$lib/toast.svelte';
-  import { logCrosspost } from '$lib/db';
-  import type { Account, Platform, UnifiedPost } from '$lib/types';
+  import { onDestroy } from 'svelte';
+  import { snapshot, saveSnapshot, loadSnapshot, deleteSnapshot, restoreFiles, type ComposerSnapshot, type StoredOptions } from '$lib/publishing/snapshots';
+  import { createJob, deliverJob, getJob, isComplete, type PublishJob } from '$lib/publishing/outbox';
+  import DeliveryStatus from './DeliveryStatus.svelte';
+  import DestinationPreviews from './DestinationPreviews.svelte';
+  let restoredOptions: StoredOptions | null = $state(null);
+  let pendingJob: PublishJob | null = $state(null);
+  let overrides: Record<string, string> = $state({});
+  let threadsMediaUrl = $state('');
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  let lastSnapshot: ComposerSnapshot | undefined;
+  let savedWrites: Promise<void> = Promise.resolve();
+  function floatingSnapshot() {
+    return snapshot('floating-compose', text, selectedAccountIds, overrides, {
+      visibility, contentWarning: showCW ? contentWarning : undefined, mediaFiles, altTexts,
+      mediaUrls: threadsMediaUrl.trim() ? [threadsMediaUrl.trim()] : undefined,
+      quoteUri: quotePost?.platform === 'bluesky' ? quotePost.uri : restoredOptions?.quoteUri,
+      quoteCid: (quotePost?.raw as any)?.post?.cid ?? (quotePost?.raw as any)?.cid ?? restoredOptions?.quoteCid,
+      quoteUrl: quotePost?.uri?.startsWith('https://') ? quotePost.uri : restoredOptions?.quoteUrl,
+      replyTo: replyToPost ? {
+        uri: replyToPost.uri, platform: replyToPost.platform, id: (replyToPost.raw as any)?.id,
+        cid: (replyToPost.raw as any)?.post?.cid ?? (replyToPost.raw as any)?.cid,
+      } : restoredOptions?.replyTo,
+    }, pendingJob && !isComplete(pendingJob) ? pendingJob.id : undefined);
+  }
+  function persistFloating(saved: ComposerSnapshot) {
+    savedWrites = savedWrites.catch(() => {}).then(async () => {
+      if (saved.text.trim() || saved.media.length || saved.jobId) await saveSnapshot(saved);
+      else await deleteSnapshot('floating-compose');
+    }).catch(() => { error = i18n.t.workflow.saveError; });
+  }
+  $effect(() => {
+    if (!loaded) return;
+    const saved = floatingSnapshot();
+    lastSnapshot = saved;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => persistFloating(saved), 500);
+  });
+  onDestroy(() => {
+    clearTimeout(saveTimer);
+    if (lastSnapshot) persistFloating(lastSnapshot);
+    mediaPreviews.forEach(revokePreviewUrl);
+  });
+
+  import type { Account, UnifiedPost } from '$lib/types';
 
   let {
     open = $bindable(false),
@@ -102,6 +144,18 @@
       accounts = result.accounts;
       clientEntries = result.clients;
       selectedAccountIds = accounts.map(a => a.id);
+      const saved = await loadSnapshot('floating-compose');
+      if (saved && !replyToPost && !quotePost) {
+        pendingJob = saved.jobId ? await getJob(saved.jobId) ?? null : null;
+        if (!pendingJob || !isComplete(pendingJob)) {
+          restoredOptions = saved.options;
+          text = saved.text; selectedAccountIds = saved.accountIds; overrides = saved.overrides;
+          visibility = saved.options.visibility ?? 'public';
+          contentWarning = saved.options.contentWarning ?? ''; showCW = !!contentWarning;
+          mediaFiles = restoreFiles(saved); mediaPreviews = mediaFiles.map(createPreviewUrl);
+          altTexts = saved.options.altTexts ?? []; threadsMediaUrl = saved.options.mediaUrls?.[0] ?? '';
+        }
+      }
       loaded = true;
     } catch (e) {
       error = String(e);
@@ -130,83 +184,40 @@
   }
 
   async function handlePost() {
-    if (!text.trim() && mediaFiles.length === 0) return;
-    if (selectedAccountIds.length === 0) {
-      error = 'Select at least one account to post to.';
-      return;
-    }
-
-    posting = true;
-    error = '';
-
-    const targets = selectedAccountIds
-      .map(id => {
-        const acct = accounts.find(a => a.id === id);
-        const entry = clientEntries.get(id);
-        if (!acct || !entry) return null;
-        const plan = splitForPlatform(text.trim(), acct.platform as Platform);
-        return { platform: acct.platform as Platform, client: entry.client, parts: plan.parts.map(p => p.text) };
-      })
-      .filter((t): t is NonNullable<typeof t> => t !== null);
-
-    // Build quote options
-    const quoteUri = quotePost?.uri;
-    const quoteCid = (quotePost?.raw as any)?.post?.cid ?? (quotePost?.raw as any)?.cid ?? '';
-    const quoteAuthor = quotePost?.author.handle ?? '';
-    let quoteUrl: string | undefined;
-    if (quoteUri && quoteAuthor) {
-      const rkey = quoteUri.split('/').pop();
-      quoteUrl = `https://bsky.app/profile/${quoteAuthor}/post/${rkey}`;
-    }
-
-    const options: Omit<ComposeOptions, 'text'> = {
-      visibility,
-      contentWarning: showCW ? contentWarning : undefined,
-      mediaFiles: mediaFiles.length > 0 ? mediaFiles : undefined,
-      altTexts: altTexts.length > 0 ? altTexts : undefined,
-      quoteUri: quoteUri || undefined,
-      quoteCid: quoteCid || undefined,
-      quoteUrl,
-      onVideoProgress: (status: string) => { videoUploadStatus = status; },
-    };
-
+    if (posting || pendingJob && !isComplete(pendingJob)) return;
+    if (!text.trim() && !mediaFiles.length) return;
+    const altMode = localStorage.getItem('crispdeck-alt-text-mode') ?? 'off';
+    const missing = mediaFiles.some((_, index) => !altTexts[index]?.trim());
+    if (missing && altMode === 'require') { error = i18n.t.compose.missingAltConfirm; return; }
+    if (missing && altMode === 'warn' && !confirm(i18n.t.compose.missingAltConfirm)) return;
+    posting = true; error = '';
     try {
-      const results = await crosspostThread(targets, options);
-      const allSuccess = results.every(r => r.success);
-
-      await logCrosspost({
-        bluesky_uri: results.find(r => r.platform === 'bluesky')?.uri ?? null,
-        bluesky_cid: results.find(r => r.platform === 'bluesky')?.cid ?? null,
-        mastodon_uri: results.find(r => r.platform === 'mastodon')?.uri ?? null,
-        mastodon_id: null,
-        threads_uri: results.find(r => r.platform === 'threads')?.uri ?? null,
-        threads_id: null,
-        text_preview: text.trim().substring(0, 280),
-        media_count: mediaFiles.length,
-        status: allSuccess ? 'success' : results.some(r => r.success) ? 'partial' : 'failed',
-      });
-
-      if (allSuccess) {
-        toast.success(`Posted to ${results.map(r => r.platform).join(' + ')}!`);
-        resetForm();
-        open = false;
-        onposted?.();
-      } else {
-        const failed = results.filter(r => !r.success);
-        const succeeded = results.filter(r => r.success);
-        if (succeeded.length > 0) toast.warning(`Posted to ${succeeded.map(r => r.platform).join(', ')} but failed on ${failed.map(r => r.platform).join(', ')}`);
-        else toast.error(`Post failed: ${failed[0]?.error || 'Unknown error'}`);
+      clearTimeout(saveTimer); await savedWrites;
+      pendingJob = await createJob(floatingSnapshot(), accounts);
+      await saveSnapshot({ ...floatingSnapshot(), jobId: pendingJob.id });
+      await finishDelivery(false);
+    } catch (e) { error = String(e); }
+    finally { posting = false; }
+  }
+  async function finishDelivery(allow: boolean) {
+    if (!pendingJob) return;
+    posting = true; error = '';
+    try {
+      pendingJob = await deliverJob(pendingJob.id, undefined, allow);
+      if (isComplete(pendingJob)) {
+        toast.success(i18n.t.workflow.posted);
+        resetForm(); pendingJob = null;
+        clearTimeout(saveTimer); lastSnapshot = undefined;
+        await savedWrites;
+        await deleteSnapshot('floating-compose');
+        open = false; onposted?.();
       }
-    } catch (e) {
-      error = String(e);
-      toast.error(i18n.t.compose.postFailed);
-    } finally {
-      posting = false;
-      videoUploadStatus = '';
-    }
+    } catch (e) { error = String(e); }
+    finally { posting = false; }
   }
 
   function resetForm() {
+    selectedAccountIds = selectedAccountIds.filter(id => accounts.some(account => account.id === id));
     text = '';
     contentWarning = '';
     showCW = false;
@@ -214,7 +225,7 @@
     mediaFiles = [];
     mediaPreviews = [];
     altTexts = [];
-    error = '';
+    error = ''; overrides = {}; threadsMediaUrl = ''; restoredOptions = null;
   }
 
   function handleClose() {
@@ -267,6 +278,14 @@
       </div>
     {:else}
       <div class="flex-1 overflow-y-auto p-4 space-y-3">
+        {#if pendingJob}
+          <DeliveryStatus job={pendingJob} busy={posting} onretry={finishDelivery} />
+          {#if !isComplete(pendingJob)}
+            <p class="text-xs text-[var(--color-text-muted)]">{i18n.t.workflow.deliveryLocked}</p>
+            <button disabled={posting} class="text-sm underline" onclick={() => { resetForm(); pendingJob = null; }}>{i18n.t.workflow.newDraft}</button>
+          {/if}
+        {/if}
+        <fieldset disabled={posting || (!!pendingJob && !isComplete(pendingJob))} class="min-w-0 space-y-3">
         {#if error}
           <div class="p-2 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-xs">
             {error}
@@ -369,6 +388,14 @@
 
         <!-- Account picker -->
         <AccountPicker {accounts} bind:selected={selectedAccountIds} />
+        <details><summary class="text-sm cursor-pointer">{i18n.t.compose.preview}</summary>
+          <DestinationPreviews {accounts} selected={selectedAccountIds} sharedText={text} bind:overrides {threadsMediaUrl} {mediaPreviews} mediaTypes={mediaFiles.map(f => f.type)} {altTexts}
+            {visibility} contentWarning={showCW ? contentWarning : ''} threadGate="everyone" disableQuotes={false} selfLabel="none" />
+        </details>
+        {#if hasThreads}
+          <label class="block text-xs space-y-1"><span>{i18n.t.workflow.mediaUrl}</span><input type="url" bind:value={threadsMediaUrl} placeholder="https://" class="w-full p-2 rounded bg-[var(--color-bg)] border border-[var(--color-border)]" /></label>
+        {/if}
+        </fieldset>
       </div>
 
       <!-- Bottom toolbar -->
@@ -409,7 +436,8 @@
             {/if}
             <button
               onclick={handlePost}
-              disabled={posting || (!text.trim() && mediaFiles.length === 0) || selectedAccountIds.length === 0}
+              data-testid="publish-post"
+              disabled={posting || (!!pendingJob && !isComplete(pendingJob)) || (!text.trim() && mediaFiles.length === 0) || selectedAccountIds.length === 0}
               class="flex items-center gap-1.5 px-4 py-1.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-xs font-medium rounded-md disabled:opacity-50 transition-colors"
             >
               {#if posting}

@@ -1,7 +1,7 @@
 // BskyAgent was imported here and never used. RichText is loaded on demand:
 // it was the only value this module took from the SDK, and taking it
 // statically put all 221 KB gzipped of it in the compose route's closure.
-import type { BlobRef } from '@atproto/api';
+import type { Agent, BlobRef } from '@atproto/api';
 import { loadAtprotoSdk } from '$lib/api/atproto-sdk';
 import type { BlueskyClient } from '$lib/api/bluesky';
 import type { MastodonClient } from '$lib/api/mastodon';
@@ -16,12 +16,18 @@ export interface PostResult {
   uri?: string;
   cid?: string;
   error?: string;
+  id?: string;
+  uncertain?: boolean;
 }
 
 export type ThreadGate = 'everyone' | 'mentioned' | 'following' | 'nobody';
 
 export interface ComposeOptions {
   text: string;
+  deliveryKey?: string;
+  recordKey?: string;
+  createdAt?: string;
+  replyTo?: { uri: string; cid?: string; id?: string; rootUri?: string; rootCid?: string; platform?: Platform };
   visibility?: 'public' | 'unlisted' | 'private' | 'direct';
   contentWarning?: string;
   mediaFiles?: File[];
@@ -47,9 +53,12 @@ export interface PollOptions {
 export async function postToBluesky(
   client: BlueskyClient,
   options: ComposeOptions,
+  oauthAgent?: Agent,
 ): Promise<PostResult> {
   try {
-    const agent = client.getAgent();
+    const agent = oauthAgent ?? client.getAgent();
+    const did = agent.did ?? (agent as { session?: { did?: string } }).session?.did;
+    if (!did) throw new Error('Reconnect this Bluesky account before publishing.');
 
     // Use RichText to auto-detect facets (mentions, links, tags)
     const { RichText } = await loadAtprotoSdk();
@@ -60,7 +69,7 @@ export async function postToBluesky(
       $type: 'app.bsky.feed.post',
       text: rt.text,
       facets: rt.facets,
-      createdAt: new Date().toISOString(),
+      createdAt: options.createdAt ?? new Date().toISOString(),
     };
 
     // Upload media if present
@@ -71,7 +80,7 @@ export async function postToBluesky(
       if (videoFile) {
         // Video upload: only one video per post, no mixing with images
         const videoIdx = options.mediaFiles.indexOf(videoFile);
-        const blobRef = await client.uploadVideo(videoFile, options.onVideoProgress);
+        const blobRef = await client.uploadVideo(videoFile, options.onVideoProgress, oauthAgent);
 
         const videoEmbed: Record<string, unknown> = {
           $type: 'app.bsky.embed.video',
@@ -144,11 +153,17 @@ export async function postToBluesky(
       };
     }
 
-    const resp = await agent.api.com.atproto.repo.createRecord({
-      repo: agent.session!.did,
-      collection: 'app.bsky.feed.post',
-      record,
-    });
+    if (options.replyTo?.uri && options.replyTo.cid) {
+      record.reply = {
+        root: { uri: options.replyTo.rootUri ?? options.replyTo.uri, cid: options.replyTo.rootCid ?? options.replyTo.cid },
+        parent: { uri: options.replyTo.uri, cid: options.replyTo.cid },
+      };
+    }
+    const repo = agent.api.com.atproto.repo;
+    // A stable record key makes an interrupted outbox delivery safe to retry.
+    const resp = options.recordKey
+      ? await repo.putRecord({ repo: did, collection: 'app.bsky.feed.post', rkey: options.recordKey, record })
+      : await repo.createRecord({ repo: did, collection: 'app.bsky.feed.post', record });
 
     // Create thread gate if specified
     if (options.threadGate && options.threadGate !== 'everyone') {
@@ -161,8 +176,8 @@ export async function postToBluesky(
       }
       // 'nobody' = empty allow array
 
-      await agent.api.com.atproto.repo.createRecord({
-        repo: agent.session!.did,
+      await (options.recordKey ? repo.putRecord.bind(repo) : repo.createRecord.bind(repo))({
+        repo: did,
         collection: 'app.bsky.feed.threadgate',
         rkey,
         record: {
@@ -177,8 +192,8 @@ export async function postToBluesky(
     // Create post gate if quoting disabled
     if (options.disableQuotes) {
       const rkey = resp.data.uri.split('/').pop()!;
-      await agent.api.com.atproto.repo.createRecord({
-        repo: agent.session!.did,
+      await (options.recordKey ? repo.putRecord.bind(repo) : repo.createRecord.bind(repo))({
+        repo: did,
         collection: 'app.bsky.feed.postgate',
         rkey,
         record: {
@@ -210,6 +225,8 @@ export async function postToMastodon(
   client: MastodonClient,
   options: ComposeOptions,
 ): Promise<PostResult> {
+  let writeStarted = false;
+  let confirmedRejected = false;
   try {
     const instanceUrl = client.getInstanceUrl();
     const token = client.getAccessToken();
@@ -248,6 +265,8 @@ export async function postToMastodon(
       visibility: options.visibility ?? 'public',
     };
 
+    if (options.replyTo) body.in_reply_to_id = options.replyTo.id ?? options.replyTo.uri.split('/').pop();
+
     if (mediaIds.length > 0) {
       body.media_ids = mediaIds;
     }
@@ -264,13 +283,15 @@ export async function postToMastodon(
       };
     }
 
+    writeStarted = true;
     const resp = await fetch(`${instanceUrl}/api/v1/statuses`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      headers: { 'Content-Type': 'application/json', ...authHeaders, ...(options.deliveryKey ? { 'Idempotency-Key': options.deliveryKey } : {}) },
       body: JSON.stringify(body),
     });
 
     if (!resp.ok) {
+      confirmedRejected = true;
       const errData = await resp.json().catch(() => ({}));
       throw new Error(errData.error || `Status creation failed: ${resp.statusText}`);
     }
@@ -279,13 +300,15 @@ export async function postToMastodon(
     return {
       platform: 'mastodon',
       success: true,
-      uri: status.uri || status.url,
+      uri: status.url || status.uri,
+      id: String(status.id),
     };
   } catch (e) {
     return {
       platform: 'mastodon',
       success: false,
       error: String(e),
+      uncertain: writeStarted && !confirmedRejected,
     };
   }
 }
@@ -295,6 +318,7 @@ export async function postToThreads(
   client: ThreadsClient,
   options: ComposeOptions,
 ): Promise<PostResult> {
+  let publishing = false;
   try {
     let containerId: string;
 
@@ -310,32 +334,38 @@ export async function postToThreads(
         await client.waitForContainer(id);
         childIds.push(id);
       }
-      containerId = await client.createCarouselContainer(childIds, options.text);
+      containerId = await client.createCarouselContainer(childIds, options.text, options.replyTo?.id);
     } else if (mediaUrls && mediaUrls.length === 1) {
       // Single image or video
       const url = mediaUrls[0];
       const isVideo = /\.(mp4|mov)$/i.test(url);
       containerId = isVideo
-        ? await client.createVideoContainer(url, options.text)
-        : await client.createImageContainer(url, options.text);
+        ? await client.createVideoContainer(url, options.text, options.replyTo?.id)
+        : await client.createImageContainer(url, options.text, options.replyTo?.id);
     } else {
       // Text-only
-      containerId = await client.createTextContainer(options.text);
+      containerId = await client.createTextContainer(options.text, options.replyTo?.id);
     }
 
     await client.waitForContainer(containerId);
+    publishing = true;
     const result = await client.publishContainer(containerId);
+    publishing = false;
+    let permalink: string | undefined;
+    try { permalink = (await client.getPost(result.id)).permalink; } catch { /* the post is already published */ }
 
     return {
       platform: 'threads',
       success: true,
-      uri: `https://www.threads.net/post/${result.id}`,
+      uri: permalink,
+      id: String(result.id),
     };
   } catch (e) {
     return {
       platform: 'threads',
       success: false,
       error: String(e),
+      uncertain: publishing,
     };
   }
 }

@@ -64,7 +64,7 @@ export function saveLayout(name: string, columns: DeckColumnConfig[]): DeckLayou
   const existing = layouts.findIndex(l => l.name === name);
   const layout: DeckLayout = {
     name,
-    columns: structuredClone(columns),
+    columns: JSON.parse(JSON.stringify(columns)),
     createdAt: new Date().toISOString(),
   };
 

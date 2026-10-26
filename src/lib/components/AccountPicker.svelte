@@ -8,6 +8,9 @@
   } = $props();
 
   function toggle(id: number) {
+    // Reconnected accounts can have a new local id. Keep each explicit choice
+    // free of disconnected ids restored from an older draft.
+    selected = selected.filter(value => accounts.some(account => account.id === value));
     if (selected.includes(id)) {
       selected = selected.filter(s => s !== id);
     } else {

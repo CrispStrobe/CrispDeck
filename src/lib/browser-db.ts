@@ -70,8 +70,10 @@ function tx<T>(storeName: string, mode: IDBTransactionMode, fn: (store: IDBObjec
     const txn = db.transaction(storeName, mode);
     const store = txn.objectStore(storeName);
     const req = fn(store);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    let result: T;
+    req.onsuccess = () => { result = req.result; };
+    txn.oncomplete = () => resolve(result);
+    txn.onabort = txn.onerror = () => reject(txn.error ?? req.error);
   }));
 }
 
@@ -499,6 +501,7 @@ export async function listCrossposts(limit: number = 50, offset: number = 0): Pr
 // ── Drafts ────────────────────────────────────────────────────────────────
 
 export async function saveDraft(params: {
+  id?: number;
   text: string;
   target_accounts: number[];
   media_paths?: string[];
@@ -508,11 +511,16 @@ export async function saveDraft(params: {
   content_warning?: string | null;
   scheduled_at?: string | null;
 }): Promise<number> {
-  return await add('drafts', {
-    ...params,
+  const previous = params.id === undefined ? undefined : await tx<Draft | undefined>('drafts', 'readonly', store => store.get(params.id!));
+  if (params.id !== undefined && !previous) throw new Error('Draft no longer exists');
+  const save = params.id === undefined ? add : put;
+  const { id, ...fields } = params;
+  return await save('drafts', {
+    ...fields,
+    ...(id === undefined ? {} : { id }),
     scheduled_at: params.scheduled_at ?? null,
     is_sent: false,
-    created_at: now(),
+    created_at: previous?.created_at ?? now(),
     updated_at: now(),
   }) as number;
 }

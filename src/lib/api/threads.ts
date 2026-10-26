@@ -431,12 +431,13 @@ export class ThreadsClient {
   /**
    * Create a carousel container referencing child item IDs.
    */
-  async createCarouselContainer(childIds: string[], text?: string): Promise<string> {
+  async createCarouselContainer(childIds: string[], text?: string, replyToId?: string): Promise<string> {
     const body: Record<string, string> = {
       media_type: 'CAROUSEL',
       children: childIds.join(','),
     };
     if (text) body.text = text;
+    if (replyToId) body.reply_to_id = replyToId;
 
     const resp = await this.apiPost<{ id: string }>(`/${this.userId}/threads`, body);
     return resp.id;

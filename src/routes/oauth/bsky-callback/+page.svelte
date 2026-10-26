@@ -2,6 +2,7 @@
   import { i18n } from '$lib/i18n.svelte';
   import { swallow } from '$lib/debug-log';
   import { base } from '$app/paths';
+  import { getHomeMode, homeRedirectPath } from '$lib/settings';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { addAccount, updateAccount, listAccounts } from '$lib/db';
@@ -62,7 +63,7 @@
         goto(returnTo);
         return;
       }
-      const dest = returnTo ?? ((await listAccounts()).length === 1 ? `${base}/feed` : `${base}/settings`);
+      const dest = returnTo ?? ((await listAccounts()).length === 1 ? (homeRedirectPath(getHomeMode(), base) ?? `${base}/feed`) : `${base}/settings`);
       setTimeout(() => goto(dest), 1500);
     } catch (e) {
       clearSilentReauthFlag();

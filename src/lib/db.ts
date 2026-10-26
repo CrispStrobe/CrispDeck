@@ -239,6 +239,7 @@ export async function listCrossposts(
 // ── Drafts ─────────────────────────────────────────────────────────────────
 
 export async function saveDraft(params: {
+  id?: number;
   text: string;
   target_accounts: number[];
   media_paths?: string[];

@@ -6,8 +6,8 @@
   import { getSttEngine } from '$lib/settings';
   import { buildScheduledAt, minScheduleDate, formatScheduledFor } from '$lib/quick-schedule';
   import { base } from '$app/paths';
-  import { onMount } from 'svelte';
-  import { logCrosspost, saveDraft as dbSaveDraft, listDrafts, deleteDraft as dbDeleteDraft } from '$lib/db';
+  import { onMount, onDestroy } from 'svelte';
+  import { listDrafts } from '$lib/db';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { PenSquare, Send, Loader2, X, ImagePlus, AlertTriangle, Check, BarChart3, Shield, Mic, MicOff, Sparkles, Clock } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
@@ -16,10 +16,7 @@
   import EmojiPicker from '$lib/components/EmojiPicker.svelte';
   import GifPicker from '$lib/components/GifPicker.svelte';
   import { listTemplates, saveTemplate, deleteTemplate, type PostTemplate } from '$lib/templates';
-  import { BlueskyClient } from '$lib/api/bluesky';
-  import { MastodonClient } from '$lib/api/mastodon';
-  import { crosspostThread, graphemeLength, type PostResult, type ComposeOptions, type ThreadGate, type PollOptions } from '$lib/compose/adapter';
-  import { splitForPlatform, planThread, type ThreadPlan } from '$lib/compose/thread';
+  import { graphemeLength, type ThreadGate } from '$lib/compose/adapter';
   import { validateMediaFile, createPreviewUrl, revokePreviewUrl, isVideoFile } from '$lib/compose/media';
   import { tryVoiceCommand, looksLikeCommand } from '$lib/voice-commands';
   import { runAIAction, isAIConfigured, type AIAction } from '$lib/compose/ai';
@@ -27,31 +24,68 @@
   import { toast } from '$lib/toast.svelte';
   import { searchArchive } from '$lib/archive';
   import type { Account, Platform } from '$lib/types';
+  import { snapshot, saveSnapshot, loadSnapshot, deleteSnapshot, restoreFiles, type ComposerSnapshot } from '$lib/publishing/snapshots';
+  import { persistDraft, draftSnapshot, removeDraft } from '$lib/publishing/drafts';
+  import { createJob, deliverJob, getJob, isComplete, type PublishJob } from '$lib/publishing/outbox';
+  import DeliveryStatus from '$lib/components/DeliveryStatus.svelte';
+  import DestinationPreviews from '$lib/components/DestinationPreviews.svelte';
+  let pendingJob: PublishJob | null = $state(null);
+  let overrides: Record<string, string> = $state({});
+  let threadsMediaUrl = $state('');
+  let autoSaveReady = $state(false);
+  let autoSaveWrite: Promise<void> = Promise.resolve();
+  let latestSnapshot: ComposerSnapshot | undefined;
+  let saveError = $state('');
 
-/**
- * A draft's target_accounts is an array, or the JSON text of one when it came
- * back from the database as a string. A corrupt value used to throw straight
- * out of the render path and take the page with it; an empty selection is
- * recoverable, a blank page is not.
- */
-function parseTargetAccounts(value: unknown): number[] {
-  if (Array.isArray(value)) return value as number[];
-  if (typeof value !== 'string') return [];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (e) {
-    swallow('drafts.targetAccounts', e);
-    return [];
+  function currentSnapshot(id = 'autosave') {
+    const quoteUrl = quoteUri && quoteAuthor ? `https://bsky.app/profile/${quoteAuthor}/post/${quoteUri.split('/').pop()}` : undefined;
+    return { ...snapshot(id, text, selectedAccountIds, overrides, {
+      visibility, contentWarning: showCW ? contentWarning : undefined,
+      mediaFiles, altTexts, mediaUrls: threadsMediaUrl.trim() ? [threadsMediaUrl.trim()] : undefined,
+      quoteUri: quoteUri || undefined, quoteCid: quoteCid || undefined, quoteUrl,
+      threadGate, selfLabel: selfLabel === 'none' ? undefined : selfLabel, disableQuotes,
+      replyTo: replyTo ? { uri: replyTo, platform: replyPlatform as Platform } : undefined,
+      poll: showPoll ? { options: pollOptions.filter(o => o.trim()), expiresIn: pollExpiry, multiple: pollMultiple } : undefined,
+    }, pendingJob && !isComplete(pendingJob) ? pendingJob.id : undefined), context: { quoteAuthor, quoteText, replyAuthor } };
   }
-}
+
+  function applySnapshot(saved: ComposerSnapshot) {
+    quoteAuthor = saved.context?.quoteAuthor ?? ''; quoteText = saved.context?.quoteText ?? ''; replyAuthor = saved.context?.replyAuthor ?? '';
+    text = saved.text; selectedAccountIds = saved.accountIds; overrides = saved.overrides;
+    visibility = saved.options.visibility ?? 'public';
+    contentWarning = saved.options.contentWarning ?? ''; showCW = !!contentWarning;
+    mediaFiles = restoreFiles(saved); mediaPreviews = mediaFiles.map(createPreviewUrl);
+    altTexts = saved.options.altTexts ?? mediaFiles.map(() => '');
+    threadsMediaUrl = saved.options.mediaUrls?.[0] ?? '';
+    threadGate = saved.options.threadGate ?? 'everyone';
+    selfLabel = (saved.options.selfLabel ?? 'none') as typeof selfLabel;
+    disableQuotes = saved.options.disableQuotes ?? false;
+    showPoll = !!saved.options.poll;
+    pollOptions = saved.options.poll?.options ?? ['', ''];
+    pollExpiry = saved.options.poll?.expiresIn ?? 86400;
+    pollMultiple = saved.options.poll?.multiple ?? false;
+    quoteUri = saved.options.quoteUri ?? ''; quoteCid = saved.options.quoteCid ?? '';
+    replyTo = saved.options.replyTo?.uri ?? ''; replyPlatform = saved.options.replyTo?.platform ?? '';
+  }
+
+  $effect(() => {
+    if (!autoSaveReady || loading) return;
+    const saved = currentSnapshot();
+    latestSnapshot = saved;
+    scheduleAutoSave(saved);
+  });
+  onDestroy(() => {
+    if (autoSaveTimer) clearTimeout(autoSaveTimer);
+    if (latestSnapshot && autoSaveReady) queueAutoSave(latestSnapshot);
+    mediaPreviews.forEach(revokePreviewUrl);
+  });
+
 
   let accounts: Account[] = $state([]);
   let selectedAccountIds: number[] = $state([]);
   let loading = $state(true);
   let posting = $state(false);
   let error = $state('');
-  let results: PostResult[] = $state([]);
 
   // Auto-save key
   const AUTOSAVE_KEY = 'crispdeck-compose-autosave';
@@ -96,26 +130,18 @@ function parseTargetAccounts(value: unknown): number[] {
   let scheduleTime = $state('');
 
   async function handleSchedule() {
-    if (!text.trim()) return;
+    if ((!text.trim() && !mediaFiles.length) || !selectedAccountIds.length || !checkAltText() || posting) return;
     const scheduledAt = buildScheduledAt(scheduleDate, scheduleTime);
     if (!scheduledAt) return;
+    posting = true;
     try {
-      await dbSaveDraft({
-        text: text.trim(),
-        target_accounts: selectedAccountIds,
-        visibility,
-        content_warning: showCW ? contentWarning : null,
-        scheduled_at: scheduledAt,
-      });
-      toast.success(`Scheduled for ${formatScheduledFor(scheduledAt)}`);
-      text = '';
-      showSchedule = false;
-      scheduleDate = '';
-      scheduleTime = '';
-      clearAutoSave();
-    } catch (e) {
-      error = `Failed to schedule: ${e}`;
-    }
+      await persistDraft(currentSnapshot(), scheduledAt, editingDraftId ?? undefined);
+      toast.success(`${i18n.t.workflow.scheduledFor} ${formatScheduledFor(scheduledAt)}`);
+      resetComposer();
+      showSchedule = false; scheduleDate = ''; scheduleTime = '';
+      await clearAutoSave();
+    } catch (e) { error = String(e); }
+    finally { posting = false; }
   }
 
   // AI compose
@@ -151,24 +177,33 @@ function parseTargetAccounts(value: unknown): number[] {
     }
   }
 
-  function scheduleAutoSave() {
-    if (autoSaveTimer) clearTimeout(autoSaveTimer);
-    autoSaveTimer = setTimeout(() => {
-      if (text.trim()) {
-        writeJson(AUTOSAVE_KEY, {
-          text, cw: showCW ? contentWarning : '', savedAt: new Date().toISOString(),
-        });
-      } else {
-        removeKey(AUTOSAVE_KEY);
-      }
-    }, 2000);
+  function queueAutoSave(saved: ComposerSnapshot) {
+    autoSaveWrite = autoSaveWrite.catch(() => {}).then(async () => {
+      if (saved.text.trim() || saved.media.length || saved.jobId) await saveSnapshot(saved);
+      else await deleteSnapshot('autosave');
+      saveError = '';
+    }).catch(() => { saveError = i18n.t.workflow.saveError; });
   }
-
-  function clearAutoSave() {
+  function scheduleAutoSave(saved = currentSnapshot()) {
     if (autoSaveTimer) clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(() => queueAutoSave(saved), 500);
+  }
+  async function clearAutoSave() {
+    if (autoSaveTimer) clearTimeout(autoSaveTimer);
+    latestSnapshot = undefined;
+    autoSaveWrite = autoSaveWrite.catch(() => {}).then(() => deleteSnapshot('autosave'));
+    await autoSaveWrite;
     removeKey(AUTOSAVE_KEY);
     autoSaveRestoredFrom = null;
   }
+  function resetComposer() {
+    selectedAccountIds = selectedAccountIds.filter(id => accounts.some(account => account.id === id));
+    text = ''; contentWarning = ''; showCW = false;
+    mediaPreviews.forEach(revokePreviewUrl); mediaFiles = []; mediaPreviews = []; altTexts = [];
+    overrides = {}; editingDraftId = null; threadsMediaUrl = '';
+    quoteUri = ''; quoteCid = ''; quoteAuthor = ''; quoteText = ''; replyTo = ''; replyAuthor = ''; replyPlatform = '';
+  }
+  function newDraft() { resetComposer(); pendingJob = null; void clearAutoSave(); }
 
   // Posting time insights
   let timingInsights: PostingTimeInsight[] = $state([]);
@@ -215,29 +250,25 @@ function parseTargetAccounts(value: unknown): number[] {
         const drafts = await listDrafts();
         const draft = drafts.find(d => d.id === Number(draftId));
         if (draft) {
-          text = draft.text;
-          visibility = (draft.visibility as typeof visibility) ?? 'public';
-          contentWarning = draft.content_warning ?? '';
-          showCW = !!draft.content_warning;
-          const ids = parseTargetAccounts(draft.target_accounts);
-          selectedAccountIds = ids;
+          applySnapshot(await draftSnapshot(draft));
           editingDraftId = draft.id;
+          pendingJob = await getJob(`draft-${draft.id}`) ?? null;
         }
       }
 
       // Reply context
-      replyTo = params.get('replyTo') ?? '';
-      replyAuthor = params.get('author') ?? '';
-      replyPlatform = params.get('platform') ?? '';
+      replyTo = params.get('replyTo') ?? replyTo;
+      replyAuthor = params.get('author') ?? replyAuthor;
+      replyPlatform = params.get('platform') ?? replyPlatform;
       if (replyAuthor && !text) {
         text = `@${replyAuthor} `;
       }
 
       // Quote context
-      quoteUri = params.get('quoteUri') ?? '';
-      quoteCid = params.get('quoteCid') ?? '';
-      quoteAuthor = params.get('quoteAuthor') ?? '';
-      quoteText = params.get('quoteText') ?? '';
+      quoteUri = params.get('quoteUri') ?? quoteUri;
+      quoteCid = params.get('quoteCid') ?? quoteCid;
+      quoteAuthor = params.get('quoteAuthor') ?? quoteAuthor;
+      quoteText = params.get('quoteText') ?? quoteText;
 
       // Handle shared content from PWA share_target
       const sharedText = params.get('text') ?? '';
@@ -249,7 +280,15 @@ function parseTargetAccounts(value: unknown): number[] {
 
       // Auto-restore unsent text (only if no draft/reply/quote context)
       if (!text && !replyTo && !quoteUri && !draftId) {
-        const saved = localStorage.getItem(AUTOSAVE_KEY);
+        const durable = await loadSnapshot('autosave');
+        if (durable) {
+          pendingJob = durable.jobId ? await getJob(durable.jobId) ?? null : null;
+          if (!pendingJob || !isComplete(pendingJob)) {
+            applySnapshot(durable);
+            autoSaveRestoredFrom = durable.savedAt;
+          }
+        }
+        const saved = !durable ? localStorage.getItem(AUTOSAVE_KEY) : null;
         if (saved) {
           try {
             const data = JSON.parse(saved);
@@ -265,6 +304,7 @@ function parseTargetAccounts(value: unknown): number[] {
       error = String(e);
     } finally {
       loading = false;
+      autoSaveReady = true;
       templates = listTemplates();
 
       // Load posting time insights from archive
@@ -314,7 +354,7 @@ function parseTargetAccounts(value: unknown): number[] {
     if (mediaFiles.length === 0) return true;
     const mode = localStorage.getItem('crispdeck-alt-text-mode') ?? 'off';
     if (mode === 'off') return true;
-    const missingAlt = altTexts.some((t, i) => i < mediaFiles.length && !t.trim());
+    const missingAlt = mediaFiles.some((_, i) => !altTexts[i]?.trim());
     if (!missingAlt) return true;
     if (mode === 'require') {
       error = 'Alt text is required for all images. Add descriptions before posting.';
@@ -327,118 +367,50 @@ function parseTargetAccounts(value: unknown): number[] {
   }
 
   async function handlePost() {
-    if (!text.trim() && mediaFiles.length === 0) return;
-    if (selectedAccountIds.length === 0) {
-      error = 'Select at least one account to post to.';
-      return;
-    }
-    if (!checkAltText()) return;
-
-    posting = true;
-    error = '';
-    results = [];
-
-    const targets = selectedAccountIds
-      .map(id => {
-        const acct = accounts.find(a => a.id === id);
-        const entry = clientEntries.get(id);
-        if (!acct || !entry) return null;
-        // Split text per platform's char limits
-        const plan = splitForPlatform(text.trim(), acct.platform as Platform);
-        return {
-          platform: acct.platform as Platform,
-          client: entry.client,
-          parts: plan.parts.map(p => p.text),
-        };
-      })
-      .filter((t): t is NonNullable<typeof t> => t !== null);
-
-    // Build quote URL for Mastodon (Bluesky uses embed record)
-    let quoteUrl: string | undefined;
-    if (quoteUri && quoteAuthor) {
-      // Construct a bsky.app URL for the quoted post
-      const rkey = quoteUri.split('/').pop();
-      quoteUrl = `https://bsky.app/profile/${quoteAuthor}/post/${rkey}`;
-    }
-
-    const options: Omit<ComposeOptions, 'text'> = {
-      visibility,
-      contentWarning: showCW ? contentWarning : undefined,
-      mediaFiles: mediaFiles.length > 0 ? mediaFiles : undefined,
-      altTexts: altTexts.length > 0 ? altTexts : undefined,
-      quoteUri: quoteUri || undefined,
-      quoteCid: quoteCid || undefined,
-      quoteUrl,
-      threadGate: threadGate !== 'everyone' ? threadGate : undefined,
-      selfLabel: selfLabel !== 'none' ? selfLabel : undefined,
-      disableQuotes: disableQuotes || undefined,
-      poll: showPoll && pollOptions.filter(o => o.trim()).length >= 2
-        ? { options: pollOptions.filter(o => o.trim()), expiresIn: pollExpiry, multiple: pollMultiple }
-        : undefined,
-      onVideoProgress: (status: string) => { videoUploadStatus = status; },
-    };
-
+    if (posting || pendingJob && !isComplete(pendingJob)) return;
+    if ((!text.trim() && !mediaFiles.length) || !checkAltText()) return;
+    posting = true; error = '';
     try {
-      results = await crosspostThread(targets, options);
+      if (autoSaveTimer) clearTimeout(autoSaveTimer);
+      await autoSaveWrite;
+      const saved = currentSnapshot();
+      pendingJob = await createJob(saved, accounts, editingDraftId ?? undefined);
+      await saveSnapshot({ ...saved, jobId: pendingJob.id });
+      await finishDelivery(false);
+    } catch (e) { error = String(e); }
+    finally { posting = false; }
+  }
 
-      // Log to crosspost history
-      const bskyResult = results.find(r => r.platform === 'bluesky');
-      const mastoResult = results.find(r => r.platform === 'mastodon');
-      const threadsResult = results.find(r => r.platform === 'threads');
-      const allSuccess = results.every(r => r.success);
-
-      await logCrosspost({
-        bluesky_uri: bskyResult?.uri ?? null,
-        bluesky_cid: bskyResult?.cid ?? null,
-        mastodon_uri: mastoResult?.uri ?? null,
-        mastodon_id: null,
-        threads_uri: threadsResult?.uri ?? null,
-        threads_id: null,
-        text_preview: text.trim().substring(0, 280),
-        media_count: mediaFiles.length,
-        status: allSuccess ? 'success' : results.some(r => r.success) ? 'partial' : 'failed',
-      });
-
-      // Clear on full success
-      if (allSuccess) {
-        toast.success(`Posted to ${results.map(r => r.platform).join(' + ')}!`);
-        text = '';
-        contentWarning = '';
-        showCW = false;
-        mediaPreviews.forEach(revokePreviewUrl);
-        mediaFiles = [];
-        mediaPreviews = [];
-        altTexts = [];
-        clearAutoSave();
+  async function finishDelivery(allow: boolean) {
+    if (!pendingJob) return;
+    posting = true; error = '';
+    try {
+      pendingJob = await deliverJob(pendingJob.id, undefined, allow);
+      if (isComplete(pendingJob)) {
+        const completedDraftId = pendingJob.draftId ?? editingDraftId;
+        if (completedDraftId !== null && completedDraftId !== undefined) {
+          const draft = (await listDrafts()).find(d => d.id === completedDraftId);
+          if (draft) await removeDraft(draft);
+        }
+        toast.success(i18n.t.workflow.posted);
+        resetComposer();
+        await clearAutoSave();
       } else {
-        const failed = results.filter(r => !r.success);
-        const succeeded = results.filter(r => r.success);
-        if (succeeded.length > 0) toast.warning(`Posted to ${succeeded.map(r => r.platform).join(', ')} but failed on ${failed.map(r => r.platform).join(', ')}`);
-        else toast.error(`Post failed: ${failed[0]?.error || 'Unknown error'}`);
+        toast.warning(i18n.t.workflow.needsAttention);
       }
-    } catch (e) {
-      error = String(e);
-      toast.error(i18n.t.compose.postFailedSeeDetails);
-    } finally {
-      posting = false;
-      videoUploadStatus = '';
-    }
+    } catch (e) { error = String(e); }
+    finally { posting = false; }
   }
 
   async function handleSaveDraft() {
-    if (!text.trim()) return;
+    if ((!text.trim() && !mediaFiles.length) || posting) return;
+    posting = true;
     try {
-      await dbSaveDraft({
-        text: text.trim(),
-        target_accounts: selectedAccountIds,
-        visibility,
-        content_warning: showCW ? contentWarning : null,
-      });
+      editingDraftId = await persistDraft(currentSnapshot(), null, editingDraftId ?? undefined);
+      toast.success(i18n.t.workflow.savedDraft);
       error = '';
-      results = [{ platform: 'bluesky', success: true, uri: 'Draft saved' }];
-    } catch (e) {
-      error = `Failed to save draft: ${e}`;
-    }
+    } catch (e) { error = String(e); }
+    finally { posting = false; }
   }
 
   // Character counts per selected platform
@@ -600,15 +572,11 @@ function parseTargetAccounts(value: unknown): number[] {
   const hasBsky = $derived(selectedAccounts.some(a => a.platform === 'bluesky'));
   const hasMasto = $derived(selectedAccounts.some(a => a.platform === 'mastodon'));
   const hasThreads = $derived(selectedAccounts.some(a => a.platform === 'threads'));
-  const trimmedText = $derived(text.trim());
   const bskyLen = $derived(graphemeLength(text));
   const mastoLen = $derived(text.length);
   const threadsLen = $derived(text.length);
   const bskyNeedsThread = $derived(hasBsky && bskyLen > 300);
   const mastoNeedsThread = $derived(hasMasto && mastoLen > 500);
-  const bskyPlan = $derived(hasBsky && trimmedText ? splitForPlatform(trimmedText, 'bluesky') : null);
-  const mastoPlan = $derived(hasMasto && trimmedText ? splitForPlatform(trimmedText, 'mastodon') : null);
-  const threadsPlan = $derived(hasThreads && trimmedText ? splitForPlatform(trimmedText, 'threads') : null);
   const threadsNeedsThread = $derived(hasThreads && threadsLen > 500);
   const needsThread = $derived(bskyNeedsThread || mastoNeedsThread || threadsNeedsThread);
 </script>
@@ -637,26 +605,18 @@ function parseTargetAccounts(value: unknown): number[] {
   {#if autoSaveRestoredFrom}
     <div class="mb-4 p-2 bg-blue-900/30 border border-blue-800 rounded-lg text-blue-200 text-xs flex items-center justify-between">
       <span>{i18n.t.compose.autoSaveRestored}</span>
-      <button onclick={() => { text = ''; contentWarning = ''; showCW = false; clearAutoSave(); }} class="underline ml-2">{i18n.t.compose.discard}</button>
+      <button onclick={newDraft} class="underline ml-2">{i18n.t.compose.discard}</button>
     </div>
   {/if}
 
-  {#if results.length > 0}
-    <div class="mb-4 space-y-2">
-      {#each results as result}
-        <div class="p-3 rounded-lg text-sm flex items-center gap-2 {result.success ? 'bg-green-900/50 border border-green-700 text-green-200' : 'bg-red-900/50 border border-red-700 text-red-200'}">
-          {#if result.success}
-            <Check size={14} />
-            <span>Posted to {result.platform}</span>
-            {#if result.uri}
-              <a href={hrefOrHash(result.uri)} target="_blank" rel="noopener noreferrer" class="underline ml-1">{i18n.t.common.view}</a>
-            {/if}
-          {:else}
-            <AlertTriangle size={14} />
-            <span>{result.platform}: {result.error}</span>
-          {/if}
-        </div>
-      {/each}
+  {#if saveError}<p role="alert" class="mb-3 text-red-400 text-sm">{saveError}</p>{/if}
+  {#if pendingJob}
+    <div class="mb-4 space-y-3">
+      <DeliveryStatus job={pendingJob} busy={posting} onretry={finishDelivery} />
+      {#if !isComplete(pendingJob)}
+        <p class="text-sm text-[var(--color-text-muted)]">{i18n.t.workflow.deliveryLocked}</p>
+        <button onclick={newDraft} disabled={posting} class="underline text-sm">{i18n.t.workflow.newDraft}</button>
+      {/if}
     </div>
   {/if}
 
@@ -665,6 +625,7 @@ function parseTargetAccounts(value: unknown): number[] {
       <Loader2 size={32} class="text-[var(--color-text-muted)] animate-spin mx-auto" />
     </div>
   {:else}
+    <fieldset disabled={posting || (!!pendingJob && !isComplete(pendingJob))} class="min-w-0">
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <!-- Main editor -->
       <div class="lg:col-span-2 space-y-4">
@@ -691,7 +652,7 @@ function parseTargetAccounts(value: unknown): number[] {
         {#if editingDraftId}
           <div class="p-2 bg-yellow-950/30 border border-yellow-700/30 rounded-lg text-xs text-yellow-300 flex items-center justify-between">
             <span>Editing draft #{editingDraftId}</span>
-            <button onclick={async () => { await dbDeleteDraft(editingDraftId!); editingDraftId = null; }} class="text-yellow-400 hover:text-yellow-200 underline">{i18n.t.compose.discardDraft}</button>
+            <button onclick={async () => { const draft = (await listDrafts()).find(d => d.id === editingDraftId); if (draft) await removeDraft(draft); editingDraftId = null; }} class="text-yellow-400 hover:text-yellow-200 underline">{i18n.t.compose.discardDraft}</button>
           </div>
         {/if}
 
@@ -807,8 +768,8 @@ function parseTargetAccounts(value: unknown): number[] {
         {/if}
 
         <!-- Toolbar -->
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-2">
             <label class="p-2 text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] rounded-md cursor-pointer transition-colors {mediaFiles.length >= 4 ? 'opacity-50 pointer-events-none' : ''}">
               <ImagePlus size={18} />
               <input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" multiple class="hidden" onchange={addMedia} />
@@ -918,6 +879,9 @@ function parseTargetAccounts(value: unknown): number[] {
               {/if}
             </div>
 
+            <details class="relative">
+              <summary class="text-xs cursor-pointer whitespace-nowrap">{i18n.t.workflow.advanced}</summary>
+              <div class="absolute z-30 right-0 w-64 p-3 space-y-3 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xl">
             {#if hasMasto}
               <select
                 bind:value={visibility}
@@ -946,7 +910,7 @@ function parseTargetAccounts(value: unknown): number[] {
               >
                 <option value="everyone">{i18n.t.compose.anyoneCanReply}</option>
                 <option value="mentioned">{i18n.t.compose.mentionedOnly}</option>
-                <option value="following">{i18n.t.compose.followersOnlyVis}</option>
+                <option value="following">{i18n.t.workflow.followingReplies}</option>
                 <option value="nobody">{i18n.t.compose.noReplies}</option>
               </select>
               <select
@@ -965,6 +929,8 @@ function parseTargetAccounts(value: unknown): number[] {
                 No quotes
               </label>
             {/if}
+              </div>
+            </details>
           </div>
 
           {#if timingInsights.length > 0}
@@ -979,7 +945,7 @@ function parseTargetAccounts(value: unknown): number[] {
             </div>
           {/if}
 
-          <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2 min-w-0">
             {#if videoUploadStatus}
               <span class="flex items-center gap-1.5 text-xs text-blue-300">
                 <Loader2 size={12} class="animate-spin" />
@@ -989,7 +955,7 @@ function parseTargetAccounts(value: unknown): number[] {
             <button
               onclick={handleSaveDraft}
               disabled={!text.trim()}
-              class="px-3 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] disabled:opacity-30"
+              class="px-3 py-2 text-sm whitespace-nowrap text-[var(--color-text-muted)] hover:text-[var(--color-text)] disabled:opacity-30"
             >
               Save Draft
             </button>
@@ -1005,6 +971,8 @@ function parseTargetAccounts(value: unknown): number[] {
               {#if showSchedule}
                 <div class="absolute bottom-full right-0 mb-1 p-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl z-50 w-56">
                   <div class="space-y-2">
+                    <p class="text-xs text-[var(--color-text-muted)]">{i18n.t.workflow.scheduleHint}</p>
+                    <p class="text-xs">{i18n.t.workflow.timezone}: {Intl.DateTimeFormat().resolvedOptions().timeZone}</p>
                     <label for="schedule-date" class="text-xs text-[var(--color-text-muted)]">{i18n.t.compose.date}</label>
                     <input id="schedule-date" type="date" bind:value={scheduleDate}
                       min={minScheduleDate()}
@@ -1025,8 +993,9 @@ function parseTargetAccounts(value: unknown): number[] {
             </div>
             <button
               onclick={handlePost}
+              data-testid="publish-post"
               disabled={posting || (!text.trim() && mediaFiles.length === 0) || selectedAccountIds.length === 0}
-              class="flex items-center gap-2 px-5 py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm font-medium rounded-md disabled:opacity-50 transition-colors"
+              class="flex items-center gap-2 whitespace-nowrap px-5 py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm font-medium rounded-md disabled:opacity-50 transition-colors"
             >
               {#if posting}
                 <Loader2 size={14} class="animate-spin" />
@@ -1092,76 +1061,17 @@ function parseTargetAccounts(value: unknown): number[] {
       <div class="space-y-4">
         <AccountPicker {accounts} bind:selected={selectedAccountIds} />
 
-        <!-- Platform preview with thread splitting -->
-        {#if trimmedText}
-          <div class="space-y-2">
-            <span class="text-xs text-[var(--color-text-muted)] uppercase tracking-wider font-medium">{i18n.t.compose.preview}</span>
-            {#if bskyPlan}
-              <div class="p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
-                <div class="flex items-center justify-between mb-2">
-                  <div class="flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-[var(--color-bluesky)]"></span>
-                    <span class="text-xs font-medium text-[var(--color-text-muted)]">{i18n.t.common.bluesky}</span>
-                  </div>
-                  {#if bskyPlan.needsThread}
-                    <span class="text-[10px] px-1.5 py-0.5 bg-blue-900/50 rounded text-blue-300">{bskyPlan.parts.length} posts</span>
-                  {/if}
-                </div>
-                {#each bskyPlan.parts as part, i}
-                  <div class="text-sm text-[var(--color-text)] whitespace-pre-wrap break-words {i > 0 ? 'mt-2 pt-2 border-t border-[var(--color-border)]' : ''}">
-                    {part.text}
-                    <span class="text-[10px] text-[var(--color-text-muted)] ml-1">{part.charCount}/{part.charLimit}</span>
-                  </div>
-                {/each}
-              </div>
-            {/if}
-            {#if mastoPlan}
-              <div class="p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
-                <div class="flex items-center justify-between mb-2">
-                  <div class="flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-[var(--color-mastodon)]"></span>
-                    <span class="text-xs font-medium text-[var(--color-text-muted)]">{i18n.t.common.mastodon}</span>
-                    {#if visibility !== 'public'}
-                      <span class="text-[10px] px-1.5 py-0.5 bg-[var(--color-surface-hover)] rounded text-[var(--color-text-muted)]">{visibility}</span>
-                    {/if}
-                  </div>
-                  {#if mastoPlan.needsThread}
-                    <span class="text-[10px] px-1.5 py-0.5 bg-purple-900/50 rounded text-purple-300">{mastoPlan.parts.length} posts</span>
-                  {/if}
-                </div>
-                {#if showCW && contentWarning}
-                  <p class="text-xs text-yellow-400 mb-1">⚠ {contentWarning}</p>
-                {/if}
-                {#each mastoPlan.parts as part, i}
-                  <div class="text-sm text-[var(--color-text)] whitespace-pre-wrap break-words {i > 0 ? 'mt-2 pt-2 border-t border-[var(--color-border)]' : ''}">
-                    {part.text}
-                    <span class="text-[10px] text-[var(--color-text-muted)] ml-1">{part.charCount}/{part.charLimit}</span>
-                  </div>
-                {/each}
-              </div>
-            {/if}
-            {#if threadsPlan}
-              <div class="p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
-                <div class="flex items-center justify-between mb-2">
-                  <div class="flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-[var(--color-threads,#000)]"></span>
-                    <span class="text-xs font-medium text-[var(--color-text-muted)]">{i18n.t.common.threads}</span>
-                  </div>
-                  {#if threadsPlan.needsThread}
-                    <span class="text-[10px] px-1.5 py-0.5 bg-gray-800/50 rounded text-gray-300">{threadsPlan.parts.length} posts</span>
-                  {/if}
-                </div>
-                {#each threadsPlan.parts as part, i}
-                  <div class="text-sm text-[var(--color-text)] whitespace-pre-wrap break-words {i > 0 ? 'mt-2 pt-2 border-t border-[var(--color-border)]' : ''}">
-                    {part.text}
-                    <span class="text-[10px] text-[var(--color-text-muted)] ml-1">{part.charCount}/{part.charLimit}</span>
-                  </div>
-                {/each}
-              </div>
-            {/if}
-          </div>
+        <DestinationPreviews {accounts} selected={selectedAccountIds} sharedText={text} bind:overrides {threadsMediaUrl} {mediaPreviews} mediaTypes={mediaFiles.map(f => f.type)} {altTexts}
+          {visibility} contentWarning={showCW ? contentWarning : ''} {threadGate} {disableQuotes} {selfLabel} />
+        {#if hasThreads}
+          <label class="block text-sm space-y-2">
+            <span>{i18n.t.workflow.mediaUrl}</span>
+            <input type="url" bind:value={threadsMediaUrl} placeholder="https://" class="w-full p-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)]" />
+            <span class="block text-xs text-[var(--color-text-muted)]">{i18n.t.workflow.threadsMediaHint}</span>
+          </label>
         {/if}
       </div>
     </div>
+    </fieldset>
   {/if}
 </div>

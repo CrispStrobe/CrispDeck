@@ -10,6 +10,20 @@
   import { initAllClients, invalidateClientCache, type ClientEntry } from '$lib/api/client-factory';
   import { Columns3, Plus, Loader2 } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
+  import StarterWorkspaces from '$lib/components/StarterWorkspaces.svelte';
+  import { STARTER_WORKSPACES, type WorkspaceId } from '$lib/starter-workspaces';
+  function layoutLabel(name: string) {
+    const key = name.replace(/^starter:/, '') as WorkspaceId;
+    return name.startsWith('starter:') && STARTER_WORKSPACES.includes(key) ? i18n.t.workflow[key] : name;
+  }
+  let showStarters = $state(false);
+  function applyStarter(next: DeckColumnConfig[]) {
+    streamManager.disconnectAll(); streamCleanups.clear();
+    columns = next; columnPosts = {}; columnNotifGroups = {};
+    refreshLayoutList();
+    columns.forEach(col => loadColumn(col));
+    showStarters = false;
+  }
   import { haptic } from '$lib/haptics';
   import DelayedSpinner from '$lib/components/DelayedSpinner.svelte';
   import DeckColumn from '$lib/components/deck/DeckColumn.svelte';
@@ -1199,6 +1213,9 @@
 <svelte:head><title>CrispDeck — Deck</title><meta name="description" content="Multi-column deck view" /></svelte:head>
 
 <div class="h-full flex flex-col">
+  {#if showStarters || (!loading && accounts.length === 0)}
+    <div class="p-4 border-b border-[var(--color-border)] overflow-y-auto max-h-[70vh]"><StarterWorkspaces connected={accounts.length > 0} onapply={applyStarter} /></div>
+  {/if}
   <!-- Deck header -->
   <div class="flex items-center justify-between px-4 py-2 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex-shrink-0">
     <div class="flex items-center gap-3">
@@ -1207,6 +1224,7 @@
         <h1 class="text-lg font-bold">{i18n.t.nav.deck}</h1>
         <span class="text-xs text-[var(--color-text-muted)]">{columns.length} col</span>
       </div>
+      <button onclick={() => showStarters = !showStarters} class="px-2 py-1 text-xs border border-[var(--color-border)] rounded-lg">{i18n.t.workflow.starterWorkspaces}</button>
       <!-- Saved layouts -->
       {#if savedLayoutNames.length > 0}
         <select
@@ -1215,7 +1233,7 @@
         >
           <option value="">{i18n.t.deck.loadLayoutPlaceholder}</option>
           {#each savedLayoutNames as name}
-            <option value={name}>{name}</option>
+            <option value={name}>{layoutLabel(name)}</option>
           {/each}
         </select>
       {/if}

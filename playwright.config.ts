@@ -19,7 +19,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run preview',
+    command: process.env.PLAYWRIGHT_DEV_SERVER ? 'npm run dev -- --port 4173' : 'npm run preview',
     port: 4173,
     reuseExistingServer: true,
     timeout: 120000,

@@ -13,7 +13,6 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { COLUMN_TYPES } from './deck-columns';
-// @ts-expect-error — a plain .mjs generator, no types alongside it.
 import { routes, shortcuts } from '../../scripts/testing-checklist.mjs';
 
 const CHECKLIST = readFileSync(join(process.cwd(), 'TESTING.md'), 'utf-8');

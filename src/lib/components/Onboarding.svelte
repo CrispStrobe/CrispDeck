@@ -1,6 +1,9 @@
 <script lang="ts">
   import { ArrowLeft, Loader2 } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
+  import StarterWorkspaces from './StarterWorkspaces.svelte';
+  import { getHomeMode, setHomeMode } from '$lib/settings';
+  let homeMode = $state(getHomeMode() === 'deck' ? 'deck' : 'feed');
   import { isTauri } from '$lib/platform';
   import { OAUTH_UNAVAILABLE_IN_APP } from '$lib/api/bluesky-oauth';
 
@@ -43,7 +46,8 @@
   let busy: 'oauth' | 'password' | 'mastodon' | 'threads' | null = $state(null);
 
   async function run(which: NonNullable<typeof busy>, fn: () => void | Promise<void>) {
-    if (busy) return;   // a second click would start a second sign-in
+    if (busy) return;
+    setHomeMode(homeMode as 'feed' | 'deck');   // a second click would start a second sign-in
     busy = which;
     try {
       await fn();
@@ -87,6 +91,12 @@
     </div>
 
     {#if selected === null}
+      <fieldset class="mb-6 text-left space-y-2">
+        <legend class="text-sm font-medium mb-2">{i18n.t.workflow.chooseHome}</legend>
+        {#each ['feed', 'deck'] as mode}
+          <label class="flex items-center gap-2 text-sm"><input type="radio" name="home-mode" value={mode} bind:group={homeMode} onchange={() => setHomeMode(mode as 'feed' | 'deck')} />{mode === 'feed' ? i18n.t.workflow.homeFeed : i18n.t.workflow.homeDeck}</label>
+        {/each}
+      </fieldset>
       <!-- Stage 1: Network selector -->
       <div class="space-y-3">
         <button
@@ -249,3 +259,5 @@
     {/if}
   </div>
 </div>
+
+<div class="max-w-4xl mx-auto mt-8 mb-6"><StarterWorkspaces /></div>
