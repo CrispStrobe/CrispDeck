@@ -40,6 +40,7 @@ function repoRoot() {
 const ROOT = repoRoot();
 const OUT = join(ROOT, 'TESTING.md');
 
+/** @param {string} path */
 function read(path) {
   return readFileSync(join(ROOT, path), 'utf-8');
 }

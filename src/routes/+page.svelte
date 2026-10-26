@@ -11,21 +11,17 @@
   import { Rss, PenSquare, Users, ScanSearch, Columns3, Bell, Search, TrendingUp, BarChart3, Bookmark, MessageSquare, Keyboard } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import Onboarding from '$lib/components/Onboarding.svelte';
+  import StarterWorkspaces from '$lib/components/StarterWorkspaces.svelte';
   import type { Account } from '$lib/types';
 
   let accounts: Account[] = $state([]);
   let loading = $state(true);
 
   onMount(async () => {
-    // Check if user prefers direct-to-feed mode
-    const redirect = homeRedirectPath(getHomeMode(), base);
-    if (redirect) {
-      goto(redirect, { replaceState: true });
-      return;
-    }
-
     try {
       accounts = await listAccounts();
+      const redirect = accounts.length ? homeRedirectPath(getHomeMode(), base) : null;
+      if (redirect) { await goto(redirect, { replaceState: true }); return; }
     } catch (e) {
       swallow('dashboard.loadAccounts', e);
     } finally {
@@ -81,7 +77,7 @@
       is_primary: true,
     });
     markFirstRunComplete();
-    goto(`${base}/feed`);
+    goto(homeRedirectPath(getHomeMode(), base) ?? `${base}/feed`);
   }
 
   async function handleConnectMastodon(instanceUrl: string) {
@@ -131,6 +127,7 @@
       error={connectError}
     />
   {:else}
+    <div class="mb-8"><StarterWorkspaces connected={true} /></div>
     <!-- Account summary -->
     <div class="grid grid-cols-3 gap-4 mb-8">
       <div class="bg-[var(--color-surface)] rounded-lg p-4 border border-[var(--color-border)]">

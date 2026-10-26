@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getTheme, setTheme, nextTheme } from '$lib/settings';
-  import { readJson, writeJson, writeString } from '$lib/safe-storage';
+  import { readJson, readString, writeJson, writeString } from '$lib/safe-storage';
   import { isNavItemActive } from '$lib/nav-active';
   import { base } from '$app/paths';
   import { routePath } from '$lib/routes';
@@ -13,6 +13,7 @@
   import ToastContainer from '$lib/components/ToastContainer.svelte';
   import ScrollToTop from '$lib/components/ScrollToTop.svelte';
   import AccountSwitcher from '$lib/components/AccountSwitcher.svelte';
+  import AppNavigation from '$lib/components/AppNavigation.svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { installLogInterceptors, swallow } from '$lib/debug-log';
   import { preloadSanitizer } from '$lib/sanitize';
@@ -25,6 +26,8 @@
   let { children } = $props();
 
   import { onMount, onDestroy } from 'svelte';
+  import { startScheduler } from '$lib/publishing/scheduler';
+  onMount(startScheduler);
   import { onNavigate } from '$app/navigation';
   import { getBookmarkCount } from '$lib/bookmarks';
 
@@ -55,25 +58,20 @@
 
   // Configurable sidebar — simple mode hides advanced items
   const SIMPLE_MODE_HIDDEN = ['/deck', '/identities', '/archive', '/analytics', '/moderation', '/labelers', '/about'];
-  const savedSimpleMode = localStorage.getItem('crispdeck-simple-mode') === 'true';
+  const savedSimpleMode = readString('crispdeck-simple-mode', 'true') === 'true';
   let simpleMode = $state(savedSimpleMode);
   // This runs while the shell initialises, outside any try/catch: a corrupt
   // value used to throw here and take every page down with it.
   let navHidden = $state<Set<string>>(new Set(
-    savedSimpleMode ? SIMPLE_MODE_HIDDEN : readJson<string[]>('crispdeck-nav-hidden', [], Array.isArray)
+    readJson<string[]>('crispdeck-nav-hidden', [], Array.isArray)
   ));
   let showNavCustomize = $state(false);
 
   function toggleSimpleMode() {
     simpleMode = !simpleMode;
     writeString('crispdeck-simple-mode', String(simpleMode));
-    if (simpleMode) {
-      navHidden = new Set(SIMPLE_MODE_HIDDEN);
-    } else {
-      navHidden = new Set();
-    }
-    writeJson('crispdeck-nav-hidden', [...navHidden]);
   }
+
   function toggleNavItem(href: string) {
     if (navHidden.has(href)) navHidden.delete(href); else navHidden.add(href);
     navHidden = new Set(navHidden);
@@ -254,6 +252,9 @@
     { href: '/feed', icon: Rss, label: i18n.t.nav.feed },
     { href: '/deck', icon: Columns3, label: i18n.t.nav.deck },
     { href: '/compose', icon: PenSquare, label: i18n.t.nav.compose },
+    { href: '/drafts', icon: PenSquare, label: i18n.t.nav.drafts },
+    { href: '/calendar', icon: BarChart3, label: i18n.t.nav.calendar },
+    { href: '/reading-lists', icon: Bookmark, label: i18n.t.nav.readingLists },
     { href: '/notifications', icon: Bell, label: i18n.t.nav.notifications },
     { href: '/messages', icon: MessageSquare, label: i18n.t.nav.messages, badge: () => unreadMessages > 0 ? unreadMessages : 0 },
     { href: '/search', icon: Search, label: i18n.t.nav.search },
@@ -314,28 +315,12 @@
         </button>
       </div>
     </div>
-    <ul class="flex-1 py-1 overflow-y-auto" role="list">
-      {#each visibleNavItems as item}
-        <li>
-          <a
-            href={`${base}${item.href}`.replace(/\/$/, "") || "/"}
-            title={collapsed ? item.label : undefined}
-            class="flex items-center gap-2.5 px-3 py-2 text-sm transition-colors
-              {isActive(item.href)
-                ? 'text-[var(--color-text)] bg-[var(--color-primary)]/10 border-r-2 border-[var(--color-primary)]'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'}"
-          >
-            <item.icon size={16} class="flex-shrink-0" />
-            {#if !collapsed}
-              <span class="truncate flex-1">{item.label}</span>
-              {#if item.badge && item.badge() > 0}
-                <span class="ml-auto text-[9px] px-1.5 py-0.5 bg-[var(--color-primary)] text-white rounded-full min-w-[18px] text-center">{item.badge()}</span>
-              {/if}
-            {/if}
-          </a>
-        </li>
-      {/each}
-    </ul>
+    <a href="{base}/compose" class="mx-2 mt-3 mb-2 flex items-center justify-center gap-2 rounded-lg bg-[var(--color-primary)] text-white py-2.5" title={i18n.t.nav.compose}>
+      <PenSquare size={18} />{#if !collapsed}<span class="text-sm font-semibold">{i18n.t.nav.compose}</span>{/if}
+    </a>
+    <div class="flex-1 overflow-y-auto">
+      <AppNavigation items={visibleNavItems} simple={simpleMode} {collapsed} path={routePath(page.url?.pathname ?? '/')} />
+    </div>
     <!-- Account switcher -->
     <div class="px-2 py-1.5 border-t border-[var(--color-border)]">
       <AccountSwitcher accounts={sidebarAccounts} {collapsed} />
@@ -389,23 +374,8 @@
   {#if mobileMenuOpen}
     <div class="md:hidden fixed inset-0 z-40 flex {mobileMenuClosing ? 'mobile-menu-backdrop-out' : 'mobile-menu-backdrop'}">
       <div class="w-64 bg-[var(--color-surface)] border-r border-[var(--color-border)] pt-14 overflow-y-auto {mobileMenuClosing ? 'mobile-menu-slide-out' : 'mobile-menu-slide'}">
-        <ul class="py-2">
-          {#each visibleNavItems as item}
-            <li>
-              <a
-                href={`${base}${item.href}`.replace(/\/$/, "") || "/"}
-                onclick={closeMobileMenu}
-                class="flex items-center gap-3 px-4 py-3 text-sm transition-colors
-                  {isActive(item.href)
-                    ? 'text-[var(--color-text)] bg-[var(--color-primary)]/10'
-                    : 'text-[var(--color-text-muted)]'}"
-              >
-                <item.icon size={18} />
-                {item.label}
-              </a>
-            </li>
-          {/each}
-        </ul>
+        <a href="{base}/compose" onclick={closeMobileMenu} class="block mx-3 mt-3 px-4 py-2.5 text-center rounded-lg bg-[var(--color-primary)] text-white">{i18n.t.nav.compose}</a>
+        <AppNavigation items={visibleNavItems} simple={simpleMode} path={routePath(page.url?.pathname ?? '/')} onnavigate={closeMobileMenu} />
       </div>
       <button type="button" class="flex-1 mobile-menu-overlay" aria-label={i18n.t.app.closeMenu} onclick={closeMobileMenu}></button>
     </div>

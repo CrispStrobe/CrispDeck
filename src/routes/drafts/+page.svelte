@@ -11,6 +11,20 @@
   import { crosspostThread, type PostResult } from '$lib/compose/adapter';
   import { splitForPlatform } from '$lib/compose/thread';
   import type { Draft, Account, Platform } from '$lib/types';
+  import { publishDraft, persistDraft, draftSnapshot, removeDraft, SCHEDULER_CHANGE } from '$lib/publishing/drafts';
+  import { listJobs, type PublishJob } from '$lib/publishing/outbox';
+  import { buildScheduledAt } from '$lib/quick-schedule';
+  import DeliveryStatus from '$lib/components/DeliveryStatus.svelte';
+  import Outbox from '$lib/components/Outbox.svelte';
+  let deliveryJobs: Record<number, PublishJob> = $state({});
+  let now = $state(Date.now());
+  async function refreshDrafts() {
+    try {
+      drafts = await listDrafts();
+      deliveryJobs = Object.fromEntries((await listJobs()).filter(j => j.draftId !== undefined).map(j => [j.draftId!, j]));
+    } catch (e) { error = String(e); }
+  }
+
 
 /**
  * A draft's target_accounts is an array, or the JSON text of one when it came
@@ -45,114 +59,55 @@ function parseTargetAccounts(value: unknown): number[] {
   let scheduleTime = $state('');
 
   onMount(() => {
-    let stopScheduler: (() => void) | undefined;
-    (async () => {
+    let disposed = false;
+    void (async () => {
       try {
-        const [draftList, result] = await Promise.all([listDrafts(), initAllClients()]);
-        drafts = draftList;
-        accounts = result.accounts;
-        clientEntries = result.clients;
-        stopScheduler = checkScheduledDrafts();
-      } catch (e) {
-        error = String(e);
-      } finally {
-        loading = false;
-      }
+        const result = await initAllClients();
+        if (!disposed) { accounts = result.accounts; clientEntries = result.clients; await refreshDrafts(); }
+      } catch (e) { error = String(e); }
+      finally { loading = false; }
     })();
-    return () => stopScheduler?.();
+    const refresh = () => { void refreshDrafts(); };
+    const timer = setInterval(() => { now = Date.now(); }, 15_000);
+    window.addEventListener(SCHEDULER_CHANGE, refresh);
+    window.addEventListener('crispdeck-outbox-change', refresh);
+    window.addEventListener('focus', refresh);
+    return () => {
+      disposed = true; clearInterval(timer);
+      window.removeEventListener(SCHEDULER_CHANGE, refresh);
+      window.removeEventListener('crispdeck-outbox-change', refresh);
+      window.removeEventListener('focus', refresh);
+    };
   });
 
-  function checkScheduledDrafts() {
-    // Check every 30 seconds for drafts that are past their scheduled time
-    const interval = setInterval(async () => {
-      const now = new Date();
-      for (const draft of drafts) {
-        if (draft.scheduled_at && !draft.is_sent && new Date(draft.scheduled_at) <= now) {
-          await postDraft(draft);
-        }
-      }
-    }, 30000);
-    return () => clearInterval(interval);
-  }
-
-  /** One account's share of a draft, after the text has been split for its platform. */
-  type DraftTarget = { platform: Platform; client: ClientEntry['client']; parts: string[] };
-
-  async function postDraft(draft: Draft) {
-    posting = draft.id;
-    error = '';
-    results = [];
-
-    const targetIds = parseTargetAccounts(draft.target_accounts);
-
-    const targets = targetIds
-      .map((id: number) => {
-        const acct = accounts.find(a => a.id === id);
-        const entry = clientEntries.get(id);
-        if (!acct || !entry) return null;
-        const plan = splitForPlatform(draft.text.trim(), acct.platform as Platform);
-        return { platform: acct.platform as Platform, client: entry.client, parts: plan.parts.map(p => p.text) };
-      })
-      // `typeof t` inside t's own annotation is circular — TS gives up and
-      // silently types the parameter `any`. Name the shape instead.
-      .filter((t: DraftTarget | null): t is DraftTarget => t !== null);
-
-    if (targets.length === 0) {
-      error = 'No valid accounts for this draft';
-      posting = null;
-      return;
-    }
-
-    try {
-      results = await crosspostThread(targets, {
-        visibility: (draft.visibility as any) ?? 'public',
-        contentWarning: draft.content_warning ?? undefined,
-      });
-
-      if (results.every(r => r.success)) {
-        await dbDeleteDraft(draft.id);
-        drafts = await listDrafts();
-      }
-    } catch (e) {
-      error = String(e);
-    } finally {
-      posting = null;
-    }
+  async function postDraft(draft: Draft, allowUncertain = false) {
+    if (posting !== null) return;
+    posting = draft.id; error = ''; results = [];
+    try { await publishDraft(draft, allowUncertain); await refreshDrafts(); }
+    catch (e) { error = String(e); }
+    finally { posting = null; }
   }
 
   async function handleDelete(id: number) {
     try {
-      await dbDeleteDraft(id);
-      drafts = drafts.filter(d => d.id !== id);
+      const draft = drafts.find(d => d.id === id);
+      if (draft) await removeDraft(draft);
+      await refreshDrafts();
     } catch (e) {
       error = String(e);
     }
   }
 
   async function scheduleDraft(draftId: number) {
-    if (!scheduleDate || !scheduleTime) return;
-    const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
-
-    // Update the draft — delete and re-save with scheduled_at
+    const scheduledAt = buildScheduledAt(scheduleDate, scheduleTime);
+    if (!scheduledAt) { error = i18n.t.workflow.overdue; return; }
     const draft = drafts.find(d => d.id === draftId);
     if (!draft) return;
-
     try {
-      await dbDeleteDraft(draftId);
-      await dbSaveDraft({
-        text: draft.text,
-        target_accounts: parseTargetAccounts(draft.target_accounts),
-        visibility: draft.visibility,
-        content_warning: draft.content_warning,
-        scheduled_at: scheduledAt,
-      });
-      drafts = await listDrafts();
-      schedulingDraftId = null;
-      scheduleDate = '';
-      scheduleTime = '';
-    } catch (e) {
-      error = String(e);
-    }
+      await persistDraft(await draftSnapshot(draft), scheduledAt, draftId);
+      await refreshDrafts();
+      schedulingDraftId = null; scheduleDate = ''; scheduleTime = '';
+    } catch (e) { error = String(e); }
   }
 
   function formatDate(dateStr: string): string {
@@ -235,6 +190,8 @@ function parseTargetAccounts(value: unknown): number[] {
     </div>
   </div>
 
+  <p class="mb-2 text-sm text-[var(--color-text-muted)]">{i18n.t.workflow.scheduleHint}</p>
+  <p class="mb-4 text-xs text-[var(--color-text-muted)]">{i18n.t.workflow.timezone}: {Intl.DateTimeFormat().resolvedOptions().timeZone}</p>
   {#if error}
     <div class="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">
       {error}
@@ -320,17 +277,22 @@ function parseTargetAccounts(value: unknown): number[] {
                 </button>
                 <button
                   onclick={() => postDraft(draft)}
-                  disabled={posting === draft.id}
+                  disabled={posting !== null || !!deliveryJobs[draft.id]}
                   class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-success)] transition-colors"
                   title={i18n.t.drafts.postNow}
                 >
                   {#if posting === draft.id}<Loader2 size={14} class="animate-spin" />{:else}<Send size={14} />{/if}
                 </button>
-                <button onclick={() => handleDelete(draft.id)} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors" title={i18n.t.drafts.delete}>
+                <button onclick={() => handleDelete(draft.id)} disabled={posting !== null} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors" title={i18n.t.drafts.delete}>
                   <Trash2 size={14} />
                 </button>
               </div>
             </div>
+            {#if deliveryJobs[draft.id]}
+              <div class="mt-3"><DeliveryStatus job={deliveryJobs[draft.id]} busy={posting === draft.id} onretry={allow => postDraft(draft, allow)} /></div>
+            {:else if draft.scheduled_at && Date.parse(draft.scheduled_at) < now}
+              <p class="mt-2 text-sm text-yellow-400">{i18n.t.workflow.overdue}</p>
+            {/if}
             <!-- Post preview -->
             {#if previewDraftId === draft.id}
               <div class="mt-3 pt-3 border-t border-[var(--color-border)] space-y-2">
@@ -395,7 +357,7 @@ function parseTargetAccounts(value: unknown): number[] {
                 </button>
                 <button
                   onclick={() => postDraft(draft)}
-                  disabled={posting === draft.id}
+                  disabled={posting !== null || !!deliveryJobs[draft.id]}
                   class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-success)] transition-colors"
                   title={i18n.t.drafts.postNow}
                 >
@@ -408,7 +370,7 @@ function parseTargetAccounts(value: unknown): number[] {
                 >
                   <Clock size={14} />
                 </button>
-                <button onclick={() => handleDelete(draft.id)} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors" title={i18n.t.drafts.delete}>
+                <button onclick={() => handleDelete(draft.id)} disabled={posting !== null} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors" title={i18n.t.drafts.delete}>
                   <Trash2 size={14} />
                 </button>
               </div>
@@ -442,6 +404,11 @@ function parseTargetAccounts(value: unknown): number[] {
                 </button>
               </div>
             {/if}
+            {#if deliveryJobs[draft.id]}
+              <div class="mt-3"><DeliveryStatus job={deliveryJobs[draft.id]} busy={posting === draft.id} onretry={allow => postDraft(draft, allow)} /></div>
+            {:else if draft.scheduled_at && Date.parse(draft.scheduled_at) < now}
+              <p class="mt-2 text-sm text-yellow-400">{i18n.t.workflow.overdue}</p>
+            {/if}
             <!-- Post preview -->
             {#if previewDraftId === draft.id}
               <div class="mt-3 pt-3 border-t border-[var(--color-border)] space-y-2">
@@ -473,4 +440,5 @@ function parseTargetAccounts(value: unknown): number[] {
       </div>
     {/if}
   {/if}
+  <Outbox />
 </div>

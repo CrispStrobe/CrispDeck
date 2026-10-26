@@ -23,7 +23,8 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - run: npm test
+      - run: npm run check
+      - run: npm test -- --maxWorkers=2
       - run: npx svelte-kit sync
       - run: npx vite build
 
@@ -88,3 +89,4 @@ jobs:
       - name: cargo check
         working-directory: src-tauri
         run: cargo check --locked
+

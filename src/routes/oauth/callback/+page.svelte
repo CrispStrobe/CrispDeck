@@ -5,6 +5,7 @@
   import { fetchJson } from '$lib/http';
   import { swallow } from '$lib/debug-log';
   import { base } from '$app/paths';
+  import { getHomeMode, homeRedirectPath } from '$lib/settings';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { completeMastodonOAuth, addAccount, listAccounts } from '$lib/db';
@@ -76,7 +77,7 @@
 
       // Redirect: first account → feed, otherwise → settings
       const allAccounts = await listAccounts();
-      const dest = allAccounts.length === 1 ? `${base}/feed` : `${base}/settings`;
+      const dest = allAccounts.length === 1 ? (homeRedirectPath(getHomeMode(), base) ?? `${base}/feed`) : `${base}/settings`;
       setTimeout(() => goto(dest), 1500);
     } catch (e) {
       status = 'error';

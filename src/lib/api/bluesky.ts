@@ -1,4 +1,4 @@
-import type { BskyAgent, AppBskyFeedDefs } from '@atproto/api';
+import type { Agent, BskyAgent, AppBskyFeedDefs } from '@atproto/api';
 import { loadAtprotoSdk } from './atproto-sdk';
 
 const PUBLIC_API = 'https://public.api.bsky.app';
@@ -324,12 +324,13 @@ export class BlueskyClient {
   }
 
   /** Upload a video to Bluesky via video.bsky.app */
-  async uploadVideo(file: File, onProgress?: (status: string) => void): Promise<any> {
+  async uploadVideo(file: File, onProgress?: (status: string) => void, oauthAgent?: Agent): Promise<any> {
     await this.ensureAgents();
-    if (!this.authAgent) throw new Error('Auth required for video upload');
+    const videoAgent = oauthAgent ?? this.authAgent;
+    if (!videoAgent) throw new Error('Auth required for video upload');
 
     // 1. Get the service auth token for video.bsky.app
-    const serviceAuth = await this.authAgent.api.com.atproto.server.getServiceAuth({
+    const serviceAuth = await videoAgent.api.com.atproto.server.getServiceAuth({
       aud: `did:web:video.bsky.app`,
       lxm: 'app.bsky.video.uploadVideo',
       exp: Math.floor(Date.now() / 1000) + 60 * 30, // 30 min
@@ -337,7 +338,7 @@ export class BlueskyClient {
 
     // 2. Upload raw bytes to video.bsky.app
     const uploadUrl = new URL('https://video.bsky.app/xrpc/app.bsky.video.uploadVideo');
-    uploadUrl.searchParams.set('did', this.authAgent.session?.did ?? '');
+    uploadUrl.searchParams.set('did', videoAgent.did ?? (videoAgent as BskyAgent).session?.did ?? '');
     uploadUrl.searchParams.set('name', file.name || 'video.mp4');
 
     onProgress?.('uploading');

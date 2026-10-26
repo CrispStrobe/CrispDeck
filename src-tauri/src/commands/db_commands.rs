@@ -447,6 +447,8 @@ pub fn db_save_draft(
     media_paths: Option<Vec<String>>,
     visibility: Option<String>,
     content_warning: Option<String>,
+    scheduled_at: Option<String>,
+    id: Option<i64>,
 ) -> Result<i64, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let ta_json = serde_json::to_string(&target_accounts).map_err(|e| e.to_string())?;
@@ -459,6 +461,8 @@ pub fn db_save_draft(
         &mp_json,
         &visibility.unwrap_or_else(|| "public".to_string()),
         content_warning.as_deref(),
+        scheduled_at.as_deref(),
+        id,
     )
     .map_err(|e| e.to_string())
 }
