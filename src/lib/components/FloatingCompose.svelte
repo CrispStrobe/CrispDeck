@@ -323,7 +323,7 @@
             class="w-full px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-[var(--color-text)] text-sm resize-none focus:outline-none focus:border-[var(--color-primary)] {needsThread ? 'border-yellow-500/50' : ''}"
           ></textarea>
           <!-- Character count rings -->
-          <div class="absolute bottom-2 right-2 flex items-center gap-2 text-[10px]">
+          <div class="mt-1 flex flex-wrap justify-end items-center gap-2 text-[10px]">
             {#if hasBsky}
               {@const pct = Math.min(bskyLen / 300, 1)}
               {@const color = pct >= 1 ? '#facc15' : pct >= 0.9 ? '#f87171' : pct >= 0.8 ? '#fb923c' : 'var(--color-bluesky)'}

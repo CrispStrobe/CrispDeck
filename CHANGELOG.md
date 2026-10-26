@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Compose
+
+- Character counters sit below the full and floating editors, keeping long
+  draft text readable on narrow screens and while scrolling.
+
 ### Release automation and native validation
 
 - Google Play tooling verifies published Android packages, validates access with

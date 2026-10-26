@@ -36,6 +36,9 @@ before compilation. Native checks then include:
   launch and restart of that exact APK.
 - A complete static web ZIP; the same source passes browser workflows in CI.
 
+The same candidate also renders the draft Google Play listing assets from its
+source commit. Those assets remain a separate workflow artifact for owner review.
+
 Platform receipts bind check results to source, version, size and SHA-256.
 The aggregation job rejects missing platforms, changed packages, mixed source
 commits, a mismatched Android emulator report or mobile identity, and unknown

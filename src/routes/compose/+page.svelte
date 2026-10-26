@@ -689,7 +689,7 @@
 
           <!-- Character counts with warning thresholds -->
           <!-- Character count rings -->
-          <div class="absolute bottom-3 right-3 flex items-center gap-2.5 text-xs">
+          <div class="mt-1 flex flex-wrap justify-end items-center gap-2.5 text-xs">
             {#if hasBsky}
               {@const pct = Math.min(bskyLen / 300, 1)}
               {@const color = pct >= 1 ? '#facc15' : pct >= 0.9 ? '#f87171' : pct >= 0.8 ? '#fb923c' : 'var(--color-bluesky)'}

@@ -98,8 +98,14 @@ jobs:
     with:
       source_sha: ${{ needs.prepare.outputs.commit }}
 
+  listing_assets:
+    needs: [prepare, ci]
+    uses: ./.github/workflows/store-assets.yml
+    with:
+      source_sha: ${{ needs.prepare.outputs.commit }}
+
   verify:
-    needs: [prepare, desktop, mobile, macos, web, android_smoke]
+    needs: [prepare, desktop, mobile, macos, web, android_smoke, listing_assets]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:

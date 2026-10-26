@@ -2,6 +2,11 @@ name: Google Play Listing Assets
 
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      source_sha:
+        type: string
+        required: true
 
 permissions:
   contents: read
@@ -12,6 +17,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
       - uses: actions/setup-node@v5
         with:
           node-version: lts/*
