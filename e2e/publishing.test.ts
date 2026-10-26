@@ -1,4 +1,8 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect as playwrightExpect, type Page } from '@playwright/test';
+
+// Real PBKDF2 credential setup and reconnects also run on constrained devices.
+test.setTimeout(60000);
+const expect = playwrightExpect.configure({ timeout: 15000 });
 
 /** Real storage + real UI, with only remote network boundaries stubbed. */
 async function connectTestAccounts(page: Page, count = 2) {
@@ -119,8 +123,8 @@ test('autosave restores image bytes, alt text, destination text and visibility a
     const db = await new Promise<IDBDatabase>(resolve => { const r = indexedDB.open('crispdeck-publishing'); r.onsuccess = () => resolve(r.result); });
     const data = await new Promise<any>(resolve => { const r = db.transaction('snapshots').objectStore('snapshots').get('autosave'); r.onsuccess = () => resolve(r.result); });
     db.close();
-    return data?.options.altTexts?.[0];
-  })).toBe('A tiny test image');
+    return { alt: data?.options.altTexts?.[0], visibility: data?.options.visibility, override: data?.overrides?.['1'] };
+  })).toEqual({ alt: 'A tiny test image', visibility: 'private', override: 'Custom destination text' });
   await page.reload();
   await expect(page.locator('textarea').first()).toHaveValue('Draft with a photo');
   await expect(page.getByPlaceholder(/Describe this image/)).toHaveValue('A tiny test image');

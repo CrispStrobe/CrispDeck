@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.christianstrobele.crispdeck</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>crispdeck</string>
+			</array>
+		</dict>
+	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>NSCameraUsageDescription</key>
+	<string>CrispDeck needs camera access to take photos for posts.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>CrispDeck needs microphone access for voice dictation.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>CrispDeck needs photo library access to attach images to posts.</string>
+</dict>
+</plist>
