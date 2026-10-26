@@ -26,7 +26,9 @@ jobs:
       - run: npm ci
 
       - name: Install Chromium for Playwright
-        run: npx playwright install --with-deps chromium
+        run: |
+          bash scripts/ci-apt.sh
+          npx playwright install --with-deps chromium
 
       - name: Build the web bundle
         run: npm run build

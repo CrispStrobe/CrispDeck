@@ -51,6 +51,7 @@ jobs:
           cache: npm
 
       - run: npm ci
+      - run: bash scripts/ci-apt.sh
       - run: npx playwright install --with-deps chromium
       - run: npx svelte-kit sync && BENCH_CHUNK_MAP=1 npx vite build
 

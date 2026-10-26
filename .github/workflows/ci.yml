@@ -32,6 +32,7 @@ jobs:
       - run: npm test -- --maxWorkers=2
       - run: npx svelte-kit sync
       - run: npx vite build
+      - run: bash scripts/ci-apt.sh
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test --reporter=list
       - uses: actions/upload-artifact@v4
@@ -67,8 +68,9 @@ jobs:
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
         run: |
+          bash scripts/ci-apt.sh
           sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
