@@ -9,6 +9,7 @@ import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
 import type { BlueskyClient } from '$lib/api/bluesky';
 import type { MastodonClient } from '$lib/api/mastodon';
 import type { ThreadsClient } from '$lib/api/threads';
+import { newRecordKey } from './record-key';
 import { all, read, write, exclusive } from './storage';
 import { restoreFiles, type ComposerSnapshot } from './snapshots';
 
@@ -19,6 +20,7 @@ export interface DeliveryPart {
   result?: PostResult;
   error?: string;
   attemptedAt?: string;
+  recordKey?: string;
 }
 export interface Destination {
   accountId: number;
@@ -74,7 +76,7 @@ export async function createJob(saved: ComposerSnapshot, accounts: Account[], dr
       const resolved = await resolveMentionsForPlatform(text, account.platform);
       return {
         accountId: account.id, handle: account.handle, platform: account.platform,
-        parts: splitForPlatform(resolved, account.platform).parts.map(p => ({ text: p.text, status: 'pending' as const })),
+        parts: splitForPlatform(resolved, account.platform).parts.map(p => ({ text: p.text, status: 'pending' as const, recordKey: account.platform === 'bluesky' ? newRecordKey() : undefined })),
       };
     }));
     const job: PublishJob = {
@@ -121,6 +123,7 @@ export async function deliverJob(id: string, clients?: Map<number, ClientEntry>,
           part.error = 'Threads needs a publicly accessible media URL. Add an HTTPS media URL before publishing.';
           break;
         }
+        if (destination.platform === 'bluesky') part.recordKey ??= newRecordKey();
         part.status = 'sending';
         part.attemptedAt ??= new Date().toISOString();
         part.error = undefined;
@@ -131,6 +134,7 @@ export async function deliverJob(id: string, clients?: Map<number, ClientEntry>,
           ...job.snapshot.options,
           text: part.text,
           deliveryKey: `${job.id}-${destination.accountId}-${index}`,
+          recordKey: part.recordKey,
           createdAt: job.createdAt,
           mediaFiles: index === 0 ? restoreFiles(job.snapshot) : undefined,
           mediaUrls: index === 0 ? job.snapshot.options.mediaUrls : undefined,

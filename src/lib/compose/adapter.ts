@@ -25,6 +25,7 @@ export type ThreadGate = 'everyone' | 'mentioned' | 'following' | 'nobody';
 export interface ComposeOptions {
   text: string;
   deliveryKey?: string;
+  recordKey?: string;
   createdAt?: string;
   replyTo?: { uri: string; cid?: string; id?: string; rootUri?: string; rootCid?: string; platform?: Platform };
   visibility?: 'public' | 'unlisted' | 'private' | 'direct';
@@ -160,8 +161,8 @@ export async function postToBluesky(
     }
     const repo = agent.api.com.atproto.repo;
     // A stable record key makes an interrupted outbox delivery safe to retry.
-    const resp = options.deliveryKey
-      ? await repo.putRecord({ repo: did, collection: 'app.bsky.feed.post', rkey: options.deliveryKey, record })
+    const resp = options.recordKey
+      ? await repo.putRecord({ repo: did, collection: 'app.bsky.feed.post', rkey: options.recordKey, record })
       : await repo.createRecord({ repo: did, collection: 'app.bsky.feed.post', record });
 
     // Create thread gate if specified
@@ -175,7 +176,7 @@ export async function postToBluesky(
       }
       // 'nobody' = empty allow array
 
-      await (options.deliveryKey ? repo.putRecord.bind(repo) : repo.createRecord.bind(repo))({
+      await (options.recordKey ? repo.putRecord.bind(repo) : repo.createRecord.bind(repo))({
         repo: did,
         collection: 'app.bsky.feed.threadgate',
         rkey,
@@ -191,7 +192,7 @@ export async function postToBluesky(
     // Create post gate if quoting disabled
     if (options.disableQuotes) {
       const rkey = resp.data.uri.split('/').pop()!;
-      await (options.deliveryKey ? repo.putRecord.bind(repo) : repo.createRecord.bind(repo))({
+      await (options.recordKey ? repo.putRecord.bind(repo) : repo.createRecord.bind(repo))({
         repo: did,
         collection: 'app.bsky.feed.postgate',
         rkey,
