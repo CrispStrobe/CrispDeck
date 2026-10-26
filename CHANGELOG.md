@@ -15,6 +15,9 @@
 
 ### Release automation and native validation
 
+- Windows signing runs after Tauri's per-format binary patch. Installation
+  checks compare the installed executable with its packaged snapshot and
+  retain installer logs and failed candidates for diagnosis.
 - Google Play tooling verifies published Android packages, validates access with
   a discarded temporary edit and can publish only to the internal track.
   Listing copy, a feature graphic and phone/tablet capture tooling are included.

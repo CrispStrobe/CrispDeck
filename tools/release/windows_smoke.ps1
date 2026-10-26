@@ -12,7 +12,8 @@ if ($record.StringData(1) -ne $version) { throw 'MSI marketing version differs f
 $view.Close()
 
 function Install-Msi([string]$Path) {
-    $result = Start-Process msiexec.exe -ArgumentList @('/i', "`"$Path`"", '/qn', '/norestart') -Wait -PassThru
+    $log = Join-Path $Output ([IO.Path]::GetFileNameWithoutExtension($Path) + '.install.log')
+    $result = Start-Process msiexec.exe -ArgumentList @('/i', "`"$Path`"", '/qn', '/norestart', '/L*v', "`"$log`"") -Wait -PassThru
     if ($result.ExitCode -notin 0, 3010) { throw "MSI installation failed: $($result.ExitCode)" }
 }
 
@@ -44,10 +45,22 @@ if (-not $installed) { throw 'Installed CrispDeck executable is missing.' }
 if (-not $installed.VersionInfo.ProductVersion.StartsWith($version + '.') -and $installed.VersionInfo.ProductVersion -ne $version) {
     throw "Installed app has unexpected version: $($installed.VersionInfo.ProductVersion)"
 }
-$source = 'src-tauri/target/release/crispdeck.exe'
-if ((Get-FileHash $source).Hash -ne (Get-FileHash $installed.FullName).Hash) { throw 'Installer changed or substituted the native executable.' }
+$commit = (git rev-parse HEAD).Trim()
+$snapshots = @('msi', 'nsis') | ForEach-Object {
+    $snapshot = Get-Content (Join-Path $Output "bundled-$_-native.json") -Raw | ConvertFrom-Json
+    if ($snapshot.commit -ne $commit -or $snapshot.format -ne $_) { throw 'Packaged executable receipt belongs to another source/format.' }
+    $snapshot
+}
+$expected = $snapshots | Where-Object { $_.format -eq 'msi' }
+$installedHash = (Get-FileHash $installed.FullName).Hash
+@{ installed_sha256 = $installedHash; expected_sha256 = $expected.sha256; installed_path = $installed.FullName;
+    version = $installed.VersionInfo.ProductVersion; previous_version = $previous } |
+    ConvertTo-Json | Set-Content (Join-Path $Output 'installed-native.json')
+if ($expected.sha256 -ne $installedHash) { throw 'Installed executable differs from the MSI packaging snapshot; inspect installer logs and installed-native.json.' }
 $files = @($installed) + @(Get-ChildItem $Directory -File | Where-Object { $_.Extension -in '.exe', '.msi' })
-$signed = $true; $timestamped = $true; $identities = @()
+$signed = @($snapshots | Where-Object { -not $_.authenticode }).Count -eq 0
+$timestamped = @($snapshots | Where-Object { -not $_.timestamp }).Count -eq 0
+$identities = @($snapshots | Where-Object publisher_thumbprint | ForEach-Object publisher_thumbprint)
 foreach ($file in $files) {
     $signature = Get-AuthenticodeSignature $file.FullName
     $signed = $signed -and $signature.Status -eq 'Valid'
@@ -85,6 +98,7 @@ $result = @{
     checks = @{ package_metadata = $true; install_smoke = $true; authenticode = $signed; timestamp = $timestamped }
     metadata = @{ previous_version = $previous; upgrade_exercised = $null -ne $previous; profile_marker_preserved = $true;
         visible_window = $visible; app_alive_seconds = 20; publisher_thumbprints = @($identities | Select-Object -Unique);
+        installed_sha256 = $installedHash; bundle_native_receipts = @($snapshots);
         physical_device = $false; authenticated_workflows = $false }
 }
 $result | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Output 'checks.json')

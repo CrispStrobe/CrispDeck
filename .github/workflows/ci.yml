@@ -89,7 +89,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          foreach ($file in @('tools/release/sign_windows.ps1', 'tools/release/windows_smoke.ps1')) {
+          foreach ($file in @('tools/release/sign_windows.ps1', 'tools/release/windows_bundle_hook.ps1', 'tools/release/windows_smoke.ps1')) {
             $errors = $null; $tokens = $null
             [Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file), [ref]$tokens, [ref]$errors) | Out-Null
             if ($errors.Count) { throw ($errors | Out-String) }

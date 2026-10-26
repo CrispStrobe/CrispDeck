@@ -70,7 +70,7 @@ jobs:
           REQUIRE_SIGNING: ${{ inputs.require_windows_signing }}
           HAS_PFX: ${{ secrets.WINDOWS_CERT_PFX_BASE64 != '' && secrets.WINDOWS_CERT_PASSWORD != '' }}
         run: |
-          foreach ($file in @('tools/release/sign_windows.ps1', 'tools/release/windows_smoke.ps1')) {
+          foreach ($file in @('tools/release/sign_windows.ps1', 'tools/release/windows_bundle_hook.ps1', 'tools/release/windows_smoke.ps1')) {
             $errors = $null; $tokens = $null
             [Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file), [ref]$tokens, [ref]$errors) | Out-Null
             if ($errors.Count) { throw ($errors | Out-String) }
@@ -88,45 +88,38 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           allow-no-subscriptions: true
-      - name: Sign Windows executable using publisher PFX
-        if: runner.os == 'Windows' && env.WINDOWS_SIGNING_MODE == 'pfx'
+      - name: Install Azure Artifact Signing callback dependency
+        if: runner.os == 'Windows' && env.WINDOWS_SIGNING_MODE == 'azure'
+        shell: pwsh
+        # Same pinned Microsoft PowerShell module as trusted-signing-action v2.0.0.
+        run: Install-Module ArtifactSigning -RequiredVersion 0.1.8 -Scope CurrentUser -Force -Repository PSGallery
+      - name: Bundle Windows installers and observe/sign each patched executable
+        if: runner.os == 'Windows'
         shell: pwsh
         env:
           WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
-        run: ./tools/release/sign_windows.ps1 -File src-tauri/target/release/crispdeck.exe
-      - name: Sign Windows executable using Azure Artifact Signing
-        if: runner.os == 'Windows' && env.WINDOWS_SIGNING_MODE == 'azure'
-        uses: azure/trusted-signing-action@v2.0.0
-        with:
-          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.AZURE_CERTIFICATE_PROFILE }}
-          files: ${{ github.workspace }}/src-tauri/target/release/crispdeck.exe
-      - name: Bundle signed Windows executable
-        if: runner.os == 'Windows'
-        run: npx tauri bundle --bundles nsis,msi
+          AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          AZURE_CERTIFICATE_PROFILE: ${{ vars.AZURE_CERTIFICATE_PROFILE }}
+        run: |
+          $binary = Resolve-Path src-tauri/target/release/crispdeck.exe
+          $bytes = [IO.File]::ReadAllBytes($binary)
+          $offset = [Text.Encoding]::ASCII.GetString($bytes).IndexOf('__TAURI_BUNDLE_TYPE_VAR_UNK', [StringComparison]::Ordinal)
+          if ($offset -lt 0) { throw 'The compiled executable has no unpatched Tauri bundle marker.' }
+          $env:CRISPDECK_BUNDLE_TYPE_OFFSET = [string]$offset
+          $config = Join-Path $env:RUNNER_TEMP 'windows-bundle-config.json'
+          @{ bundle = @{ windows = @{ signCommand = @{
+            cmd = 'pwsh'; args = @('-NoProfile', '-File', (Resolve-Path tools/release/windows_bundle_hook.ps1).Path, '-File', '%1')
+          } } } } | ConvertTo-Json -Depth 7 | Set-Content $config
+          npx tauri bundle --config $config --bundles 'nsis,msi'
+          if ($LASTEXITCODE -ne 0) { throw 'Windows bundling failed.' }
       - name: Build Linux package
         if: runner.os == 'Linux'
         run: npx tauri build --bundles deb
       - name: Collect final desktop installers
+        id: collect
         run: python3 tools/release/packages.py '${{ matrix.os_name }}' release-assets
-      - name: Sign Windows installers using publisher PFX
-        if: runner.os == 'Windows' && env.WINDOWS_SIGNING_MODE == 'pfx'
-        shell: pwsh
-        env:
-          WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
-          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
-        run: ./tools/release/sign_windows.ps1 -Directory release-assets
-      - name: Sign Windows installers using Azure Artifact Signing
-        if: runner.os == 'Windows' && env.WINDOWS_SIGNING_MODE == 'azure'
-        uses: azure/trusted-signing-action@v2.0.0
-        with:
-          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.AZURE_CERTIFICATE_PROFILE }}
-          files-folder: ${{ github.workspace }}/release-assets
-          files-folder-filter: exe,msi
       - name: Install, upgrade and launch Windows app
         if: runner.os == 'Windows'
         shell: pwsh
@@ -152,6 +145,7 @@ jobs:
             ${{ runner.temp }}/${{ matrix.os_name }}-smoke/*.log
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
+        if: always() && steps.collect.outcome == 'success'
         with:
           name: package-${{ matrix.os_name }}
           path: release-assets/
