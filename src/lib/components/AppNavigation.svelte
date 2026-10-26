@@ -18,7 +18,7 @@
   <a href={`${base}${item.href}`.replace(/\/$/, '') || '/'} onclick={onnavigate}
     aria-current={active(item.href) ? 'page' : undefined}
     title={collapsed ? item.label : undefined}
-    class="flex items-center gap-2.5 px-3 py-2.5 text-sm transition-colors {active(item.href) ? 'text-[var(--color-primary-text)] bg-[var(--color-primary)]/10' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'}">
+    class="flex items-center gap-2.5 px-3 py-2.5 text-sm transition-colors {active(item.href) ? 'text-[var(--color-text)] bg-[var(--color-primary)]/10' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'}">
     <item.icon size={17} class="flex-shrink-0" />
     {#if !collapsed}
       <span class="truncate flex-1">{item.label}</span>

@@ -404,6 +404,7 @@ jobs:
       ANDROID_KEYSTORE_PASSWORD:  ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS:          ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD:       ${{ secrets.ANDROID_KEY_PASSWORD }}
+      ANDROID_RELEASE_CERT_SHA256: ${{ vars.ANDROID_RELEASE_CERT_SHA256 }}
 
     steps:
       - uses: actions/checkout@v5
@@ -413,6 +414,8 @@ jobs:
         run: |
           test -n "$ANDROID_KEYSTORE_BASE64" && test -n "$ANDROID_KEYSTORE_PASSWORD" && test -n "$ANDROID_KEY_ALIAS" && test -n "$ANDROID_KEY_PASSWORD" \
             || { echo "::error::Tagged Android releases require a retained production keystore"; exit 1; }
+          test -n "$ANDROID_RELEASE_CERT_SHA256" \
+            || { echo "::error::Pin the production certificate in ANDROID_RELEASE_CERT_SHA256"; exit 1; }
 
       - uses: actions/setup-node@v5
         with:
@@ -512,7 +515,14 @@ jobs:
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
           test -n "$APKSIGNER"
           for apk in android-artifacts/*.apk; do
-            "$APKSIGNER" verify --verbose --print-certs "$apk"
+            "$APKSIGNER" verify --verbose --print-certs "$apk" | tee "$RUNNER_TEMP/apk-signature.txt"
+            if [ "$SIGNING_CONFIGURED" = "true" ]; then
+              GOT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$RUNNER_TEMP/apk-signature.txt")
+              [ "$GOT" = "$ANDROID_RELEASE_CERT_SHA256" ] \
+                || { echo "::error::APK certificate differs from the retained release identity"; exit 1; }
+              VERSION=$(node -p "require('./package.json').version")
+              echo "$GOT" > "android-artifacts/CrispDeck_${VERSION}_android-cert.sha256"
+            fi
           done
           if [ "$SIGNING_CONFIGURED" = "true" ]; then
             for aab in android-artifacts/*.aab; do

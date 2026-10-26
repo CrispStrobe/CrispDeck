@@ -22,6 +22,8 @@
   independent, and failed browser runs retain diagnostic artifacts.
 - Populated Feed and Deck benchmarks record first post and first decoded image;
   existing bundle, accessibility and scroll measurements remain enforced.
+- Active navigation text meets contrast requirements, and the GIF button's
+  accessible name includes its visible label.
 - Six-platform release assembly: iOS App Store archive, notarized universal macOS
   DMG, signed Android APK/AAB, Windows installers, Linux DEB and a static web ZIP.
   Releases remain drafts until their artifacts are verified and checksummed.

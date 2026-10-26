@@ -450,7 +450,8 @@ gh release edit v1.3.0 --draft=false --latest
 
 Android tagged releases require all four `ANDROID_KEYSTORE_*`/`ANDROID_KEY_*`
 secrets described in `mobile.yml`. Retain the original keystore and passwords
-privately for future updates. Debug keys are only for manual QA builds.
+privately for future updates, and pin its certificate SHA-256 in the repository
+variable `ANDROID_RELEASE_CERT_SHA256`. Debug keys are only for manual QA builds.
 Windows installers currently have no configured Authenticode certificate.
 
 For Apple stores, dispatch `macos-appstore.yml` with `dry_run=false` on the release

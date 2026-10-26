@@ -129,7 +129,7 @@
   }
 </script>
 
-<button type="button" class="gif-trigger" onclick={open} aria-label={i18n.t.compose.addAnimatedEmoji}>
+<button type="button" class="gif-trigger" onclick={open} aria-label={`GIF: ${i18n.t.compose.addAnimatedEmoji}`}>
   GIF
 </button>
 
