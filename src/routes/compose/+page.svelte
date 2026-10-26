@@ -197,6 +197,7 @@
     autoSaveRestoredFrom = null;
   }
   function resetComposer() {
+    selectedAccountIds = selectedAccountIds.filter(id => accounts.some(account => account.id === id));
     text = ''; contentWarning = ''; showCW = false;
     mediaPreviews.forEach(revokePreviewUrl); mediaFiles = []; mediaPreviews = []; altTexts = [];
     overrides = {}; editingDraftId = null; threadsMediaUrl = '';

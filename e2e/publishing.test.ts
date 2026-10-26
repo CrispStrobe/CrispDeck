@@ -59,7 +59,7 @@ async function fakeNetworks(page: Page, reject: (sent: Sent, number: number) => 
   return attempts;
 }
 
-test('partial crossposts survive reload and retry only the failed account', async ({ page }) => {
+test('partial crossposts survive reconnect, retry only the failed account, and allow a new draft', async ({ page }) => {
   let rejected = false;
   const attempts = await fakeNetworks(page, sent => sent.account === '2' && !rejected && (rejected = true));
   await connectTestAccounts(page);
@@ -71,12 +71,26 @@ test('partial crossposts survive reload and retry only the failed account', asyn
   await page.getByTestId('publish-post').click();
   await expect(page.getByText('Partially published', { exact: true })).toBeVisible();
   expect(attempts.map(a => a.account)).toEqual(['1', '2']);
+  // Reconnecting through a new local account row must preserve delivery identity.
+  await page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>(resolve => { const r = indexedDB.open('crispdeck'); r.onsuccess = () => resolve(r.result); });
+    await new Promise<void>(resolve => {
+      const tx = db.transaction('accounts', 'readwrite'); const store = tx.objectStore('accounts');
+      const r = store.get(2); r.onsuccess = () => { store.delete(2); store.put({ ...r.result, id: 3 }); };
+      tx.oncomplete = () => resolve();
+    }); db.close();
+  });
   await page.reload();
   await expect(page.getByRole('button', { name: 'Retry failed destinations', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Retry failed destinations', exact: true }).click();
   await expect(page.getByText('Published', { exact: true }).first()).toBeVisible();
   expect(attempts.map(a => a.account)).toEqual(['1', '2', '2']);
   expect(attempts[1].key).toBe(attempts[2].key);
+  await page.locator('textarea').first().fill('A new post after reconnect');
+  await page.getByRole('button', { name: /writer2@2.social.test/ }).first().click();
+  await page.getByTestId('publish-post').click();
+  await expect.poll(() => attempts.length).toBe(5);
+  expect(attempts.slice(3).map(a => a.account)).toEqual(['1', '2']);
 });
 
 test('a failed thread resumes after the saved parent instead of reposting its first part', async ({ page }) => {

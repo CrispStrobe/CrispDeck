@@ -217,6 +217,7 @@
   }
 
   function resetForm() {
+    selectedAccountIds = selectedAccountIds.filter(id => accounts.some(account => account.id === id));
     text = '';
     contentWarning = '';
     showCW = false;
