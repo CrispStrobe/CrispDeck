@@ -30,6 +30,8 @@
 - Android signing now handles Tauri's Kotlin release block and refuses a missing
   signing assignment. Tagged mobile builds require production signing and fail
   when their expected packages are missing.
+- iOS exports retain media permission purposes and the native callback scheme,
+  and verify them in the signed IPA before upload.
 - App Store submission requires the correct marketing version and platform, and
   stops when build attachment fails. Screenshot capture includes Mac and medium
   iPhone sizes as well as large iPhone and iPad.

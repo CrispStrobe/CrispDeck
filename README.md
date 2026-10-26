@@ -436,7 +436,7 @@ scripts/
 
 ```bash
 # Update package.json, package-lock.json, Tauri config, Cargo.toml/Cargo.lock,
-# iOS Info.plist, CHANGELOG and App Store beta notes. Merge after CI succeeds.
+# CHANGELOG and App Store beta notes. Keep iOS customizations in Info.ios.plist.
 git tag v1.3.0
 git push origin v1.3.0
 gh release create v1.3.0 --verify-tag --draft --title 'CrispDeck v1.3.0' --notes-file /path/to/release-notes
@@ -485,7 +485,7 @@ genuinely drop them from a mobile binary, move those two crates into a
 `[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]`
 table rather than relying on a CLI flag.
 
-OAuth on mobile uses the `crispdeck://` URL scheme (registered in AndroidManifest.xml and Info.plist) instead of the desktop localhost TCP listener.
+The `crispdeck://` scheme is registered for native callbacks. Mastodon uses the native loopback OAuth listener. Packaged-app Bluesky sign-in uses an App Password; browser OAuth is available on the web.
 
 ## Stats
 

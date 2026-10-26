@@ -78,41 +78,10 @@ jobs:
         run: npx tauri icon static/icon-1024.png
 
       # Generates the Xcode project in src-tauri/gen/apple/
-      # Our seed files (Info.plist, PrivacyInfo.xcprivacy) are committed and
-      # will be left in place — tauri ios init does not overwrite existing files.
+      # Versionless customizations live in src-tauri/Info.ios.plist. Generated
+      # project paths can change with Tauri and must not be the source of truth.
       - name: Initialize iOS project
         run: npx tauri ios init
-
-      # The committed Info.plist is the seed `tauri ios init` preserves, so its
-      # version drifts silently whenever package.json is bumped and nobody
-      # remembers to edit it too. Apple compares CFBundleShortVersionString
-      # against the version declared in App Store Connect, so a stale value is
-      # an upload rejection (or, worse, a build landing under the old version).
-      # It went out of step between 1.2.6 and 1.2.7; sync it here so it cannot
-      # happen again.
-      - name: Sync iOS bundle version with package.json
-        run: |
-          PLIST=src-tauri/gen/apple/CrispDeck_iOS/Info.plist
-          VERSION=$(node -p "require('./package.json').version")
-          CURRENT=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "$PLIST")
-          if [ "$CURRENT" != "$VERSION" ]; then
-            echo "Info.plist said $CURRENT, package.json says $VERSION — syncing"
-            /usr/libexec/PlistBuddy -c "Set CFBundleShortVersionString $VERSION" "$PLIST"
-          fi
-          /usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "$PLIST"
-
-          # CFBundleVersion is the *build* number, and it was committed as "1"
-          # with nothing ever bumping it. App Store Connect requires it to be
-          # unique and increasing within a marketing version, so the first
-          # upload of 1.2.8 worked and every later one was refused — which is
-          # precisely the loop TestFlight puts you in: ship, get feedback, fix,
-          # ship again. The run number is monotonic per repository and needs no
-          # state kept anywhere.
-          # Kept for a local `tauri ios build`, which does read this file. CI
-          # cannot rely on it: the bundler regenerates the plist, so the value
-          # that reaches the binary is the one set on the archive below.
-          /usr/libexec/PlistBuddy -c "Set CFBundleVersion ${{ github.run_number }}" "$PLIST"
-          echo "source plist build number: $(/usr/libexec/PlistBuddy -c "Print CFBundleVersion" "$PLIST")"
 
       # Inject PrivacyInfo.xcprivacy into the Xcode project target
       - name: Inject PrivacyInfo.xcprivacy
@@ -272,6 +241,7 @@ jobs:
           # it after export would invalidate the signature.
           APP_PLIST=$(find "$ARCHIVE/Products/Applications" -name Info.plist -maxdepth 2 | head -1)
           [ -n "$APP_PLIST" ] || { echo "::error::no app Info.plist inside the archive"; exit 1; }
+          python3 scripts/ios-release-metadata.py apply "$APP_PLIST" src-tauri/Info.ios.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" "$APP_PLIST"
           /usr/libexec/PlistBuddy -c "Set :ApplicationProperties:CFBundleVersion ${{ github.run_number }}" "$ARCHIVE/Info.plist"
           echo "archive build number: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PLIST")"
@@ -320,6 +290,8 @@ jobs:
               echo "::error::IPA carries CFBundleVersion $GOT, expected ${{ github.run_number }}"
               exit 1
             }
+            python3 "$GITHUB_WORKSPACE/scripts/ios-release-metadata.py" verify \
+              "$GITHUB_WORKSPACE/CrispDeck_${VERSION}_ios-appstore.ipa" "$VERSION" "${{ github.run_number }}"
             codesign --verify --deep --strict --verbose=2 Payload/*.app 2>&1 | tail -5
           else
             echo "ERROR: exportArchive produced no IPA"
@@ -538,7 +510,9 @@ jobs:
           for apk in android-artifacts/*.apk; do
             "$APKSIGNER" verify --verbose --print-certs "$apk" | tee "$RUNNER_TEMP/apk-signature.txt"
             if [ "$SIGNING_CONFIGURED" = "true" ]; then
-              GOT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$RUNNER_TEMP/apk-signature.txt")
+              # New apksigner versions label scheme signers as "V2 Signer:";
+              # older versions use "Signer #1". Reject multiple identities.
+              GOT=$(sed -nE 's/^(Signer #[0-9]+|V[0-9.]+ Signer:?) certificate SHA-256 digest: //p' "$RUNNER_TEMP/apk-signature.txt" | sort -u)
               [ "$GOT" = "$ANDROID_RELEASE_CERT_SHA256" ] \
                 || { echo "::error::APK certificate differs from the retained release identity"; exit 1; }
               VERSION=$(node -p "require('./package.json').version")
