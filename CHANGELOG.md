@@ -17,9 +17,10 @@
 - Windows app binaries and installers support timestamped PFX or Azure Artifact
   Signing. Publication requires publisher signing; unsigned build-only
   candidates remain explicitly marked and cannot be promoted.
-- Apple uploads happen after all package checks; published GitHub artifacts
+- App Store Connect uploads happen after all package checks; published GitHub artifacts
   cannot be replaced by the new publisher. Manual candidate builds do not
-  upload to Apple or notify TestFlight testers.
+  upload to App Store Connect or notify TestFlight testers. Mac notarization
+  still uses Apple’s notary service.
 - The physical-device/live-account validation matrix remains pending until
   dedicated accounts and device access are available.
 

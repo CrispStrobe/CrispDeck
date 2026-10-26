@@ -14,8 +14,9 @@ gh workflow run coordinated-release.yml --ref main -f publish=false
 The preparation job checks package/Tauri/Cargo versions and obtains the next
 unused iOS build number from Apple's build list. It counts expired builds and
 filters both platform and marketing version. The coordinator serializes runs
-to avoid two uploads choosing the same number. Build-only runs never upload
-to Apple, replace release assets or notify TestFlight testers.
+to avoid two uploads choosing the same number. Build-only runs never upload builds
+to App Store Connect, replace release assets or notify TestFlight testers.
+Mac code notarization still sends the candidate DMG to Apple’s notary service.
 
 All builders check out the preparation job's full commit SHA. Full CI runs
 before compilation. Native checks then include:
