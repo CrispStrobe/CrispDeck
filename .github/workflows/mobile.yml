@@ -273,6 +273,7 @@ jobs:
           APP_PLIST=$(find "$ARCHIVE/Products/Applications" -name Info.plist -maxdepth 2 | head -1)
           [ -n "$APP_PLIST" ] || { echo "::error::no app Info.plist inside the archive"; exit 1; }
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c "Set :ApplicationProperties:CFBundleVersion ${{ github.run_number }}" "$ARCHIVE/Info.plist"
           echo "archive build number: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PLIST")"
 
           # Write ExportOptions.plist
@@ -286,6 +287,7 @@ jobs:
             <key>method</key><string>app-store-connect</string>
             <key>teamID</key><string>{t}</string>
             <key>signingStyle</key><string>automatic</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
             <key>destination</key><string>export</string>
           </dict>
           </plist>''')

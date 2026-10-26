@@ -1,7 +1,8 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect as playwrightExpect, type Page } from '@playwright/test';
 
 // Real PBKDF2 credential setup and reconnects also run on constrained devices.
 test.setTimeout(60000);
+const expect = playwrightExpect.configure({ timeout: 15000 });
 
 /** Real storage + real UI, with only remote network boundaries stubbed. */
 async function connectTestAccounts(page: Page, count = 2) {
@@ -39,7 +40,7 @@ async function connectTestAccounts(page: Page, count = 2) {
     db.close();
   }, count);
   await page.reload();
-  await expect(page.getByRole('button', { name: /writer1@/ }).first()).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole('button', { name: /writer1@/ }).first()).toBeVisible();
 }
 
 type Sent = { account: string; text: string; parent?: string; key?: string; id: string };
@@ -72,7 +73,7 @@ test('partial crossposts survive reconnect, retry only the failed account, and a
   expect(geometry!.x + geometry!.width).toBeLessThanOrEqual(390);
   expect(await page.locator('main').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
   await page.getByTestId('publish-post').click();
-  await expect(page.getByText('Partially published', { exact: true })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText('Partially published', { exact: true })).toBeVisible();
   expect(attempts.map(a => a.account)).toEqual(['1', '2']);
   // Reconnecting through a new local account row must preserve delivery identity.
   await page.evaluate(async () => {
@@ -166,7 +167,7 @@ test('a scheduled draft publishes from another route and never repeats after a p
   await expect.poll(() => attempts.length).toBe(2);
   for (let i = 0; i < 3; i++) await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await page.goto('/drafts');
-  await expect(page.getByText('Partially published', { exact: true })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText('Partially published', { exact: true })).toBeVisible();
   expect(attempts).toHaveLength(2);
   await page.getByRole('button', { name: 'Retry failed destinations', exact: true }).click();
   await expect.poll(() => attempts.length).toBe(3);

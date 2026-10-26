@@ -5,11 +5,13 @@ set -euo pipefail
 # tens of KB/s. Use Ubuntu's canonical HTTPS archive on disposable CI runners.
 # This script must never rewrite a developer machine's package sources.
 [[ "${GITHUB_ACTIONS:-}" == true ]] || { echo 'GitHub Actions runner required' >&2; exit 1; }
-for source in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do
+for source in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources /etc/apt/apt-mirrors*.txt; do
   if [[ -f "$source" ]]; then
     sudo sed -i \
       -e 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
+      -e 's|https://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
       -e 's|http://archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
+      -e 's|http://security.ubuntu.com/ubuntu|https://security.ubuntu.com/ubuntu|g' \
       "$source"
   fi
 done
