@@ -45,6 +45,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Require production signing for tagged releases
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          test -n "$APPLE_API_KEY_P8" && test -n "$APPLE_API_KEY_ID" && test -n "$APPLE_API_ISSUER_ID" && test -n "$APPLE_TEAM_ID" && test -n "$IOS_DIST_P12" && test -n "$IOS_DIST_P12_PASSWORD" \
+            || { echo "::error::Tagged iOS releases require Apple signing credentials"; exit 1; }
+
       - uses: actions/setup-node@v5
         with:
           node-version: lts/*
@@ -68,7 +74,7 @@ jobs:
       # Our seed files (Info.plist, PrivacyInfo.xcprivacy) are committed and
       # will be left in place — tauri ios init does not overwrite existing files.
       - name: Initialize iOS project
-        run: npx tauri ios init || true
+        run: npx tauri ios init
 
       # The committed Info.plist is the seed `tauri ios init` preserves, so its
       # version drifts silently whenever package.json is bumped and nobody
@@ -133,7 +139,8 @@ jobs:
           fi
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" "$KEYCHAIN"
           security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
-          security find-identity -v -p codesigning | grep -i "distribution" || echo "WARNING: No Distribution cert"
+          security find-identity -v -p codesigning | grep -i "distribution" \
+            || { echo "::error::The retained Distribution identity is missing; refusing automatic certificate creation"; exit 1; }
 
           # Set Automatic signing in the Xcode project with our Team ID
           cd src-tauri/gen/apple
@@ -319,7 +326,7 @@ jobs:
         run: |
           VERSION=$(node -p "require('./package.json').version")
           IPA="CrispDeck_${VERSION}_ios-appstore.ipa"
-          [ ! -f "$IPA" ] && echo "No IPA to upload" && exit 0
+          [ -f "$IPA" ] || { echo "::error::No IPA to upload"; exit 1; }
 
           echo "=== Validating IPA ==="
           xcrun altool --validate-app \
@@ -376,7 +383,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           for ipa in CrispDeck_*_ios-*.ipa; do
-            [ -f "$ipa" ] && gh release upload "${{ github.ref_name }}" "$ipa" --clobber || true
+            [ -f "$ipa" ] || { echo "::error::iOS release IPA missing"; exit 1; }
+            gh release upload "${{ github.ref_name }}" "$ipa" --clobber
           done
 
       - name: Upload iOS artifact
@@ -384,7 +392,7 @@ jobs:
         with:
           name: ios-build
           path: CrispDeck_*_ios-*.ipa
-          if-no-files-found: warn
+          if-no-files-found: error
 
   # ─────────────────────────── Android ─────────────────────────────────────
   android:
@@ -399,6 +407,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+
+      - name: Require production signing for tagged releases
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64" && test -n "$ANDROID_KEYSTORE_PASSWORD" && test -n "$ANDROID_KEY_ALIAS" && test -n "$ANDROID_KEY_PASSWORD" \
+            || { echo "::error::Tagged Android releases require a retained production keystore"; exit 1; }
 
       - uses: actions/setup-node@v5
         with:
@@ -434,7 +448,7 @@ jobs:
       - run: npm ci
 
       - name: Initialize Android project
-        run: npx tauri android init || true
+        run: npx tauri android init
 
       # ── Production keystore (Play Store) ─────────────────────────────────
       - name: Setup production keystore
@@ -470,23 +484,41 @@ jobs:
           ANDROID_KEY_ALIAS:         ${{ env.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD:      ${{ env.ANDROID_KEY_PASSWORD }}
 
-      - name: Build Android APK
-        run: npx tauri android build --apk 2>&1 | tail -60
-
-      - name: Build Android AAB (Play Store)
-        if: env.SIGNING_CONFIGURED == 'true'
-        run: npx tauri android build --aab 2>&1 | tail -60
+      - name: Build Android packages
+        run: |
+          if [ "$SIGNING_CONFIGURED" = "true" ]; then
+            npx tauri android build --apk --aab --ci
+          else
+            npx tauri android build --apk --ci
+          fi
 
       - name: Collect artifacts
         run: |
           VERSION=$(node -p "require('./package.json').version")
           mkdir -p android-artifacts
           SUFFIX=$( [ "$SIGNING_CONFIGURED" = "true" ] && echo "release" || echo "debug-signed" )
-          APK=$(find src-tauri/gen/android -name "*.apk" -type f | head -1)
-          [ -n "$APK" ] && cp "$APK" "android-artifacts/CrispDeck_${VERSION}_android_${SUFFIX}.apk" || true
+          APK=$(find src-tauri/gen/android -name "*.apk" -type f -path "*/release/*" | head -1)
+          [ -n "$APK" ] || { echo "::error::No release APK produced"; exit 1; }
+          cp "$APK" "android-artifacts/CrispDeck_${VERSION}_android_${SUFFIX}.apk"
           AAB=$(find src-tauri/gen/android -name "*.aab" -type f | head -1)
-          [ -n "$AAB" ] && cp "$AAB" "android-artifacts/CrispDeck_${VERSION}_android_${SUFFIX}.aab" || true
+          if [ "$SIGNING_CONFIGURED" = "true" ]; then
+            [ -n "$AAB" ] || { echo "::error::No release AAB produced"; exit 1; }
+            cp "$AAB" "android-artifacts/CrispDeck_${VERSION}_android_${SUFFIX}.aab"
+          fi
           ls -lh android-artifacts/ || echo "No artifacts"
+
+      - name: Verify Android signatures
+        run: |
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          test -n "$APKSIGNER"
+          for apk in android-artifacts/*.apk; do
+            "$APKSIGNER" verify --verbose --print-certs "$apk"
+          done
+          if [ "$SIGNING_CONFIGURED" = "true" ]; then
+            for aab in android-artifacts/*.aab; do
+              jarsigner -verify "$aab" | grep -q 'jar verified'
+            done
+          fi
 
       - name: Upload Android artifacts to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -494,7 +526,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           for f in android-artifacts/*; do
-            [ -f "$f" ] && gh release upload "${{ github.ref_name }}" "$f" --clobber || true
+            [ -f "$f" ] || { echo "::error::Android release artifacts missing"; exit 1; }
+            gh release upload "${{ github.ref_name }}" "$f" --clobber
           done
 
       - name: Upload Android artifact
@@ -502,4 +535,4 @@ jobs:
         with:
           name: android-build
           path: android-artifacts/
-          if-no-files-found: warn
+          if-no-files-found: error

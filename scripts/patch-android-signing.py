@@ -10,6 +10,7 @@ Signing modes (checked in order):
 import os
 import re
 import sys
+import json
 
 path = sys.argv[1] if len(sys.argv) > 1 else "src-tauri/gen/android/app/build.gradle.kts"
 
@@ -23,14 +24,14 @@ if not os.path.exists(path):
         print(f"[signing] Auto-discovered: {path}")
     else:
         print(f"[signing] No build.gradle.kts found (tauri android init may have failed)")
-        sys.exit(0)  # exit cleanly so CI continues
+        sys.exit(1)
 
 try:
     with open(path) as f:
         content = f.read()
 except FileNotFoundError:
     print(f"File not found: {path}")
-    sys.exit(0)
+    sys.exit(1)
 
 # Determine signing mode
 keystore_path = os.environ.get("ANDROID_KEYSTORE_PATH")
@@ -42,6 +43,11 @@ production_mode = all([keystore_path, keystore_password, key_alias, key_password
 
 if production_mode:
     print(f"[signing] Using production keystore: {keystore_path}")
+    # Kotlin quoted strings also interpolate $, unlike JSON strings.
+    keystore_path, keystore_password, key_alias, key_password = [
+        json.dumps(value)[1:-1].replace('$', '\\$')
+        for value in (keystore_path, keystore_password, key_alias, key_password)
+    ]
     signing_config = f"""
     signingConfigs {{
         create("release") {{
@@ -75,11 +81,14 @@ else:
 # Wire signingConfig into the release buildType
 if 'signingConfig = signingConfigs.getByName("release")' not in content:
     content = re.sub(
-        r"(buildTypes\s*\{[^}]*release\s*\{)",
+        r'(buildTypes\s*\{[\s\S]*?(?:getByName\("release"\)|release)\s*\{)',
         r'\1\n            signingConfig = signingConfigs.getByName("release")',
         content,
         count=1,
     )
+
+if 'signingConfig = signingConfigs.getByName("release")' not in content:
+    raise SystemExit('[signing] Could not wire the release build type; refusing an unsigned build')
 
 with open(path, "w") as f:
     f.write(content)

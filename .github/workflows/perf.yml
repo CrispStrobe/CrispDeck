@@ -150,6 +150,15 @@ jobs:
             console.log("measurement complete: " + r.postsRendered + " posts, " + r.scroll.frames + " frames sampled");
           '
 
+      - name: Populated Feed and Deck media
+        env:
+          BENCH_COLUMNS: ${{ github.event.inputs.columns || '8' }}
+          BENCH_ITEMS: ${{ github.event.inputs.items || '50' }}
+        run: |
+          set -o pipefail
+          node bench/media-render.mjs | tee media-result.json
+          { echo '### First post and decoded media'; echo '```json'; cat media-result.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Lighthouse
         id: lighthouse
         run: |
@@ -210,6 +219,7 @@ jobs:
           name: deck-bench
           path: |
             bench-result.json
+            media-result.json
             bundle-size.json
             lighthouse*.json
             bench/bundle-budget.json

@@ -425,18 +425,45 @@ scripts/
 
 ## CI/CD
 
-- **CI** (`ci.yml`): 1,520 frontend tests + frontend build + Playwright E2E + Rust check on Linux/macOS/Windows — every push and PR
+- **CI** (`ci.yml`): frontend tests, one shared production build and Playwright run,
+  release-script guards, and parallel Rust checks on Linux/macOS/Windows.
 - **Mobile** (`mobile.yml`): iOS + Android builds via Tauri 2 — triggers on `v*` tags
-- **Release** (`release.yml`): Cross-platform Tauri builds — triggers on `v*` tags, creates GitHub Releases with `.deb`, `.dmg`, `.msi`
+- **Release** (`release.yml`): Windows installers and Linux DEB on `v*` tags.
+  `macos-dmg.yml` builds a signed, notarized universal DMG. `web-release.yml`
+  packages the static site; Vercel and Pages deploy from main.
 
 ### Creating a release
 
 ```bash
-# Bump version in package.json + src-tauri/tauri.conf.json + src-tauri/Cargo.toml,
-# add a CHANGELOG.md section, update releaseBody in .github/workflows/release.yml
-git tag v1.1.0
-git push origin v1.1.0
+# Update package.json, package-lock.json, Tauri config, Cargo.toml/Cargo.lock,
+# iOS Info.plist, CHANGELOG and App Store beta notes. Merge after CI succeeds.
+git tag v1.3.0
+git push origin v1.3.0
+gh release create v1.3.0 --verify-tag --draft --title 'CrispDeck v1.3.0' --notes-file /path/to/release-notes
+
+# After the desktop, mobile, notarization and web jobs succeed:
+gh release download v1.3.0 --dir /tmp/crispdeck-v1.3.0
+python3 tools/release/verify.py 1.3.0 /tmp/crispdeck-v1.3.0
+gh release upload v1.3.0 /tmp/crispdeck-v1.3.0/SHA256SUMS
+gh release edit v1.3.0 --draft=false --latest
 ```
+
+Android tagged releases require all four `ANDROID_KEYSTORE_*`/`ANDROID_KEY_*`
+secrets described in `mobile.yml`. Retain the original keystore and passwords
+privately for future updates. Debug keys are only for manual QA builds.
+Windows installers currently have no configured Authenticode certificate.
+
+For Apple stores, dispatch `macos-appstore.yml` with `dry_run=false` on the release
+tag; iOS upload is part of `mobile.yml`. Wait for Apple processing, prepare the
+platform versions (`tools/asc/prepare.py`), apply the listing and screenshots,
+and run `tools/asc/status.py`. TestFlight and App Store review are separate
+dispatch workflows. A GitHub IPA asset is an App Store archive, not a sideload
+installer. Upload success does not mean Apple has approved or published it.
+
+Scheduling in this release remains on-device. A closed-app scheduler would need
+an opt-in authenticated service, encrypted credential storage, a durable worker
+and cancellation/retry guarantees, plus matching privacy disclosures. The current
+push cron is not a posting worker. No server scheduling service is enabled.
 
 ### Mobile builds (Tauri 2)
 

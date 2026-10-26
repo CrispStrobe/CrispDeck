@@ -52,9 +52,11 @@ jobs:
           import json, pathlib, struct
           root = pathlib.Path("appstore-shots")
           rows = json.loads((root / "manifest.json").read_text())
-          expected = {"APP_IPHONE_67": (1320, 2868),
+          expected = {"APP_DESKTOP": (1440, 900),
+                      "APP_IPHONE_61": (1179, 2556),
+                      "APP_IPHONE_67": (1320, 2868),
                       "APP_IPAD_PRO_3GEN_129": (2064, 2752)}
-          assert len(rows) == 10, len(rows)
+          assert len(rows) == 20, len(rows)
           for row in rows:
               path = root / row["name"]
               blob = path.read_bytes()

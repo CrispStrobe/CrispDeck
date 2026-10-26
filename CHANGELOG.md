@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+## v1.3.0 — 2026-10-26
+
+### Publishing and daily workflows
+
+- Publishing progress survives reloads. Partial crossposts and threads resume at
+  the unfinished account and part; uncertain provider responses require review
+  before retrying. Reconnecting an account preserves its outstanding work.
+- Scheduled posts run across routes and resume after sleep or an offline period.
+  Scheduling stays on this device and requires CrispDeck to remain open.
+- Destination previews include text overrides, media and alt text. Drafts retain
+  attached files and advanced options through reloads.
+- Streamlined navigation, a prominent Compose action, starter workspace previews,
+  and onboarding that respects the selected Feed or Deck home.
+
+### Validation and releases
+
+- Frontend and browser tests share one build and runner. Native checks remain
+  independent, and failed browser runs retain diagnostic artifacts.
+- Populated Feed and Deck benchmarks record first post and first decoded image;
+  existing bundle, accessibility and scroll measurements remain enforced.
+- Six-platform release assembly: iOS App Store archive, notarized universal macOS
+  DMG, signed Android APK/AAB, Windows installers, Linux DEB and a static web ZIP.
+  Releases remain drafts until their artifacts are verified and checksummed.
+- Android signing now handles Tauri's Kotlin release block and refuses a missing
+  signing assignment. Tagged mobile builds require production signing and fail
+  when their expected packages are missing.
+- App Store submission requires the correct marketing version and platform, and
+  stops when build attachment fails. Screenshot capture includes Mac and medium
+  iPhone sizes as well as large iPhone and iPad.
+
 ## v1.2.8 — 2026-08-30
 
 ### Fixed

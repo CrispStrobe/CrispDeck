@@ -21,6 +21,7 @@ on:
         type: choice
         options:
           - status              # read-only: what does Apple hold?
+          - prepare-versions    # create missing platform versions for package.json
           - listing-dry-run     # show what pushing metadata would change
           - listing             # push name, description, keywords, URLs, contact
           - cancel-open         # pull open review submissions out of Apple's queue
@@ -81,6 +82,7 @@ jobs:
           [ "${{ inputs.platform }}" != "both" ] && plat=(--platform "${{ inputs.platform }}")
           case "${{ inputs.task }}" in
             status)          python3 tools/asc/status.py "${plat[@]}" ;;
+            prepare-versions) python3 tools/asc/prepare.py ;;
             listing-dry-run) python3 tools/asc/listing.py --dry-run ;;
             listing)         python3 tools/asc/listing.py ;;
             cancel-open)     python3 tools/asc/submit.py "${plat[@]}" --cancel-open ;;

@@ -1,0 +1,37 @@
+name: Web Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm ci
+      - run: npx svelte-kit sync && npx vite build
+      - name: Package the static web app
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          test -s build/index.html
+          (cd build && zip -qr "../CrispDeck_${VERSION}_web.zip" .)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-release
+          path: CrispDeck_*_web.zip
+          if-no-files-found: error
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" CrispDeck_*_web.zip --clobber
