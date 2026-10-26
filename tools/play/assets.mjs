@@ -24,7 +24,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1024, height: 500 }, deviceScaleFactor: 1 });
   await page.setContent(`<html><body style="margin:0">${graphic}</body></html>`);
   await page.locator('image').evaluate(image => new Promise((resolve, reject) => {
-    const probe = new Image(); probe.onload = resolve; probe.onerror = reject; probe.src = image.getAttribute('href');
+    const probe = new Image(); probe.onload = () => resolve(true); probe.onerror = () => reject(new Error('Store icon failed to load')); probe.src = image.getAttribute('href');
   }));
   await page.screenshot({ path: path.join(out, 'feature-graphic.png') });
 } finally { await browser.close(); }

@@ -71,6 +71,6 @@ for any Google processing/review before testers can install it.
 
 Listing copy remains a draft until the Console record and declarations are
 reviewed by the account owner. App credentials/posts are primarily on-device;
-optional Threads OAuth, push subscriptions, hosting logs and third-party
-provider handling need to be considered when completing data safety. The tool
+optional Threads OAuth, push subscriptions, published feed configuration,
+hosting logs and third-party provider handling need to be considered when completing data safety. The tool
 does not submit a blanket "no data collected" declaration on the owner's behalf.
