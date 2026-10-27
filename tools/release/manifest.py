@@ -90,6 +90,8 @@ def verify(root, version, commit, build_number, android_certificate, require_win
     apk_name = expected_names['android'][0]
     if (smoke.get('commit'), smoke.get('version'), smoke.get('apk_sha256')) != (commit, version, receipts['android']['assets'][apk_name]['sha256']):
         raise ValueError('Android emulator report belongs to another source/package')
+    if smoke.get('validator_commit') != commit or smoke.get('diagnostic') is not False:
+        raise ValueError('Android emulator report must use the release source validator, not a diagnostic')
     if smoke.get('checks', {}).get('install_launch_restart') is not True:
         raise ValueError('Android native installation/startup/restart checks did not pass')
     if smoke.get('checks', {}).get('system_bar_themes') is not True:

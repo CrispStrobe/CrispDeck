@@ -104,6 +104,9 @@ jobs:
 
   android_smoke:
     needs: [prepare, android]
+    permissions:
+      contents: read
+      actions: read
     uses: ./.github/workflows/android-smoke.yml
     with:
       source_sha: ${{ needs.prepare.outputs.commit }}

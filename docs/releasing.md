@@ -146,3 +146,10 @@ compilation, dispatch Desktop Packages with `smoke_run_id` set to its Actions
 run ID. The report records the original build separately from the validator
 revision. This diagnostic mode neither creates release receipts nor publishes
 anything; the complete coordinator still validates the final source commit.
+
+Android Emulator Smoke also accepts a manual `package_run_id` to diagnose a
+retained `package-android` artifact without compiling. The report records the
+APK receipt's source and hash separately from the validator revision and is
+marked diagnostic. Aggregation rejects diagnostic reports and validators from
+another commit. Normal release checks keep one persistent UiAutomation session
+connected across app restarts so WebView accessibility children remain available.
