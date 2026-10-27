@@ -115,3 +115,9 @@ that restored file: NSIS/MSI bundle markers deliberately differ. The callback
 records source-bound hashes after patching/signing. Smoke checks compare the
 installed MSI app to its MSI snapshot and retain verbose installation logs.
 Failed package candidates are retained for diagnosis and cannot be published.
+
+To rerun Linux installation/startup against a retained candidate without native
+compilation, dispatch Desktop Packages with `smoke_run_id` set to its Actions
+run ID. The report records the original build separately from the validator
+revision. This diagnostic mode neither creates release receipts nor publishes
+anything; the complete coordinator still validates the final source commit.
