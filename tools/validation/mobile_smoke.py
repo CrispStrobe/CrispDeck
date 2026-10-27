@@ -28,7 +28,49 @@ def android_bar_appearance(dump):
             [('status', 'LIGHT_STATUS_BARS'), ('navigation', 'LIGHT_NAVIGATION_BARS')]}
 
 
-def android_theme_check(output, name, light):
+def android_node_center(node):
+    bounds = list(map(int, re.findall(r'-?\d+', node.get('bounds', ''))))
+    if len(bounds) != 4 or min(bounds) < 0 or bounds[2] <= bounds[0] or bounds[3] <= bounds[1]:
+        raise RuntimeError('Android control has no visible tappable bounds')
+    return (bounds[0] + bounds[2]) // 2, (bounds[1] + bounds[3]) // 2
+
+
+def emulator_launcher_close_node(xml):
+    nodes = list(ET.fromstring(xml).iter('node'))
+    errors = [node.get('text', '') for node in nodes if node.get('package') == 'android'
+              and node.get('resource-id') == 'android:id/alertTitle'
+              and re.search(r"isn't responding|keeps stopping|has stopped", node.get('text', ''))]
+    if not errors: return None
+    if errors != ["Pixel Launcher isn't responding"]:
+        raise RuntimeError(f'Unexpected app/system error dialog: {errors}')
+    buttons = [node for node in nodes if node.get('package') == 'android'
+               and node.get('resource-id') == 'android:id/aerr_close'
+               and node.get('enabled') == 'true' and node.get('clickable') == 'true']
+    if len(buttons) != 1:
+        raise RuntimeError('The emulator launcher error has no unambiguous Close app control')
+    return buttons[0]
+
+
+def android_hierarchy(output, automation, stage, incidents):
+    for attempt in range(4):
+        xml = automation.dump_hierarchy(compressed=False)
+        (output / f'ui-{stage}-{attempt}.xml').write_text(xml)
+        close = emulator_launcher_close_node(xml)
+        if close is None: return xml
+        if len(incidents) >= 3:
+            raise RuntimeError('The emulator launcher remained unstable after three recoveries')
+        with (output / f'emulator-launcher-anr-{len(incidents) + 1}.png').open('wb') as file:
+            subprocess.run(['adb', 'exec-out', 'screencap', '-p'], stdout=file, check=True)
+        incidents.append({'stage': stage, 'dialog': "Pixel Launcher isn't responding", 'action': 'Close app'})
+        automation.click(*android_node_center(close))
+        time.sleep(1)
+    raise RuntimeError('The emulator launcher error did not close')
+
+
+def android_theme_check(output, name, light, automation, incidents):
+    android_hierarchy(output, automation, name, incidents)
+    if automation.app_current()['package'] != BUNDLE:
+        raise RuntimeError(f'CrispDeck is not the foreground app during {name}')
     dump = run('adb', 'shell', 'dumpsys', 'window', 'windows')
     (output / f'window-{name}.log').write_text(dump)
     appearance = android_bar_appearance(dump)
@@ -38,11 +80,11 @@ def android_theme_check(output, name, light):
         subprocess.run(['adb', 'exec-out', 'screencap', '-p'], stdout=file, check=True)
 
 
-def android_toggle_theme(output, automation, transition):
+def android_toggle_theme(output, automation, transition, incidents):
     # Keep one UiAutomation service connected across launches. Starting a fresh
     # `uiautomator dump` process for each query can miss WebView virtual nodes.
     for attempt in range(6):
-        xml = automation.dump_hierarchy(compressed=False)
+        xml = android_hierarchy(output, automation, f'{transition}-{attempt}', incidents)
         (output / f'theme-controls-{transition}-{attempt}.xml').write_text(xml)
         controls = [node for node in ET.fromstring(xml).iter('node')
                     if node.get('content-desc') == 'Toggle theme' or node.get('text') == 'Toggle theme']
@@ -51,10 +93,7 @@ def android_toggle_theme(output, automation, transition):
         time.sleep(1)
     if len(controls) != 1:
         raise RuntimeError(f'Expected one accessible theme toggle, found {len(controls)}')
-    bounds = list(map(int, re.findall(r'\d+', controls[0].get('bounds', ''))))
-    if len(bounds) != 4 or bounds[2] <= bounds[0] or bounds[3] <= bounds[1]:
-        raise RuntimeError('Android theme toggle has no tappable bounds')
-    automation.click((bounds[0] + bounds[2]) // 2, (bounds[1] + bounds[3]) // 2)
+    automation.click(*android_node_center(controls[0]))
     time.sleep(2)
 
 
@@ -74,6 +113,8 @@ def android(root, output, diagnostic=False):
     automation = uiautomator2.connect()
     # Start the persistent accessibility service before the app creates its WebView.
     (output / 'automation-device.json').write_text(json.dumps(automation.info, indent=2) + '\n')
+    incidents = []
+    android_hierarchy(output, automation, 'emulator-before-install', incidents)
     subprocess.run(['adb', 'logcat', '-c'], check=True)
     subprocess.run(['adb', 'install', '-r', str(apk)], check=True)
     info = run('adb', 'shell', 'dumpsys', 'package', BUNDLE)
@@ -97,19 +138,20 @@ def android(root, output, diagnostic=False):
         launch()
         with (output / 'native-startup.png').open('wb') as file:
             subprocess.run(['adb', 'exec-out', 'screencap', '-p'], stdout=file, check=True)
-        android_theme_check(output, 'dark', False)
-        android_toggle_theme(output, automation, 'dark-to-oled')
-        android_theme_check(output, 'oled', False)
-        android_toggle_theme(output, automation, 'oled-to-light')
-        android_theme_check(output, 'light', True)
+        android_theme_check(output, 'dark', False, automation, incidents)
+        android_toggle_theme(output, automation, 'dark-to-oled', incidents)
+        android_theme_check(output, 'oled', False, automation, incidents)
+        android_toggle_theme(output, automation, 'oled-to-light', incidents)
+        android_theme_check(output, 'light', True, automation, incidents)
         subprocess.run(['adb', 'shell', 'am', 'force-stop', BUNDLE], check=True)
         launch()
-        android_theme_check(output, 'light-restarted', True)
-        android_toggle_theme(output, automation, 'light-to-dark')
-        android_theme_check(output, 'dark-restored', False)
+        android_theme_check(output, 'light-restarted', True, automation, incidents)
+        android_toggle_theme(output, automation, 'light-to-dark', incidents)
+        android_theme_check(output, 'dark-restored', False, automation, incidents)
         report = {'platform': 'android', 'version': version,
                   'commit': receipt['commit'], 'validator_commit': validator, 'diagnostic': diagnostic,
                   'apk_sha256': digest, 'automation': 'uiautomator2',
+                  'emulator_incidents': incidents,
                   'checks': {'install_launch_restart': True, 'system_bar_themes': True}, 'physical_device': False,
                   'authenticated_workflows': False, 'app_alive_seconds_per_launch': 12,
                   'upgrade_exercised': False}

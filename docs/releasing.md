@@ -153,3 +153,6 @@ APK receipt's source and hash separately from the validator revision and is
 marked diagnostic. Aggregation rejects diagnostic reports and validators from
 another commit. Normal release checks keep one persistent UiAutomation session
 connected across app restarts so WebView accessibility children remain available.
+The emulator can show a Pixel Launcher ANR during cold boot. Only that exact
+system dialog may be closed, with screenshots and incidents retained. CrispDeck
+and other system ANRs fail the check; no general error-dialog dismissal is used.
