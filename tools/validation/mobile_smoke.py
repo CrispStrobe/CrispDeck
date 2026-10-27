@@ -39,11 +39,18 @@ def android_theme_check(output, name, light):
 
 
 def android_toggle_theme(output):
-    subprocess.run(['adb', 'shell', 'uiautomator', 'dump', '--compressed', '/sdcard/crispdeck-ui.xml'], check=True)
-    xml = run('adb', 'shell', 'cat', '/sdcard/crispdeck-ui.xml')
-    (output / 'theme-controls.xml').write_text(xml)
-    controls = [node for node in ET.fromstring(xml).iter('node')
-                if node.get('content-desc') == 'Toggle theme' or node.get('text') == 'Toggle theme']
+    # A newly restarted WebView can render before its accessibility provider
+    # has supplied UiAutomator with child nodes. Poll for the named control;
+    # retain each snapshot and fail rather than tapping guessed coordinates.
+    for attempt in range(6):
+        subprocess.run(['adb', 'shell', 'uiautomator', 'dump', '--compressed', '/sdcard/crispdeck-ui.xml'], check=True)
+        xml = run('adb', 'shell', 'cat', '/sdcard/crispdeck-ui.xml')
+        (output / f'theme-controls-{attempt}.xml').write_text(xml)
+        controls = [node for node in ET.fromstring(xml).iter('node')
+                    if node.get('content-desc') == 'Toggle theme' or node.get('text') == 'Toggle theme']
+        if controls:
+            break
+        time.sleep(1)
     if len(controls) != 1:
         raise RuntimeError(f'Expected one accessible theme toggle, found {len(controls)}')
     bounds = list(map(int, re.findall(r'\d+', controls[0].get('bounds', ''))))
