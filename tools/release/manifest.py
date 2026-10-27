@@ -9,7 +9,7 @@ import subprocess
 import zipfile
 
 REQUIRED = {
-    'ios': ('codesign', 'metadata', 'simulator_smoke'),
+    'ios': ('codesign', 'retained_identity', 'metadata', 'simulator_smoke'),
     'android': ('apk_signature', 'aab_signature', 'certificate', 'alignment', 'metadata'),
     'macos': ('codesign', 'notarization', 'gatekeeper', 'universal', 'install_smoke'),
     'windows': ('package_metadata', 'install_smoke'),

@@ -53,6 +53,9 @@ class ReleaseManifestTests(unittest.TestCase):
         self.change_receipt('ios', lambda data: data['checks'].update(codesign=False))
         with self.assertRaisesRegex(ValueError, 'codesign'):
             self.verify()
+        self.change_receipt('ios', lambda data: data['checks'].update(codesign=True, retained_identity=False))
+        with self.assertRaisesRegex(ValueError, 'retained_identity'):
+            self.verify()
 
     def test_replaced_package_missing_platform_or_wrong_mobile_identity_is_rejected(self):
         package = self.root / manifest.names(VERSION)['linux'][0]

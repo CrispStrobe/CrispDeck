@@ -17,6 +17,9 @@
 
 ### Release automation and native validation
 
+- iOS archives build without signing or automatic provisioning, then export
+  with the retained Distribution certificate and an explicit App Store profile.
+  Profile validation and signer checks prevent certificate mismatches.
 - Windows signing runs after Tauri's per-format binary patch. Installation
   checks compare the installed executable with its packaged snapshot and
   retain installer logs and failed candidates for diagnosis.

@@ -34,6 +34,10 @@ Native checks include:
   app replacement and native startup.
 - Exported iOS identity/build number, permission descriptions, callback scheme,
   privacy manifest, strict signature verification and iPhone Simulator startup.
+  Device archives remain unsigned until manual export with the retained
+  Distribution identity and explicit App Store profile. The profile must match
+  the app, team and imported certificate. Tauri's internal automatic-provisioning
+  flags are removed by the local xcodebuild guard; CI never creates certificates.
 - Android APK and final AAB signatures against the retained certificate,
   version, ZIP integrity, 16 KiB ZIP/ELF alignment and emulator installation,
   launch and restart of that exact APK. Emulator checks cycle the app's dark,
@@ -79,6 +83,15 @@ Google Play publication uses the separate internal-track workflow.
 
 Heavy compilation and emulators run in GitHub Actions. Local checks are Python
 release guards and workflow syntax; inspect load/memory before broader work.
+
+iOS builders require `IOS_DIST_P12`, `IOS_DIST_P12_PASSWORD`, `APPLE_TEAM_ID`
+and `IOS_APPSTORE_PROFILE_BASE64` (base64 of the signed App Store provisioning
+profile). The profile is installed in both Xcode profile directories. Manual
+export selects the imported certificate's SHA-1 and verifies the exported IPA
+uses that certificate. App Store Connect API credentials are used separately
+by preparation and publication. The shared playbook documents the retained
+profile and both existing Distribution identities; never enable automatic
+provisioning to work around a missing profile or certificate.
 
 ## Windows publisher identity
 
