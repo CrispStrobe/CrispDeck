@@ -61,6 +61,12 @@ def launch(executable, report, directory, linux=False):
 
 def linux(package, version, directory):
     report = {'platform': 'linux', 'version': version, 'physical_device': False, 'authenticated_workflows': False}
+    package_name = subprocess.check_output(['dpkg-deb', '-f', str(package), 'Package'], text=True).strip()
+    report['package_name'] = package_name
+    def install(path):
+        with (directory / 'installer.log').open('a') as log:
+            subprocess.run(['sudo', 'apt-get', 'install', '-y', '--allow-downgrades', str(path.resolve())],
+                           stdout=log, stderr=subprocess.STDOUT, check=True)
     profile = Path.home() / '.local/share/com.christianstrobele.crispdeck'
     profile.mkdir(parents=True, exist_ok=True)
     marker = profile / 'installer-smoke.marker'
@@ -68,10 +74,10 @@ def linux(package, version, directory):
     with tempfile.TemporaryDirectory() as temp:
         previous = previous_package(version, '_amd64.deb', Path(temp))
         if previous:
-            subprocess.run(['sudo', 'apt-get', 'install', '-y', '--allow-downgrades', str(previous)], check=True)
+            install(previous)
             report['previous_version'] = subprocess.check_output(['dpkg-deb', '-f', str(previous), 'Version'], text=True).strip()
-        subprocess.run(['sudo', 'apt-get', 'install', '-y', '--allow-downgrades', str(package.resolve())], check=True)
-    installed = subprocess.check_output(['dpkg-query', '-W', '-f=${Version}', 'crispdeck'], text=True).strip()
+        install(package)
+    installed = subprocess.check_output(['dpkg-query', '-W', '-f=${Version}', package_name], text=True).strip()
     if installed != version: raise RuntimeError(f'Installed Linux version is {installed}, expected {version}')
     if not marker.is_file(): raise RuntimeError('Installer removed existing application data')
     report['profile_marker_preserved'] = True
@@ -125,8 +131,9 @@ if __name__ == '__main__':
     parser.add_argument('platform', choices=('linux', 'macos'))
     parser.add_argument('package', type=Path)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--version', help='Version of an existing package being diagnosed (defaults to package.json)')
     args = parser.parse_args(); args.output.mkdir(parents=True, exist_ok=True)
-    version = json.loads(Path('package.json').read_text())['version']
+    version = args.version or json.loads(Path('package.json').read_text())['version']
     result = (linux if args.platform == 'linux' else macos)(args.package, version, args.output)
     (args.output / 'report.json').write_text(json.dumps(result, indent=2) + '\n')
     (args.output / 'checks.json').write_text(json.dumps({'checks': {'install_smoke': True}, 'metadata': result}, indent=2) + '\n')

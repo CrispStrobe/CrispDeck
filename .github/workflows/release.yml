@@ -9,12 +9,19 @@ on:
       require_windows_signing:
         type: boolean
         default: false
+      smoke_run_id:
+        type: string
+        default: ''
   workflow_dispatch:
     inputs:
       require_windows_signing:
         description: Require production Windows signing
         type: boolean
         default: false
+      smoke_run_id:
+        description: Diagnose an existing package-linux artifact without compiling (blank builds normally)
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -26,6 +33,7 @@ defaults:
 
 jobs:
   release:
+    if: inputs.smoke_run_id == ''
     strategy:
       fail-fast: false
       matrix:
@@ -150,3 +158,47 @@ jobs:
           name: package-${{ matrix.os_name }}
           path: release-assets/
           if-no-files-found: error
+
+  linux_recheck:
+    if: inputs.smoke_run_id != ''
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+      - name: Identify the original package build
+        env:
+          RUN_ID: ${{ inputs.smoke_run_id }}
+        run: |
+          [[ "$RUN_ID" =~ ^[1-9][0-9]*$ ]] || { echo 'Expected an Actions run ID'; exit 1; }
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" --jq '{id,head_sha,html_url}' > original-build.json
+      - uses: actions/download-artifact@v4
+        with:
+          name: package-linux
+          run-id: ${{ inputs.smoke_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: release-assets
+      - name: Install native runtime and headless display dependencies
+        run: |
+          bash scripts/ci-apt.sh
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-0 libayatana-appindicator3-1 libssl3t64 xvfb xauth xdotool imagemagick
+      - name: Recheck the retained package without rebuilding
+        run: |
+          VERSION=$(dpkg-deb -f release-assets/*.deb Version)
+          xvfb-run -a python3 tools/release/desktop_smoke.py linux release-assets/*.deb --version "$VERSION" --output "$RUNNER_TEMP/linux-smoke"
+          echo 'Diagnostic package recheck only; this workflow does not create release receipts or publish artifacts.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: diagnostic-linux
+          path: |
+            original-build.json
+            ${{ runner.temp }}/linux-smoke/
+          if-no-files-found: warn
