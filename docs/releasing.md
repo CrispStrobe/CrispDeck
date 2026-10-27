@@ -21,6 +21,9 @@ Mac code notarization still sends the candidate DMG to Apple’s notary service.
 All builders check out the preparation job's full commit SHA. Full CI and
 platform builds run in parallel after preparation. Aggregation requires CI and
 every platform check to pass before either store upload or publication.
+Android emulator validation starts as soon as its signed APK is ready,
+independently of the iOS build. Both mobile packages remain required by the
+final verification gate.
 Native checks include:
 
 - Linux DEB installation/upgrade, installed version, a visible native window,

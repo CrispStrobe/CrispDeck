@@ -71,12 +71,21 @@ jobs:
       require_windows_signing: ${{ needs.prepare.outputs.publish == 'true' }}
     secrets: inherit
 
-  mobile:
+  ios:
     needs: prepare
     uses: ./.github/workflows/mobile.yml
     with:
       source_sha: ${{ needs.prepare.outputs.commit }}
-      platform: both
+      platform: ios
+      build_number: ${{ needs.prepare.outputs.ios_build }}
+    secrets: inherit
+
+  android:
+    needs: prepare
+    uses: ./.github/workflows/mobile.yml
+    with:
+      source_sha: ${{ needs.prepare.outputs.commit }}
+      platform: android
       build_number: ${{ needs.prepare.outputs.ios_build }}
     secrets: inherit
 
@@ -94,7 +103,7 @@ jobs:
       source_sha: ${{ needs.prepare.outputs.commit }}
 
   android_smoke:
-    needs: [prepare, mobile]
+    needs: [prepare, android]
     uses: ./.github/workflows/android-smoke.yml
     with:
       source_sha: ${{ needs.prepare.outputs.commit }}
@@ -106,7 +115,7 @@ jobs:
       source_sha: ${{ needs.prepare.outputs.commit }}
 
   verify:
-    needs: [prepare, ci, desktop, mobile, macos, web, android_smoke, listing_assets]
+    needs: [prepare, ci, desktop, ios, android, macos, web, android_smoke, listing_assets]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
