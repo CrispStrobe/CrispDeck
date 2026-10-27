@@ -96,6 +96,13 @@ by preparation and publication. The shared playbook documents the retained
 profile and both existing Distribution identities; never enable automatic
 provisioning to work around a missing profile or certificate.
 
+Android CI copies `src-tauri/android/MainActivity.kt` into the generated project
+to apply the native system-bar theme hook. After a fresh local `tauri android
+init`, copy that file to
+`src-tauri/gen/android/app/src/main/java/com/christianstrobele/crispdeck/MainActivity.kt`
+before building. The generated platform directory is disposable; the source
+activity remains outside it.
+
 ## Windows publisher identity
 
 No Windows identity was configured when this workflow was introduced. An

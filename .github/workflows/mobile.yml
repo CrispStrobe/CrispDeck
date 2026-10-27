@@ -34,11 +34,11 @@ defaults:
 # ─────────────────────────────────────────────────────────────────────────────
 # Required GitHub Secrets (see /mnt/volume1/appstore.md for full playbook):
 #
-# iOS (App Store Connect API key — same key used for CrispChess / CrispSudoku):
-#   APPLE_API_KEY_P8    – content of the AuthKey_<KEYID>.p8 file
-#   APPLE_API_KEY_ID    – Key ID (shown in App Store Connect)
-#   APPLE_API_ISSUER_ID – Issuer ID (shown in App Store Connect)
-#   APPLE_TEAM_ID       – 10-character Developer Team ID (seedId from bundle-id endpoint)
+# iOS (local retained signing; API credentials belong to the coordinator):
+#   APPLE_TEAM_ID               – 10-character Developer Team ID
+#   IOS_DIST_P12                – base64 of the retained Distribution identity
+#   IOS_DIST_P12_PASSWORD       – password of that retained PKCS#12 file
+#   IOS_APPSTORE_PROFILE_BASE64 – explicit App Store profile matching that identity
 #
 # Android (Google Play):
 #   ANDROID_KEYSTORE_BASE64    – base64-encoded release keystore (.jks / .keystore)
