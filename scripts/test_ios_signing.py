@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 from pathlib import Path
 import unittest
+import tempfile
 
 
 def load(name):
@@ -75,3 +76,15 @@ class IosSigningTests(unittest.TestCase):
                      '-allowProvisioningDeviceRegistration', '-allowProvisioningUpdates']
         self.assertEqual(guard.local_arguments(arguments), ['archive', '-sdk', 'iphoneos',
                          'CODE_SIGNING_ALLOWED=NO', '-archivePath', '/tmp/a path/App.xcarchive'])
+
+    def test_guard_audits_archives_even_when_tauri_sanitizes_child_environment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            log = root / 'native-smoke.jsonl'
+            (root / 'xcodebuild.log-path').write_text(str(log))
+            self.assertEqual(guard.guard_log_path(root / 'xcodebuild', environment={}), log)
+
+    def test_missing_guard_audit_configuration_is_an_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(FileNotFoundError):
+                guard.guard_log_path(Path(directory) / 'xcodebuild', environment={})

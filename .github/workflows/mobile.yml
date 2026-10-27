@@ -130,6 +130,7 @@ jobs:
             --team "$APPLE_TEAM_ID" --keychain build.keychain-db --output "$RUNNER_TEMP/ios-signing"
           mkdir -p "$RUNNER_TEMP/xcode-offline" "$RUNNER_TEMP/ios-smoke"
           install -m 755 scripts/xcodebuild-offline.py "$RUNNER_TEMP/xcode-offline/xcodebuild"
+          printf '%s' "$RUNNER_TEMP/ios-smoke/xcodebuild-guard.jsonl" > "$RUNNER_TEMP/xcode-offline/xcodebuild.log-path"
           echo "$RUNNER_TEMP/xcode-offline" >> "$GITHUB_PATH"
           echo "CRISPDECK_XCODE_GUARD_LOG=$RUNNER_TEMP/ios-smoke/xcodebuild-guard.jsonl" >> "$GITHUB_ENV"
           cp "$RUNNER_TEMP/ios-signing/signing-metadata.json" "$RUNNER_TEMP/ios-smoke/"
