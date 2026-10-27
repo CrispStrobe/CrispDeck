@@ -21,6 +21,9 @@ Mac code notarization still sends the candidate DMG to Apple’s notary service.
 All builders check out the preparation job's full commit SHA. Full CI and
 platform builds run in parallel after preparation. Aggregation requires CI and
 every platform check to pass before either store upload or publication.
+Android emulator validation starts as soon as its signed APK is ready,
+independently of the iOS build. Both mobile packages remain required by the
+final verification gate.
 Native checks include:
 
 - Linux DEB installation/upgrade, installed version, a visible native window,
@@ -34,9 +37,15 @@ Native checks include:
   app replacement and native startup.
 - Exported iOS identity/build number, permission descriptions, callback scheme,
   privacy manifest, strict signature verification and iPhone Simulator startup.
+  Device archives remain unsigned until manual export with the retained
+  Distribution identity and explicit App Store profile. The profile must match
+  the app, team and imported certificate. Tauri's internal automatic-provisioning
+  flags are removed by the local xcodebuild guard; CI never creates certificates.
 - Android APK and final AAB signatures against the retained certificate,
   version, ZIP integrity, 16 KiB ZIP/ELF alignment and emulator installation,
-  launch and restart of that exact APK.
+  launch and restart of that exact APK. Emulator checks cycle the app's dark,
+  OLED and light themes, verify the native system-bar appearance and retain
+  screenshots, including a restart with the light theme saved.
 - A complete static web ZIP; the same source passes browser workflows in CI.
 
 The same candidate also renders the draft Google Play listing assets from its
@@ -77,6 +86,22 @@ Google Play publication uses the separate internal-track workflow.
 
 Heavy compilation and emulators run in GitHub Actions. Local checks are Python
 release guards and workflow syntax; inspect load/memory before broader work.
+
+iOS builders require `IOS_DIST_P12`, `IOS_DIST_P12_PASSWORD`, `APPLE_TEAM_ID`
+and `IOS_APPSTORE_PROFILE_BASE64` (base64 of the signed App Store provisioning
+profile). The profile is installed in both Xcode profile directories. Manual
+export selects the imported certificate's SHA-1 and verifies the exported IPA
+uses that certificate. App Store Connect API credentials are used separately
+by preparation and publication. The shared playbook documents the retained
+profile and both existing Distribution identities; never enable automatic
+provisioning to work around a missing profile or certificate.
+
+Android CI copies `src-tauri/android/MainActivity.kt` into the generated project
+to apply the native system-bar theme hook. After a fresh local `tauri android
+init`, copy that file to
+`src-tauri/gen/android/app/src/main/java/com/christianstrobele/crispdeck/MainActivity.kt`
+before building. The generated platform directory is disposable; the source
+activity remains outside it.
 
 ## Windows publisher identity
 
@@ -121,3 +146,13 @@ compilation, dispatch Desktop Packages with `smoke_run_id` set to its Actions
 run ID. The report records the original build separately from the validator
 revision. This diagnostic mode neither creates release receipts nor publishes
 anything; the complete coordinator still validates the final source commit.
+
+Android Emulator Smoke also accepts a manual `package_run_id` to diagnose a
+retained `package-android` artifact without compiling. The report records the
+APK receipt's source and hash separately from the validator revision and is
+marked diagnostic. Aggregation rejects diagnostic reports and validators from
+another commit. Normal release checks keep one persistent UiAutomation session
+connected across app restarts so WebView accessibility children remain available.
+The emulator can show a Pixel Launcher ANR during cold boot. Only that exact
+system dialog may be closed, with screenshots and incidents retained. CrispDeck
+and other system ANRs fail the check; no general error-dialog dismissal is used.

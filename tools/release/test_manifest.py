@@ -29,7 +29,8 @@ class ReleaseManifestTests(unittest.TestCase):
             manifest.receipt(self.root, platform, VERSION, COMMIT, checks, metadata)
         apk = self.root / manifest.names(VERSION)['android'][0]
         (self.root / 'android-emulator-smoke.json').write_text(json.dumps({'version': VERSION,
-            'commit': COMMIT, 'apk_sha256': manifest.digest(apk), 'checks': {'install_launch_restart': True}}))
+            'commit': COMMIT, 'validator_commit': COMMIT, 'diagnostic': False, 'apk_sha256': manifest.digest(apk),
+            'checks': {'install_launch_restart': True, 'system_bar_themes': True}}))
 
     def verify(self, **kwargs):
         return manifest.verify(self.root, VERSION, COMMIT, '62', CERT, **kwargs)
@@ -51,6 +52,9 @@ class ReleaseManifestTests(unittest.TestCase):
         self.change_receipt('macos', lambda data: data.update(commit=COMMIT))
         self.change_receipt('ios', lambda data: data['checks'].update(codesign=False))
         with self.assertRaisesRegex(ValueError, 'codesign'):
+            self.verify()
+        self.change_receipt('ios', lambda data: data['checks'].update(codesign=True, retained_identity=False))
+        with self.assertRaisesRegex(ValueError, 'retained_identity'):
             self.verify()
 
     def test_replaced_package_missing_platform_or_wrong_mobile_identity_is_rejected(self):
@@ -80,4 +84,20 @@ class ReleaseManifestTests(unittest.TestCase):
         for key, value in [('commit', 'd' * 40), ('apk_sha256', 'e' * 64)]:
             path.write_text(json.dumps({**original, key: value}))
             with self.assertRaisesRegex(ValueError, 'another source/package'):
+                self.verify()
+
+    def test_android_theme_regression_blocks_aggregation(self):
+        path = self.root / 'android-emulator-smoke.json'
+        report = json.loads(path.read_text())
+        report['checks']['system_bar_themes'] = False
+        path.write_text(json.dumps(report))
+        with self.assertRaisesRegex(ValueError, 'system-bar theme'):
+            self.verify()
+
+    def test_retained_package_diagnostics_cannot_be_promoted_to_release_evidence(self):
+        path = self.root / 'android-emulator-smoke.json'
+        original = json.loads(path.read_text())
+        for changes in [{'diagnostic': True}, {'validator_commit': 'f' * 40}]:
+            path.write_text(json.dumps({**original, **changes}))
+            with self.assertRaisesRegex(ValueError, 'release source validator'):
                 self.verify()

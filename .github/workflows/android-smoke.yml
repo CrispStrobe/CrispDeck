@@ -6,9 +6,19 @@ on:
       source_sha:
         type: string
         required: true
+      package_run_id:
+        type: string
+        default: ''
+  workflow_dispatch:
+    inputs:
+      package_run_id:
+        description: Diagnose the signed APK from this run's package-android artifact
+        type: string
+        required: true
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   android:
@@ -17,11 +27,26 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.source_sha }}
+          ref: ${{ inputs.source_sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install --disable-pip-version-check -r tools/validation/requirements-android.txt
+      - name: Record the retained package's original build
+        if: inputs.package_run_id != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PACKAGE_RUN_ID: ${{ inputs.package_run_id }}
+        run: |
+          [[ "$PACKAGE_RUN_ID" =~ ^[1-9][0-9]*$ ]] || { echo 'Expected an Actions run ID'; exit 1; }
+          mkdir -p android-smoke
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PACKAGE_RUN_ID" --jq '{id,head_sha,html_url}' > android-smoke/package-build.json
       - uses: actions/download-artifact@v4
         with:
           name: package-android
           path: release-assets
+          run-id: ${{ inputs.package_run_id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Enable KVM for the ephemeral emulator host
         run: sudo chmod 666 /dev/kvm
       - name: Install, launch and restart the actual signed APK
@@ -33,11 +58,11 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: python3 tools/validation/mobile_smoke.py android --output android-smoke
+          script: python3 tools/validation/mobile_smoke.py android --output android-smoke ${{ inputs.package_run_id != '' && '--diagnostic' || '' }}
       - name: Retain native emulator evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-android
+          name: ${{ inputs.package_run_id != '' && 'diagnostic-android' || 'smoke-android' }}
           path: android-smoke/
           if-no-files-found: warn

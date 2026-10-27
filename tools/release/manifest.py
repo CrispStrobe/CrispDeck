@@ -9,7 +9,7 @@ import subprocess
 import zipfile
 
 REQUIRED = {
-    'ios': ('codesign', 'metadata', 'simulator_smoke'),
+    'ios': ('codesign', 'retained_identity', 'metadata', 'simulator_smoke'),
     'android': ('apk_signature', 'aab_signature', 'certificate', 'alignment', 'metadata'),
     'macos': ('codesign', 'notarization', 'gatekeeper', 'universal', 'install_smoke'),
     'windows': ('package_metadata', 'install_smoke'),
@@ -90,8 +90,12 @@ def verify(root, version, commit, build_number, android_certificate, require_win
     apk_name = expected_names['android'][0]
     if (smoke.get('commit'), smoke.get('version'), smoke.get('apk_sha256')) != (commit, version, receipts['android']['assets'][apk_name]['sha256']):
         raise ValueError('Android emulator report belongs to another source/package')
+    if smoke.get('validator_commit') != commit or smoke.get('diagnostic') is not False:
+        raise ValueError('Android emulator report must use the release source validator, not a diagnostic')
     if smoke.get('checks', {}).get('install_launch_restart') is not True:
         raise ValueError('Android native installation/startup/restart checks did not pass')
+    if smoke.get('checks', {}).get('system_bar_themes') is not True:
+        raise ValueError('Android system-bar theme checks did not pass')
     signed = receipts['windows']['checks'].get('authenticode') is True and receipts['windows']['checks'].get('timestamp') is True
     if require_windows_signing and not signed:
         raise ValueError('Publication requires valid, timestamped Windows publisher signatures')

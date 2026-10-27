@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getTheme, setTheme, nextTheme } from '$lib/settings';
+  import { syncSystemBars } from '$lib/system-bars';
   import { readJson, readString, writeJson, writeString } from '$lib/safe-storage';
   import { isNavItemActive } from '$lib/nav-active';
   import { base } from '$app/paths';
@@ -47,6 +48,7 @@
     theme = nextTheme(theme);
     document.documentElement.setAttribute('data-theme', theme);
     setTheme(theme);
+    void syncSystemBars(theme);
   }
   let showShortcuts = $state(false);
   let offline = $state(false);
@@ -112,6 +114,7 @@
     // Restore theme
     theme = getTheme();
     document.documentElement.setAttribute('data-theme', theme);
+    void syncSystemBars(theme);
 
     // Restore display preferences
     const root = document.documentElement;
@@ -361,7 +364,7 @@
       <a href={base || "/"} class="text-sm font-bold text-[var(--color-text)]">CrispDeck</a>
     </div>
     <div class="flex items-center gap-1">
-      <button onclick={toggleTheme} class="p-1.5 text-[var(--color-text-muted)]" title={i18n.t.app.toggleTheme}>
+      <button onclick={toggleTheme} class="p-1.5 text-[var(--color-text-muted)]" aria-label={i18n.t.app.toggleTheme} title={i18n.t.app.toggleTheme}>
         {#if theme === 'dark'}<Smartphone size={14} />{:else if theme === 'oled'}<Sun size={14} />{:else}<Moon size={14} />{/if}
       </button>
       <a href="{base}/notifications" class="p-1.5 text-[var(--color-text-muted)]">

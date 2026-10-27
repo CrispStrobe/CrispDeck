@@ -34,11 +34,11 @@ defaults:
 # ─────────────────────────────────────────────────────────────────────────────
 # Required GitHub Secrets (see /mnt/volume1/appstore.md for full playbook):
 #
-# iOS (App Store Connect API key — same key used for CrispChess / CrispSudoku):
-#   APPLE_API_KEY_P8    – content of the AuthKey_<KEYID>.p8 file
-#   APPLE_API_KEY_ID    – Key ID (shown in App Store Connect)
-#   APPLE_API_ISSUER_ID – Issuer ID (shown in App Store Connect)
-#   APPLE_TEAM_ID       – 10-character Developer Team ID (seedId from bundle-id endpoint)
+# iOS (local retained signing; API credentials belong to the coordinator):
+#   APPLE_TEAM_ID               – 10-character Developer Team ID
+#   IOS_DIST_P12                – base64 of the retained Distribution identity
+#   IOS_DIST_P12_PASSWORD       – password of that retained PKCS#12 file
+#   IOS_APPSTORE_PROFILE_BASE64 – explicit App Store profile matching that identity
 #
 # Android (Google Play):
 #   ANDROID_KEYSTORE_BASE64    – base64-encoded release keystore (.jks / .keystore)
@@ -58,12 +58,11 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 60
     env:
-      APPLE_API_KEY_P8:    ${{ secrets.APPLE_API_KEY_P8 }}
-      APPLE_API_KEY_ID:    ${{ secrets.APPLE_API_KEY_ID }}
-      APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
       APPLE_TEAM_ID:       ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
       IOS_DIST_P12:        ${{ secrets.IOS_DIST_P12 }}
       IOS_DIST_P12_PASSWORD: ${{ secrets.IOS_DIST_P12_PASSWORD }}
+      IOS_APPSTORE_PROFILE_BASE64: ${{ secrets.IOS_APPSTORE_PROFILE_BASE64 }}
       IOS_BUILD_NUMBER: ${{ inputs.build_number || github.run_number }}
 
     steps:
@@ -73,7 +72,7 @@ jobs:
 
       - name: Require production signing credentials
         run: |
-          test -n "$APPLE_API_KEY_P8" && test -n "$APPLE_API_KEY_ID" && test -n "$APPLE_API_ISSUER_ID" && test -n "$APPLE_TEAM_ID" && test -n "$IOS_DIST_P12" && test -n "$IOS_DIST_P12_PASSWORD" \
+          test -n "$APPLE_TEAM_ID" && test -n "$IOS_DIST_P12" && test -n "$IOS_DIST_P12_PASSWORD" && test -n "$IOS_APPSTORE_PROFILE_BASE64" \
             || { echo "::error::iOS packages require Apple signing credentials"; exit 1; }
           [[ "$IOS_BUILD_NUMBER" =~ ^[1-9][0-9]{0,3}$ ]] || { echo "::error::Invalid iOS build number"; exit 1; }
 
@@ -107,141 +106,43 @@ jobs:
       - name: Inject PrivacyInfo.xcprivacy
         run: python3 scripts/patch-ios-privacy.py
 
-      # ── Production signing via App Store Connect API key ─────────────────
-      - name: Setup App Store Connect API key
-        id: api_key
-        if: >
-          env.APPLE_API_KEY_P8 != '' &&
-          env.APPLE_API_KEY_ID != '' &&
-          env.APPLE_API_ISSUER_ID != '' &&
-          env.APPLE_TEAM_ID != ''
+      - name: Import the retained Distribution identity
         run: |
-          # Install key where both xcodebuild and altool find it by default
-          mkdir -p ~/.appstoreconnect/private_keys
-          printf '%s' "$APPLE_API_KEY_P8" > \
-            ~/.appstoreconnect/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8
-          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8
-
-          # Import Distribution cert + private key into a build keychain
           KEYCHAIN="build.keychain-db"
           security create-keychain -p "" "$KEYCHAIN"
           security set-keychain-settings -lut 3600 "$KEYCHAIN"
           security unlock-keychain -p "" "$KEYCHAIN"
-          if [ -n "$IOS_DIST_P12" ]; then
-            echo "$IOS_DIST_P12" | base64 -d > /tmp/dist.p12
-            security import /tmp/dist.p12 -k "$KEYCHAIN" -P "$IOS_DIST_P12_PASSWORD" \
-              -T /usr/bin/codesign -T /usr/bin/security
-            rm /tmp/dist.p12
-          fi
+          echo "$IOS_DIST_P12" | base64 -d > "$RUNNER_TEMP/dist.p12"
+          security import "$RUNNER_TEMP/dist.p12" -k "$KEYCHAIN" -P "$IOS_DIST_P12_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          rm "$RUNNER_TEMP/dist.p12"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" "$KEYCHAIN"
-          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
-          security find-identity -v -p codesigning | grep -i "distribution" \
-            || { echo "::error::The retained Distribution identity is missing; refusing automatic certificate creation"; exit 1; }
-
-          # Set Automatic signing in the Xcode project with our Team ID
-          cd src-tauri/gen/apple
-          XCPROJ=$(ls -d *.xcodeproj 2>/dev/null | head -1)
-          if [ -n "$XCPROJ" ]; then
-            # Target-level: Automatic signing + team
-            sed -i '' \
-              "s/CODE_SIGN_STYLE = .*/CODE_SIGN_STYLE = Automatic;/g" \
-              "$XCPROJ/project.pbxproj" 2>/dev/null || true
-            sed -i '' \
-              "s/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = $APPLE_TEAM_ID;/g" \
-              "$XCPROJ/project.pbxproj" 2>/dev/null || true
-            # Remove any previous disable-signing patches
-            sed -i '' \
-              '/CODE_SIGNING_REQUIRED = NO/d;/CODE_SIGNING_ALLOWED = NO/d' \
-              "$XCPROJ/project.pbxproj" 2>/dev/null || true
-            # Remove project-level CODE_SIGN_IDENTITY override (classic Flutter gotcha —
-            # also produced by some Tauri pbxproj templates; causes export to re-sign
-            # embedded frameworks with the wrong identity)
-            sed -i '' \
-              '/CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]/d' \
-              "$XCPROJ/project.pbxproj" 2>/dev/null || true
-          fi
-
+          python3 - <<'PYTHON'
+          import shlex, subprocess
+          previous = shlex.split(subprocess.check_output(['security', 'list-keychains', '-d', 'user'], text=True))
+          subprocess.run(['security', 'list-keychains', '-d', 'user', '-s', 'build.keychain-db', *previous], check=True)
+          PYTHON
           echo "SIGNING_CONFIGURED=true" >> "$GITHUB_ENV"
-          echo "KEY_PATH=$HOME/.appstoreconnect/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8" \
-            >> "$GITHUB_ENV"
 
-      # ── Pre-resolve provisioning profiles via xcodebuild ──────────────
-      # Tauri's `--` pass-through doesn't forward all xcodebuild auth flags.
-      # Work around: call xcodebuild directly with auth flags first — it will
-      # fail at the "Build Rust Code" script phase (no Tauri build server),
-      # BUT provisioning profile resolution happens BEFORE build phases, so
-      # the profile gets downloaded and cached in ~/Library/MobileDevice/.
-      # Then `tauri ios build` finds the cached profile and succeeds.
-      - name: Pre-resolve provisioning profiles
-        if: env.SIGNING_CONFIGURED == 'true'
+      - name: Validate the explicit App Store profile and prepare manual export
         run: |
-          # Inject DEVELOPMENT_TEAM into pbxproj (insert, not replace — key
-          # may not exist in the generated file). Use env var for actual value.
-          TEAM="$APPLE_TEAM_ID"
-          python3 -c "
-          import re, os
-          team = os.environ['APPLE_TEAM_ID']
-          pbxproj = 'src-tauri/gen/apple/crispdeck.xcodeproj/project.pbxproj'
-          with open(pbxproj) as f: content = f.read()
-          if 'DEVELOPMENT_TEAM' not in content:
-              content = content.replace(
-                  'buildSettings = {',
-                  f'buildSettings = {{\n\t\t\t\tDEVELOPMENT_TEAM = {team};\n\t\t\t\tCODE_SIGN_STYLE = Automatic;'
-              )
-          else:
-              content = re.sub(r'DEVELOPMENT_TEAM = [^;]*;', f'DEVELOPMENT_TEAM = {team};', content)
-          with open(pbxproj, 'w') as f: f.write(content)
-          print(f'Patched DEVELOPMENT_TEAM = {team}')
-          "
+          python3 scripts/ios-signing.py prepare --bundle com.christianstrobele.crispdeck \
+            --team "$APPLE_TEAM_ID" --keychain build.keychain-db --output "$RUNNER_TEMP/ios-signing"
+          mkdir -p "$RUNNER_TEMP/xcode-offline" "$RUNNER_TEMP/ios-smoke"
+          install -m 755 scripts/xcodebuild-offline.py "$RUNNER_TEMP/xcode-offline/xcodebuild"
+          printf '%s' "$RUNNER_TEMP/ios-smoke/xcodebuild-guard.jsonl" > "$RUNNER_TEMP/xcode-offline/xcodebuild.log-path"
+          echo "$RUNNER_TEMP/xcode-offline" >> "$GITHUB_PATH"
+          echo "CRISPDECK_XCODE_GUARD_LOG=$RUNNER_TEMP/ios-smoke/xcodebuild-guard.jsonl" >> "$GITHUB_ENV"
+          cp "$RUNNER_TEMP/ios-signing/signing-metadata.json" "$RUNNER_TEMP/ios-smoke/"
 
-          # Call xcodebuild to trigger provisioning AND certificate resolution.
-          # Use the "archive" action (not just "build") because archiving is
-          # what triggers Xcode to create/download the DISTRIBUTION certificate.
-          # A plain "build" only resolves Development identity.
-          # This WILL fail at the Rust build script phase (no Tauri server) —
-          # that's expected. Certificate + profile resolution happens BEFORE
-          # build phases, so both get downloaded and cached.
-          cd src-tauri/gen/apple
-          XCPROJ=$(ls -d *.xcodeproj 2>/dev/null | head -1)
-          echo "Pre-resolving provisioning + Distribution cert for $XCPROJ ..."
-          xcodebuild \
-            -project "$XCPROJ" \
-            -scheme crispdeck_iOS \
-            -configuration Release \
-            -sdk iphoneos \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$KEY_PATH" \
-            -authenticationKeyID "$APPLE_API_KEY_ID" \
-            -authenticationKeyIssuerID "$APPLE_API_ISSUER_ID" \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CODE_SIGN_STYLE=Automatic \
-            archive \
-            -archivePath /tmp/pre-resolve.xcarchive \
-            2>&1 | tail -20 || echo "Expected failure (no Tauri build server) — cert + provisioning should be cached"
-
-          # Also verify the Distribution certificate is now in the keychain
-          echo "=== Distribution certificates in keychain ==="
-          security find-identity -v -p codesigning | grep -i "distribution\|apple dist" || echo "WARNING: No Distribution cert found"
-
-          # Verify profiles were downloaded
-          echo "=== Provisioning profiles ==="
-          ls ~/Library/MobileDevice/Provisioning\ Profiles/ 2>/dev/null || echo "No profiles dir yet"
-
-      # ── Build via tauri ios build (Rust + frontend + xcodebuild) ─────────
-      # Do NOT pass --export-method here. That flag causes Tauri to internally
-      # run xcodebuild -exportArchive WITHOUT API key auth flags, which means
-      # Xcode cannot download/create a Distribution certificate and falls back
-      # to the Development identity. We only want Tauri to produce the
-      # .xcarchive; the separate "Export IPA from archive" step below handles
-      # Distribution re-signing with explicit auth flags.
-      - name: Build iOS app (archive only)
-        if: env.SIGNING_CONFIGURED == 'true'
+      # Tauri 2.11 adds automatic-provisioning flags even when signing is skipped.
+      # The PATH wrapper removes those flags; the archive is signed only at export.
+      - name: Build an unsigned iOS archive
         run: |
-          export PATH="/usr/bin:$PATH"
-          npx tauri ios build 2>&1 | tail -80
+          npx tauri ios build --no-sign --archive-only --ci 2>&1 | tail -80
+          python3 scripts/ios-signing.py verify-guard --log "$CRISPDECK_XCODE_GUARD_LOG"
 
-      # tauri ios build produces an .xcarchive (signed .app inside) but
-      # NOT an .ipa. Run xcodebuild -exportArchive to create the IPA.
+      # Sign the unsigned archive with the exact retained identity/profile.
       - name: Export IPA from archive
         if: env.SIGNING_CONFIGURED == 'true'
         run: |
@@ -266,37 +167,16 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :ApplicationProperties:CFBundleVersion $IOS_BUILD_NUMBER" "$ARCHIVE/Info.plist"
           echo "archive build number: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PLIST")"
 
-          # Write ExportOptions.plist
-          python3 -c "
-          import os
-          t = os.environ['APPLE_TEAM_ID']
-          open('/tmp/ExportOptions.plist','w').write(f'''<?xml version=\"1.0\" encoding=\"UTF-8\"?>
-          <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
-          <plist version=\"1.0\">
-          <dict>
-            <key>method</key><string>app-store-connect</string>
-            <key>teamID</key><string>{t}</string>
-            <key>signingStyle</key><string>automatic</string>
-            <key>manageAppVersionAndBuildNumber</key><false/>
-            <key>destination</key><string>export</string>
-          </dict>
-          </plist>''')
-          "
-
-          PATH="/usr/bin:$PATH" xcodebuild -exportArchive \
+          /usr/bin/xcodebuild -exportArchive \
             -archivePath "$ARCHIVE" \
             -exportPath "$RUNNER_TEMP/export" \
-            -exportOptionsPlist /tmp/ExportOptions.plist \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$KEY_PATH" \
-            -authenticationKeyID "$APPLE_API_KEY_ID" \
-            -authenticationKeyIssuerID "$APPLE_API_ISSUER_ID" \
+            -exportOptionsPlist "$IOS_EXPORT_OPTIONS" \
             2>&1 | tail -20
 
           IPA=$(find "$RUNNER_TEMP/export" -name "*.ipa" | head -1)
           if [ -n "$IPA" ]; then
             cp "$IPA" "CrispDeck_${VERSION}_ios-appstore.ipa"
-            echo "Exported IPA: $(ls -lh CrispDeck_${VERSION}_ios-appstore.ipa)"
+            echo "Exported IPA: $(ls -lh "CrispDeck_${VERSION}_ios-appstore.ipa")"
             # Verify signature
             mkdir -p /tmp/ipa_check && cd /tmp/ipa_check
             unzip -q "$GITHUB_WORKSPACE/CrispDeck_${VERSION}_ios-appstore.ipa"
@@ -313,10 +193,12 @@ jobs:
             python3 "$GITHUB_WORKSPACE/scripts/ios-release-metadata.py" verify \
               "$GITHUB_WORKSPACE/CrispDeck_${VERSION}_ios-appstore.ipa" "$VERSION" "$IOS_BUILD_NUMBER"
             codesign --verify --deep --strict --verbose=2 Payload/*.app 2>&1 | tail -5
+            python3 "$GITHUB_WORKSPACE/scripts/ios-signing.py" verify-app --app Payload/*.app \
+              --identity "$IOS_SIGNING_SHA1" | tee "$RUNNER_TEMP/ios-smoke/device-signing.json"
           else
             echo "ERROR: exportArchive produced no IPA"
             ls -la "$RUNNER_TEMP/export/" 2>/dev/null || true
-            DISTLOG=$(ls -td /var/folders/*/*/T/*xcdistributionlogs* 2>/dev/null | head -1)
+            DISTLOG=$(find /var/folders -type d -name '*xcdistributionlogs*' -print -quit 2>/dev/null || true)
             [ -n "$DISTLOG" ] && grep -n "Step failed\|error" "$DISTLOG/IDEDistribution.verbose.log" 2>/dev/null | tail -20 || true
             exit 1
           fi
@@ -338,7 +220,17 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           mkdir -p ios-artifacts
           cp "CrispDeck_${VERSION}_ios-appstore.ipa" ios-artifacts/
-          python3 tools/release/manifest.py receipt ios ios-artifacts --check codesign --check metadata --build-number "$IOS_BUILD_NUMBER" --checks-file "$RUNNER_TEMP/ios-smoke/checks.json"
+          python3 - <<'PYTHON'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP']) / 'ios-smoke'
+          result = json.loads((root / 'checks.json').read_text())
+          signing = json.loads((root / 'device-signing.json').read_text())
+          result['checks']['retained_identity'] = signing['retained_identity']
+          result['metadata']['device_ipa_certificate_sha1'] = signing['exported_device_ipa_certificate_sha1']
+          (root / 'checks.json').write_text(json.dumps(result, indent=2) + '\n')
+          PYTHON
+          python3 tools/release/manifest.py receipt ios ios-artifacts --check codesign --check retained_identity --check metadata --build-number "$IOS_BUILD_NUMBER" --checks-file "$RUNNER_TEMP/ios-smoke/checks.json"
       - uses: actions/upload-artifact@v4
         with:
           name: package-ios
@@ -403,7 +295,7 @@ jobs:
           ndk-version: r26d
 
       - name: Set NDK environment
-        run: echo "NDK_HOME=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
+        run: echo "NDK_HOME=${{ steps.setup-ndk.outputs.ndk-path }}" >> "$GITHUB_ENV"
 
       - run: npm ci
 
@@ -418,6 +310,9 @@ jobs:
           npx tauri icon static/icon-1024.png
           npx tauri android init --ci --skip-targets-install
           python3 scripts/merge-android-manifest.py "$RUNNER_TEMP/crispdeck-manifest.xml" "$MANIFEST"
+          ACTIVITY=src-tauri/gen/android/app/src/main/java/com/christianstrobele/crispdeck/MainActivity.kt
+          test -f "$ACTIVITY"
+          cp src-tauri/android/MainActivity.kt "$ACTIVITY"
 
       # ── Production keystore (Play Store) ─────────────────────────────────
       - name: Setup production keystore

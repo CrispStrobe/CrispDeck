@@ -4,6 +4,8 @@
 
 ### Mobile layout
 
+- Android status and navigation icons follow CrispDeck's dark, OLED and light
+  themes, including after restart and when the phone uses a different theme.
 - Keep the mobile header, tabs and menu controls inside the device safe areas.
   Fit scrollable content within the inset viewport so the final controls remain
   reachable above the home indicator.
@@ -15,6 +17,9 @@
 
 ### Release automation and native validation
 
+- iOS archives build without signing or automatic provisioning, then export
+  with the retained Distribution certificate and an explicit App Store profile.
+  Profile validation and signer checks prevent certificate mismatches.
 - Windows signing runs after Tauri's per-format binary patch. Installation
   checks compare the installed executable with its packaged snapshot and
   retain installer logs and failed candidates for diagnosis.

@@ -2,6 +2,7 @@ mod asr;
 mod auth;
 mod commands;
 mod db;
+mod system_bars;
 
 use rusqlite::Connection;
 use std::sync::Mutex;
@@ -59,6 +60,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            system_bars::set_system_bar_theme,
             // Account commands
             commands::db_commands::db_list_accounts,
             commands::db_commands::db_add_account,

@@ -9,6 +9,7 @@ import plistlib
 import re
 import subprocess
 import time
+import xml.etree.ElementTree as ET
 
 BUNDLE = 'com.christianstrobele.crispdeck'
 
@@ -17,9 +18,103 @@ def run(*args):
     return subprocess.check_output([str(arg) for arg in args], text=True)
 
 
-def android(root, output):
-    version = json.loads(Path('package.json').read_text())['version']
+def android_bar_appearance(dump):
+    windows = re.split(r'(?m)^\s*Window #\d+ ', dump)
+    window = next((block for block in windows if block.strip() and BUNDLE + '/' in block.splitlines()[0]
+                   and 'mAttrs=' in block), None)
+    if window is None:
+        raise RuntimeError('No CrispDeck window attributes in the Android system-bar dump')
+    return {name: bool(re.search(r'\b' + flag + r'\b', window)) for name, flag in
+            [('status', 'LIGHT_STATUS_BARS'), ('navigation', 'LIGHT_NAVIGATION_BARS')]}
+
+
+def android_node_center(node):
+    bounds = list(map(int, re.findall(r'-?\d+', node.get('bounds', ''))))
+    if len(bounds) != 4 or min(bounds) < 0 or bounds[2] <= bounds[0] or bounds[3] <= bounds[1]:
+        raise RuntimeError('Android control has no visible tappable bounds')
+    return (bounds[0] + bounds[2]) // 2, (bounds[1] + bounds[3]) // 2
+
+
+def emulator_launcher_close_node(xml):
+    nodes = list(ET.fromstring(xml).iter('node'))
+    errors = [node.get('text', '') for node in nodes if node.get('package') == 'android'
+              and node.get('resource-id') == 'android:id/alertTitle'
+              and re.search(r"isn't responding|keeps stopping|has stopped", node.get('text', ''))]
+    if not errors: return None
+    if errors != ["Pixel Launcher isn't responding"]:
+        raise RuntimeError(f'Unexpected app/system error dialog: {errors}')
+    buttons = [node for node in nodes if node.get('package') == 'android'
+               and node.get('resource-id') == 'android:id/aerr_close'
+               and node.get('enabled') == 'true' and node.get('clickable') == 'true']
+    if len(buttons) != 1:
+        raise RuntimeError('The emulator launcher error has no unambiguous Close app control')
+    return buttons[0]
+
+
+def android_hierarchy(output, automation, stage, incidents):
+    for attempt in range(4):
+        xml = automation.dump_hierarchy(compressed=False)
+        (output / f'ui-{stage}-{attempt}.xml').write_text(xml)
+        close = emulator_launcher_close_node(xml)
+        if close is None: return xml
+        if len(incidents) >= 3:
+            raise RuntimeError('The emulator launcher remained unstable after three recoveries')
+        with (output / f'emulator-launcher-anr-{len(incidents) + 1}.png').open('wb') as file:
+            subprocess.run(['adb', 'exec-out', 'screencap', '-p'], stdout=file, check=True)
+        incidents.append({'stage': stage, 'dialog': "Pixel Launcher isn't responding", 'action': 'Close app'})
+        automation.click(*android_node_center(close))
+        time.sleep(1)
+    raise RuntimeError('The emulator launcher error did not close')
+
+
+def android_theme_check(output, name, light, automation, incidents):
+    android_hierarchy(output, automation, name, incidents)
+    if automation.app_current()['package'] != BUNDLE:
+        raise RuntimeError(f'CrispDeck is not the foreground app during {name}')
+    dump = run('adb', 'shell', 'dumpsys', 'window', 'windows')
+    (output / f'window-{name}.log').write_text(dump)
+    appearance = android_bar_appearance(dump)
+    if appearance != {'status': light, 'navigation': light}:
+        raise RuntimeError(f'Android {name} system-bar appearance is {appearance}, expected light={light}')
+    with (output / f'theme-{name}.png').open('wb') as file:
+        subprocess.run(['adb', 'exec-out', 'screencap', '-p'], stdout=file, check=True)
+
+
+def android_toggle_theme(output, automation, transition, incidents):
+    # Keep one UiAutomation service connected across launches. Starting a fresh
+    # `uiautomator dump` process for each query can miss WebView virtual nodes.
+    for attempt in range(6):
+        xml = android_hierarchy(output, automation, f'{transition}-{attempt}', incidents)
+        (output / f'theme-controls-{transition}-{attempt}.xml').write_text(xml)
+        controls = [node for node in ET.fromstring(xml).iter('node')
+                    if node.get('content-desc') == 'Toggle theme' or node.get('text') == 'Toggle theme']
+        if controls:
+            break
+        time.sleep(1)
+    if len(controls) != 1:
+        raise RuntimeError(f'Expected one accessible theme toggle, found {len(controls)}')
+    automation.click(*android_node_center(controls[0]))
+    time.sleep(2)
+
+
+def android(root, output, diagnostic=False):
+    import uiautomator2
+    receipt = json.loads((root / 'receipt-android.json').read_text())
+    version = receipt['version']
+    validator = run('git', 'rev-parse', 'HEAD').strip()
+    if receipt.get('platform') != 'android' or not re.fullmatch(r'\d+\.\d+\.\d+', version) or not re.fullmatch(r'[0-9a-f]{40}', receipt['commit']):
+        raise ValueError('Invalid Android package source receipt')
+    if not diagnostic and (receipt['commit'] != validator or version != json.loads(Path('package.json').read_text())['version']):
+        raise ValueError('Android package and validator must use the same release source')
     apk = root / f'CrispDeck_{version}_android_release.apk'
+    with apk.open('rb') as file: digest = hashlib.file_digest(file, 'sha256').hexdigest()
+    if receipt['assets'][apk.name]['sha256'] != digest:
+        raise ValueError('APK changed after its package receipt was created')
+    automation = uiautomator2.connect()
+    # Start the persistent accessibility service before the app creates its WebView.
+    (output / 'automation-device.json').write_text(json.dumps(automation.info, indent=2) + '\n')
+    incidents = []
+    android_hierarchy(output, automation, 'emulator-before-install', incidents)
     subprocess.run(['adb', 'logcat', '-c'], check=True)
     subprocess.run(['adb', 'install', '-r', str(apk)], check=True)
     info = run('adb', 'shell', 'dumpsys', 'package', BUNDLE)
@@ -43,10 +138,21 @@ def android(root, output):
         launch()
         with (output / 'native-startup.png').open('wb') as file:
             subprocess.run(['adb', 'exec-out', 'screencap', '-p'], stdout=file, check=True)
-        with apk.open('rb') as file: digest = hashlib.file_digest(file, 'sha256').hexdigest()
+        android_theme_check(output, 'dark', False, automation, incidents)
+        android_toggle_theme(output, automation, 'dark-to-oled', incidents)
+        android_theme_check(output, 'oled', False, automation, incidents)
+        android_toggle_theme(output, automation, 'oled-to-light', incidents)
+        android_theme_check(output, 'light', True, automation, incidents)
+        subprocess.run(['adb', 'shell', 'am', 'force-stop', BUNDLE], check=True)
+        launch()
+        android_theme_check(output, 'light-restarted', True, automation, incidents)
+        android_toggle_theme(output, automation, 'light-to-dark', incidents)
+        android_theme_check(output, 'dark-restored', False, automation, incidents)
         report = {'platform': 'android', 'version': version,
-                  'commit': run('git', 'rev-parse', 'HEAD').strip(), 'apk_sha256': digest,
-                  'checks': {'install_launch_restart': True}, 'physical_device': False,
+                  'commit': receipt['commit'], 'validator_commit': validator, 'diagnostic': diagnostic,
+                  'apk_sha256': digest, 'automation': 'uiautomator2',
+                  'emulator_incidents': incidents,
+                  'checks': {'install_launch_restart': True, 'system_bar_themes': True}, 'physical_device': False,
                   'authenticated_workflows': False, 'app_alive_seconds_per_launch': 12,
                   'upgrade_exercised': False}
         (output / 'android-emulator-smoke.json').write_text(json.dumps(report, indent=2) + '\n')
@@ -93,6 +199,8 @@ if __name__ == '__main__':
     parser.add_argument('platform', choices=('android', 'ios'))
     parser.add_argument('--packages', type=Path, default=Path('release-assets'))
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--diagnostic', action='store_true', help='Label a retained-package check; never release evidence')
     args = parser.parse_args(); args.output.mkdir(parents=True, exist_ok=True)
-    if args.platform == 'android': android(args.packages, args.output)
+    if args.diagnostic and args.platform != 'android': parser.error('Diagnostic mode is Android-only')
+    if args.platform == 'android': android(args.packages, args.output, args.diagnostic)
     else: ios(args.output)
