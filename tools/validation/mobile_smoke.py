@@ -9,12 +9,49 @@ import plistlib
 import re
 import subprocess
 import time
+import xml.etree.ElementTree as ET
 
 BUNDLE = 'com.christianstrobele.crispdeck'
 
 
 def run(*args):
     return subprocess.check_output([str(arg) for arg in args], text=True)
+
+
+def android_bar_appearance(dump):
+    windows = re.split(r'(?m)^\s*Window #\d+ ', dump)
+    window = next((block for block in windows if block.strip() and BUNDLE + '/' in block.splitlines()[0]
+                   and 'mAttrs=' in block), None)
+    if window is None:
+        raise RuntimeError('No CrispDeck window attributes in the Android system-bar dump')
+    return {name: bool(re.search(r'\b' + flag + r'\b', window)) for name, flag in
+            [('status', 'LIGHT_STATUS_BARS'), ('navigation', 'LIGHT_NAVIGATION_BARS')]}
+
+
+def android_theme_check(output, name, light):
+    dump = run('adb', 'shell', 'dumpsys', 'window', 'windows')
+    (output / f'window-{name}.log').write_text(dump)
+    appearance = android_bar_appearance(dump)
+    if appearance != {'status': light, 'navigation': light}:
+        raise RuntimeError(f'Android {name} system-bar appearance is {appearance}, expected light={light}')
+    with (output / f'theme-{name}.png').open('wb') as file:
+        subprocess.run(['adb', 'exec-out', 'screencap', '-p'], stdout=file, check=True)
+
+
+def android_toggle_theme(output):
+    subprocess.run(['adb', 'shell', 'uiautomator', 'dump', '--compressed', '/sdcard/crispdeck-ui.xml'], check=True)
+    xml = run('adb', 'shell', 'cat', '/sdcard/crispdeck-ui.xml')
+    (output / 'theme-controls.xml').write_text(xml)
+    controls = [node for node in ET.fromstring(xml).iter('node')
+                if node.get('content-desc') == 'Toggle theme' or node.get('text') == 'Toggle theme']
+    if len(controls) != 1:
+        raise RuntimeError(f'Expected one accessible theme toggle, found {len(controls)}')
+    bounds = list(map(int, re.findall(r'\d+', controls[0].get('bounds', ''))))
+    if len(bounds) != 4 or bounds[2] <= bounds[0] or bounds[3] <= bounds[1]:
+        raise RuntimeError('Android theme toggle has no tappable bounds')
+    subprocess.run(['adb', 'shell', 'input', 'tap', str((bounds[0] + bounds[2]) // 2),
+                    str((bounds[1] + bounds[3]) // 2)], check=True)
+    time.sleep(2)
 
 
 def android(root, output):
@@ -43,10 +80,20 @@ def android(root, output):
         launch()
         with (output / 'native-startup.png').open('wb') as file:
             subprocess.run(['adb', 'exec-out', 'screencap', '-p'], stdout=file, check=True)
+        android_theme_check(output, 'dark', False)
+        android_toggle_theme(output)
+        android_theme_check(output, 'oled', False)
+        android_toggle_theme(output)
+        android_theme_check(output, 'light', True)
+        subprocess.run(['adb', 'shell', 'am', 'force-stop', BUNDLE], check=True)
+        launch()
+        android_theme_check(output, 'light-restarted', True)
+        android_toggle_theme(output)
+        android_theme_check(output, 'dark-restored', False)
         with apk.open('rb') as file: digest = hashlib.file_digest(file, 'sha256').hexdigest()
         report = {'platform': 'android', 'version': version,
                   'commit': run('git', 'rev-parse', 'HEAD').strip(), 'apk_sha256': digest,
-                  'checks': {'install_launch_restart': True}, 'physical_device': False,
+                  'checks': {'install_launch_restart': True, 'system_bar_themes': True}, 'physical_device': False,
                   'authenticated_workflows': False, 'app_alive_seconds_per_launch': 12,
                   'upgrade_exercised': False}
         (output / 'android-emulator-smoke.json').write_text(json.dumps(report, indent=2) + '\n')

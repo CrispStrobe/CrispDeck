@@ -4,6 +4,8 @@
 
 ### Mobile layout
 
+- Android status and navigation icons follow CrispDeck's dark, OLED and light
+  themes, including after restart and when the phone uses a different theme.
 - Keep the mobile header, tabs and menu controls inside the device safe areas.
   Fit scrollable content within the inset viewport so the final controls remain
   reachable above the home indicator.

@@ -418,6 +418,9 @@ jobs:
           npx tauri icon static/icon-1024.png
           npx tauri android init --ci --skip-targets-install
           python3 scripts/merge-android-manifest.py "$RUNNER_TEMP/crispdeck-manifest.xml" "$MANIFEST"
+          ACTIVITY=src-tauri/gen/android/app/src/main/java/com/christianstrobele/crispdeck/MainActivity.kt
+          test -f "$ACTIVITY"
+          cp src-tauri/android/MainActivity.kt "$ACTIVITY"
 
       # ── Production keystore (Play Store) ─────────────────────────────────
       - name: Setup production keystore

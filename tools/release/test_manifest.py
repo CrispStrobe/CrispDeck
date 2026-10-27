@@ -29,7 +29,8 @@ class ReleaseManifestTests(unittest.TestCase):
             manifest.receipt(self.root, platform, VERSION, COMMIT, checks, metadata)
         apk = self.root / manifest.names(VERSION)['android'][0]
         (self.root / 'android-emulator-smoke.json').write_text(json.dumps({'version': VERSION,
-            'commit': COMMIT, 'apk_sha256': manifest.digest(apk), 'checks': {'install_launch_restart': True}}))
+            'commit': COMMIT, 'apk_sha256': manifest.digest(apk),
+            'checks': {'install_launch_restart': True, 'system_bar_themes': True}}))
 
     def verify(self, **kwargs):
         return manifest.verify(self.root, VERSION, COMMIT, '62', CERT, **kwargs)
@@ -81,3 +82,11 @@ class ReleaseManifestTests(unittest.TestCase):
             path.write_text(json.dumps({**original, key: value}))
             with self.assertRaisesRegex(ValueError, 'another source/package'):
                 self.verify()
+
+    def test_android_theme_regression_blocks_aggregation(self):
+        path = self.root / 'android-emulator-smoke.json'
+        report = json.loads(path.read_text())
+        report['checks']['system_bar_themes'] = False
+        path.write_text(json.dumps(report))
+        with self.assertRaisesRegex(ValueError, 'system-bar theme'):
+            self.verify()

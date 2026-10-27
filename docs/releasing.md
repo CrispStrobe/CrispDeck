@@ -36,7 +36,9 @@ Native checks include:
   privacy manifest, strict signature verification and iPhone Simulator startup.
 - Android APK and final AAB signatures against the retained certificate,
   version, ZIP integrity, 16 KiB ZIP/ELF alignment and emulator installation,
-  launch and restart of that exact APK.
+  launch and restart of that exact APK. Emulator checks cycle the app's dark,
+  OLED and light themes, verify the native system-bar appearance and retain
+  screenshots, including a restart with the light theme saved.
 - A complete static web ZIP; the same source passes browser workflows in CI.
 
 The same candidate also renders the draft Google Play listing assets from its
