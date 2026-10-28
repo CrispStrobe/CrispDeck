@@ -77,6 +77,11 @@ running app; Android resolves both through the OS to the installed activity,
 then checks the same foreground process remains. This establishes routing,
 not a completed provider sign-in or credential persistence.
 
+The headless Linux check uses GIO's default registered handler. The generic
+`xdg-open` shell fallback on Ubuntu cannot parse the plugin's quoted Exec
+field; desktop environments normally provide their own dispatcher. This test
+does not establish external-browser integration for every window manager.
+
 The final Android APK must contain `app.vercel.crispdeck`; the exported iOS
 IPA must contain it after metadata application and signing. Existing legacy
 registrations are retained for compatibility. Expired Bluesky sessions stay
