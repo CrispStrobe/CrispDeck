@@ -275,8 +275,9 @@ export async function startMastodonOAuth(instanceUrl: string): Promise<{
   /** Echoed back by the instance; the callback page refuses anything else. */
   state: string;
 }> {
-  // Same registration code in both builds; the app's return address is a
-  // fixed loopback one, so its registration can be reused across sign-ins.
+  // Same registration code in both builds; the app's return address is the
+  // fixed app.vercel.crispdeck://oauth/mastodon, so one registration per
+  // instance is reused across sign-ins.
   if (!isTauri()) return browserDb.startMastodonOAuth(instanceUrl);
   return browserDb.startMastodonOAuth(instanceUrl, MASTODON_APP_REDIRECT);
 }
