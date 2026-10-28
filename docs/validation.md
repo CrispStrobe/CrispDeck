@@ -59,7 +59,11 @@ report explicitly records that no upgrade was exercised. A data marker checks
 installer preservation of application data; it is not a real credential test.
 
 Android emulator checks install the signed APK and force-stop/relaunch it.
-iPhone Simulator checks build and launch the simulator app; production IPA
+iPhone Simulator checks build and launch a debug simulator app, because Tauri's
+release Swift logger discards the callback receipts. Receipts are collected
+from the simulator system log, and a startup receipt must establish that
+collection works before callback checks. The production device IPA remains a
+release build;
 signature and metadata checks apply separately to the exported device archive.
 All reports explicitly mark physical-device and authenticated workflows false.
 

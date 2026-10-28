@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 import unittest
 
@@ -9,6 +10,15 @@ spec.loader.exec_module(smoke)
 
 
 class CallbackEvidenceTests(unittest.TestCase):
+    def test_system_log_headers_and_other_apps_cannot_supply_receipts(self):
+        header = 'Filtering log data: ' + smoke.CALLBACK_DELIVERED + ' OR CrispDeck v\n'
+        other = json.dumps({'subsystem': 'other.app', 'eventMessage': smoke.CALLBACK_DELIVERED}) + '\n'
+        actual = json.dumps({'subsystem': smoke.BUNDLE, 'eventMessage': smoke.CALLBACK_DELIVERED}) + '\n'
+        self.assertEqual(smoke.ios_log_messages(header + other), '')
+        with self.assertRaisesRegex(RuntimeError, 'did not reach'):
+            smoke.require_callback_delivery(smoke.ios_log_messages(header + other + actual), 2)
+        smoke.require_callback_delivery(smoke.ios_log_messages(header + other + actual * 2), 2)
+
     def test_process_start_or_successful_url_open_is_not_delivery(self):
         for log in ['', 'CrispDeck v1.3.0 started', 'Open in CrispDeck?']:
             with self.assertRaisesRegex(RuntimeError, 'did not reach'):

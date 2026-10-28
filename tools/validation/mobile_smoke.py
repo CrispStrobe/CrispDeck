@@ -28,6 +28,16 @@ def require_callback_delivery(log, count):
         raise RuntimeError('OS callbacks did not reach the running app deep-link plugin')
 
 
+def ios_log_messages(log):
+    messages = []
+    for line in log.splitlines():
+        try: item = json.loads(line)
+        except json.JSONDecodeError: continue
+        if isinstance(item, dict) and item.get('subsystem') == BUNDLE and isinstance(item.get('eventMessage'), str):
+            messages.append(item['eventMessage'])
+    return '\n'.join(messages)
+
+
 def require_android_callback_result(result, component):
     status = re.search(r'(?m)^Status:\s*(\S+)', result)
     activity = re.search(r'(?m)^Activity:\s*(\S+)', result)
@@ -62,7 +72,7 @@ def ios_callback_tests(identifier, output):
                         '-derivedDataPath', str(output.parent / 'ios-callback-derived-data'),
                         '-resultBundlePath', str(output / 'callback-ui-tests.xcresult'),
                         '-parallel-testing-enabled', 'NO', 'CODE_SIGNING_ALLOWED=NO'],
-                       stdout=log, stderr=subprocess.STDOUT, check=True, timeout=240)
+                       stdout=log, stderr=subprocess.STDOUT, check=True, timeout=360)
 
 
 def android_bar_appearance(dump):
@@ -240,31 +250,59 @@ def ios(output):
     devices = [device for devices in doc['devices'].values() for device in devices if device.get('isAvailable') and device['name'].startswith('iPhone')]
     if not devices: raise RuntimeError('No available iPhone simulator runtime')
     device = devices[0]; identifier = device['udid']; booted_here = device['state'] != 'Booted'
+    collector = None
+    system_log = None
     try:
         if booted_here: subprocess.run(['xcrun', 'simctl', 'boot', identifier], check=True)
         subprocess.run(['xcrun', 'simctl', 'bootstatus', identifier, '-b'], check=True)
         subprocess.run(['xcrun', 'simctl', 'install', identifier, str(app)], check=True)
+        # Tauri redirects iOS stdout/stderr into its Swift OS logger. The
+        # simulator build must enable debug logging; production IPA signing
+        # and metadata are verified independently before this step.
+        native_log = output / 'native-startup.log'
+        system_log = native_log.open('w')
+        predicate = f'subsystem == "{BUNDLE}" AND (eventMessage CONTAINS "{CALLBACK_DELIVERED}" OR eventMessage CONTAINS "CrispDeck v")'
+        collector = subprocess.Popen(['xcrun', 'simctl', 'spawn', identifier, 'log', 'stream',
+                                      '--style', 'ndjson', '--level', 'debug', '--predicate', predicate],
+                                     stdout=system_log, stderr=subprocess.STDOUT)
+        time.sleep(1)
+        if collector.poll() is not None:
+            raise RuntimeError('Simulator system-log collector exited before app launch')
         stdout = output / 'native-stdout.log'
-        stderr = output / 'native-startup.log'
+        stderr = output / 'native-stderr.log'
         env = dict(os.environ, SIMCTL_CHILD_RUST_LOG='info')
         result = subprocess.check_output(['xcrun', 'simctl', 'launch', '--terminate-running-process',
                                          f'--stdout={stdout}', f'--stderr={stderr}', identifier, BUNDLE],
                                         text=True, env=env)
         pid = int(re.search(r':\s*(\d+)\s*$', result).group(1))
         for _ in range(12): time.sleep(1); os.kill(pid, 0)
+        for _ in range(20):
+            if 'CrispDeck v' in ios_log_messages(native_log.read_text()): break
+            time.sleep(0.5)
+        if 'CrispDeck v' not in ios_log_messages(native_log.read_text()):
+            raise RuntimeError('Simulator system log has no app startup receipt; callback logging is unavailable')
         subprocess.run(['xcrun', 'simctl', 'io', identifier, 'screenshot', str(output / 'native-startup.png')], check=True)
         ios_callback_tests(identifier, output)
         os.kill(pid, 0)
-        require_callback_delivery(stdout.read_text() + stderr.read_text(), len(CALLBACKS))
+        for _ in range(20):
+            if ios_log_messages(native_log.read_text()).count(CALLBACK_DELIVERED) >= len(CALLBACKS): break
+            time.sleep(0.5)
+        require_callback_delivery(ios_log_messages(native_log.read_text()), len(CALLBACKS))
         subprocess.run(['xcrun', 'simctl', 'io', identifier, 'screenshot', str(output / 'oauth-callbacks.png')], check=True)
         report = {'platform': 'ios', 'version': json.loads(Path('package.json').read_text())['version'],
                   'commit': run('git', 'rev-parse', 'HEAD').strip(), 'simulator': device['name'],
                   'app_alive_seconds': 12, 'physical_device': False, 'authenticated_workflows': False,
                   'callback_automation': 'XCUISystem.open, explicit Open confirmation and native plugin receipt',
+                  'simulator_build': 'debug', 'device_ipa_build': 'release',
                   'oauth_callbacks': CALLBACKS,
                   'checks': {'simulator_smoke': True, 'deep_link_dispatch': True}}
         (output / 'checks.json').write_text(json.dumps({'checks': report['checks'], 'metadata': report}, indent=2) + '\n')
     finally:
+        if collector is not None:
+            collector.terminate()
+            try: collector.wait(timeout=10)
+            except subprocess.TimeoutExpired: collector.kill(); collector.wait(timeout=10)
+        if system_log is not None: system_log.close()
         subprocess.run(['xcrun', 'simctl', 'terminate', identifier, BUNDLE], check=False)
         if booted_here: subprocess.run(['xcrun', 'simctl', 'shutdown', identifier], check=False)
 
