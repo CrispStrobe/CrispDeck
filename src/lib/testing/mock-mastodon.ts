@@ -88,7 +88,7 @@ export async function startMockMastodon(): Promise<MockMastodon> {
         res.writeHead(302, { location: `${q.redirect_uri}${sep}${new URLSearchParams(params)}` });
         res.end();
       };
-      const state = q.state ? { state: q.state } : {};
+      const state: Record<string, string> = q.state ? { state: q.state } : {};
       if (q.response_type !== 'code') return back({ error: 'unsupported_response_type', ...state });
       const scopes = scopesOf(q.scope);
       if (scopes.some((s) => !app.scopes.includes(s))) return back({ error: 'invalid_scope', ...state });
