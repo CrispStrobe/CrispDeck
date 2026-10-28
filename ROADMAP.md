@@ -109,7 +109,7 @@
 - [x] Sprint 5 — Bluesky profile-pinned posts, Mastodon list membership management
 - [x] Sprint 6 — Bluesky video upload pipeline, web push (VAPID + cron), Mastodon v2 filters, touch deck reorder, network-first onboarding, tabbed settings
 - [x] Performance phases 17–21 — parallelized APIs, SWR caching, IDB singletons, leak fixes, vendor chunk splitting, SW cache auto-versioning
-- [x] Reliability — self-healing Bluesky OAuth sessions (restore by DID, transient-error retries, silent re-auth), deck fixes for OAuth accounts, starter pack search on official API
+- [x] Reliability — self-healing Bluesky OAuth sessions (restore by DID, transient-error retries), deck fixes for OAuth accounts, starter pack search on official API. (The `prompt=none` silent re-auth shipped here never worked: bsky.social refuses it from public clients — see PLAN.md, OAuth follow-ups.)
 - [x] CI fully green — 1,177 frontend + 29 E2E + 15 Rust tests
 
 ## Shipped since v1.1.0
@@ -122,5 +122,6 @@
 ## Next (candidates)
 
 - [ ] Measure and tune post-media loading on the live deploy (eager vs. below-fold lazy)
-- [ ] Longer-lived OAuth sessions via a confidential-client backend (atproto `private_key_jwt`)
+- [x] In-app Mastodon and Bluesky OAuth on desktop/mobile via `app.vercel.crispdeck:` (no local port) — PR #70
+- [ ] Longer-lived OAuth sessions via a confidential-client backend (atproto `private_key_jwt`) — also the only way silent re-login can work; scoped in PLAN.md, OAuth follow-ups
 - [ ] Threads home-timeline workarounds as the API evolves

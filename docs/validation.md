@@ -32,6 +32,12 @@ for any later automated live-account job.
 | Sleep/offline; resume and handle overdue work once | Pending | Pending | Pending | Pending | Pending | Pending |
 | Mobile keyboard, rotation, safe areas and media permission denial | Pending | Pending | N/A | N/A | N/A | Pending |
 
+Server-side evidence for the sign-in rows (2026-10-28, not a pass): bsky.social
+accepts CrispDeck's web and native clients (`node scripts/probe-oauth-servers.mjs`),
+and mastodon.social / fosstodon.org accept the app's redirect URI and scopes.
+A macOS release build registers `app.vercel.crispdeck:`. A real account sign-in
+is still required for each cell; open items O1–O6 in PLAN.md say how.
+
 Record the exact release/commit, device model/OS, install source, account
 provider/instance (no secrets), case result, expected/actual outcome and a
 redacted debug-log reference. Record native restart tests on actual devices,

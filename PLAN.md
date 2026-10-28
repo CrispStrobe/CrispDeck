@@ -42,6 +42,200 @@ Recent reliability work (2026-09-18/19), merged as PRs #1–#5:
 
 ## Remaining Work
 
+### OAuth follow-ups (from PRs #70–#72, 2026-10-28)
+
+**What shipped.** PR #70 moved app sign-in for Mastodon and Bluesky onto the
+app's own URL scheme `app.vercel.crispdeck:` (no local port). Desktop default:
+a CrispDeck sign-in window (`auth_in_app_window`,
+`src-tauri/src/commands/auth_commands.rs`) whose redirect Rust cancels before
+it loads. Alternative (Settings → "System browser", and the only mode on
+mobile): `tauri-plugin-deep-link` (`authorizeInBrowser` in
+`src/lib/oauth-window.ts`). Bluesky signs in as a native client published at
+`static/client-metadata-native.json` → https://crispdeck.vercel.app/client-metadata-native.json
+(live since the #70 merge, commit 148fb41). Mastodon reuses one registration
+per instance (`src/lib/mastodon-app.ts`). PR #71 pinned `@tauri-apps/api` to
+`~2.11.0` (the crate is 2.11.2; `tauri build` refuses a minor mismatch). PR #72
+added `src/lib/testing/mock-mastodon.ts`, `src/lib/mastodon-oauth.flow.test.ts`
+and `scripts/probe-oauth-servers.mjs`.
+
+**Verified so far** (no human account was used):
+- `cargo check`, `svelte-check`, all of CI on macOS/Ubuntu/Windows for #70.
+- macOS release `.app` builds (`npm run tauri build -- --bundles app`), declares
+  `CFBundleURLSchemes = app.vercel.crispdeck`, macOS routes the scheme to it,
+  and opening an `app.vercel.crispdeck://…` link while it runs does not start
+  a second process (single-instance forwarding works).
+- `node scripts/probe-oauth-servers.mjs`: bsky.social accepts a PAR for both
+  published clients (web and native) → metadata and redirect URIs are valid.
+- mastodon.social and fosstodon.org accept registration with
+  `app.vercel.crispdeck://oauth/mastodon` and all 12 scopes in
+  `MASTODON_SCOPES`, and the authorize URL 302s to sign-in (not an error).
+- Mastodon's `OAuth::AuthorizationsController` sets `form_action(false)` in its
+  CSP, so the redirect to the custom scheme after "Authorize" is not blocked.
+- The mock-instance flow test (register → authorize → exchange → verify,
+  reuse, re-register after deletion, code replay, revoke) passes; adding an
+  unknown scope makes it fail, so it does catch mistakes.
+
+**Not verified:** any real sign-in with a person's account, mobile, Windows,
+Linux. Each open item below says how to close it.
+
+#### O1. Real Mastodon sign-in in the desktop app (sign-in window mode) — needs a human
+- **Needs**: a Mastodon account the user is willing to connect; a Mac.
+- **Steps**: `npm install && npm run tauri dev` (or run a built `.app`). In
+  Settings → Accounts (or onboarding) add a Mastodon account on the
+  instance. A window titled "Sign in — <instance> (secure)" opens; sign in,
+  press Authorize.
+- **Expected**: the window closes by itself, the account appears, the home
+  timeline loads, and posting works. Signing in a second time does not add a
+  second "CrispDeck" under the instance's Settings → Authorized apps.
+  Removing the account in CrispDeck makes the token disappear there.
+- **If Authorize seems to do nothing**: the redirect was not intercepted.
+  Check that `redirect_prefix` passed to `auth_in_app_window` equals
+  `MASTODON_APP_REDIRECT` (`app.vercel.crispdeck://oauth/mastodon`) exactly,
+  and that WKWebView calls `on_navigation` for a 302 to a custom scheme
+  (log `nav.as_str()` in the closure).
+- **Record** the result in `docs/validation.md` (macOS column).
+
+#### O2. Real Bluesky sign-in in the app — needs a human
+- **Needs**: a Bluesky account; a Mac. The metadata is already live.
+- **Steps**: as O1 but add a Bluesky account with OAuth (not app password).
+- **Expected**: window "Sign in — bsky.social (secure)" (the title follows
+  the user's PDS host if it changes); after approval it closes and the
+  account works, including DMs (scope `transition:chat.bsky`).
+- **If bsky.social shows "invalid client"/"redirect_uri"**: run
+  `node scripts/probe-oauth-servers.mjs`; it reports which check fails.
+  `BLUESKY_APP_REDIRECT` in `src/lib/oauth-window.ts` must equal
+  `redirect_uris[0]` in `static/client-metadata-native.json`.
+
+#### O3. "System browser" mode on macOS — needs a human
+- `tauri dev` cannot test this (macOS only routes the scheme to a bundled
+  app). Build: `npm run tauri build -- --bundles app`; the bundle lands in
+  `$CARGO_TARGET_DIR/release/bundle/macos/CrispDeck.app` (or
+  `src-tauri/target/...`). Register it so macOS picks it, not the older
+  `/Applications/CrispDeck.app` 1.2.4 with the same bundle id:
+  `/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f <path>`.
+- Settings → choose "System browser", then repeat O1 and O2.
+- **Expected**: the default browser opens the sign-in page; after approval
+  the browser asks to open CrispDeck; the app comes to the front and the
+  account appears. Timeout is 300 s (`INTERACTIVE_TIMEOUT`).
+
+#### O4. Remove (or replace) the silent Bluesky re-login — agent can do
+- **Finding**: bsky.social answers every `prompt=none` request from CrispDeck
+  with `400 invalid_request "Public clients are not allowed to use
+  silent-sign-on"` — for the web client (`client-metadata.json`) and the
+  native one alike (`token_endpoint_auth_method: none` = public client).
+  So the silent re-login added in #70 (`silentReauthInApp`, run at startup
+  and from `renewAfterDeath` when a refresh fails) and the older web one
+  (`maybeSilentReauth`, redirects the page with `prompt=none`) can never
+  succeed. Both fail safely: the error is swallowed and the account falls
+  back to the "reconnect in Settings" state. But each attempt costs a
+  network round trip, and the code and its comments claim a feature that
+  does not exist.
+- **Recommended now (option a)**: delete the dead paths and keep behaviour
+  otherwise identical. Touch: `src/lib/api/bluesky-oauth.ts`
+  (`silentReauthInApp`, `renewals`, `SESSION_RENEWED_EVENT`,
+  `renewAfterDeath` and its `onDelete` wiring, `maybeSilentReauth`,
+  `wasSilentReauthAttempt`, `clearSilentReauthFlag`,
+  `SILENT_REAUTH_*` constants, the `prompt` option of `authorizeInApp`),
+  `src/lib/api/client-factory.ts` (the `expired` branch → just
+  `oauthDead = true`; drop the `maybeSilentReauth` block and the
+  `SESSION_RENEWED_EVENT` listener), `src/routes/oauth/bsky-callback/+page.svelte`
+  (silent-attempt flag handling), `src/lib/oauth-window.ts` (comment
+  mentioning silentReauthInApp; `SILENT_TIMEOUT` and the `hidden` option of
+  `authorizeInWindow` become unused — keep the Rust `hidden` parameter or
+  remove it from `auth_in_app_window` too), and their tests in
+  `src/lib/api/bluesky-oauth.app.test.ts` and any client-factory/callback
+  tests that assert silent re-auth. Update the CHANGELOG lines that claim
+  it (v1.1-era "dead refresh token silently re-authenticates via prompt=none").
+  Done when `git grep -n "prompt: 'none'\|prompt=none" src` is empty, tests
+  and `svelte-check` pass, and an expired session shows the reconnect state.
+- **Option b (longer-term, ROADMAP)**: become a confidential client — a
+  Vercel function holding a private key, metadata with
+  `token_endpoint_auth_method: private_key_jwt` and a `jwks_uri`, token
+  requests proxied through it. That gives longer sessions and is the only
+  way `prompt=none` could ever be allowed. Large; needs a design note first.
+  Re-run `scripts/probe-oauth-servers.mjs` (prints the `prompt=none` result)
+  to see whether bsky.social's rule has changed before starting either.
+
+#### O5. Mobile (iOS + Android) sign-in — agent can build, human must sign in
+- Sign-in on mobile is always the system browser + deep link.
+- **Android check (agent)**: the committed
+  `src-tauri/gen/android/app/src/main/AndroidManifest.xml` still only has
+  the old `crispdeck` scheme filter. The deep-link plugin's build script
+  (`tauri_plugin::mobile::update_android_manifest("DEEP LINK PLUGIN", …)`)
+  inserts the `app.vercel.crispdeck` filter during an Android build. Build
+  (`npx tauri android build --apk`, see `docs/releasing.md`) and confirm the
+  generated manifest (and `aapt dump xmltree <apk> AndroidManifest.xml`)
+  contains `android:scheme="app.vercel.crispdeck"` on `MainActivity`. Also
+  check `scripts/merge-android-manifest.py`, which re-applies CrispDeck's
+  manifest customisations to a fresh project, keeps the plugin's block. The
+  old `crispdeck` scheme is no longer used by any code (`git grep crispdeck://`);
+  remove that intent filter once the new one is confirmed.
+- **iOS check (agent)**: after `npx tauri ios build`, the app's Info.plist
+  must contain `CFBundleURLTypes` with `app.vercel.crispdeck`.
+- **Human**: on an emulator/device, `adb shell am start -a android.intent.action.VIEW -d "app.vercel.crispdeck://oauth/mastodon?code=x"`
+  must bring CrispDeck up; then a real Mastodon and Bluesky sign-in.
+  Record in `docs/validation.md`.
+
+#### O6. Windows and Linux deep links — agent (CI/VM), human for real sign-in
+- There the scheme is registered at runtime (`register_all()` in
+  `src-tauri/src/lib.rs` setup) and a link starts a second process that
+  `tauri-plugin-single-instance` (feature `deep-link`) forwards to the
+  running one. The default "sign-in window" mode does not depend on any of
+  this; only "System browser" does.
+- **Check**: on Windows, after first launch
+  `reg query HKCU\Software\Classes\app.vercel.crispdeck` exists; on Linux a
+  `.desktop` entry with `MimeType=x-scheme-handler/app.vercel.crispdeck;`
+  is installed (`xdg-mime query default x-scheme-handler/app.vercel.crispdeck`).
+  Then `start app.vercel.crispdeck://x` / `xdg-open app.vercel.crispdeck://x`
+  with the app running must leave exactly one process. This could be added
+  to the native startup smoke checks in the release workflow.
+
+#### O7. Three vitest failures on Node 26 (pre-existing on main) — agent can do
+- `src/lib/safe-storage.test.ts` ("quota is exceeded", "storage is disabled
+  outright") and `src/lib/components/post-prefs.test.ts` ("still picks up a
+  settings change") fail locally on Node 26.4 and also on `main` before #70.
+- **Cause**: they spy on `Storage.prototype` (`vi.spyOn(Storage.prototype,
+  'setItem')` / `'getItem'`), but under Node 22+ `vitest.setup.ts` installs
+  its own `MemoryStorage` class as `localStorage`, which does not inherit
+  from `Storage.prototype`, so the spy never fires.
+- **Fix options**: make `MemoryStorage` extend/inherit jsdom's `Storage`
+  (e.g. `Object.setPrototypeOf(MemoryStorage.prototype, Storage.prototype)`
+  when `Storage` exists, keeping its own methods out of the way), or change
+  the tests to spy on `localStorage` itself (`vi.spyOn(localStorage,
+  'setItem')`). The second is smaller. CI uses `node-version: lts/*`
+  (`.github/workflows/ci.yml`) and is green, so these only fail on newer
+  Node; they will fail in CI once LTS reaches that behaviour.
+
+#### O8. Tauri version alignment — agent can do, low priority
+- Now: crate `tauri` 2.11.2 / `@tauri-apps/cli` 2.11.2 / `@tauri-apps/api`
+  `~2.11.0`; crate `tauri-plugin-deep-link` 2.4.10 / npm
+  `@tauri-apps/plugin-deep-link` `~2.4.10`; `tauri-plugin-single-instance`
+  2.4.5 (no npm side). Cargo would only take deep-link 2.6 together with a
+  newer `tauri`/`wry`.
+- `tauri build` errors on a minor mismatch between any crate and its npm
+  package, so upgrade them in one PR: `cargo update -p tauri -p
+  tauri-plugin-deep-link …` plus matching `npm install @tauri-apps/api@~2.X
+  @tauri-apps/cli@~2.X @tauri-apps/plugin-*@~…`; then `npm run tauri build
+  -- --bundles app` locally (the check runs before compiling, so it fails
+  fast) and the full CI matrix.
+
+#### O9. Local test servers beyond the Mastodon mock — optional, scoped
+- **Bluesky**: a local PDS (`@atproto/pds` or `@atproto/dev-env`) can run
+  in-process with SQLite, but (1) `auth_in_app_window` refuses non-https
+  URLs, so the real window cannot be pointed at it without a trusted local
+  certificate (mkcert → changes the login keychain; ask first) or a
+  test-only bypass, and (2) the native `client_id` is the production URL,
+  which a local PDS would fetch from the internet. Worthwhile only as a
+  vitest test of `bluesky-oauth.ts` against `@atproto/oauth-provider` with a
+  loopback client; `scripts/probe-oauth-servers.mjs` already covers the
+  production configuration.
+- **Mastodon in Docker**: Docker is installed on the Mac but the daemon was
+  not running; the official compose (Rails + Postgres + Redis) is heavy and
+  the mock already enforces the rules that matter. Not recommended.
+- **The sign-in window itself** (Rust `on_navigation` interception) has no
+  automated test. A WebDriver run (`tauri-driver`, Linux/Windows only)
+  pointed at a page that 302s to `app.vercel.crispdeck://…` would cover it.
+
 ### Future: Nostr support
 - **Status**: Not started
 - **Effort**: Very large (multi-week)
