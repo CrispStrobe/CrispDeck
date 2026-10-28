@@ -151,7 +151,8 @@ codes. Full provider sign-in in both modes still requires dedicated accounts.
 
 Node 26.4.0 reproduces all three reported failures on the original tests (two
 storage failures and one preference-change failure). Storage tests now spy on
-`localStorage` itself, so both jsdom and the fallback MemoryStorage are covered.
+`Object.getPrototypeOf(localStorage)`, so both jsdom and the fallback
+MemoryStorage are covered without relying on jsdom’s instance proxy.
 CI runs the entire unit suite on Node 26.4.0 as well as its normal LTS job.
 
 #### OAuth listener ordering and merge checks — implemented; covered by required CI
