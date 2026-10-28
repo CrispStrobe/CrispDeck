@@ -112,6 +112,12 @@ def linux(package, version, directory):
     report = {'platform': 'linux', 'version': version, 'physical_device': False, 'authenticated_workflows': False}
     package_name = subprocess.check_output(['dpkg-deb', '-f', str(package), 'Package'], text=True).strip()
     report['package_name'] = package_name
+    depends = subprocess.check_output(['dpkg-deb', '-f', str(package), 'Depends'], text=True)
+    dependency_names = {part.strip().split()[0] for part in re.split(r'[,|]', depends) if part.strip()}
+    for dependency in ('xdg-utils', 'desktop-file-utils'):
+        if dependency not in dependency_names:
+            raise RuntimeError(f'DEB is missing the OAuth runtime dependency: {dependency}')
+    report['oauth_runtime_dependencies'] = ['xdg-utils', 'desktop-file-utils']
     def install(path):
         with (directory / 'installer.log').open('a') as log:
             subprocess.run(['sudo', 'apt-get', 'install', '-y', '--allow-downgrades', str(path.resolve())],

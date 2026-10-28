@@ -32,6 +32,11 @@
       "icons/icon.ico",
       "icons/icon.png"
     ],
+    "linux": {
+      "deb": {
+        "depends": ["xdg-utils", "desktop-file-utils"]
+      }
+    },
     "iOS": {
       "minimumSystemVersion": "15.0"
     },
