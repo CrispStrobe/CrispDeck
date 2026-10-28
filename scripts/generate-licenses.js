@@ -97,6 +97,7 @@ if (rustOutput) {
             'hostname': { license: 'MIT', author: 'svartalf' },
             'log': { license: 'Apache-2.0 OR MIT', author: 'The Rust Project Developers' },
             'env_logger': { license: 'Apache-2.0 OR MIT', author: 'The Rust Project Developers' },
+            'oslog': { license: 'MIT', author: 'Steven Joruk' },
             'tauri-build': { license: 'Apache-2.0 OR MIT', author: 'Tauri Contributors' },
         };
         // Extract dependency names from [dependencies] section
