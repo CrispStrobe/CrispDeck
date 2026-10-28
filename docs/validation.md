@@ -63,8 +63,11 @@ iPhone Simulator checks build and launch a debug simulator app, because Tauri's
 release Swift logger discards the callback receipts. Receipts are collected
 from the simulator system log, and a startup receipt must establish that
 collection works before callback checks. The production device IPA remains a
-release build;
-signature and metadata checks apply separately to the exported device archive.
+release build with independent signature and metadata checks on the exported
+device archive.
+The development profile keeps Tauri's debug information enabled: `swift-rs`
+uses Cargo's DEBUG setting to choose the Swift bridge configuration, so the
+wildcard dependency optimization must not disable that bridge's debug logger.
 All reports explicitly mark physical-device and authenticated workflows false.
 
 

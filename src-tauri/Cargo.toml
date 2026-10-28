@@ -103,3 +103,9 @@ crispasr-cuda   = ["crispasr", "crispasr/cuda"]
 
 [profile.dev.package."*"]
 debug = 0
+
+# swift-rs chooses Tauri's Swift configuration from Cargo's DEBUG environment.
+# Without this exception even a debug iOS app gets the release bridge, which
+# discards stdout/stderr and prevents native callback delivery diagnostics.
+[profile.dev.package.tauri]
+debug = 1
