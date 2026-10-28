@@ -93,6 +93,11 @@ keyring = { version = "3", default-features = false, features = ["sync-secret-se
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3", default-features = false, features = ["windows-native"] }
 
+[target.'cfg(target_os = "ios")'.dependencies]
+# Fixed lifecycle receipts go directly to Apple's logger. Tauri's release
+# Swift bridge intentionally discards redirected stdout/stderr.
+oslog = { version = "0.2", default-features = false }
+
 [features]
 default = ["desktop"]
 desktop = ["dep:tauri-plugin-shell", "dep:tauri-plugin-process", "dep:tauri-plugin-single-instance"]
@@ -103,9 +108,3 @@ crispasr-cuda   = ["crispasr", "crispasr/cuda"]
 
 [profile.dev.package."*"]
 debug = 0
-
-# swift-rs chooses Tauri's Swift configuration from Cargo's DEBUG environment.
-# Without this exception even a debug iOS app gets the release bridge, which
-# discards stdout/stderr and prevents native callback delivery diagnostics.
-[profile.dev.package.tauri]
-debug = 1

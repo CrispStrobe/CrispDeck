@@ -206,10 +206,7 @@ jobs:
       - name: Build and launch the native iPhone simulator app
         run: |
           if [ "$(uname -m)" = arm64 ]; then TARGET=aarch64-sim; else TARGET=x86_64; fi
-          # Tauri's Swift release logger intentionally discards stdout/stderr.
-          # Use debug for simulator delivery receipts; the device IPA above is
-          # still built in release mode and signed with the retained identity.
-          npx tauri ios build --debug --target "$TARGET" 2>&1 | tail -70
+          npx tauri ios build --target "$TARGET" 2>&1 | tail -70
           python3 tools/validation/mobile_smoke.py ios --output "$RUNNER_TEMP/ios-smoke"
       - name: Retain iPhone simulator evidence
         if: always()

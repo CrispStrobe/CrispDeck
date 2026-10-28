@@ -2,6 +2,7 @@ mod asr;
 mod auth;
 mod commands;
 mod db;
+mod lifecycle;
 mod system_bars;
 
 use rusqlite::Connection;
@@ -49,7 +50,7 @@ pub fn run() {
             // codes. A fixed lifecycle message also lets native smoke checks
             // confirm the plugin delivered an OS callback to this process.
             app.listen("deep-link://new-url", |_| {
-                log::info!("OAuth callback delivered to the running app");
+                lifecycle::oauth_callback();
             });
             // macOS and mobile register the scheme from the bundle; Windows
             // and Linux only at runtime (and not at all in `tauri dev`
@@ -87,6 +88,7 @@ pub fn run() {
                 "CrispDeck v{} started",
                 env!("CARGO_PKG_VERSION")
             );
+            lifecycle::started();
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

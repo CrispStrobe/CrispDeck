@@ -11,7 +11,7 @@ spec.loader.exec_module(smoke)
 
 class CallbackEvidenceTests(unittest.TestCase):
     def test_system_log_headers_and_other_apps_cannot_supply_receipts(self):
-        header = 'Filtering log data: ' + smoke.CALLBACK_DELIVERED + ' OR CrispDeck v\n'
+        header = 'Filtering log data: ' + smoke.CALLBACK_DELIVERED + ' OR ' + smoke.STARTUP_DELIVERED + '\n'
         other = json.dumps({'subsystem': 'other.app', 'eventMessage': smoke.CALLBACK_DELIVERED}) + '\n'
         actual = json.dumps({'subsystem': smoke.BUNDLE, 'eventMessage': smoke.CALLBACK_DELIVERED}) + '\n'
         self.assertEqual(smoke.ios_log_messages(header + other), '')

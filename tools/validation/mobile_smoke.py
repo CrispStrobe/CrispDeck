@@ -17,6 +17,7 @@ SCHEME = 'app.vercel.crispdeck'
 CALLBACKS = [f'{SCHEME}:/oauth/callback?state=ci-native-smoke',
              f'{SCHEME}://oauth/mastodon?state=ci-native-smoke']
 CALLBACK_DELIVERED = 'OAuth callback delivered to the running app'
+STARTUP_DELIVERED = 'CrispDeck native startup complete'
 
 
 def run(*args):
@@ -256,12 +257,11 @@ def ios(output):
         if booted_here: subprocess.run(['xcrun', 'simctl', 'boot', identifier], check=True)
         subprocess.run(['xcrun', 'simctl', 'bootstatus', identifier, '-b'], check=True)
         subprocess.run(['xcrun', 'simctl', 'install', identifier, str(app)], check=True)
-        # Tauri redirects iOS stdout/stderr into its Swift OS logger. The
-        # simulator build must enable debug logging; production IPA signing
-        # and metadata are verified independently before this step.
+        # The release app emits these two fixed receipts directly through
+        # Apple's logger, independently of Tauri's redirected console logger.
         native_log = output / 'native-startup.log'
         system_log = native_log.open('w')
-        predicate = f'subsystem == "{BUNDLE}" AND (eventMessage CONTAINS "{CALLBACK_DELIVERED}" OR eventMessage CONTAINS "CrispDeck v")'
+        predicate = f'subsystem == "{BUNDLE}" AND (eventMessage CONTAINS "{CALLBACK_DELIVERED}" OR eventMessage CONTAINS "{STARTUP_DELIVERED}")'
         collector = subprocess.Popen(['xcrun', 'simctl', 'spawn', identifier, 'log', 'stream',
                                       '--style', 'ndjson', '--level', 'debug', '--predicate', predicate],
                                      stdout=system_log, stderr=subprocess.STDOUT)
@@ -277,9 +277,9 @@ def ios(output):
         pid = int(re.search(r':\s*(\d+)\s*$', result).group(1))
         for _ in range(12): time.sleep(1); os.kill(pid, 0)
         for _ in range(20):
-            if 'CrispDeck v' in ios_log_messages(native_log.read_text()): break
+            if STARTUP_DELIVERED in ios_log_messages(native_log.read_text()): break
             time.sleep(0.5)
-        if 'CrispDeck v' not in ios_log_messages(native_log.read_text()):
+        if STARTUP_DELIVERED not in ios_log_messages(native_log.read_text()):
             raise RuntimeError('Simulator system log has no app startup receipt; callback logging is unavailable')
         subprocess.run(['xcrun', 'simctl', 'io', identifier, 'screenshot', str(output / 'native-startup.png')], check=True)
         ios_callback_tests(identifier, output)
@@ -293,7 +293,7 @@ def ios(output):
                   'commit': run('git', 'rev-parse', 'HEAD').strip(), 'simulator': device['name'],
                   'app_alive_seconds': 12, 'physical_device': False, 'authenticated_workflows': False,
                   'callback_automation': 'XCUISystem.open, explicit Open confirmation and native plugin receipt',
-                  'simulator_build': 'debug', 'device_ipa_build': 'release',
+                  'simulator_build': 'release', 'device_ipa_build': 'release',
                   'oauth_callbacks': CALLBACKS,
                   'checks': {'simulator_smoke': True, 'deep_link_dispatch': True}}
         (output / 'checks.json').write_text(json.dumps({'checks': report['checks'], 'metadata': report}, indent=2) + '\n')
