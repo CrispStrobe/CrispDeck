@@ -9,13 +9,14 @@
   import { onMount } from 'svelte';
   import {
     listAccounts, addAccount as dbAddAccount, deleteAccount as dbDeleteAccount,
-    updateAccount as dbUpdateAccount, startMastodonOAuth as dbStartOAuth,
+    updateAccount as dbUpdateAccount, startMastodonOAuth as dbStartOAuth, runMastodonAuthorization,
     completeMastodonOAuth as dbCompleteOAuth, getDecryptedCredentials
   } from '$lib/db';
   import { Settings, Plus, Trash2, Star, ExternalLink, Loader2, Shield, Download, Upload, EyeOff } from '@lucide/svelte';
   import { startBlueskyOAuth, OAUTH_UNAVAILABLE_IN_APP } from '$lib/api/bluesky-oauth';
-  import { isTauri as isTauriRuntime } from '$lib/platform';
   import { goto } from '$app/navigation';
+  import { revokeMastodonToken } from '$lib/mastodon-app';
+  import { getOAuthWindowMode, setOAuthWindowMode, isMobile, type OAuthWindowMode } from '$lib/oauth-window';
   import { invalidateClientCache } from '$lib/api/client-factory';
   import { i18n, type Language } from '$lib/i18n.svelte';
   import { getDensity, saveDensity, applyDensity, getDensityOptions, type DensityMode } from '$lib/density';
@@ -444,7 +445,10 @@
   // OAuth cannot complete inside the Tauri webview (see bluesky-oauth.ts), so
   // the app opens on the method that actually works there rather than making
   // people discover the dead end themselves.
-  const oauthAvailable = !isTauriRuntime();
+  // The app signs in through its own window or the system browser.
+  const oauthAvailable = true;
+  let oauthMode = $state<OAuthWindowMode>(getOAuthWindowMode());
+  const oauthMobile = isMobile();
   let bskyAuthMode: 'app-password' | 'oauth' = $state(oauthAvailable ? 'oauth' : 'app-password');
   let bskyHandle = $state('');
   let bskyAppPassword = $state('');
@@ -577,7 +581,8 @@
 
       // Redirect to the Mastodon authorization page
       // The callback at /oauth/callback will complete the flow
-      window.location.href = mastoOAuthState!.auth_url;
+      const callback = await runMastodonAuthorization(mastoOAuthState!, `${base}/oauth/callback`);
+    if (callback) await goto(callback);
       return; // Page will unload
     } catch (e) {
       error = String(e);
@@ -588,6 +593,13 @@
 
   async function removeAccount(id: number) {
     try {
+      const acct = accounts.find((a) => a.id === id);
+      if (acct?.platform === 'mastodon' && acct.instance_url) {
+        // Best effort: an unreachable instance must not block removing it here.
+        try {
+          await revokeMastodonToken(acct.instance_url, JSON.parse(await getDecryptedCredentials(id)));
+        } catch (e) { swallow('settings.revokeMastodonToken', e); }
+      }
       await dbDeleteAccount(id);
       invalidateClientCache();
       await loadAccounts();
@@ -2179,6 +2191,26 @@
           </button>
         {/if}
       </div>
+
+      <!-- Where OAuth sign-in pages open. Desktop only: mobile always uses
+           the system browser, and the web redirects the page itself. -->
+      {#if isTauri && !oauthMobile}
+        <div>
+          <span class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.oauthWindowMode}</span>
+          <div class="flex gap-2 mt-2">
+            {#each [['window', i18n.t.settings.oauthWindowApp, i18n.t.settings.oauthWindowAppHint], ['browser', i18n.t.settings.oauthWindowBrowser, i18n.t.settings.oauthWindowBrowserHint]] as [mode, label, hint] (mode)}
+              <button
+                onclick={() => { setOAuthWindowMode(mode as OAuthWindowMode); oauthMode = mode as OAuthWindowMode; }}
+                aria-pressed={oauthMode === mode}
+                class="flex-1 px-3 py-2 text-xs rounded-md border transition-colors {oauthMode === mode ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white' : 'border-[var(--color-border)] text-[var(--color-text-muted)]'}"
+              >
+                <span class="block font-medium">{label}</span>
+                <span class="block text-[10px] opacity-80">{hint}</span>
+              </button>
+            {/each}
+          </div>
+        </div>
+      {/if}
 
       <!-- Where credentials are kept. Desktop only: the browser build has
            IndexedDB and no choice to make, so it shows nothing here. -->

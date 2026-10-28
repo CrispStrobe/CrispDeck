@@ -104,7 +104,7 @@ describe('db.ts <-> Tauri commands', () => {
 
   it('finds the Rust commands at all (guards the parser itself)', () => {
     expect(registered.size).toBeGreaterThan(10);
-    expect(args.get('auth_start_mastodon_oauth')).toEqual(['instance_url']);
+    expect(args.get('db_add_account')?.slice(0, 2)).toEqual(['platform', 'handle']);
   });
 
   it('every command db.ts invokes is registered in the invoke_handler', () => {

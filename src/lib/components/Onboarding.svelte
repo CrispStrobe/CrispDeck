@@ -4,11 +4,11 @@
   import StarterWorkspaces from './StarterWorkspaces.svelte';
   import { getHomeMode, setHomeMode } from '$lib/settings';
   let homeMode = $state(getHomeMode() === 'deck' ? 'deck' : 'feed');
-  import { isTauri } from '$lib/platform';
   import { OAUTH_UNAVAILABLE_IN_APP } from '$lib/api/bluesky-oauth';
 
   // OAuth cannot complete inside the Tauri webview, so don't lead with it there.
-  const oauthAvailable = !isTauri();
+  // The app signs in through the its own window or the system browser.
+  const oauthAvailable = true;
 
   interface Props {
     // Every one of these is slow and most end in a redirect, so they may
