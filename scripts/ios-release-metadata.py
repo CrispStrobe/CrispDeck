@@ -6,6 +6,7 @@ import plistlib
 import zipfile
 
 PURPOSES = ('NSCameraUsageDescription', 'NSMicrophoneUsageDescription', 'NSPhotoLibraryUsageDescription')
+OAUTH_SCHEME = 'app.vercel.crispdeck'
 
 
 def validate_custom(info):
@@ -13,8 +14,8 @@ def validate_custom(info):
         if not isinstance(info.get(key), str) or not info[key].strip():
             raise ValueError(f'Missing iOS permission purpose: {key}')
     schemes = [scheme for item in info.get('CFBundleURLTypes', []) for scheme in item.get('CFBundleURLSchemes', [])]
-    if 'crispdeck' not in schemes:
-        raise ValueError('Missing crispdeck callback URL scheme')
+    if OAUTH_SCHEME not in schemes:
+        raise ValueError(f'Missing {OAUTH_SCHEME} callback URL scheme')
 
 
 def apply(info_path, custom_path):
@@ -25,7 +26,14 @@ def apply(info_path, custom_path):
     allowed = {'CFBundleURLTypes', 'ITSAppUsesNonExemptEncryption'}
     if any(key not in allowed and not (key.startswith('NS') and key.endswith('UsageDescription')) for key in custom):
         raise ValueError('iOS customizations must not override generated bundle/version/platform fields')
+    # Platform plugins may register additional callbacks. Keep their entries
+    # instead of replacing the whole generated CFBundleURLTypes array.
+    url_types = info.get('CFBundleURLTypes', [])
+    for entry in custom.get('CFBundleURLTypes', []):
+        if entry not in url_types:
+            url_types.append(entry)
     info.update(custom)
+    info['CFBundleURLTypes'] = url_types
     fmt = plistlib.FMT_BINARY if original.startswith(b'bplist00') else plistlib.FMT_XML
     Path(info_path).write_bytes(plistlib.dumps(info, fmt=fmt))
 

@@ -6,7 +6,7 @@ mod system_bars;
 
 use rusqlite::Connection;
 use std::sync::Mutex;
-use tauri::Manager;
+use tauri::{Listener, Manager};
 
 pub struct AppState {
     pub db: Mutex<Connection>,
@@ -45,6 +45,12 @@ pub fn run() {
 
     builder
         .setup(|app| {
+            // Never log callback URLs: their query can contain authorization
+            // codes. A fixed lifecycle message also lets native smoke checks
+            // confirm the plugin delivered an OS callback to this process.
+            app.listen("deep-link://new-url", |_| {
+                log::info!("OAuth callback delivered to the running app");
+            });
             // macOS and mobile register the scheme from the bundle; Windows
             // and Linux only at runtime (and not at all in `tauri dev`
             // otherwise).

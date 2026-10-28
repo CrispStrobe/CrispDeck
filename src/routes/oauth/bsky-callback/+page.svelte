@@ -6,7 +6,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { addAccount, updateAccount, listAccounts } from '$lib/db';
-  import { initBlueskyOAuth, wasSilentReauthAttempt, clearSilentReauthFlag, OAUTH_RETURN_TO_KEY } from '$lib/api/bluesky-oauth';
+  import { initBlueskyOAuth, OAUTH_RETURN_TO_KEY } from '$lib/api/bluesky-oauth';
   import { invalidateClientCache } from '$lib/api/client-factory';
   import { Loader2, Check, AlertTriangle } from '@lucide/svelte';
 
@@ -24,7 +24,6 @@
   }
 
   onMount(async () => {
-    const silent = wasSilentReauthAttempt();
     try {
       // init() processes the OAuth callback params in the URL automatically
       const result = await initBlueskyOAuth();
@@ -55,27 +54,11 @@
       }
 
       invalidateClientCache();
-      clearSilentReauthFlag();
       status = 'success';
       const returnTo = takeReturnTo();
-      if (silent && returnTo) {
-        // Silent re-auth round-trip: go straight back, no success screen needed
-        goto(returnTo);
-        return;
-      }
       const dest = returnTo ?? ((await listAccounts()).length === 1 ? (homeRedirectPath(getHomeMode(), base) ?? `${base}/feed`) : `${base}/settings`);
       setTimeout(() => goto(dest), 1500);
     } catch (e) {
-      clearSilentReauthFlag();
-      if (silent) {
-        // Silent re-auth failed (e.g. login_required: no live bsky.social
-        // cookie). Return the user where they were — pages already show a
-        // reconnect hint; never strand them on an error screen they
-        // didn't ask for.
-        swallow('oauth.bskySilentReauth', e);
-        goto(takeReturnTo() ?? `${base}/feed`);
-        return;
-      }
       status = 'error';
       errorMsg = String(e);
       swallow('oauth.bskyCallback', e);

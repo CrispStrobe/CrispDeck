@@ -12,6 +12,9 @@ import time
 import xml.etree.ElementTree as ET
 
 BUNDLE = 'com.christianstrobele.crispdeck'
+SCHEME = 'app.vercel.crispdeck'
+CALLBACKS = [f'{SCHEME}:/oauth/callback?state=ci-native-smoke',
+             f'{SCHEME}://oauth/mastodon?state=ci-native-smoke']
 
 
 def run(*args):
@@ -148,11 +151,24 @@ def android(root, output, diagnostic=False):
         android_theme_check(output, 'light-restarted', True, automation, incidents)
         android_toggle_theme(output, automation, 'light-to-dark', incidents)
         android_theme_check(output, 'dark-restored', False, automation, incidents)
+        pid = run('adb', 'shell', 'pidof', BUNDLE).strip()
+        for index, uri in enumerate(CALLBACKS):
+            args = ['-a', 'android.intent.action.VIEW', '-c', 'android.intent.category.BROWSABLE', '-d', uri]
+            target = run('adb', 'shell', 'cmd', 'package', 'resolve-activity', '--brief', *args).strip().splitlines()[-1]
+            if target != component:
+                raise RuntimeError(f'Android OAuth callback resolves to another activity: {target}')
+            result = run('adb', 'shell', 'am', 'start', '-W', *args)
+            (output / f'oauth-callback-{index}.log').write_text(result)
+            time.sleep(2)
+            android_hierarchy(output, automation, f'oauth-callback-{index}', incidents)
+            if run('adb', 'shell', 'pidof', BUNDLE).strip() != pid or automation.app_current()['package'] != BUNDLE:
+                raise RuntimeError('Android OAuth callback did not retain the foreground app process')
         report = {'platform': 'android', 'version': version,
                   'commit': receipt['commit'], 'validator_commit': validator, 'diagnostic': diagnostic,
                   'apk_sha256': digest, 'automation': 'uiautomator2',
                   'emulator_incidents': incidents,
-                  'checks': {'install_launch_restart': True, 'system_bar_themes': True}, 'physical_device': False,
+                  'checks': {'install_launch_restart': True, 'system_bar_themes': True, 'deep_link_dispatch': True},
+                  'oauth_callbacks': CALLBACKS, 'physical_device': False,
                   'authenticated_workflows': False, 'app_alive_seconds_per_launch': 12,
                   'upgrade_exercised': False}
         (output / 'android-emulator-smoke.json').write_text(json.dumps(report, indent=2) + '\n')
@@ -172,6 +188,9 @@ def ios(output):
                 candidates.append(app)
     if not candidates: raise ValueError('No built iOS Simulator app was found')
     app = sorted(candidates, key=lambda path: ('.xcarchive/' in str(path), str(path)))[-1]
+    info = plistlib.loads((app / 'Info.plist').read_bytes())
+    if SCHEME not in [scheme for item in info.get('CFBundleURLTypes', []) for scheme in item.get('CFBundleURLSchemes', [])]:
+        raise RuntimeError('iPhone Simulator app is missing the native OAuth scheme')
     doc = json.loads(run('xcrun', 'simctl', 'list', 'devices', 'available', '-j'))
     devices = [device for devices in doc['devices'].values() for device in devices if device.get('isAvailable') and device['name'].startswith('iPhone')]
     if not devices: raise RuntimeError('No available iPhone simulator runtime')
@@ -183,11 +202,16 @@ def ios(output):
         result = run('xcrun', 'simctl', 'launch', '--terminate-running-process', identifier, BUNDLE)
         pid = int(re.search(r':\s*(\d+)\s*$', result).group(1))
         for _ in range(12): time.sleep(1); os.kill(pid, 0)
+        for uri in CALLBACKS:
+            subprocess.run(['xcrun', 'simctl', 'openurl', identifier, uri], check=True)
+            time.sleep(2)
+            os.kill(pid, 0)
         subprocess.run(['xcrun', 'simctl', 'io', identifier, 'screenshot', str(output / 'native-startup.png')], check=True)
         report = {'platform': 'ios', 'version': json.loads(Path('package.json').read_text())['version'],
                   'commit': run('git', 'rev-parse', 'HEAD').strip(), 'simulator': device['name'],
                   'app_alive_seconds': 12, 'physical_device': False, 'authenticated_workflows': False,
-                  'checks': {'simulator_smoke': True}}
+                  'oauth_callbacks': CALLBACKS,
+                  'checks': {'simulator_smoke': True, 'deep_link_dispatch': True}}
         (output / 'checks.json').write_text(json.dumps({'checks': report['checks'], 'metadata': report}, indent=2) + '\n')
     finally:
         subprocess.run(['xcrun', 'simctl', 'terminate', identifier, BUNDLE], check=False)

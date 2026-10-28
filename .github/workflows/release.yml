@@ -70,7 +70,7 @@ jobs:
         run: |
           bash scripts/ci-apt.sh
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev patchelf xvfb xauth xdotool imagemagick
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev patchelf xvfb xauth xdotool imagemagick xdg-utils desktop-file-utils dbus-x11
       - name: Check Windows signing configuration and helper syntax
         if: runner.os == 'Windows'
         shell: pwsh
@@ -140,7 +140,7 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           test "$(dpkg-deb -f release-assets/*.deb Version)" = "$VERSION"
           test "$(dpkg-deb -f release-assets/*.deb Architecture)" = amd64
-          xvfb-run -a -s '-screen 0 1920x1080x24' python3 tools/release/desktop_smoke.py linux release-assets/*.deb --output "$RUNNER_TEMP/linux-smoke"
+          dbus-run-session -- xvfb-run -a -s '-screen 0 1920x1080x24' python3 tools/release/desktop_smoke.py linux release-assets/*.deb --output "$RUNNER_TEMP/linux-smoke"
           python3 tools/release/manifest.py receipt linux release-assets --check package_metadata --check install_smoke --checks-file "$RUNNER_TEMP/linux-smoke/checks.json"
       - name: Retain installer smoke evidence
         if: always()
@@ -188,11 +188,11 @@ jobs:
         run: |
           bash scripts/ci-apt.sh
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-0 libayatana-appindicator3-1 libssl3t64 xvfb xauth xdotool imagemagick
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-0 libayatana-appindicator3-1 libssl3t64 xvfb xauth xdotool imagemagick xdg-utils desktop-file-utils dbus-x11
       - name: Recheck the retained package without rebuilding
         run: |
           VERSION=$(dpkg-deb -f release-assets/*.deb Version)
-          xvfb-run -a -s '-screen 0 1920x1080x24' python3 tools/release/desktop_smoke.py linux release-assets/*.deb --version "$VERSION" --output "$RUNNER_TEMP/linux-smoke"
+          dbus-run-session -- xvfb-run -a -s '-screen 0 1920x1080x24' python3 tools/release/desktop_smoke.py linux release-assets/*.deb --version "$VERSION" --output "$RUNNER_TEMP/linux-smoke"
           echo 'Diagnostic package recheck only; this workflow does not create release receipts or publish artifacts.' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()

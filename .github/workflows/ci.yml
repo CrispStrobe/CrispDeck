@@ -12,6 +12,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  required:
+    name: Required CI
+    if: always()
+    needs: [frontend, rust-check, node26]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every CI job to pass
+        env:
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+          RUST_RESULT: ${{ needs.rust-check.result }}
+          NODE26_RESULT: ${{ needs.node26.result }}
+        run: |
+          for result in "$FRONTEND_RESULT" "$RUST_RESULT" "$NODE26_RESULT"; do
+            if [ "$result" != success ]; then
+              echo "Required CI dependency did not pass: $result"
+              exit 1
+            fi
+          done
+
+  node26:
+    name: Node 26 tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '26.4.0'
+          cache: npm
+      - run: npm ci
+      - run: npx svelte-kit sync
+      - run: npm test -- --maxWorkers=2
+
   frontend:
     name: Frontend and browser tests
     runs-on: ubuntu-latest

@@ -362,7 +362,7 @@ jobs:
       - name: Verify Android signatures, identity and 16 KiB compatibility
         run: |
           python3 tools/release/packages.py android android-artifacts --sdk "$ANDROID_HOME" --certificate "$ANDROID_RELEASE_CERT_SHA256"
-          python3 tools/release/manifest.py receipt android android-artifacts --check apk_signature --check aab_signature --check certificate --check alignment --check metadata --certificate "$ANDROID_RELEASE_CERT_SHA256"
+          python3 tools/release/manifest.py receipt android android-artifacts --check apk_signature --check aab_signature --check certificate --check alignment --check metadata --check deep_link_manifest --certificate "$ANDROID_RELEASE_CERT_SHA256"
 
       - name: Upload Android artifact
         # Retain failed candidates for diagnosis; release upload still requires verification.

@@ -7,7 +7,7 @@ import { BlueskyClient } from './bluesky';
 import { swallow, addLog } from '$lib/debug-log';
 import { MastodonClient } from './mastodon';
 import { ThreadsClient } from './threads';
-import { initBlueskyOAuth, restoreBlueskyOAuthSession, maybeSilentReauth, silentReauthInApp, SESSION_RENEWED_EVENT } from './bluesky-oauth';
+import { initBlueskyOAuth, restoreBlueskyOAuthSession } from './bluesky-oauth';
 import { listAccounts, getDecryptedCredentials } from '$lib/db';
 // Type-only: this module never constructs an Agent, it only passes them
 // around. A value import here put the whole SDK in every route that
@@ -106,7 +106,6 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
         // OAuth accounts: use the already-resumed session if it matches,
         // otherwise restore this account's session directly by DID.
         let oauthAgent: Agent | undefined;
-        let oauthDead = false;
         const did = acct.did ?? creds.did;
         if (creds.auth_method === 'oauth' && did) {
           if (oauthSession && oauthSession.did === did) {
@@ -115,13 +114,7 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
             const restored = await restoreBlueskyOAuthSession(did);
             if (restored.status === 'ok') {
               oauthAgent = restored.agent;
-            } else if (restored.status === 'expired') {
-              // In the app, renew it in a hidden window first; on the web
-              // this falls through to the redirecting maybeSilentReauth.
-              const renewed = await silentReauthInApp(acct.handle, did);
-              if (renewed) oauthAgent = renewed;
-              else oauthDead = true;
-            } else {
+            } else if (restored.status === 'unavailable') {
               transientOAuthFailure = true;
             }
           }
@@ -135,13 +128,6 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
             client: BlueskyClient.readOnly(acct.handle),
             oauthAgent,
           };
-        }
-        if (oauthDead && did && (await maybeSilentReauth(acct.handle, did))) {
-          // Refresh token is dead but the user likely still has a live
-          // bsky.social cookie — silent re-auth redirects and comes back
-          // with a fresh session, no user interaction needed.
-          // (maybeSilentReauth redirects the page; we won't get here.)
-          return null;
         }
         if (creds.app_password) {
           // App password auth
@@ -204,12 +190,6 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
 }
 
 /** Invalidate the client cache (e.g. after adding/removing an account) */
-// A Bluesky session renewed in the background: the cached clients still hold
-// the dead one, so the next caller must build fresh ones.
-if (typeof window !== 'undefined') {
-  window.addEventListener(SESSION_RENEWED_EVENT, () => invalidateClientCache());
-}
-
 export function invalidateClientCache(): void {
   _cachedResult = null;
   _cacheTime = 0;
