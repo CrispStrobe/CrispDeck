@@ -135,6 +135,8 @@ callback forms on the running app. Android package verification checks the
 final APK manifest; its emulator resolves and opens both URLs through the OS
 and requires the original foreground process. These checks are mandatory in
 release aggregation. Existing legacy registrations remain for compatibility.
+The Android seed explicitly registers the new scheme, and the merge test
+requires it even when a cached plugin build does not update the fresh project.
 Real device/account sign-in is still pending; follow O1–O3 on each device and
 record it in `docs/validation.md` when the resources are available.
 
