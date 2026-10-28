@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import plistlib
 import re
+import shutil
 import subprocess
 import time
 import xml.etree.ElementTree as ET
@@ -15,10 +16,43 @@ BUNDLE = 'com.christianstrobele.crispdeck'
 SCHEME = 'app.vercel.crispdeck'
 CALLBACKS = [f'{SCHEME}:/oauth/callback?state=ci-native-smoke',
              f'{SCHEME}://oauth/mastodon?state=ci-native-smoke']
+CALLBACK_DELIVERED = 'OAuth callback delivered to the running app'
 
 
 def run(*args):
     return subprocess.check_output([str(arg) for arg in args], text=True)
+
+
+def require_callback_delivery(log, count):
+    if log.count(CALLBACK_DELIVERED) < count:
+        raise RuntimeError('OS callbacks did not reach the running app deep-link plugin')
+
+
+def ios_callback_tests(identifier, output):
+    """Use Apple's UI test runner to confirm any system Open prompt explicitly."""
+    project = output / 'callback-runner'
+    project.mkdir()
+    shutil.copy(Path(__file__).with_name('ios_callback_tests.swift'), project / 'CallbackTests.swift')
+    spec = {
+        'name': 'CallbackSmoke',
+        'settings': {'base': {'SWIFT_VERSION': '5.0', 'GENERATE_INFOPLIST_FILE': 'YES',
+                              'CODE_SIGNING_ALLOWED': 'NO'}},
+        'targets': {'CallbackTests': {'type': 'bundle.ui-testing', 'platform': 'iOS',
+                                     'deploymentTarget': '16.4', 'sources': ['CallbackTests.swift'],
+                                     'settings': {'base': {'PRODUCT_BUNDLE_IDENTIFIER': BUNDLE + '.callback-tests'}}}},
+        'schemes': {'CallbackSmoke': {'build': {'targets': {'CallbackTests': ['test']}},
+                                     'test': {'targets': ['CallbackTests']}}},
+    }
+    (project / 'project.json').write_text(json.dumps(spec, indent=2) + '\n')
+    subprocess.run(['xcodegen', 'generate', '--spec', str(project / 'project.json'),
+                    '--project', str(project)], check=True)
+    with (output / 'callback-ui-tests.log').open('w') as log:
+        subprocess.run(['xcodebuild', 'test', '-project', str(project / 'CallbackSmoke.xcodeproj'),
+                        '-scheme', 'CallbackSmoke', '-destination', f'platform=iOS Simulator,id={identifier}',
+                        '-derivedDataPath', str(output.parent / 'ios-callback-derived-data'),
+                        '-resultBundlePath', str(output / 'callback-ui-tests.xcresult'),
+                        '-parallel-testing-enabled', 'NO', 'CODE_SIGNING_ALLOWED=NO'],
+                       stdout=log, stderr=subprocess.STDOUT, check=True, timeout=240)
 
 
 def android_bar_appearance(dump):
@@ -199,17 +233,23 @@ def ios(output):
         if booted_here: subprocess.run(['xcrun', 'simctl', 'boot', identifier], check=True)
         subprocess.run(['xcrun', 'simctl', 'bootstatus', identifier, '-b'], check=True)
         subprocess.run(['xcrun', 'simctl', 'install', identifier, str(app)], check=True)
-        result = run('xcrun', 'simctl', 'launch', '--terminate-running-process', identifier, BUNDLE)
+        stdout = output / 'native-stdout.log'
+        stderr = output / 'native-startup.log'
+        env = dict(os.environ, SIMCTL_CHILD_RUST_LOG='info')
+        result = subprocess.check_output(['xcrun', 'simctl', 'launch', '--terminate-running-process',
+                                         f'--stdout={stdout}', f'--stderr={stderr}', identifier, BUNDLE],
+                                        text=True, env=env)
         pid = int(re.search(r':\s*(\d+)\s*$', result).group(1))
         for _ in range(12): time.sleep(1); os.kill(pid, 0)
-        for uri in CALLBACKS:
-            subprocess.run(['xcrun', 'simctl', 'openurl', identifier, uri], check=True)
-            time.sleep(2)
-            os.kill(pid, 0)
         subprocess.run(['xcrun', 'simctl', 'io', identifier, 'screenshot', str(output / 'native-startup.png')], check=True)
+        ios_callback_tests(identifier, output)
+        os.kill(pid, 0)
+        require_callback_delivery(stdout.read_text() + stderr.read_text(), len(CALLBACKS))
+        subprocess.run(['xcrun', 'simctl', 'io', identifier, 'screenshot', str(output / 'oauth-callbacks.png')], check=True)
         report = {'platform': 'ios', 'version': json.loads(Path('package.json').read_text())['version'],
                   'commit': run('git', 'rev-parse', 'HEAD').strip(), 'simulator': device['name'],
                   'app_alive_seconds': 12, 'physical_device': False, 'authenticated_workflows': False,
+                  'callback_automation': 'XCUISystem.open, explicit Open confirmation and native plugin receipt',
                   'oauth_callbacks': CALLBACKS,
                   'checks': {'simulator_smoke': True, 'deep_link_dispatch': True}}
         (output / 'checks.json').write_text(json.dumps({'checks': report['checks'], 'metadata': report}, indent=2) + '\n')

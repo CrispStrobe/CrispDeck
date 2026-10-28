@@ -72,8 +72,10 @@ are exercised with a synthetic state and no authorization code. Windows and
 Linux verify the OS handler points to the installed executable; desktop checks
 require the original process, one instance and the plugin's fixed callback
 message. Callback URLs and codes are never included in that message. macOS
-also checks the bundled scheme. iPhone Simulator dispatches both URLs to the
-running app; Android resolves both through the OS to the installed activity,
+also checks the bundled scheme. iPhone Simulator uses XCUISystem to open both
+URLs, explicitly accepts any CrispDeck Open confirmation, then requires two
+native plugin receipts and the original process. Startup and completed-callback
+screenshots are retained separately. Android resolves both through the OS to the installed activity,
 then checks the same foreground process remains. This establishes routing,
 not a completed provider sign-in or credential persistence.
 

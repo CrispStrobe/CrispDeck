@@ -26,6 +26,8 @@
   required CI gate.
 - Keep the desktop single-instance dependency and initialization out of mobile
   targets, even when the default Cargo `desktop` feature is enabled.
+- iPhone Simulator callback checks confirm any system Open prompt and require
+  native plugin receipts, so an untouched confirmation cannot pass validation.
 - Tests: Mastodon sign-in runs against a stand-in instance over HTTP;
   `scripts/probe-oauth-servers.mjs` checks the live Bluesky configuration.
 

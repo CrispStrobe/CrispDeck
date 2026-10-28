@@ -130,8 +130,9 @@ probe still documents bsky.social's refusal; no confidential backend is added.
 
 The iOS release metadata script previously replaced generated URL registrations
 with the legacy scheme. It now preserves plugin entries and requires
-`app.vercel.crispdeck` in the signed export. iPhone Simulator checks both
-callback forms on the running app. Android package verification checks the
+`app.vercel.crispdeck` in the signed export. iPhone Simulator opens both
+callback forms through XCUISystem, confirms any system Open prompt and requires
+native plugin receipts from the original process. Android package verification checks the
 final APK manifest; its emulator resolves and opens both URLs through the OS
 and requires the original foreground process. These checks are mandatory in
 release aggregation. Existing legacy registrations remain for compatibility.
