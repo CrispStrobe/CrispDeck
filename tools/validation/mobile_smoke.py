@@ -28,6 +28,16 @@ def require_callback_delivery(log, count):
         raise RuntimeError('OS callbacks did not reach the running app deep-link plugin')
 
 
+def require_android_callback_result(result, component):
+    status = re.search(r'(?m)^Status:\s*(\S+)', result)
+    activity = re.search(r'(?m)^Activity:\s*(\S+)', result)
+    def expanded(value):
+        package, name = value.split('/', 1)
+        return package + '/' + (package + name if name.startswith('.') else name)
+    if status is None or status.group(1) != 'ok' or activity is None or expanded(activity.group(1)) != expanded(component):
+        raise RuntimeError('Android did not confirm callback delivery to the installed activity')
+
+
 def ios_callback_tests(identifier, output):
     """Use Apple's UI test runner to confirm any system Open prompt explicitly."""
     project = output / 'callback-runner'
@@ -193,6 +203,7 @@ def android(root, output, diagnostic=False):
                 raise RuntimeError(f'Android OAuth callback resolves to another activity: {target}')
             result = run('adb', 'shell', 'am', 'start', '-W', *args)
             (output / f'oauth-callback-{index}.log').write_text(result)
+            require_android_callback_result(result, component)
             time.sleep(2)
             android_hierarchy(output, automation, f'oauth-callback-{index}', incidents)
             if run('adb', 'shell', 'pidof', BUNDLE).strip() != pid or automation.app_current()['package'] != BUNDLE:
