@@ -102,6 +102,21 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
+      - name: Check mobile dependency boundaries with default features
+        if: runner.os == 'Linux'
+        run: |
+          python3 - <<'PY'
+          import subprocess
+          for target in ('aarch64-apple-ios', 'aarch64-linux-android'):
+              tree = subprocess.check_output([
+                  'cargo', 'tree', '--manifest-path', 'src-tauri/Cargo.toml',
+                  '--target', target, '--depth', '1', '--edges', 'normal', '--locked',
+              ], text=True)
+              if 'tauri-plugin-single-instance' in tree:
+                  raise SystemExit(f'{target}: desktop-only single-instance dependency leaked into mobile')
+              print(f'{target}: desktop-only dependency excluded with default features enabled')
+          PY
+
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
         run: |

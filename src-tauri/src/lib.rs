@@ -21,7 +21,7 @@ pub fn run() {
     // Must be the first plugin. With its deep-link feature, a sign-in return
     // (app.vercel.crispdeck:/...) that launched a second process is passed to
     // the running app's deep-link listener, and the main window is raised.
-    #[cfg(feature = "desktop")]
+    #[cfg(all(desktop, feature = "desktop"))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
         if let Some(w) = app.get_webview_window("main") {
             let _ = w.set_focus();

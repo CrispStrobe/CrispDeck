@@ -137,6 +137,9 @@ and requires the original foreground process. These checks are mandatory in
 release aggregation. Existing legacy registrations remain for compatibility.
 The Android seed explicitly registers the new scheme, and the merge test
 requires it even when a cached plugin build does not update the fresh project.
+The native iOS build found #70's single-instance initialization compiled on
+mobile through the default `desktop` Cargo feature. Its dependency and init
+are now target-scoped to desktop as well as feature-gated.
 Real device/account sign-in is still pending; follow O1–O3 on each device and
 record it in `docs/validation.md` when the resources are available.
 

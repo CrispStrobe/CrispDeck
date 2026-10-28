@@ -24,6 +24,8 @@
   OAuth scheme in the exported IPA. Native CI checks scheme registration,
   callback dispatch and single-instance forwarding; Node 26 tests join the
   required CI gate.
+- Keep the desktop single-instance dependency and initialization out of mobile
+  targets, even when the default Cargo `desktop` feature is enabled.
 - Tests: Mastodon sign-in runs against a stand-in instance over HTTP;
   `scripts/probe-oauth-servers.mjs` checks the live Bluesky configuration.
 

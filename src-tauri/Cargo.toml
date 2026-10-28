@@ -25,9 +25,6 @@ tauri-plugin-notification = "2"
 tauri-plugin-deep-link = "2"
 tauri-plugin-shell = { version = "2", optional = true }
 tauri-plugin-process = { version = "2", optional = true }
-# Desktop: a deep link on Windows/Linux starts a second process; this hands
-# its URL to the running one instead.
-tauri-plugin-single-instance = { version = "2", features = ["deep-link"], optional = true }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -53,6 +50,9 @@ env_logger = "0.11"
 # System info (desktop only — hostname crate doesn't compile on mobile)
 [target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
 hostname = "0.4"
+# The default Cargo `desktop` feature can also be enabled by a mobile build.
+# This plugin exports no mobile init API, so scope the dependency by target.
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"], optional = true }
 
 # ── CrispASR (optional — translation, TTS, STT) ──────────────────────────
 # Path dep to sibling CrispASR checkout. Same pattern as crisp-docx and
