@@ -6,6 +6,7 @@
   "permissions": [
     "core:default",
     "opener:default",
+    "deep-link:default",
     "http:default",
     "dialog:default",
     "store:default",

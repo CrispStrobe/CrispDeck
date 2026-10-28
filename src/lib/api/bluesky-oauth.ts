@@ -15,6 +15,7 @@ import { writeString } from '$lib/safe-storage';
 import { swallow } from '$lib/debug-log';
 import type { Agent } from '@atproto/api';
 import { isTauri } from '$lib/platform';
+import { getOAuthWindowMode, authorizeInWindow, authorizeInBrowser, BLUESKY_APP_REDIRECT } from '$lib/oauth-window';
 // The very document served at this deployment's /client-metadata.json — one
 // source of truth for the deployed client's identity. The origin lives in the
 // file rather than in a constant here, so a build served from somewhere other
@@ -22,6 +23,7 @@ import { isTauri } from '$lib/platform';
 // client_id and redirect_uri on its own origin. Pointing at another origin
 // would land the user back on that other deployment after signing in.
 import clientMetadataJson from '../../../static/client-metadata.json';
+import nativeClientMetadataJson from '../../../static/client-metadata-native.json';
 import type { OAuthClientMetadataInput } from '@atproto/oauth-types';
 
 /**
@@ -69,24 +71,34 @@ export class OAuthUnavailableError extends Error {
 
 /** Message shown when OAuth cannot be offered. Exported so the UI can pre-empt it. */
 export const OAUTH_UNAVAILABLE_IN_APP =
-  'Bluesky OAuth is not available in the desktop and mobile apps yet: the ' +
-  'sign-in redirect has nowhere to land inside the app window. Use an App ' +
-  'Password below — everything works except direct messages.';
+  'Bluesky OAuth is not available here. Use an App Password below — ' +
+  'everything works except direct messages.';
+
+/**
+ * The app's client: a native AT Protocol client whose metadata is published at
+ * crispdeck.vercel.app and which returns to the app's URL scheme. Imported at
+ * build time for the same reason as the web one. Tokens are bound to the
+ * client id, so this must not change once people have signed in with it.
+ */
+const APP_CLIENT_METADATA = nativeClientMetadataJson as unknown as OAuthClientMetadataInput;
+
+/** Where BrowserOAuthClient keeps the DID of the current session. */
+const SESSION_POINTER_KEY = '@@atproto/oauth-client-browser(sub)';
 
 async function createOAuthClient(): Promise<BrowserOAuthClient> {
   if (isTauri()) {
-    // The webview's origin is `tauri://localhost` (or `http://tauri.localhost`
-    // on Windows/Android). Neither can serve a client-metadata document for the
-    // authorization server to fetch, and the loopback client the library would
-    // otherwise build immediately navigates to `http://127.0.0.1/` — which in a
-    // packaged app is a blank window rather than a dev server, so offering it
-    // would break the app rather than just fail.
-    //
-    // The sanctioned native flow (open the system browser, catch the callback
-    // on a loopback HTTP server) is buildable here — auth_wait_for_callback
-    // already does exactly that for Mastodon — but it is Rust work, not a
-    // frontend fix.
-    throw new OAuthUnavailableError(OAUTH_UNAVAILABLE_IN_APP);
+    // The webview's origin (`tauri://localhost`, `http://tauri.localhost`)
+    // can neither serve a client-metadata document nor receive a redirect, so
+    // the app signs in as a native client instead: the authorization page
+    // opens in a sign-in window or the system browser, and the redirect to
+    // app.vercel.crispdeck: comes back to the app (see oauth-window.ts).
+    const { BrowserOAuthClient } = await loadOAuthSdk();
+    return new BrowserOAuthClient({
+      clientMetadata: APP_CLIENT_METADATA,
+      responseMode: 'query',
+      handleResolver: HANDLE_RESOLVER,
+      onDelete: renewAfterDeath,
+    });
   }
 
   const loopback =
@@ -141,10 +153,124 @@ export async function startBlueskyOAuth(handle: string): Promise<void> {
   // type it on Bluesky's page" — it is an unresolvable handle, and it threw
   // `Failed to resolve identity:` with nothing after the colon. Signing in
   // against the entryway is what sends someone to Bluesky's own login form.
-  await client.signIn(handle.trim() || HANDLE_RESOLVER, {
+  const input = handle.trim() || HANDLE_RESOLVER;
+  if (isTauri()) {
+    await signInInApp(client, input);
+    return;
+  }
+  await client.signIn(input, {
     signal: new AbortController().signal,
   });
   // This redirects — execution stops here
+}
+
+/**
+ * Authorize in the app and complete the session in the webview, which holds
+ * the state and PKCE verifier. Uses a sign-in window, or the system browser
+ * and a deep link back (see oauth-window.ts).
+ */
+async function authorizeInApp(
+  client: BrowserOAuthClient,
+  input: string,
+  opts: { prompt?: 'none'; hidden?: boolean } = {},
+) {
+  const url = await client.authorize(input, {
+    redirect_uri: BLUESKY_APP_REDIRECT,
+    ...(opts.prompt ? { prompt: opts.prompt } : {}),
+  });
+  let query: string | null = null;
+  if (opts.hidden || getOAuthWindowMode() === 'window') {
+    try {
+      query = await authorizeInWindow(url.href, BLUESKY_APP_REDIRECT, { hidden: opts.hidden });
+    } catch (e) {
+      if (opts.hidden || !String(e).includes('could not open the sign-in window')) {
+        await client.abortRequest(url).catch(() => {});
+        throw e;
+      }
+    }
+  }
+  query ??= await authorizeInBrowser(url.href, BLUESKY_APP_REDIRECT);
+  const { session } = await client.callback(new URLSearchParams(query), {
+    redirect_uri: BLUESKY_APP_REDIRECT,
+  });
+  writeString(SESSION_POINTER_KEY, session.sub);
+  return session;
+}
+
+/** Interactive sign-in in the app, landing on the page that stores the account. */
+async function signInInApp(client: BrowserOAuthClient, input: string): Promise<void> {
+  await authorizeInApp(client, input);
+  const { goto } = await import('$app/navigation');
+  const { base } = await import('$app/paths');
+  await goto(`${base}/oauth/bsky-callback`);
+}
+
+/**
+ * The app's automatic re-login for a session whose refresh token died.
+ *
+ * Runs `prompt=none` in a hidden sign-in window. The window shares the app's
+ * cookie store, so while Bluesky still remembers the user from the last
+ * sign-in it answers with a fresh code and nobody sees anything. When it
+ * would need the user (login_required), this resolves null and the account
+ * falls back to the usual "reconnect in Settings" state.
+ *
+ * Guarded like maybeSilentReauth: at most one attempt per DID per 30 minutes.
+ * Not on mobile, where there is no hidden window to use. Runs at startup
+ * (client-factory) and whenever a session dies mid-use (renewAfterDeath).
+ */
+export function silentReauthInApp(handleOrDid: string, did: string): Promise<Agent | null> {
+  if (!isTauri() || getOAuthWindowMode() !== 'window') return Promise.resolve(null);
+  // A session that dies mid-use and the startup restore can both ask at once;
+  // they share one attempt rather than the second being turned away by the
+  // guard while the first is still running.
+  const inFlight = renewals.get(did);
+  if (inFlight) return inFlight;
+  const guardKey = `${SILENT_REAUTH_GUARD_PREFIX}${did}`;
+  try {
+    const last = Number(localStorage.getItem(guardKey) ?? 0);
+    if (Date.now() - last < SILENT_REAUTH_MIN_INTERVAL_MS) return Promise.resolve(null);
+  } catch {
+    return Promise.resolve(null);
+  }
+  writeString(guardKey, String(Date.now()));
+  const attempt = (async () => {
+    try {
+      const client = await getOAuthClient();
+      const session = await authorizeInApp(client, handleOrDid, { prompt: 'none', hidden: true });
+      if (session.sub !== did) return null;
+      const { Agent } = await loadAtprotoSdk();
+      return new Agent(session);
+    } catch (e) {
+      swallow(`bluesky-oauth.silentReauthInApp:${did}`, e);
+      return null;
+    } finally {
+      renewals.delete(did);
+    }
+  })();
+  renewals.set(did, attempt);
+  return attempt;
+}
+
+const renewals = new Map<string, Promise<Agent | null>>();
+
+/** Fired on window after a session was renewed in the background. */
+export const SESSION_RENEWED_EVENT = 'crispdeck:bluesky-session-renewed';
+
+/**
+ * The OAuth client's onDelete hook, in the app: a session whose refresh just
+ * failed mid-use is renewed in the background instead of waiting for the next
+ * launch. Listeners (client-factory) rebuild their clients on the event.
+ *
+ * Not for a revoked session — the user, or Bluesky, ended that on purpose.
+ */
+function renewAfterDeath(sub: string, cause: unknown): void {
+  const name = cause instanceof Error ? cause.name : '';
+  if (name !== 'TokenRefreshError' && name !== 'TokenInvalidError') return;
+  void silentReauthInApp(sub, sub).then((agent) => {
+    if (agent && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(SESSION_RENEWED_EVENT, { detail: { did: sub } }));
+    }
+  });
 }
 
 /**
@@ -160,7 +286,10 @@ export async function initBlueskyOAuth(): Promise<{
 } | null> {
   try {
     const client = await getOAuthClient();
-    const result = await client.init();
+    // init() would look for callback params in the window URL and insist on a
+    // loopback http origin; in the app the callback is completed in
+    // signInInApp, so only restoring is left to do.
+    const result = isTauri() ? await restoreFromPointer(client) : await client.init();
 
     if (result?.session) {
       const { Agent } = await loadAtprotoSdk();
@@ -178,6 +307,14 @@ export async function initBlueskyOAuth(): Promise<{
     }
   }
   return null;
+}
+
+async function restoreFromPointer(client: BrowserOAuthClient) {
+  let sub: string | null = null;
+  try {
+    sub = localStorage.getItem(SESSION_POINTER_KEY);
+  } catch { /* storage unavailable: no session */ }
+  return sub ? { session: await client.restore(sub) } : undefined;
 }
 
 /** Check if there's an active OAuth session */
@@ -301,7 +438,9 @@ export function clearSilentReauthFlag(): void {
  * truly logged-out user isn't stuck in a redirect loop.
  */
 export async function maybeSilentReauth(handleOrDid: string, did: string): Promise<boolean> {
-  if (typeof window === 'undefined') return false;
+  // A prompt=none redirect would navigate the app window away; the app's
+  // redirect lands in Rust, not in a page. The user reconnects from Settings.
+  if (typeof window === 'undefined' || isTauri()) return false;
   const guardKey = `${SILENT_REAUTH_GUARD_PREFIX}${did}`;
   try {
     const last = Number(localStorage.getItem(guardKey) ?? 0);

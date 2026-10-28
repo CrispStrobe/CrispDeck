@@ -7,7 +7,7 @@ import { BlueskyClient } from './bluesky';
 import { swallow, addLog } from '$lib/debug-log';
 import { MastodonClient } from './mastodon';
 import { ThreadsClient } from './threads';
-import { initBlueskyOAuth, restoreBlueskyOAuthSession, maybeSilentReauth } from './bluesky-oauth';
+import { initBlueskyOAuth, restoreBlueskyOAuthSession, maybeSilentReauth, silentReauthInApp, SESSION_RENEWED_EVENT } from './bluesky-oauth';
 import { listAccounts, getDecryptedCredentials } from '$lib/db';
 // Type-only: this module never constructs an Agent, it only passes them
 // around. A value import here put the whole SDK in every route that
@@ -116,7 +116,11 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
             if (restored.status === 'ok') {
               oauthAgent = restored.agent;
             } else if (restored.status === 'expired') {
-              oauthDead = true;
+              // In the app, renew it in a hidden window first; on the web
+              // this falls through to the redirecting maybeSilentReauth.
+              const renewed = await silentReauthInApp(acct.handle, did);
+              if (renewed) oauthAgent = renewed;
+              else oauthDead = true;
             } else {
               transientOAuthFailure = true;
             }
@@ -200,6 +204,12 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
 }
 
 /** Invalidate the client cache (e.g. after adding/removing an account) */
+// A Bluesky session renewed in the background: the cached clients still hold
+// the dead one, so the next caller must build fresh ones.
+if (typeof window !== 'undefined') {
+  window.addEventListener(SESSION_RENEWED_EVENT, () => invalidateClientCache());
+}
+
 export function invalidateClientCache(): void {
   _cachedResult = null;
   _cacheTime = 0;

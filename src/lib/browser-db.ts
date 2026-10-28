@@ -1,6 +1,6 @@
 import { base } from '$app/paths';
 import { writeString } from './safe-storage';
-import { fetchOk } from './http';
+import { ensureMastodonApp, mastodonAuthorizeUrl, exchangeMastodonCode } from './mastodon-app';
 /**
  * Browser-side database using IndexedDB.
  * Mirrors the Rust/SQLite backend so the app works fully on Vercel.
@@ -536,7 +536,11 @@ export async function deleteDraft(id: number): Promise<void> {
 
 // ── Mastodon OAuth (browser popup flow) ───────────────────────────────────
 
-export async function startMastodonOAuth(instanceUrl: string): Promise<{
+export async function startMastodonOAuth(
+  instanceUrl: string,
+  // The app passes its own fixed loopback address (see oauth-window.ts).
+  redirectUri = `${window.location.origin}${base}/oauth/callback`,
+): Promise<{
   auth_url: string;
   client_id: string;
   client_secret: string;
@@ -549,24 +553,11 @@ export async function startMastodonOAuth(instanceUrl: string): Promise<{
   // this client to an account they control. The instance echoes this back and
   // the callback page refuses anything else.
   const state = randomState();
-  // The instance stores this at registration, so getting it wrong bakes a
-  // dead callback into the registered app rather than failing loudly.
-  const redirectUri = `${window.location.origin}${base}/oauth/callback`;
+  // The instance stores the redirect URI at registration, so getting it wrong
+  // bakes a dead callback into the registered app rather than failing loudly.
 
-  const resp = await fetchOk(`${instance}/api/v1/apps`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      client_name: 'CrispDeck',
-      redirect_uris: redirectUri,
-      scopes: 'read write:statuses write:media write:favourites write:bookmarks',
-      website: 'https://github.com/CrispStrobe/CrispDeck',
-    }),
-  }, 'register app with instance');
-
-  const app = await resp.json();
-  if (!app.client_id) throw new Error('Instance registered no client_id');
-  const authUrl = `${instance}/oauth/authorize?client_id=${app.client_id}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent('read write:statuses write:media write:favourites write:bookmarks')}&state=${encodeURIComponent(state)}`;
+  const app = await ensureMastodonApp(instance, redirectUri);
+  const authUrl = mastodonAuthorizeUrl(instance, app, state);
 
   return {
     auth_url: authUrl,
@@ -577,38 +568,11 @@ export async function startMastodonOAuth(instanceUrl: string): Promise<{
   };
 }
 
-/** 32 random bytes as hex. Matches what the desktop build generates. */
+/** 32 random bytes as hex. */
 export function randomState(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-export async function completeMastodonOAuth(params: {
-  instance_url: string;
-  code: string;
-  client_id: string;
-  client_secret: string;
-  redirect_uri: string;
-}): Promise<{ access_token: string }> {
-  const instance = params.instance_url.replace(/\/$/, '');
-  const resp = await fetchOk(`${instance}/oauth/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      client_id: params.client_id,
-      client_secret: params.client_secret,
-      redirect_uri: params.redirect_uri,
-      grant_type: 'authorization_code',
-      code: params.code,
-      scope: 'read write:statuses write:media write:favourites write:bookmarks',
-    }),
-  }, 'exchange authorization code');
-  const data = await resp.json();
-  // Without this the account is saved with access_token: undefined and every
-  // later call fails somewhere far away from the cause.
-  if (!data.access_token) {
-    throw new Error(data.error_description ?? data.error ?? 'Instance returned no access token');
-  }
-  return { access_token: data.access_token };
-}
+export const completeMastodonOAuth = exchangeMastodonCode;

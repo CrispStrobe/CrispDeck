@@ -6,7 +6,7 @@
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { listAccounts, addAccount as dbAddAccount, startMastodonOAuth as dbStartOAuth } from '$lib/db';
+  import { listAccounts, addAccount as dbAddAccount, startMastodonOAuth as dbStartOAuth, runMastodonAuthorization } from '$lib/db';
   import { startBlueskyOAuth } from '$lib/api/bluesky-oauth';
   import { Rss, PenSquare, Users, ScanSearch, Columns3, Bell, Search, TrendingUp, BarChart3, Bookmark, MessageSquare, Keyboard } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
@@ -103,7 +103,8 @@
       throw new Error('Could not store the sign-in state — browser storage is unavailable');
     }
     markFirstRunComplete();
-    window.location.href = oauthState.auth_url;
+    const callback = await runMastodonAuthorization(oauthState, `${base}/oauth/callback`);
+    if (callback) await goto(callback);
   }
 
   function handleConnectThreads() {

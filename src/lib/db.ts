@@ -263,6 +263,8 @@ export async function deleteDraft(id: number): Promise<void> {
   return invoke('db_delete_draft', { id });
 }
 
+import { getOAuthWindowMode, authorizeInWindow, authorizeInBrowser, MASTODON_APP_REDIRECT } from '$lib/oauth-window';
+
 // ── Mastodon OAuth ─────────────────────────────────────────────────────────
 
 export async function startMastodonOAuth(instanceUrl: string): Promise<{
@@ -273,8 +275,47 @@ export async function startMastodonOAuth(instanceUrl: string): Promise<{
   /** Echoed back by the instance; the callback page refuses anything else. */
   state: string;
 }> {
+  // Same registration code in both builds; the app's return address is a
+  // fixed loopback one, so its registration can be reused across sign-ins.
   if (!isTauri()) return browserDb.startMastodonOAuth(instanceUrl);
-  return invoke('auth_start_mastodon_oauth', { instance_url: instanceUrl });
+  return browserDb.startMastodonOAuth(instanceUrl, MASTODON_APP_REDIRECT);
+}
+
+/**
+ * Send the user to the instance's authorization page and get them back.
+ *
+ * On the web the page itself navigates there and the instance redirects to
+ * /oauth/callback. In the app that broke: the app window navigated away to
+ * the instance, and pressing "Authorize" redirected to the 127.0.0.1 port that
+ * had been registered — where nothing was listening, so the
+ * button appeared to do nothing and the window never came back. Now the page
+ * opens in a sign-in window, or the system browser (see oauth-window.ts), and
+ * the redirect is handed to the same /oauth/callback page in the app window.
+ *
+ * Resolves with the in-app callback path to navigate to, or null when the
+ * page is unloading (web).
+ */
+export async function runMastodonAuthorization(
+  oauthState: { auth_url: string; redirect_uri: string; state: string },
+  callbackPath: string,
+): Promise<string | null> {
+  if (!isTauri()) {
+    window.location.href = oauthState.auth_url;
+    return null;
+  }
+  let query: string | null = null;
+  if (getOAuthWindowMode() === 'window') {
+    try {
+      query = await authorizeInWindow(oauthState.auth_url, oauthState.redirect_uri);
+    } catch (e) {
+      // A window that could not open falls back to the browser; one the user
+      // closed or that failed is reported.
+      if (!String(e).includes('could not open the sign-in window')) throw e;
+    }
+  }
+  query ??= await authorizeInBrowser(oauthState.auth_url, oauthState.redirect_uri);
+  // The raw query, state included: /oauth/callback checks it.
+  return `${callbackPath}?${query}`;
 }
 
 export async function completeMastodonOAuth(params: {
@@ -284,8 +325,7 @@ export async function completeMastodonOAuth(params: {
   client_secret: string;
   redirect_uri: string;
 }): Promise<{ access_token: string }> {
-  if (!isTauri()) return browserDb.completeMastodonOAuth(params);
-  return invoke('auth_complete_mastodon_oauth', params);
+  return browserDb.completeMastodonOAuth(params);
 }
 
 /** Where the desktop build keeps credentials. */
