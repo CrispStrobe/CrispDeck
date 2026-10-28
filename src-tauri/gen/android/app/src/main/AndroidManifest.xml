@@ -31,12 +31,14 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- OAuth deep-link callback -->
+            <!-- OAuth deep-link callback. app.vercel.crispdeck is where Mastodon
+                 and Bluesky sign-in return (src/lib/oauth-window.ts). -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="crispdeck" />
+                <data android:scheme="app.vercel.crispdeck" />
             </intent-filter>
         </activity>
     </application>

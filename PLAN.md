@@ -16,7 +16,11 @@ A unified Mastodon + Bluesky + Threads social media client with:
 **Tech stack**: SvelteKit 2, Svelte 5 (runes), Tailwind CSS 4, Vite 6, Tauri 2, TypeScript + Rust, Vitest
 
 
-## Current State (2026-09-22)
+## Current State (2026-10-28)
+
+In-app OAuth for Mastodon and Bluesky is on branch `oauth-in-app`, unverified in a real app; see "In-app OAuth" under Remaining Work.
+
+### Earlier (2026-09-22)
 
 v1.2.9 — ~2,000 unit tests across 151 files (plus 62 live-API tests that run nightly rather than on every PR), 126 Rust tests, and 49 Playwright E2E specs including a smoke test of every route and the OAuth callback page.
 
@@ -41,6 +45,153 @@ Recent reliability work (2026-09-18/19), merged as PRs #1–#5:
 
 
 ## Remaining Work
+
+### In-app OAuth (branch `oauth-in-app`, 2026-10-28) — open tasks
+
+**Context for whoever picks this up.** Branch `oauth-in-app` on GitHub
+makes Mastodon and Bluesky OAuth work in the Tauri apps. Read these first:
+
+- `src/lib/oauth-window.ts`: the return addresses (`BLUESKY_APP_REDIRECT =
+  app.vercel.crispdeck:/oauth/callback`, `MASTODON_APP_REDIRECT =
+  app.vercel.crispdeck://oauth/mastodon`), the mode switch ('window' = desktop
+  sign-in window, the default; 'browser' = system browser plus deep link,
+  forced on mobile), `authorizeInWindow`, `authorizeInBrowser`.
+- `src-tauri/src/commands/auth_commands.rs` → `auth_in_app_window`: opens a
+  `WebviewWindow` at the auth URL; its `on_navigation` handler cancels any
+  navigation starting with the redirect prefix and returns that URL's query.
+  `hidden: true` is used for silent re-login.
+- `src/lib/api/bluesky-oauth.ts`: in Tauri the client is the native client
+  from `static/client-metadata-native.json`. `authorizeInApp` does
+  authorize → window/browser → `client.callback`. `silentReauthInApp` is
+  `prompt=none` in a hidden window, at most one attempt per DID per 30
+  minutes; concurrent callers share one attempt. `renewAfterDeath` is the
+  client's `onDelete` hook (renews on TokenRefreshError/TokenInvalidError,
+  never on TokenRevokedError) and fires `SESSION_RENEWED_EVENT`, which
+  `client-factory.ts` uses to drop its cached clients.
+- `src/lib/mastodon-app.ts`: scopes (`MASTODON_SCOPES`), a registration
+  cache per instance + redirect URI in localStorage `crispdeck-mastodon-apps`
+  (checked with a `client_credentials` grant; re-registered on 400/401 or a
+  scope change), token exchange, revoke. Used by both web and app; the old
+  Rust `mastodon_oauth.rs` loopback server was deleted.
+- Tests: `src/lib/oauth-window.test.ts`, `src/lib/mastodon-app.test.ts`,
+  `src/lib/api/bluesky-oauth.app.test.ts`.
+
+What is verified: Rust compiles and its 114 tests pass with `--locked` (on
+Linux, without the CrispASR feature). svelte-check is clean and 2,059 vitest
+tests pass. **None of it has run in a real app window or on a device yet.**
+
+#### OA-1. Deploy the native client metadata (blocker for Bluesky in the apps)
+- **Why**: Bluesky's authorization server fetches the client_id URL
+  `https://crispdeck.vercel.app/client-metadata-native.json`. Until it is
+  live, every Bluesky sign-in in the app fails at `client.authorize()` with
+  a client-metadata error. Web sign-in is unaffected.
+- **Do**: deploy the branch's `static/client-metadata-native.json` and its
+  `vercel.json` header/rewrite entries to production. Merging the branch to
+  `main` deploys it if Vercel auto-deploys `main`; otherwise run
+  `vercel deploy --prod`. This is a production change, so get the owner's
+  go-ahead first.
+- **Done when**: `curl -si https://crispdeck.vercel.app/client-metadata-native.json`
+  returns 200, `content-type: application/json`,
+  `access-control-allow-origin: *`, and a body identical to the file.
+- **Never** change `client_id` or `redirect_uris` in that file after people
+  have signed in with it: their tokens are bound to the client id, and the
+  redirect must stay the reverse-domain scheme of the client_id host.
+
+#### OA-2. Verify the sign-in window on macOS (owner's MacBook)
+- **Run**: `git checkout oauth-in-app && npm install && npm run tauri dev`.
+  If there is no sibling `../CrispASR` checkout, comment out the `[patch]`
+  block in `src-tauri/.cargo/config.toml` first (do not commit that).
+- **Check** the "Sign-in in the apps" list in TESTING.md, desktop items.
+- **Main risk**: whether WKWebView reports the server's **302 redirect** to a
+  custom scheme through `on_navigation`. Mastodon's Authorize button is a
+  form POST answered by a 302 to `app.vercel.crispdeck://oauth/mastodon?...`.
+  If the window just stays on the Mastodon page (or shows a "cannot open"
+  error) and never closes:
+  1. confirm by temporarily logging every URL in the `on_navigation` closure
+     (`log::info!("{}", nav)`);
+  2. fallback A: also check the URL in `.on_page_load` and in a
+     `WebviewWindowBuilder::on_web_resource_request` handler, if one is
+     available in the Tauri version in Cargo.lock;
+  3. fallback B: register `app.vercel.crispdeck` as a custom protocol on the
+     sign-in webview (`register_uri_scheme_protocol` on the Builder): WKWebView
+     then *loads* the redirect through Tauri, and the handler can read the
+     query and send it down the same oneshot channel;
+  4. until it is fixed, users can switch Settings → Sign-in window to
+     "System browser" (needs a built bundle, see OA-3).
+- **Silent re-login test**: sign in to Bluesky via OAuth. In the main
+  window's devtools (right-click → Inspect in `tauri dev`), open IndexedDB →
+  the `@atproto-oauth-client` database → `session` store and edit that DID's
+  entry: set `value.tokenSet.refresh_token` to `"x"` and `value.tokenSet.expires_at` to a
+  past ISO date. In localStorage, delete `crispdeck-bsky-silent-reauth:<did>`.
+  Reload. Expected: no window appears, the account keeps working, and the log
+  viewer shows no "OAuth session expired". If it fails, the log viewer shows
+  `bluesky-oauth.silentReauthInApp:<did>` with the reason. `login_required`
+  means the sign-in window's cookie store is not shared with or persisted
+  like the main webview's: check whether Tauri gives the new window a
+  separate data store.
+- **Done when**: every desktop item in TESTING.md's sign-in list is ticked,
+  or each failing one has an issue with the observed behaviour.
+
+#### OA-3. Verify "System browser" mode on built desktop bundles
+- macOS registers the URL scheme only from a built `.app`, so use
+  `npm run tauri build`, open the bundle, and choose Settings → Sign-in
+  window → System browser. Sign in to both services. The browser should hand
+  back to CrispDeck, and the sign-in should finish.
+- Windows/Linux: `register_all()` in `lib.rs` registers the scheme at
+  runtime. A deep link that starts a second process is forwarded by
+  tauri-plugin-single-instance (feature `deep-link`) to the running app's
+  `onOpenUrl`. Check that a second CrispDeck window does **not** open.
+- **Done when**: both services complete on macOS, and on Windows or Linux.
+
+#### OA-4. Verify on iOS and Android
+- Both now list the `app.vercel.crispdeck` scheme
+  (`src-tauri/Info.ios.plist`, `src-tauri/gen/android/app/src/main/AndroidManifest.xml`),
+  next to the older `crispdeck` scheme, which nothing in `src/` uses.
+- Build per `docs/releasing.md`, sign in to both services, and confirm the
+  browser returns to the app and the account appears. Also check that
+  `onOpenUrl` fires when the app was suspended (iOS) or recreated (Android):
+  the listener is registered by `authorizeInBrowser` in JS, so a cold
+  relaunch would lose the pending sign-in. If that happens, also read
+  `getCurrent()` from `@tauri-apps/plugin-deep-link` when the page mounts and
+  finish the sign-in from there. For Mastodon, the state saved in
+  `crispdeck-oauth-state` lets `/oauth/callback` finish it. For Bluesky,
+  `client.callback()` needs the state that the OAuth client keeps in
+  IndexedDB, which survives a relaunch.
+- Optional, better UX: use `ASWebAuthenticationSession` (iOS) or Custom Tabs
+  (Android) instead of a plain browser hand-off. Check for a maintained Tauri
+  2 plugin before writing one.
+- **Done when**: both services sign in on one real iOS and one real Android
+  device.
+
+#### OA-5. Mastodon accounts connected before the new scopes
+- **Problem**: tokens issued before this branch have only `read
+  write:statuses write:media write:favourites write:bookmarks`. Follow,
+  block, mute, lists, filters, dismissing announcements and notifications
+  return **403** for those accounts until they reconnect.
+- **Do**: in `src/lib/api/mastodon.ts`, where non-OK responses become errors,
+  recognise a 403 whose body mentions scope (Mastodon answers
+  `{"error":"This action is outside the authorized scopes"}`). Throw a
+  dedicated error whose message tells the user to reconnect the account in
+  Settings, with i18n keys in all 8 locale files. Optionally show a one-time
+  banner on Settings for Mastodon accounts whose credentials predate the
+  change. There is no stored scope today; add `scopes: MASTODON_SCOPES` to the
+  credentials JSON written in `src/routes/oauth/callback/+page.svelte`, and
+  treat its absence as "old".
+- **Done when**: a test feeds that 403 body through the client and asserts
+  the reconnect message.
+
+#### OA-6. Mastodon custom-scheme redirect on other servers
+- mastodon.social should accept `app.vercel.crispdeck://oauth/mastodon`
+  (other Mastodon apps use the same form). Check app registration
+  (`POST /api/v1/apps`) once against a GoToSocial and an Akkoma/Pleroma
+  instance. If one rejects it, record the error. The fix is a per-instance
+  fallback redirect in `ensureMastodonApp`, e.g. `urn:ietf:wg:oauth:2.0:oob`,
+  with the user pasting the code. That needs UI, so scope it with the owner
+  first.
+
+#### OA-7. Merge
+- Open a PR from `oauth-in-app` (none exists yet), let CI run, and merge
+  after OA-2. OA-1 should go live together with, or before, the merge.
 
 ### Future: Nostr support
 - **Status**: Not started

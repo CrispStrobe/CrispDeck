@@ -39,7 +39,8 @@ not a browser page reload. The on-device scheduler requires the app to remain
 open; closing the app is not expected to publish in the background.
 
 Delete test posts after recording their public IDs or links. Native Bluesky
-sign-in currently uses an App Password; browser OAuth is available on the web.
+and Mastodon sign-in use OAuth (sign-in window on desktop, system browser on
+mobile); App Passwords remain available for Bluesky.
 Threads needs the separately configured OAuth service; a static ZIP alone does
 not provide server endpoints.
 

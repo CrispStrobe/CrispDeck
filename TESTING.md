@@ -120,6 +120,21 @@ a route only findable by typing the URL is a route nobody uses.
 - [ ] `/thread`
 - [ ] `/trending`
 
+## Sign-in in the apps
+
+Desktop with Settings → Sign-in window = "In CrispDeck", unless noted.
+
+- [ ] Mastodon: the sign-in window opens, its title reads "Sign in — <instance> (secure)", Authorize closes it and the account appears
+- [ ] Mastodon: closing the window instead reports "the sign-in window was closed"
+- [ ] Mastodon: sign in twice to the same instance; the instance's Settings → Authorized apps shows one CrispDeck, not two
+- [ ] Mastodon: follow, mute, add to a list — no 403
+- [ ] Mastodon: remove the account in Settings; the token disappears from the instance's authorized apps
+- [ ] Bluesky: OAuth sign-in, then open Messages — DMs load
+- [ ] Bluesky: restart the app — still signed in, no window appears
+- [ ] Bluesky: with the session forced dead (see PLAN.md "Verify in-app OAuth"), restart — renewed with no visible window
+- [ ] "System browser" mode (built bundle, not `tauri dev`): both services return to the app
+- [ ] iOS and Android: both services return to the app from the system browser
+
 ## Flows that cross pages
 
 - [ ] Reply from the deck: does the floating compose carry the right context?

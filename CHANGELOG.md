@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### Sign-in
+
+- Mastodon sign-in works in the desktop and mobile apps. Pressing
+  "Authorize" used to appear to do nothing: the app window had navigated to
+  the instance and was redirected to a local port nobody listened on.
+- Bluesky OAuth, including direct messages, is available in the apps, not
+  only on the web. The apps sign in as a native AT Protocol client
+  (`/client-metadata-native.json`).
+- On desktop, sign-in opens in a CrispDeck sign-in window whose title shows
+  the site's domain. Settings → "Sign-in window" switches to the system
+  browser instead; mobile always uses the system browser. Both return to the
+  app through its `app.vercel.crispdeck:` URL scheme, with no local port.
+- An expired Bluesky session renews itself in a hidden sign-in window, at
+  startup and when a refresh fails mid-use, while Bluesky still remembers the
+  user. Otherwise the account asks to be reconnected, as before.
+- Mastodon: one app registration per instance is reused, instead of a new
+  "CrispDeck" under the user's authorized apps on every sign-in. Permissions
+  now include follows, blocks, mutes, lists, filters, announcements and
+  notifications, which previously failed with 403. Accounts connected before
+  this need to be reconnected once to get them. Removing an account revokes
+  its token on the instance.
+
 ### Mobile layout
 
 - Android status and navigation icons follow CrispDeck's dark, OLED and light

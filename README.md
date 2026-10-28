@@ -118,8 +118,9 @@ The Threads API is significantly more limited than Bluesky/Mastodon. Here's what
 Threads users' posts can also be read via **Mastodon federation** (`@user@threads.net`) if the Threads user has opted into fediverse sharing.
 
 ### Platform & UX
-- **Bluesky OAuth** (recommended) or app passwords
-- **Mastodon OAuth** with redirect callback
+- **Bluesky OAuth** (recommended) or app passwords — on the web and in the apps
+- **Mastodon OAuth** — on the web and in the apps
+- **In-app sign-in** (desktop): a CrispDeck sign-in window, or the system browser (Settings → Sign-in window); expired Bluesky sessions renew themselves silently
 - **Threads OAuth** with server proxy, BYOK credentials, or manual token paste
 - **Internationalization**: 8 languages (EN, DE, ES, FR, JA, PT, ZH, AR — all 100%) with RTL support
 - **Keyboard shortcuts**: ? for help, g+key navigation, j/k post scrolling, vim-style deck navigation
@@ -396,8 +397,8 @@ src-tauri/
     lib.rs             AppState, plugin registration, 30+ command handlers
     asr.rs             CrispASR integration (translate, transcribe, synthesize)
     db/                accounts, identities, crossposts, drafts, follows (SQLite CRUD)
-    auth/              credentials (AES-GCM), mastodon_oauth (ephemeral localhost server)
-    commands/          db_commands, auth_commands, detect_commands (identity matching)
+    auth/              credentials (AES-GCM), OS secret stores
+    commands/          db_commands, auth_commands (OAuth sign-in window), detect_commands (identity matching)
   tests/               crispasr_integration.rs (registry + live translation tests)
   migrations/          001_initial.sql (7-table schema)
 
@@ -477,11 +478,21 @@ genuinely drop them from a mobile binary, move those two crates into a
 `[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]`
 table rather than relying on a CLI flag.
 
-The `crispdeck://` scheme is registered for native callbacks. Mastodon uses the native loopback OAuth listener. Packaged-app Bluesky sign-in uses an App Password; browser OAuth is available on the web.
+**OAuth in the apps.** Mastodon and Bluesky sign-in return to the app's URL
+scheme, `app.vercel.crispdeck:` (registered by tauri-plugin-deep-link, in
+`src-tauri/Info.ios.plist` and in the Android manifest). On desktop the
+authorization page opens in a CrispDeck window (`auth_in_app_window` in
+`src-tauri/src/commands/auth_commands.rs`) and Rust intercepts the redirect
+before it loads; with "System browser" chosen in Settings, and always on
+mobile, the OS delivers it as a deep link. No local port is opened. Bluesky
+uses the native client published at `static/client-metadata-native.json`,
+which must be live on crispdeck.vercel.app. See `src/lib/oauth-window.ts`.
+On macOS the scheme is only registered by a built bundle, so `tauri dev` can
+test the sign-in window but not the system-browser mode.
 
 ## Stats
 
-- 2,026 frontend unit tests + 92 Playwright browser checks + Rust tests on three operating systems
+- 2,059 frontend unit tests + 92 Playwright browser checks + Rust tests on three operating systems
 - 29 pages, 15 deck column types
 - 3 networks: Bluesky (OAuth + app password), Mastodon (OAuth), Threads (OAuth with server proxy)
 - 8 UI languages (EN, DE, ES, FR, JA, PT, ZH, AR — all 100%) with RTL support

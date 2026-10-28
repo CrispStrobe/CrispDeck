@@ -37,6 +37,7 @@
 - [x] Keyboard shortcuts (? for help, g+key navigation)
 - [x] Collapsible sidebar + mobile layout (hamburger + bottom tabs)
 - [x] Web (Vercel) + Desktop (Tauri) + Tauri OAuth
+- [x] In-app OAuth without local ports (sign-in window / system browser + `app.vercel.crispdeck:` deep link), silent Bluesky session renewal, reused Mastodon app registrations (2026-10-28, branch `oauth-in-app`)
 - [x] CI/CD: tests + builds on Linux/macOS/Windows
 - [x] 118 unit + integration tests
 - [x] Mastodon instance info/rules display

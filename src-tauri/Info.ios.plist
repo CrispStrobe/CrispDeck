@@ -10,6 +10,7 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>crispdeck</string>
+				<string>app.vercel.crispdeck</string>
 			</array>
 		</dict>
 	</array>
