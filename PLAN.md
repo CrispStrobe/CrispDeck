@@ -118,7 +118,7 @@ Linux. Each open item below says how to close it.
   the browser asks to open CrispDeck; the app comes to the front and the
   account appears. Timeout is 300 s (`INTERACTIVE_TIMEOUT`).
 
-#### O4. Unsupported silent Bluesky re-login — implemented, awaiting CI
+#### O4. Unsupported silent Bluesky re-login — implemented; covered by required CI
 
 Removed the public-client silent authorization paths on native and web,
 including hidden windows, renewal events and callback flags. Normal refresh
@@ -126,7 +126,7 @@ and transient restore retries remain. Regression coverage checks that dead
 sessions require explicit reconnection and remain read-only. The live server
 probe still documents bsky.social's refusal; no confidential backend is added.
 
-#### O5. Mobile callbacks — implemented, awaiting native CI; account tests pending
+#### O5. Mobile callbacks — implemented; native checks required, account tests pending
 
 The iOS release metadata script previously replaced generated URL registrations
 with the legacy scheme. It now preserves plugin entries and requires
@@ -138,7 +138,7 @@ release aggregation. Existing legacy registrations remain for compatibility.
 Real device/account sign-in is still pending; follow O1–O3 on each device and
 record it in `docs/validation.md` when the resources are available.
 
-#### O6. Desktop callbacks — implemented, awaiting native CI; account tests pending
+#### O6. Desktop callbacks — implemented; native checks required, account tests pending
 
 Windows checks the per-user protocol registration and executable. Linux checks
 its selected desktop handler and executable under a real D-Bus session. Both
@@ -147,20 +147,21 @@ exactly the original process. macOS checks its bundled scheme and callback
 routing too. App logs record a fixed delivery message, never callback URLs or
 codes. Full provider sign-in in both modes still requires dedicated accounts.
 
-#### O7. Node 26 test failures — reproduced and fixed, awaiting CI
+#### O7. Node 26 test failures — reproduced and fixed; covered by required CI
 
 Node 26.4.0 reproduces all three reported failures on the original tests (two
 storage failures and one preference-change failure). Storage tests now spy on
 `localStorage` itself, so both jsdom and the fallback MemoryStorage are covered.
 CI runs the entire unit suite on Node 26.4.0 as well as its normal LTS job.
 
-#### OAuth listener ordering and merge checks — implemented, awaiting CI
+#### OAuth listener ordering and merge checks — implemented; covered by required CI
 
 The browser opener now waits for native listener registration; delayed or
 failed registration, timeout cleanup and exact callback matching are covered.
 A stable `Required CI` job requires frontend/browser, Node 26 and the complete
-Rust matrix. Branch protection will require that check before merge, including
-for administrators; it will not impose a human approval requirement.
+Rust matrix. Main branch protection requires that check before merge, including for
+administrators, with the branch up to date. It imposes no human approval
+requirement.
 
 #### O8. Tauri version alignment — agent can do, low priority
 - Now: crate `tauri` 2.11.2 / `@tauri-apps/cli` 2.11.2 / `@tauri-apps/api`

@@ -58,8 +58,8 @@ function isLoopbackHost(hostname: string): boolean {
 }
 
 /**
- * Thrown, rather than returning a client that cannot work, when running inside
- * the Tauri webview. Callers surface `.message` to the user.
+ * Describes a context where the OAuth SDK cannot be initialized.
+ * Callers surface `.message` to the user.
  */
 export class OAuthUnavailableError extends Error {
   constructor(message: string) {
@@ -228,8 +228,8 @@ export async function initBlueskyOAuth(): Promise<{
       };
     }
   } catch (e) {
-    // Not being able to offer OAuth at all (the Tauri webview) is a fact about
-    // the platform, not a failure worth logging on every launch.
+    // A context that cannot initialize OAuth is not a session failure
+    // worth logging on every launch.
     if (!(e instanceof OAuthUnavailableError)) {
       swallow('bluesky-oauth.init', e);
     }

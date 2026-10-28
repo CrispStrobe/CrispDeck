@@ -98,9 +98,9 @@ try {
     $schemeCommand = (Get-Item "$schemeKey\shell\open\command").GetValue('')
     if (-not $schemeCommand.Contains($installed.FullName)) { throw 'OAuth scheme points to another executable.' }
     $schemeCommand | Set-Content (Join-Path $Output 'oauth-handler-command.txt')
-    # Read callback delivery as it arrives; URLs and authorization codes are
-    # deliberately never logged by the app. This listener only records a fixed
-    # lifecycle message from the deep-link plugin.
+    # Exercise OS forwarding to this process. The retained app log must
+    # contain a fixed delivery message for each callback; URLs and codes
+    # are deliberately never logged by the app.
     foreach ($uri in $callbackUris) {
         Start-Process $uri
         Start-Sleep -Seconds 3
