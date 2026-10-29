@@ -37,6 +37,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="crispdeck" />
+                <data android:scheme="app.vercel.crispdeck" />
             </intent-filter>
         </activity>
     </application>

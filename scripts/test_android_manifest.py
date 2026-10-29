@@ -37,6 +37,7 @@ class AndroidManifestTests(unittest.TestCase):
             self.assertIn('smallestScreenSize', activity.get(f'{{{manifest.ANDROID}}}configChanges'))
             self.assertEqual(len(activity.findall('intent-filter')), 2)
             self.assertTrue(any(d.get(f'{{{manifest.ANDROID}}}scheme') == 'crispdeck' for d in activity.findall('intent-filter/data')))
+            self.assertTrue(any(d.get(f'{{{manifest.ANDROID}}}scheme') == 'app.vercel.crispdeck' for d in activity.findall('intent-filter/data')))
             first = target.read_bytes()
             manifest.merge(seed, target)
             self.assertEqual(target.read_bytes(), first)

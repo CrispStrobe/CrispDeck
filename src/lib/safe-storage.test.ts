@@ -51,7 +51,7 @@ describe('readJson', () => {
 
   it('survives storage that throws on access', () => {
     // Safari in private mode, and browsers with site data blocked.
-    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+    vi.spyOn(Object.getPrototypeOf(localStorage), 'getItem').mockImplementation(() => {
       throw new Error('SecurityError');
     });
     expect(readJson('k', 'fallback')).toBe('fallback');
@@ -71,7 +71,7 @@ describe('readString', () => {
 
   it('falls back when missing or unavailable', () => {
     expect(readString('absent', 'd')).toBe('d');
-    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('nope'); });
+    vi.spyOn(Object.getPrototypeOf(localStorage), 'getItem').mockImplementation(() => { throw new Error('nope'); });
     expect(readString('k', 'd')).toBe('d');
   });
 });
@@ -83,7 +83,7 @@ describe('writeJson', () => {
   });
 
   it('reports failure when the quota is exceeded rather than throwing', () => {
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    vi.spyOn(Object.getPrototypeOf(localStorage), 'setItem').mockImplementation(() => {
       const e = new Error('QuotaExceededError');
       e.name = 'QuotaExceededError';
       throw e;
@@ -94,7 +94,7 @@ describe('writeJson', () => {
 
   it('reports failure when storage is disabled outright', () => {
     // Safari private mode throws on every setItem.
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('SecurityError'); });
+    vi.spyOn(Object.getPrototypeOf(localStorage), 'setItem').mockImplementation(() => { throw new Error('SecurityError'); });
     expect(writeString('k', 'v')).toBe(false);
   });
 });
@@ -107,7 +107,7 @@ describe('removeKey', () => {
   });
 
   it('does not throw when storage is unavailable', () => {
-    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => { throw new Error('nope'); });
+    vi.spyOn(Object.getPrototypeOf(localStorage), 'removeItem').mockImplementation(() => { throw new Error('nope'); });
     expect(() => removeKey('k')).not.toThrow();
   });
 });

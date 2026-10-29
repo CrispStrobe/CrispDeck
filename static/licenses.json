@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-06-05T14:36:41.963Z",
+  "generatedAt": "2026-10-28T23:27:37.050Z",
   "counts": {
     "frontend": 12,
-    "backend": 38,
-    "total": 50
+    "backend": 39,
+    "total": 51
   },
   "licenses": [
     {
@@ -268,6 +268,14 @@
       "license": "Unknown",
       "author": "Various",
       "link": "https://crates.io/crates/optional",
+      "source": "Backend"
+    },
+    {
+      "name": "oslog",
+      "version": "0.2.0",
+      "license": "MIT",
+      "author": "Steven Joruk",
+      "link": "https://github.com/steven-joruk/oslog",
       "source": "Backend"
     },
     {

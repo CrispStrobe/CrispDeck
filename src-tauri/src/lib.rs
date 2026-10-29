@@ -2,11 +2,12 @@ mod asr;
 mod auth;
 mod commands;
 mod db;
+mod lifecycle;
 mod system_bars;
 
 use rusqlite::Connection;
 use std::sync::Mutex;
-use tauri::Manager;
+use tauri::{Listener, Manager};
 
 pub struct AppState {
     pub db: Mutex<Connection>,
@@ -21,7 +22,7 @@ pub fn run() {
     // Must be the first plugin. With its deep-link feature, a sign-in return
     // (app.vercel.crispdeck:/...) that launched a second process is passed to
     // the running app's deep-link listener, and the main window is raised.
-    #[cfg(feature = "desktop")]
+    #[cfg(all(desktop, feature = "desktop"))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
         if let Some(w) = app.get_webview_window("main") {
             let _ = w.set_focus();
@@ -45,6 +46,12 @@ pub fn run() {
 
     builder
         .setup(|app| {
+            // Never log callback URLs: their query can contain authorization
+            // codes. A fixed lifecycle message also lets native smoke checks
+            // confirm the plugin delivered an OS callback to this process.
+            app.listen("deep-link://new-url", |_| {
+                lifecycle::oauth_callback();
+            });
             // macOS and mobile register the scheme from the bundle; Windows
             // and Linux only at runtime (and not at all in `tauri dev`
             // otherwise).
@@ -81,6 +88,7 @@ pub fn run() {
                 "CrispDeck v{} started",
                 env!("CARGO_PKG_VERSION")
             );
+            lifecycle::started();
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

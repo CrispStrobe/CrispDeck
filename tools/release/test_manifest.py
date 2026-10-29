@@ -30,7 +30,7 @@ class ReleaseManifestTests(unittest.TestCase):
         apk = self.root / manifest.names(VERSION)['android'][0]
         (self.root / 'android-emulator-smoke.json').write_text(json.dumps({'version': VERSION,
             'commit': COMMIT, 'validator_commit': COMMIT, 'diagnostic': False, 'apk_sha256': manifest.digest(apk),
-            'checks': {'install_launch_restart': True, 'system_bar_themes': True}}))
+            'checks': {'install_launch_restart': True, 'system_bar_themes': True, 'deep_link_dispatch': True}}))
 
     def verify(self, **kwargs):
         return manifest.verify(self.root, VERSION, COMMIT, '62', CERT, **kwargs)
@@ -92,6 +92,20 @@ class ReleaseManifestTests(unittest.TestCase):
         report['checks']['system_bar_themes'] = False
         path.write_text(json.dumps(report))
         with self.assertRaisesRegex(ValueError, 'system-bar theme'):
+            self.verify()
+
+    def test_callback_dispatch_is_mandatory_for_every_native_platform(self):
+        for platform in ('ios', 'macos', 'windows', 'linux'):
+            with self.subTest(platform=platform):
+                self.change_receipt(platform, lambda data: data['checks'].update(deep_link_dispatch=False))
+                with self.assertRaisesRegex(ValueError, 'deep_link_dispatch'):
+                    self.verify()
+                self.change_receipt(platform, lambda data: data['checks'].update(deep_link_dispatch=True))
+        path = self.root / 'android-emulator-smoke.json'
+        report = json.loads(path.read_text())
+        report['checks']['deep_link_dispatch'] = False
+        path.write_text(json.dumps(report))
+        with self.assertRaisesRegex(ValueError, 'callback dispatch'):
             self.verify()
 
     def test_retained_package_diagnostics_cannot_be_promoted_to_release_evidence(self):

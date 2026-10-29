@@ -15,9 +15,19 @@
   "CrispDeck" on every sign-in, asks for the permissions the app actually uses
   (following, blocking, muting, lists, filters, notifications, account
   settings), and revokes the token when an account is removed.
-- Silent Bluesky re-login (`prompt=none`) does not work and never did:
-  bsky.social refuses it for public clients. An expired session asks you to
-  reconnect, as before.
+- Removed unsupported silent Bluesky re-login. Normal token refresh and
+  transient retries remain; an expired session asks for explicit reconnection.
+- System-browser sign-in waits for deep-link listener registration before
+  opening the browser, cleans up late registrations and matches callbacks
+  exactly.
+- iOS release metadata preserves plugin callbacks and requires the native
+  OAuth scheme in the exported IPA. Native CI checks scheme registration,
+  callback dispatch and single-instance forwarding; Node 26 tests join the
+  required CI gate.
+- Keep the desktop single-instance dependency and initialization out of mobile
+  targets, even when the default Cargo `desktop` feature is enabled.
+- iPhone Simulator callback checks confirm any system Open prompt and require
+  native plugin receipts, so an untouched confirmation cannot pass validation.
 - Tests: Mastodon sign-in runs against a stand-in instance over HTTP;
   `scripts/probe-oauth-servers.mjs` checks the live Bluesky configuration.
 
@@ -275,7 +285,7 @@ Six feature sprints, a deep performance pass, and major reliability fixes since 
 
 - **Bluesky video upload** — full pipeline (service auth → video.bsky.app upload → processing job polling) wired into compose
 - **Web push notifications** — VAPID subscribe/unsubscribe, service-worker handlers, Vercel API routes + daily cron
-- **Self-healing Bluesky OAuth sessions** — sessions restore by DID, transient network failures no longer log you out, and a dead refresh token silently re-authenticates via `prompt=none` (no login screen while your bsky.social cookie lives)
+- **Self-healing Bluesky OAuth sessions** — sessions restore by DID, transient network failures no longer log you out, and dead refresh tokens require explicit reconnection (the earlier silent re-login claim was incorrect)
 - **Network-first onboarding** — pick Bluesky / Mastodon / Threads, connect inline with OAuth or app password
 - **Tabbed settings** — six sections: Account / Appearance / Content / Compose / Advanced / About
 

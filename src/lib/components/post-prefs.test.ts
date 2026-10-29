@@ -60,7 +60,7 @@ describe('post preferences are read once for the module', () => {
   });
 
   it('does not re-read the preference keys for every post', () => {
-    const reads = vi.spyOn(Storage.prototype, 'getItem');
+    const reads = vi.spyOn(Object.getPrototypeOf(localStorage), 'getItem');
     const KEYS = ['crispdeck-hide-engagement', 'crispdeck-media-preview', 'crispdeck-compact-posts'];
 
     const mounted = mountPosts(10);
@@ -80,7 +80,7 @@ describe('post preferences are read once for the module', () => {
     flushSync();
 
     // Reading through the module's accessor reflects the new value.
-    const reads = vi.spyOn(Storage.prototype, 'getItem');
+    const reads = vi.spyOn(Object.getPrototypeOf(localStorage), 'getItem');
     const again = mountPosts(1);
     expect(reads.mock.calls.some((c) => c[0] === 'crispdeck-compact-posts')).toBe(true);
 

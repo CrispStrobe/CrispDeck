@@ -6,11 +6,6 @@
 /// cancelled before it loads, its query is handed back, and the window closes.
 /// The redirect URI (app.vercel.crispdeck:...) is never actually loaded.
 ///
-/// `hidden` runs it invisibly, for `prompt=none` re-authorization: the window
-/// shares the app's cookie store, so a server that still remembers the user
-/// answers straight away. A hidden attempt that would need the user gives up
-/// after `timeout_secs` instead of waiting on a window nobody can see.
-///
 /// Closing the window counts as cancelling.
 #[cfg(desktop)]
 #[tauri::command]
@@ -18,7 +13,6 @@ pub async fn auth_in_app_window(
     app: tauri::AppHandle,
     auth_url: String,
     redirect_prefix: String,
-    hidden: bool,
     timeout_secs: u64,
 ) -> Result<String, String> {
     use std::sync::{Arc, Mutex};
@@ -29,6 +23,7 @@ pub async fn auth_in_app_window(
     if url.scheme() != "https" {
         return Err("refusing to sign in over an unencrypted connection".into());
     }
+    let redirect: tauri::Url = redirect_prefix.parse().map_err(|e| format!("invalid redirect URL: {e}"))?;
     let (tx, rx) = oneshot::channel::<Result<String, String>>();
     let tx = Arc::new(Mutex::new(Some(tx)));
     let send = {
@@ -58,10 +53,13 @@ pub async fn auth_in_app_window(
             let _ = window.set_title(&sign_in_title(payload.url()));
         })
         .inner_size(520.0, 720.0)
-        .visible(!hidden)
-        .focused(!hidden)
+        .visible(true)
+        .focused(true)
         .on_navigation(move |nav| {
-            if nav.as_str().starts_with(&redirect_prefix) {
+            let mut target = nav.clone();
+            target.set_query(None);
+            target.set_fragment(None);
+            if target == redirect {
                 on_redirect(Ok(nav.query().unwrap_or("").to_string()));
                 return false;
             }
@@ -105,9 +103,8 @@ fn sign_in_title(url: &tauri::Url) -> String {
 pub async fn auth_in_app_window(
     auth_url: String,
     redirect_prefix: String,
-    hidden: bool,
     timeout_secs: u64,
 ) -> Result<String, String> {
-    let _ = (auth_url, redirect_prefix, hidden, timeout_secs);
+    let _ = (auth_url, redirect_prefix, timeout_secs);
     Err("in-app sign-in windows are not available on mobile".into())
 }

@@ -791,6 +791,7 @@ dependencies = [
  "hostname",
  "keyring",
  "log",
+ "oslog",
  "rand 0.8.6",
  "rusqlite",
  "security-framework",
@@ -2998,6 +2999,15 @@ checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "oslog"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80d2043d1f61d77cb2f4b1f7b7b2295f40507f5f8e9d1c8bf10a1ca5f97a3969"
+dependencies = [
+ "cc",
 ]
 
 [[package]]

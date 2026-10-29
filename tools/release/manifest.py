@@ -9,11 +9,11 @@ import subprocess
 import zipfile
 
 REQUIRED = {
-    'ios': ('codesign', 'retained_identity', 'metadata', 'simulator_smoke'),
-    'android': ('apk_signature', 'aab_signature', 'certificate', 'alignment', 'metadata'),
-    'macos': ('codesign', 'notarization', 'gatekeeper', 'universal', 'install_smoke'),
-    'windows': ('package_metadata', 'install_smoke'),
-    'linux': ('package_metadata', 'install_smoke'),
+    'ios': ('codesign', 'retained_identity', 'metadata', 'simulator_smoke', 'deep_link_dispatch'),
+    'android': ('apk_signature', 'aab_signature', 'certificate', 'alignment', 'metadata', 'deep_link_manifest'),
+    'macos': ('codesign', 'notarization', 'gatekeeper', 'universal', 'install_smoke', 'deep_link_dispatch'),
+    'windows': ('package_metadata', 'install_smoke', 'deep_link_dispatch'),
+    'linux': ('package_metadata', 'install_smoke', 'deep_link_dispatch'),
     'web': ('archive',),
 }
 
@@ -96,6 +96,8 @@ def verify(root, version, commit, build_number, android_certificate, require_win
         raise ValueError('Android native installation/startup/restart checks did not pass')
     if smoke.get('checks', {}).get('system_bar_themes') is not True:
         raise ValueError('Android system-bar theme checks did not pass')
+    if smoke.get('checks', {}).get('deep_link_dispatch') is not True:
+        raise ValueError('Android OAuth callback dispatch checks did not pass')
     signed = receipts['windows']['checks'].get('authenticode') is True and receipts['windows']['checks'].get('timestamp') is True
     if require_windows_signing and not signed:
         raise ValueError('Publication requires valid, timestamped Windows publisher signatures')

@@ -50,6 +50,9 @@ def android(root, sdk, expected, version=None):
     badging = run([tools / 'aapt', 'dump', 'badging', apk]).splitlines()[0]
     if "name='com.christianstrobele.crispdeck'" not in badging or f"versionName='{version}'" not in badging:
         raise ValueError('APK identity or marketing version differs')
+    manifest = run([tools / 'aapt', 'dump', 'xmltree', apk, 'AndroidManifest.xml'])
+    if not re.search(r'android:scheme(?:\([^)]*\))?="app\.vercel\.crispdeck"', manifest):
+        raise ValueError('Final APK is missing the native OAuth callback scheme')
     version_code = int(re.search(r"versionCode='(\d+)'", badging).group(1))
     with zipfile.ZipFile(apk) as apk_zip, zipfile.ZipFile(aab) as aab_zip, tempfile.TemporaryDirectory() as temp:
         for archive in (apk_zip, aab_zip):

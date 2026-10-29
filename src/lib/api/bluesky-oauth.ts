@@ -5,8 +5,7 @@
  *
  * Works in both:
  * - Browser (Vercel): uses window.location.origin as client_id base
- * - Tauri desktop: uses http://localhost:1420 (dev) — AT Protocol allows
- *   loopback redirect URIs for native/desktop apps
+ * - Tauri desktop/mobile: the published native client and app URL scheme
  * - Sessions stored in IndexedDB, persist across reloads
  */
 
@@ -59,8 +58,8 @@ function isLoopbackHost(hostname: string): boolean {
 }
 
 /**
- * Thrown, rather than returning a client that cannot work, when running inside
- * the Tauri webview. Callers surface `.message` to the user.
+ * Describes a context where the OAuth SDK cannot be initialized.
+ * Callers surface `.message` to the user.
  */
 export class OAuthUnavailableError extends Error {
   constructor(message: string) {
@@ -97,7 +96,6 @@ async function createOAuthClient(): Promise<BrowserOAuthClient> {
       clientMetadata: APP_CLIENT_METADATA,
       responseMode: 'query',
       handleResolver: HANDLE_RESOLVER,
-      onDelete: renewAfterDeath,
     });
   }
 
@@ -172,18 +170,16 @@ export async function startBlueskyOAuth(handle: string): Promise<void> {
 async function authorizeInApp(
   client: BrowserOAuthClient,
   input: string,
-  opts: { prompt?: 'none'; hidden?: boolean } = {},
 ) {
   const url = await client.authorize(input, {
     redirect_uri: BLUESKY_APP_REDIRECT,
-    ...(opts.prompt ? { prompt: opts.prompt } : {}),
   });
   let query: string | null = null;
-  if (opts.hidden || getOAuthWindowMode() === 'window') {
+  if (getOAuthWindowMode() === 'window') {
     try {
-      query = await authorizeInWindow(url.href, BLUESKY_APP_REDIRECT, { hidden: opts.hidden });
+      query = await authorizeInWindow(url.href, BLUESKY_APP_REDIRECT);
     } catch (e) {
-      if (opts.hidden || !String(e).includes('could not open the sign-in window')) {
+      if (!String(e).includes('could not open the sign-in window')) {
         await client.abortRequest(url).catch(() => {});
         throw e;
       }
@@ -203,74 +199,6 @@ async function signInInApp(client: BrowserOAuthClient, input: string): Promise<v
   const { goto } = await import('$app/navigation');
   const { base } = await import('$app/paths');
   await goto(`${base}/oauth/bsky-callback`);
-}
-
-/**
- * The app's automatic re-login for a session whose refresh token died.
- *
- * Runs `prompt=none` in a hidden sign-in window. The window shares the app's
- * cookie store, so while Bluesky still remembers the user from the last
- * sign-in it answers with a fresh code and nobody sees anything. When it
- * would need the user (login_required), this resolves null and the account
- * falls back to the usual "reconnect in Settings" state.
- *
- * Guarded like maybeSilentReauth: at most one attempt per DID per 30 minutes.
- * Not on mobile, where there is no hidden window to use. Runs at startup
- * (client-factory) and whenever a session dies mid-use (renewAfterDeath).
- */
-export function silentReauthInApp(handleOrDid: string, did: string): Promise<Agent | null> {
-  if (!isTauri() || getOAuthWindowMode() !== 'window') return Promise.resolve(null);
-  // A session that dies mid-use and the startup restore can both ask at once;
-  // they share one attempt rather than the second being turned away by the
-  // guard while the first is still running.
-  const inFlight = renewals.get(did);
-  if (inFlight) return inFlight;
-  const guardKey = `${SILENT_REAUTH_GUARD_PREFIX}${did}`;
-  try {
-    const last = Number(localStorage.getItem(guardKey) ?? 0);
-    if (Date.now() - last < SILENT_REAUTH_MIN_INTERVAL_MS) return Promise.resolve(null);
-  } catch {
-    return Promise.resolve(null);
-  }
-  writeString(guardKey, String(Date.now()));
-  const attempt = (async () => {
-    try {
-      const client = await getOAuthClient();
-      const session = await authorizeInApp(client, handleOrDid, { prompt: 'none', hidden: true });
-      if (session.sub !== did) return null;
-      const { Agent } = await loadAtprotoSdk();
-      return new Agent(session);
-    } catch (e) {
-      swallow(`bluesky-oauth.silentReauthInApp:${did}`, e);
-      return null;
-    } finally {
-      renewals.delete(did);
-    }
-  })();
-  renewals.set(did, attempt);
-  return attempt;
-}
-
-const renewals = new Map<string, Promise<Agent | null>>();
-
-/** Fired on window after a session was renewed in the background. */
-export const SESSION_RENEWED_EVENT = 'crispdeck:bluesky-session-renewed';
-
-/**
- * The OAuth client's onDelete hook, in the app: a session whose refresh just
- * failed mid-use is renewed in the background instead of waiting for the next
- * launch. Listeners (client-factory) rebuild their clients on the event.
- *
- * Not for a revoked session — the user, or Bluesky, ended that on purpose.
- */
-function renewAfterDeath(sub: string, cause: unknown): void {
-  const name = cause instanceof Error ? cause.name : '';
-  if (name !== 'TokenRefreshError' && name !== 'TokenInvalidError') return;
-  void silentReauthInApp(sub, sub).then((agent) => {
-    if (agent && typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent(SESSION_RENEWED_EVENT, { detail: { did: sub } }));
-    }
-  });
 }
 
 /**
@@ -300,8 +228,8 @@ export async function initBlueskyOAuth(): Promise<{
       };
     }
   } catch (e) {
-    // Not being able to offer OAuth at all (the Tauri webview) is a fact about
-    // the platform, not a failure worth logging on every launch.
+    // A context that cannot initialize OAuth is not a session failure
+    // worth logging on every launch.
     if (!(e instanceof OAuthUnavailableError)) {
       swallow('bluesky-oauth.init', e);
     }
@@ -328,7 +256,7 @@ export const resumeBlueskyOAuthSession = initBlueskyOAuth;
 
 /**
  * True when an error means the session is permanently dead (refresh token
- * revoked/expired/invalid) and only an interactive or silent re-auth can fix it.
+ * revoked/expired/invalid) and only interactive reconnection can fix it.
  * Anything else (network flake, timeout, DPoP nonce hiccup) is transient —
  * the tokens in IndexedDB are still good and a retry will succeed.
  */
@@ -360,7 +288,7 @@ export function isSessionDeadError(err: unknown): boolean {
 
 export type OAuthRestoreResult =
   | { status: 'ok'; did: string; agent: Agent }
-  | { status: 'expired' } // refresh token dead — needs (silent) re-auth
+  | { status: 'expired' } // refresh token dead — needs interactive reconnection
   | { status: 'unavailable' }; // transient failure — do NOT treat as logged out
 
 /**
@@ -381,8 +309,7 @@ export async function restoreBlueskyOAuthSession(did: string): Promise<OAuthRest
     client = await getOAuthClient();
   } catch (e) {
     // 'unavailable' rather than 'expired': the stored tokens may be perfectly
-    // good, this build just cannot use them, and 'expired' would trigger a
-    // silent re-auth redirect that cannot complete either.
+    // good; this build just cannot use them. Keep the retryable state.
     if (e instanceof OAuthUnavailableError) return { status: 'unavailable' };
     throw e;
   }
@@ -407,68 +334,5 @@ export async function restoreBlueskyOAuthSession(did: string): Promise<OAuthRest
   return { status: 'unavailable' };
 }
 
-const SILENT_REAUTH_GUARD_PREFIX = 'crispdeck-bsky-silent-reauth:';
-const SILENT_REAUTH_INFLIGHT = 'crispdeck-bsky-silent-reauth-inflight';
+/** Optional destination after a user-initiated sign-in. */
 export const OAUTH_RETURN_TO_KEY = 'crispdeck-oauth-return-to';
-const SILENT_REAUTH_MIN_INTERVAL_MS = 30 * 60 * 1000;
-
-/** True if the current page load is the result of a silent re-auth redirect */
-export function wasSilentReauthAttempt(): boolean {
-  try {
-    return sessionStorage.getItem(SILENT_REAUTH_INFLIGHT) === '1';
-  } catch {
-    return false;
-  }
-}
-
-export function clearSilentReauthFlag(): void {
-  try {
-    sessionStorage.removeItem(SILENT_REAUTH_INFLIGHT);
-  } catch (e) { swallow('bluesky-oauth.clearSilentReauthFlag', e); }
-}
-
-/**
- * Attempt a silent re-authentication (`prompt=none`) for a dead session.
- * While the user's bsky.social cookie session is alive, this round-trips
- * through the authorization server and back without any user interaction,
- * yielding a brand-new token set — so users never see a login screen.
- *
- * Redirects the page when attempted. Returns false (without redirecting)
- * when a guard is active: at most one attempt per DID per 30 minutes, so a
- * truly logged-out user isn't stuck in a redirect loop.
- */
-export async function maybeSilentReauth(handleOrDid: string, did: string): Promise<boolean> {
-  // A prompt=none redirect would navigate the app window away; the app's
-  // redirect lands in Rust, not in a page. The user reconnects from Settings.
-  if (typeof window === 'undefined' || isTauri()) return false;
-  const guardKey = `${SILENT_REAUTH_GUARD_PREFIX}${did}`;
-  try {
-    const last = Number(localStorage.getItem(guardKey) ?? 0);
-    if (Date.now() - last < SILENT_REAUTH_MIN_INTERVAL_MS) return false;
-    writeString(guardKey, String(Date.now()));
-    sessionStorage.setItem(SILENT_REAUTH_INFLIGHT, '1');
-    sessionStorage.setItem(OAUTH_RETURN_TO_KEY, window.location.pathname + window.location.search);
-  } catch {
-    return false;
-  }
-  let client: BrowserOAuthClient;
-  try {
-    client = await getOAuthClient();
-  } catch {
-    return false;
-  }
-  try {
-    await client.signIn(handleOrDid, { prompt: 'none' });
-    return true; // unreachable — signIn redirects
-  } catch (e) {
-    // signIn's promise rejects ~5s after a *successful* redirect starts
-    // ("User navigated back" watchdog) — the flag must survive that so the
-    // callback page knows this was a silent attempt. Only clear it when
-    // authorize() genuinely failed before redirecting.
-    if (!String(e).includes('User navigated back')) {
-      clearSilentReauthFlag();
-      swallow('bluesky-oauth.silentReauth', e);
-    }
-    return false;
-  }
-}

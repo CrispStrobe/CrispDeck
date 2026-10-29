@@ -118,93 +118,57 @@ Linux. Each open item below says how to close it.
   the browser asks to open CrispDeck; the app comes to the front and the
   account appears. Timeout is 300 s (`INTERACTIVE_TIMEOUT`).
 
-#### O4. Remove (or replace) the silent Bluesky re-login — agent can do
-- **Finding**: bsky.social answers every `prompt=none` request from CrispDeck
-  with `400 invalid_request "Public clients are not allowed to use
-  silent-sign-on"` — for the web client (`client-metadata.json`) and the
-  native one alike (`token_endpoint_auth_method: none` = public client).
-  So the silent re-login added in #70 (`silentReauthInApp`, run at startup
-  and from `renewAfterDeath` when a refresh fails) and the older web one
-  (`maybeSilentReauth`, redirects the page with `prompt=none`) can never
-  succeed. Both fail safely: the error is swallowed and the account falls
-  back to the "reconnect in Settings" state. But each attempt costs a
-  network round trip, and the code and its comments claim a feature that
-  does not exist.
-- **Recommended now (option a)**: delete the dead paths and keep behaviour
-  otherwise identical. Touch: `src/lib/api/bluesky-oauth.ts`
-  (`silentReauthInApp`, `renewals`, `SESSION_RENEWED_EVENT`,
-  `renewAfterDeath` and its `onDelete` wiring, `maybeSilentReauth`,
-  `wasSilentReauthAttempt`, `clearSilentReauthFlag`,
-  `SILENT_REAUTH_*` constants, the `prompt` option of `authorizeInApp`),
-  `src/lib/api/client-factory.ts` (the `expired` branch → just
-  `oauthDead = true`; drop the `maybeSilentReauth` block and the
-  `SESSION_RENEWED_EVENT` listener), `src/routes/oauth/bsky-callback/+page.svelte`
-  (silent-attempt flag handling), `src/lib/oauth-window.ts` (comment
-  mentioning silentReauthInApp; `SILENT_TIMEOUT` and the `hidden` option of
-  `authorizeInWindow` become unused — keep the Rust `hidden` parameter or
-  remove it from `auth_in_app_window` too), and their tests in
-  `src/lib/api/bluesky-oauth.app.test.ts` and any client-factory/callback
-  tests that assert silent re-auth. Update the CHANGELOG lines that claim
-  it (v1.1-era "dead refresh token silently re-authenticates via prompt=none").
-  Done when `git grep -n "prompt: 'none'\|prompt=none" src` is empty, tests
-  and `svelte-check` pass, and an expired session shows the reconnect state.
-- **Option b (longer-term, ROADMAP)**: become a confidential client — a
-  Vercel function holding a private key, metadata with
-  `token_endpoint_auth_method: private_key_jwt` and a `jwks_uri`, token
-  requests proxied through it. That gives longer sessions and is the only
-  way `prompt=none` could ever be allowed. Large; needs a design note first.
-  Re-run `scripts/probe-oauth-servers.mjs` (prints the `prompt=none` result)
-  to see whether bsky.social's rule has changed before starting either.
+#### O4. Unsupported silent Bluesky re-login — implemented; covered by required CI
 
-#### O5. Mobile (iOS + Android) sign-in — agent can build, human must sign in
-- Sign-in on mobile is always the system browser + deep link.
-- **Android check (agent)**: the committed
-  `src-tauri/gen/android/app/src/main/AndroidManifest.xml` still only has
-  the old `crispdeck` scheme filter. The deep-link plugin's build script
-  (`tauri_plugin::mobile::update_android_manifest("DEEP LINK PLUGIN", …)`)
-  inserts the `app.vercel.crispdeck` filter during an Android build. Build
-  (`npx tauri android build --apk`, see `docs/releasing.md`) and confirm the
-  generated manifest (and `aapt dump xmltree <apk> AndroidManifest.xml`)
-  contains `android:scheme="app.vercel.crispdeck"` on `MainActivity`. Also
-  check `scripts/merge-android-manifest.py`, which re-applies CrispDeck's
-  manifest customisations to a fresh project, keeps the plugin's block. The
-  old `crispdeck` scheme is no longer used by any code (`git grep crispdeck://`);
-  remove that intent filter once the new one is confirmed.
-- **iOS check (agent)**: after `npx tauri ios build`, the app's Info.plist
-  must contain `CFBundleURLTypes` with `app.vercel.crispdeck`.
-- **Human**: on an emulator/device, `adb shell am start -a android.intent.action.VIEW -d "app.vercel.crispdeck://oauth/mastodon?code=x"`
-  must bring CrispDeck up; then a real Mastodon and Bluesky sign-in.
-  Record in `docs/validation.md`.
+Removed the public-client silent authorization paths on native and web,
+including hidden windows, renewal events and callback flags. Normal refresh
+and transient restore retries remain. Regression coverage checks that dead
+sessions require explicit reconnection and remain read-only. The live server
+probe still documents bsky.social's refusal; no confidential backend is added.
 
-#### O6. Windows and Linux deep links — agent (CI/VM), human for real sign-in
-- There the scheme is registered at runtime (`register_all()` in
-  `src-tauri/src/lib.rs` setup) and a link starts a second process that
-  `tauri-plugin-single-instance` (feature `deep-link`) forwards to the
-  running one. The default "sign-in window" mode does not depend on any of
-  this; only "System browser" does.
-- **Check**: on Windows, after first launch
-  `reg query HKCU\Software\Classes\app.vercel.crispdeck` exists; on Linux a
-  `.desktop` entry with `MimeType=x-scheme-handler/app.vercel.crispdeck;`
-  is installed (`xdg-mime query default x-scheme-handler/app.vercel.crispdeck`).
-  Then `start app.vercel.crispdeck://x` / `xdg-open app.vercel.crispdeck://x`
-  with the app running must leave exactly one process. This could be added
-  to the native startup smoke checks in the release workflow.
+#### O5. Mobile callbacks — implemented; native checks required, account tests pending
 
-#### O7. Three vitest failures on Node 26 (pre-existing on main) — agent can do
-- `src/lib/safe-storage.test.ts` ("quota is exceeded", "storage is disabled
-  outright") and `src/lib/components/post-prefs.test.ts` ("still picks up a
-  settings change") fail locally on Node 26.4 and also on `main` before #70.
-- **Cause**: they spy on `Storage.prototype` (`vi.spyOn(Storage.prototype,
-  'setItem')` / `'getItem'`), but under Node 22+ `vitest.setup.ts` installs
-  its own `MemoryStorage` class as `localStorage`, which does not inherit
-  from `Storage.prototype`, so the spy never fires.
-- **Fix options**: make `MemoryStorage` extend/inherit jsdom's `Storage`
-  (e.g. `Object.setPrototypeOf(MemoryStorage.prototype, Storage.prototype)`
-  when `Storage` exists, keeping its own methods out of the way), or change
-  the tests to spy on `localStorage` itself (`vi.spyOn(localStorage,
-  'setItem')`). The second is smaller. CI uses `node-version: lts/*`
-  (`.github/workflows/ci.yml`) and is green, so these only fail on newer
-  Node; they will fail in CI once LTS reaches that behaviour.
+The iOS release metadata script previously replaced generated URL registrations
+with the legacy scheme. It now preserves plugin entries and requires
+`app.vercel.crispdeck` in the signed export. iPhone Simulator opens both
+callback forms through XCUISystem, confirms any system Open prompt and requires
+native plugin receipts from the original process. Android package verification checks the
+final APK manifest; its emulator resolves and opens both URLs through the OS
+and requires the original foreground process. These checks are mandatory in
+release aggregation. Existing legacy registrations remain for compatibility.
+The Android seed explicitly registers the new scheme, and the merge test
+requires it even when a cached plugin build does not update the fresh project.
+The native iOS build found #70's single-instance initialization compiled on
+mobile through the default `desktop` Cargo feature. Its dependency and init
+are now target-scoped to desktop as well as feature-gated.
+Real device/account sign-in is still pending; follow O1–O3 on each device and
+record it in `docs/validation.md` when the resources are available.
+
+#### O6. Desktop callbacks — implemented; native checks required, account tests pending
+
+Windows checks the per-user protocol registration and executable. Linux checks
+its selected desktop handler and executable under a real D-Bus session. Both
+open the Mastodon and Bluesky callback forms and require plugin delivery to
+exactly the original process. macOS checks its bundled scheme and callback
+routing too. App logs record a fixed delivery message, never callback URLs or
+codes. Full provider sign-in in both modes still requires dedicated accounts.
+
+#### O7. Node 26 test failures — reproduced and fixed; covered by required CI
+
+Node 26.4.0 reproduces all three reported failures on the original tests (two
+storage failures and one preference-change failure). Storage tests now spy on
+`Object.getPrototypeOf(localStorage)`, so both jsdom and the fallback
+MemoryStorage are covered without relying on jsdom’s instance proxy.
+CI runs the entire unit suite on Node 26.4.0 as well as its normal LTS job.
+
+#### OAuth listener ordering and merge checks — implemented; covered by required CI
+
+The browser opener now waits for native listener registration; delayed or
+failed registration, timeout cleanup and exact callback matching are covered.
+A stable `Required CI` job requires frontend/browser, Node 26 and the complete
+Rust matrix. Main branch protection requires that check before merge, including for
+administrators, with the branch up to date. It imposes no human approval
+requirement.
 
 #### O8. Tauri version alignment — agent can do, low priority
 - Now: crate `tauri` 2.11.2 / `@tauri-apps/cli` 2.11.2 / `@tauri-apps/api`

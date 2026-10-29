@@ -2,19 +2,20 @@
  * Getting an OAuth redirect back into the app: the sign-in window, or the
  * system browser and a deep link.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const invoke = vi.fn();
 const openUrl = vi.fn();
 let deepLinkHandler: ((urls: string[]) => void) | null = null;
 const unlisten = vi.fn();
+const register = vi.fn();
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: (...a: unknown[]) => invoke(...a) }));
 vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: (...a: unknown[]) => openUrl(...a) }));
 vi.mock('@tauri-apps/plugin-deep-link', () => ({
   onOpenUrl: async (h: (urls: string[]) => void) => {
     deepLinkHandler = h;
-    return unlisten;
+    return register();
   },
 }));
 
@@ -34,7 +35,10 @@ beforeEach(() => {
   openUrl.mockReset();
   unlisten.mockReset();
   deepLinkHandler = null;
+  register.mockReset().mockResolvedValue(unlisten);
 });
+
+afterEach(() => { vi.useRealTimers(); });
 
 describe('return addresses', () => {
   it('Bluesky returns to what the published native metadata lists', async () => {
@@ -82,16 +86,11 @@ describe('authorizeInWindow', () => {
     expect(invoke).toHaveBeenCalledWith('auth_in_app_window', {
       authUrl: 'https://bsky.social/x',
       redirectPrefix: BLUESKY_APP_REDIRECT,
-      hidden: false,
       timeoutSecs: 300,
     });
   });
 
-  it('gives a hidden re-login only a short time', async () => {
-    invoke.mockResolvedValue('');
-    await authorizeInWindow('https://bsky.social/x', BLUESKY_APP_REDIRECT, { hidden: true });
-    expect(invoke.mock.calls[0][1]).toMatchObject({ hidden: true, timeoutSecs: 20 });
-  });
+
 });
 
 describe('authorizeInBrowser', () => {
@@ -101,6 +100,7 @@ describe('authorizeInBrowser', () => {
       expect(deepLinkHandler).not.toBeNull();
       queueMicrotask(() => {
         deepLinkHandler!(['app.vercel.crispdeck://oauth/mastodon?code=other']);
+        deepLinkHandler!([`${BLUESKY_APP_REDIRECT}-wrong?code=wrong`]);
         deepLinkHandler!([`${BLUESKY_APP_REDIRECT}?code=mine&state=s`]);
       });
     });
@@ -116,5 +116,41 @@ describe('authorizeInBrowser', () => {
     openUrl.mockRejectedValue(new Error('no browser'));
     await expect(authorizeInBrowser('https://x.example', BLUESKY_APP_REDIRECT)).rejects.toThrow('no browser');
     expect(unlisten).toHaveBeenCalled();
+  });
+});
+
+
+describe('asynchronous listener registration', () => {
+  it('does not open the browser before native registration completes', async () => {
+    let ready!: (stop: () => void) => void;
+    register.mockReturnValue(new Promise((resolve) => { ready = resolve; }));
+    const result = authorizeInBrowser('https://bsky.social/x', BLUESKY_APP_REDIRECT);
+    await vi.waitFor(() => expect(register).toHaveBeenCalled());
+    expect(openUrl).not.toHaveBeenCalled();
+    ready(unlisten);
+    await vi.waitFor(() => expect(openUrl).toHaveBeenCalled());
+    deepLinkHandler!([`${BLUESKY_APP_REDIRECT}?code=c`]);
+    await expect(result).resolves.toBe('code=c');
+    expect(unlisten).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not open the browser if registration fails', async () => {
+    register.mockRejectedValue(new Error('native listener unavailable'));
+    await expect(authorizeInBrowser('https://bsky.social/x', BLUESKY_APP_REDIRECT)).rejects.toThrow('listener unavailable');
+    expect(openUrl).not.toHaveBeenCalled();
+  });
+
+  it('cleans up a registration that completes after timeout', async () => {
+    vi.useFakeTimers();
+    let ready!: (stop: () => void) => void;
+    register.mockReturnValue(new Promise((resolve) => { ready = resolve; }));
+    const result = authorizeInBrowser('https://bsky.social/x', BLUESKY_APP_REDIRECT);
+    const check = expect(result).rejects.toThrow('timed out');
+    await vi.advanceTimersByTimeAsync(300001);
+    await check;
+    ready(unlisten);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(unlisten).toHaveBeenCalledTimes(1);
+    expect(openUrl).not.toHaveBeenCalled();
   });
 });

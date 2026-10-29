@@ -44,8 +44,9 @@ redacted debug-log reference. Record native restart tests on actual devices,
 not a browser page reload. The on-device scheduler requires the app to remain
 open; closing the app is not expected to publish in the background.
 
-Delete test posts after recording their public IDs or links. Native Bluesky
-sign-in currently uses an App Password; browser OAuth is available on the web.
+Delete test posts after recording their public IDs or links. Native Bluesky sign-in supports OAuth through the system browser or desktop
+sign-in window, with App Password as an alternative. Real-account validation
+of the new native OAuth flow is still pending.
 Threads needs the separately configured OAuth service; a static ZIP alone does
 not provide server endpoints.
 
@@ -58,6 +59,36 @@ report explicitly records that no upgrade was exercised. A data marker checks
 installer preservation of application data; it is not a real credential test.
 
 Android emulator checks install the signed APK and force-stop/relaunch it.
-iPhone Simulator checks build and launch the simulator app; production IPA
-signature and metadata checks apply separately to the exported device archive.
+iPhone Simulator checks build and launch a release simulator app. The iOS app
+writes two fixed lifecycle messages directly to Apple's system logger, because
+Tauri's release bridge discards redirected stdout/stderr. A startup receipt
+must establish that collection works before callback checks. Filter headers
+cannot count as receipts. The production device IPA has independent signature
+and metadata checks on its exported release archive.
 All reports explicitly mark physical-device and authenticated workflows false.
+
+
+## OAuth callback checks without accounts
+
+The coordinator requires `deep_link_dispatch` for desktop and iPhone Simulator
+receipts and for the Android emulator report. Both native callback URL forms
+are exercised with a synthetic state and no authorization code. Windows and
+Linux verify the OS handler points to the installed executable; desktop checks
+require the original process, one instance and the plugin's fixed callback
+message. Callback URLs and codes are never included in that message. macOS
+also checks the bundled scheme. iPhone Simulator uses XCUISystem to open both
+URLs, explicitly accepts any CrispDeck Open confirmation, then requires two
+native plugin receipts and the original process. Startup and completed-callback
+screenshots are retained separately. Android resolves both through the OS to the installed activity,
+then checks the same foreground process remains. This establishes routing,
+not a completed provider sign-in or credential persistence.
+
+The headless Linux check uses GIO's default registered handler. The generic
+`xdg-open` shell fallback on Ubuntu cannot parse the plugin's quoted Exec
+field; desktop environments normally provide their own dispatcher. This test
+does not establish external-browser integration for every window manager.
+
+The final Android APK must contain `app.vercel.crispdeck`; the exported iOS
+IPA must contain it after metadata application and signing. Existing legacy
+registrations are retained for compatibility. Expired Bluesky sessions stay
+read-only with a reconnect message; no automatic authorization is attempted.

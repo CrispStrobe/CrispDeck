@@ -7,9 +7,7 @@
  * client; see static/client-metadata-native.json). No port is ever opened.
  *
  * - 'window' (desktop default): a CrispDeck window of its own. Rust cancels
- *   the redirect before it loads and hands over its query. The window shares
- *   the app's cookies, which is what lets an expired Bluesky session be
- *   renewed silently (see silentReauthInApp).
+ *   the redirect before it loads and hands over its query.
  * - 'browser': the system browser; the OS hands the redirect to the app as a
  *   deep link. The only option on mobile, and the fallback when the window
  *   cannot be opened — or when the user prefers their own browser (password
@@ -49,9 +47,8 @@ export function setOAuthWindowMode(mode: OAuthWindowMode): void {
   writeString(MODE_KEY, mode);
 }
 
-/** Seconds a visible sign-in may take; a hidden one gets far less. */
+/** Seconds an interactive sign-in may take. */
 const INTERACTIVE_TIMEOUT = 300;
-const SILENT_TIMEOUT = 20;
 
 /**
  * Open `authUrl` in a sign-in window and resolve with the query string of
@@ -60,14 +57,12 @@ const SILENT_TIMEOUT = 20;
 export async function authorizeInWindow(
   authUrl: string,
   redirectUri: string,
-  opts: { hidden?: boolean } = {},
 ): Promise<string> {
   const { invoke } = await import('@tauri-apps/api/core');
   return invoke<string>('auth_in_app_window', {
     authUrl,
     redirectPrefix: redirectUri,
-    hidden: !!opts.hidden,
-    timeoutSecs: opts.hidden ? SILENT_TIMEOUT : INTERACTIVE_TIMEOUT,
+    timeoutSecs: INTERACTIVE_TIMEOUT,
   });
 }
 
@@ -80,21 +75,34 @@ export async function authorizeInBrowser(authUrl: string, redirectUri: string): 
   const { onOpenUrl } = await import('@tauri-apps/plugin-deep-link');
   let unlisten: (() => void) | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const query = new Promise<string>((resolve, reject) => {
+  let finished = false;
+  let receive: (query: string) => void;
+  const query = new Promise<string>((resolve) => { receive = resolve; });
+  const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(
       () => reject(new Error('timed out waiting for the sign-in to come back from the browser')),
       INTERACTIVE_TIMEOUT * 1000,
     );
-    onOpenUrl((urls) => {
-      const hit = urls.find((u) => u.startsWith(redirectUri));
-      if (hit) resolve(queryOf(hit));
-    }).then((u) => { unlisten = u; }, reject);
   });
   try {
-    const { openUrl } = await import('@tauri-apps/plugin-opener');
-    await openUrl(authUrl);
-    return await query;
+    const flow = (async () => {
+      const stop = await onOpenUrl((urls) => {
+        const hit = urls.find((u) => u.split(/[?#]/, 1)[0] === redirectUri);
+        if (hit) receive(queryOf(hit));
+      });
+      if (finished) {
+        stop();
+        throw new Error('sign-in already timed out');
+      }
+      unlisten = stop;
+      const { openUrl } = await import('@tauri-apps/plugin-opener');
+      if (finished) throw new Error('sign-in already timed out');
+      await openUrl(authUrl);
+      return query;
+    })();
+    return await Promise.race([flow, timeout]);
   } finally {
+    finished = true;
     clearTimeout(timer);
     unlisten?.();
   }
