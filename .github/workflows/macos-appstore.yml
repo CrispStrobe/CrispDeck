@@ -139,7 +139,7 @@ jobs:
 
           # The sandbox entitlement is the whole reason this build can go to the
           # App Store; fail loudly rather than upload a build that will be rejected.
-          codesign -d --entitlements - "$APP" 2>/dev/null > /tmp/signed-entitlements.plist
+          codesign -d --entitlements - --xml "$APP" 2>/dev/null > /tmp/signed-entitlements.plist
           /usr/bin/python3 - <<'PY'
           import plistlib
           with open('/tmp/signed-entitlements.plist', 'rb') as f:
