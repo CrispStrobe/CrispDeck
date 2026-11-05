@@ -13,14 +13,9 @@
   <key>com.apple.security.network.client</key>
   <true/>
 
-  <!-- Inbound, and genuinely required: Mastodon OAuth binds a loopback
-       listener for the redirect URI (src-tauri/src/auth/mastodon_oauth.rs
-       does TcpListener::bind("127.0.0.1:0")). Without this the sandbox
-       refuses the bind and Mastodon sign-in fails. -->
-  <key>com.apple.security.network.server</key>
-  <true/>
-
   <!-- Deliberately NOT requested:
+       * network.server — native OAuth callbacks use the app URL scheme, not
+         a loopback listener.
        * files.user-selected / bookmarks.app-scope — the app never opens a file
          the user picked. Its SQLite database and model cache live in
          app_data_dir, which is inside the container and needs no entitlement.

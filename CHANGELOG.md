@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## v1.3.1 — 2026-11-05
+
+### macOS App Store
+
+- Remove the obsolete incoming-network entitlement after switching OAuth to
+  app URL callbacks. Verify the final signed app keeps sandbox and outgoing
+  networking permissions without restoring the server permission from its
+  provisioning profile.
+
 ### Sign-in
 
 - Mastodon and Bluesky sign-in work inside the desktop and mobile app. Both
