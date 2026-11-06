@@ -39,6 +39,10 @@ likes/reposts are not retried under a different identity, and undo operations
 use the matching unlike/unrepost endpoint.
 Pending actions are serialized, and reconnecting a socket cannot let its older
 connection deliver stale events or close the replacement connection.
+Open columns, inboxes, and thread views also respond to account reconnects and
+membership changes. Late responses from retired clients cannot replace current
+content. Reuse of a local account ID does not reuse another actor's rows,
+conversation drafts, or cached follow graph.
 
 The network loader supports independent cursors for each selected account and
 each tag/keyword source. Timeline, own posts, search, hashtags, users, lists,

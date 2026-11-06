@@ -756,7 +756,8 @@ export const translations = {
       saved: 'Saved {date}',
       calendarView: 'Calendar',
     },
-    deck: { moveColumn: "Move {title} column; use left or right arrow keys",
+    deck: {
+      moveColumn: "Move {title} column; use left or right arrow keys",
       cancelSchedule: "Cancel schedule",
       deleteDraftConfirm: "Delete this draft? Published posts and delivery history will remain.",
       publishingLoadFailed: "Could not load drafts on this device. Try refreshing the column.",

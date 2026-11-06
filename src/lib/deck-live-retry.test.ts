@@ -36,6 +36,44 @@ afterEach(() => {
 });
 
 describe('bounded live setup retries', () => {
+  it('reloads the follow graph when a local account ID is reused by another actor', async () => {
+    const original = fixture();
+    const first = subscribe([original]);
+    await vi.advanceTimersByTimeAsync(0);
+    first.stop();
+    const replacement = fixture();
+    replacement.account.id = original.account.id;
+    replacement.entry.accountId = original.account.id;
+    replacement.getFollows.mockResolvedValue({ follows: [{ did: 'did:plc:newfriend' }] });
+    const { onEvent } = subscribe([replacement]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(replacement.getFollows).toHaveBeenCalledOnce();
+    const listener = mocks.enableColumn.mock.calls.at(-1)![1] as (event: StreamEvent) => void;
+    listener({ type: 'new-post', platform: 'bluesky', payload: { did: 'did:plc:friend' } });
+    expect(onEvent).not.toHaveBeenCalled();
+    listener({ type: 'new-post', platform: 'bluesky', payload: { did: 'did:plc:newfriend' } });
+    expect(onEvent).toHaveBeenCalledOnce();
+  });
+
+  it('does not evict a replacement identity when an old follows lookup rejects late', async () => {
+    const original = fixture();
+    let reject!: (error: Error) => void;
+    original.getFollows.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; }));
+    const first = subscribe([original]);
+    first.stop();
+    const replacement = fixture();
+    replacement.account.id = original.account.id;
+    replacement.entry.accountId = original.account.id;
+    subscribe([replacement]);
+    await vi.advanceTimersByTimeAsync(0);
+    reject(new Error('Retired account lookup failed'));
+    await vi.advanceTimersByTimeAsync(0);
+    subscribe([replacement]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(replacement.getFollows).toHaveBeenCalledOnce();
+    expect(mocks.enableColumn).toHaveBeenCalledTimes(2);
+  });
+
   it('recovers a failed follows lookup automatically and uses the recovered follow set', async () => {
     const account = fixture();
     account.getFollows.mockRejectedValueOnce(new Error('Temporary outage'));

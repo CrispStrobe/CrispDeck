@@ -739,7 +739,8 @@ export default {
       saved: 'Gespeichert {date}',
       calendarView: 'Kalender',
     },
-    deck: { moveColumn: "Spalte {title} verschieben; Pfeiltasten links oder rechts verwenden",
+    deck: {
+      moveColumn: "Spalte {title} verschieben; Pfeiltasten links oder rechts verwenden",
       cancelSchedule: "Zeitplan aufheben",
       deleteDraftConfirm: "Diesen Entwurf löschen? Veröffentlichte Beiträge und der Sendeverlauf bleiben erhalten.",
       publishingLoadFailed: "Die Entwürfe konnten auf diesem Gerät nicht geladen werden. Aktualisiere die Spalte.",

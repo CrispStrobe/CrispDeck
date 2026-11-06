@@ -24,6 +24,8 @@
   reply targets on the destination instance before publishing.
 - Scope live updates to the actual column, isolate private Mastodon streams by
   account, preserve reading position, and clean up subscriptions and stale loads.
+- Refresh open deck, message and thread views when accounts reconnect or change,
+  preserving same-account state and retiring data from removed identities.
 - Translate new controls into all eight interface languages and add behavioral
   service/component/browser coverage. See [coverage and boundaries](docs/deck-parity.md).
 - Move CI and OS secret-store checks to macOS 15 after GitHub's retirement of

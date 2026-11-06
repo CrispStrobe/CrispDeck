@@ -1,12 +1,12 @@
 <script lang="ts">
   import { base } from '$app/paths';
-  import { onDestroy, tick } from 'svelte';
-  import { partitionThreadReplies } from '$lib/thread-continuation';
+  import { onDestroy, onMount, tick } from 'svelte';
   import { initAllClients } from '$lib/api/client-factory';
   import { MessageCircle, ArrowLeft, BookOpen, Share2 } from '@lucide/svelte';
   import { afterNavigate, goto } from '$app/navigation';
   import { i18n } from '$lib/i18n.svelte';
   import { loadThreadPage, parseThreadRequest, threadErrorMessage } from '$lib/thread-loader';
+  import { partitionThreadReplies } from '$lib/thread-continuation';
   import { isThread, extractThreadText } from '$lib/thread-sync';
   import Post from '$lib/components/Post.svelte';
   import type { UnifiedPost, Account, Platform } from '$lib/types';
@@ -22,10 +22,14 @@
   let externalUrl = $state('');
   let requestSequence = 0;
   let disposed = false;
+  let currentThreadUrl: URL | undefined;
 
   async function loadCurrentThread(url: URL) {
+    currentThreadUrl = url;
     const sequence = ++requestSequence;
     loading = true; error = ''; articleMode = false;
+    // Let the loading branch unmount Post before clearing its required props.
+    // Query-only navigation reuses this page, including quoted-post links.
     await tick();
     if (disposed || sequence !== requestSequence) return;
     ancestors = []; mainPost = null; replies = []; externalUrl = '';
@@ -48,6 +52,11 @@
   // SvelteKit reuses this page for query-only navigation, including account
   // switches. Only the newest navigation may replace the visible thread.
   afterNavigate(({ to }) => { if (to?.url) void loadCurrentThread(to.url); });
+  onMount(() => {
+    const refreshAccount = () => { if (currentThreadUrl) void loadCurrentThread(currentThreadUrl); };
+    window.addEventListener('crispdeck:accounts-changed', refreshAccount);
+    return () => window.removeEventListener('crispdeck:accounts-changed', refreshAccount);
+  });
   onDestroy(() => { disposed = true; requestSequence++; });
 
   let articleMode = $state(false);
