@@ -14,6 +14,14 @@ on:
         required: true
   workflow_dispatch:
     inputs:
+      source_sha:
+        description: Optional full SHA of the existing version tag to build
+        type: string
+        default: ''
+      ios_validator_sha:
+        description: Optional full SHA supplying only the iOS smoke-test harness
+        type: string
+        default: ''
       build_number:
         description: iOS build number for build-only output
         type: string
@@ -69,6 +77,34 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ inputs.source_sha || github.sha }}
+
+      # Allow an existing immutable release to be tested with a corrected test
+      # harness without changing any app source. Record the separate validator
+      # commit and hashes in the receipt; never apply it to coordinated builds.
+      - name: Verify release source and select iOS smoke harness
+        env:
+          SOURCE_OVERRIDE: ${{ github.event_name == 'workflow_dispatch' && inputs.source_sha || '' }}
+          VALIDATOR_OVERRIDE: ${{ github.event_name == 'workflow_dispatch' && inputs.ios_validator_sha || '' }}
+        run: |
+          set -euo pipefail
+          SOURCE=$(git rev-parse HEAD)
+          VALIDATOR="$SOURCE"
+          if [ -n "$SOURCE_OVERRIDE" ]; then
+            [[ "$SOURCE_OVERRIDE" =~ ^[0-9a-f]{40}$ ]] && [ "$SOURCE" = "$SOURCE_OVERRIDE" ]
+            VERSION=$(python3 -c "import json; print(json.load(open('package.json'))['version'])")
+            git fetch --no-tags --depth=1 origin "refs/tags/v$VERSION"
+            [ "$(git rev-parse 'FETCH_HEAD^{commit}')" = "$SOURCE" ] || { echo 'Source is not the immutable version tag'; exit 1; }
+          fi
+          if [ -n "$VALIDATOR_OVERRIDE" ]; then
+            [ -n "$SOURCE_OVERRIDE" ] && [[ "$VALIDATOR_OVERRIDE" =~ ^[0-9a-f]{40}$ ]] || { echo 'A pinned source and validator SHA are required'; exit 1; }
+            git fetch --no-tags --depth=1 origin "$VALIDATOR_OVERRIDE"
+            [ "$(git rev-parse 'FETCH_HEAD^{commit}')" = "$VALIDATOR_OVERRIDE" ]
+            for path in tools/validation/mobile_smoke.py tools/validation/ios_callback_tests.swift; do
+              git show "$VALIDATOR_OVERRIDE:$path" > "$path"
+            done
+            VALIDATOR="$VALIDATOR_OVERRIDE"
+          fi
+          echo "IOS_CALLBACK_VALIDATOR_SHA=$VALIDATOR" >> "$GITHUB_ENV"
 
       - name: Require production signing credentials
         run: |
@@ -224,13 +260,15 @@ jobs:
           mkdir -p ios-artifacts
           cp "CrispDeck_${VERSION}_ios-appstore.ipa" ios-artifacts/
           python3 - <<'PYTHON'
-          import json, os
+          import hashlib, json, os
           from pathlib import Path
           root = Path(os.environ['RUNNER_TEMP']) / 'ios-smoke'
           result = json.loads((root / 'checks.json').read_text())
           signing = json.loads((root / 'device-signing.json').read_text())
           result['checks']['retained_identity'] = signing['retained_identity']
           result['metadata']['device_ipa_certificate_sha1'] = signing['exported_device_ipa_certificate_sha1']
+          result['metadata']['callback_validator_commit'] = os.environ['IOS_CALLBACK_VALIDATOR_SHA']
+          result['metadata']['callback_validator_sha256'] = {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in (Path('tools/validation/mobile_smoke.py'), Path('tools/validation/ios_callback_tests.swift'))}
           (root / 'checks.json').write_text(json.dumps(result, indent=2) + '\n')
           PYTHON
           python3 tools/release/manifest.py receipt ios ios-artifacts --check codesign --check retained_identity --check metadata --build-number "$IOS_BUILD_NUMBER" --checks-file "$RUNNER_TEMP/ios-smoke/checks.json"
