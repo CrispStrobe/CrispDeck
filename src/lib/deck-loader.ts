@@ -487,8 +487,12 @@ async function loadThreadsPage(column: DeckColumnConfig, account: Account, clien
     default: throw new Error(`Threads does not support this column: ${column.type}`);
   }
   if (cursor) params.set('after', cursor);
+  // Meta's endpoint does not accept the browser's Authorization preflight.
+  // Match the Threads client: query authentication without a CORS preflight.
+  // safeError strips query strings and redacts the token from failures.
+  params.set('access_token', token);
   const data = await fetchJson<{ data: ThreadsPost[]; paging?: { cursors?: { after?: string } } }>(`${THREADS_API}${path}?${params}`, {
-    headers: { Authorization: `Bearer ${token}` }, redirect: 'error',
+    redirect: 'error',
   }, 'Load Threads column');
   const posts = arrayResponse<ThreadsPost>(data?.data, 'Threads');
   return {

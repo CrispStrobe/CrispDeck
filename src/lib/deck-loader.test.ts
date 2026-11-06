@@ -423,8 +423,8 @@ describe('cross-network search and Threads cursors', () => {
     expect(mastodonUrl.searchParams.get('q')).toBe('cats');
     expect(mastodonUrl.searchParams.get('type')).toBe('statuses');
     expect(new URL(String(threadsCall[0])).searchParams.get('search_type')).toBe('RECENT');
-    expect(String(threadsCall[0])).not.toContain('secret-token');
-    expect(threadsCall[1]).toMatchObject({ headers: { Authorization: 'Bearer secret-token' }, redirect: 'error' });
+    expect(new URL(String(threadsCall[0])).searchParams.get('access_token')).toBe('secret-token');
+    expect(threadsCall[1]).toMatchObject({ redirect: 'error' });
   });
 
   it('advances Mastodon search offsets without treating status IDs as search cursors', async () => {

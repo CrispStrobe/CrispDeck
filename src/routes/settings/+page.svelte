@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ThreadsFeedSources from '$lib/components/ThreadsFeedSources.svelte';
   import { getTtsEngine, setTtsEngine, getSttEngine, setSttEngine, getHomeMode, setHomeMode, type SpeechEngine, type HomeMode } from '$lib/settings';
   import { toast } from '$lib/toast.svelte';
   import { readString, removeKey, writeJson, writeString } from '$lib/safe-storage';
@@ -1207,6 +1208,7 @@
               </button>
             </div>
           </div>
+          <ThreadsFeedSources account={account.handle} />
         {/each}
       </div>
     {/if}

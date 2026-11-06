@@ -405,7 +405,7 @@
   <!-- Column header -->
   <div class="flex flex-wrap items-center justify-between gap-y-2 px-3 py-2 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex-shrink-0">
     <div class="flex items-center gap-2 w-full min-w-0">
-      <button type="button" class="drag-handle text-[var(--color-text-muted)] cursor-grab active:cursor-grabbing" draggable={!pinned} ondragstart={pinned ? undefined : onDragStart} ondragend={onDragEnd} onkeydown={(e) => {
+      <button type="button" class="drag-handle text-[var(--color-text-muted)] cursor-grab active:cursor-grabbing" draggable={false} ondragstart={pinned ? undefined : onDragStart} ondragend={onDragEnd} onkeydown={(e) => {
         if (pinned) return;
         if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
         e.preventDefault(); onMove?.(e.key === 'ArrowLeft' ? -1 : 1);
@@ -554,7 +554,7 @@
   {#if accounts.length}
     <button onclick={onsettings} class="flex items-center gap-1 px-3 py-1 text-[10px] text-[var(--color-text-muted)] text-left" aria-label={i18n.t.deck.columnAccounts}>
       {#each accounts.slice(0, 3) as account}{#if account.avatar_url}<img src={account.avatar_url} alt="" class="w-4 h-4 rounded-full" />{/if}{/each}
-      <span class="truncate">{accounts.map(account => `@${account.handle}`).join(', ')}</span>
+      <span class="truncate">{accounts.map(account => `@${account.handle.replace(/^@+/, '')}`).join(', ')}</span>
     </button>
   {/if}
   {#if errors.length}

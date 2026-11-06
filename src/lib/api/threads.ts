@@ -82,7 +82,7 @@ export function getThreadsAuthUrl(clientId: string, redirectUri: string, state: 
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
-    scope: 'threads_basic,threads_content_publish,threads_manage_replies,threads_manage_insights',
+    scope: 'threads_basic,threads_content_publish,threads_manage_replies,threads_read_replies,threads_manage_insights,threads_keyword_search,threads_manage_mentions,threads_profile_discovery',
     response_type: 'code',
     state,
   });
@@ -257,6 +257,27 @@ export class ThreadsClient {
       limit: String(limit),
     });
     return resp.data ?? [];
+  }
+
+  async getAllMentions(): Promise<ThreadsPost[]> {
+    const posts: ThreadsPost[] = [];
+    const seen = new Set<string>();
+    let after: string | undefined;
+    do {
+      const params: Record<string, string> = {
+        fields: 'id,media_type,media_url,permalink,username,text,timestamp,thumbnail_url,is_quote_post',
+        limit: '100',
+      };
+      if (after) params.after = after;
+      const page = await this.apiGet<{ data?: ThreadsPost[]; paging?: { cursors?: { after?: string } } }>(`/${this.userId}/mentions`, params);
+      posts.push(...(page.data ?? []));
+      const next = page.paging?.cursors?.after;
+      if (!next || !page.data?.length) break;
+      if (seen.has(next) || seen.size >= 100) throw new Error('Threads mentions pagination did not finish.');
+      seen.add(next);
+      after = next;
+    } while (true);
+    return posts;
   }
 
   async keywordSearch(query: string, options: { searchType?: 'TOP' | 'RECENT'; mediaType?: 'TEXT' | 'IMAGE' | 'VIDEO'; limit?: number } = {}): Promise<ThreadsPost[]> {

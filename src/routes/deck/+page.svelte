@@ -65,6 +65,32 @@
   let draggedColumnId: string | null = $state(null);
   let dragOverColumnId: string | null = $state(null);
 
+  // Pointer-based mouse dragging works in native WKWebView as well as browsers.
+  let pointerDrag: { id: string; x: number; y: number; pointerId: number } | null = null;
+  function startPointerDrag(id: string, event: PointerEvent) {
+    if (event.pointerType !== 'mouse' || event.button !== 0 || columns.find(c => c.id === id)?.pinned) return;
+    if (!(event.target instanceof Element) || !event.target.closest('.drag-handle')) return;
+    pointerDrag = { id, x: event.clientX, y: event.clientY, pointerId: event.pointerId };
+  }
+  function movePointerDrag(event: PointerEvent) {
+    if (!pointerDrag || event.pointerId !== pointerDrag.pointerId) return;
+    if (!draggedColumnId && Math.hypot(event.clientX - pointerDrag.x, event.clientY - pointerDrag.y) < 5) return;
+    draggedColumnId = pointerDrag.id;
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-deck-column]');
+    const id = target?.dataset.deckColumn;
+    dragOverColumnId = id && id !== pointerDrag.id && !columns.find(c => c.id === id)?.pinned ? id : null;
+    event.preventDefault();
+  }
+  function endPointerDrag(event: PointerEvent) {
+    if (!pointerDrag || event.pointerId !== pointerDrag.pointerId) return;
+    const source = pointerDrag.id;
+    const target = dragOverColumnId;
+    if (event.type !== 'pointercancel' && draggedColumnId && target) reorderColumns(source, target);
+    pointerDrag = null;
+    draggedColumnId = null;
+    dragOverColumnId = null;
+  }
+
   // Touch drag-and-drop reorder state
   let touchDragColumnId: string | null = $state(null);
   let touchDropTargetId: string | null = $state(null);
@@ -668,7 +694,7 @@
         if (!isCurrent()) return;
         posts = page.posts;
         notifications = page.notifications;
-        errors = page.errors.map(error => `@${accounts.find(account => account.id === error.accountId)?.handle ?? error.accountId}: ${error.message}`);
+        errors = page.errors.map(error => `@${String(accounts.find(account => account.id === error.accountId)?.handle ?? error.accountId).replace(/^@+/, "")}: ${error.message}`);
         if (older || !loadedOlder.has(col.id)) {
           columnCursors[col.id] = page.cursors;
           columnHasMore[col.id] = page.hasMore;
@@ -960,8 +986,11 @@
 
   function handleDrop(colId: string, e: DragEvent) {
     e.preventDefault();
-    if (!draggedColumnId || draggedColumnId === colId || columns.find(col => col.id === draggedColumnId)?.pinned || columns.find(col => col.id === colId)?.pinned) return;
-    const fromIdx = columns.findIndex(c => c.id === draggedColumnId);
+    if (draggedColumnId) reorderColumns(draggedColumnId, colId);
+  }
+  function reorderColumns(source: string, colId: string) {
+    if (source === colId || columns.find(col => col.id === source)?.pinned || columns.find(col => col.id === colId)?.pinned) return;
+    const fromIdx = columns.findIndex(c => c.id === source);
     const toIdx = columns.findIndex(c => c.id === colId);
     if (fromIdx < 0 || toIdx < 0) return;
     const moved = columns[fromIdx];
@@ -1030,7 +1059,7 @@
   }
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} onpointermove={movePointerDrag} onpointerup={endPointerDrag} onpointercancel={endPointerDrag} />
 <svelte:head><title>CrispDeck — Deck</title><meta name="description" content="Multi-column deck view" /></svelte:head>
 
 <div class="h-full flex flex-col">
@@ -1113,6 +1142,8 @@
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
           class="transition-all duration-200 {draggedColumnId === col.id || touchDragColumnId === col.id ? 'opacity-40 scale-[0.95]' : ''} {touchDropTargetId === col.id || dragOverColumnId === col.id ? 'ring-2 ring-[var(--color-primary)] rounded-lg' : draggedColumnId && draggedColumnId !== col.id ? 'hover:ring-2 hover:ring-[var(--color-primary)]/30 hover:rounded-lg' : ''} {focusedColumnIdx === colIdx ? 'ring-2 ring-[var(--color-primary)]/50 rounded-lg' : ''}"
+          data-deck-column={col.id}
+          onpointerdown={(e) => startPointerDrag(col.id, e)}
           ontouchstart={(e) => handleTouchStart(col.id, e)}
           ondragover={(e) => handleDragOver(col.id, e)}
           ondrop={(e) => handleDrop(col.id, e)}

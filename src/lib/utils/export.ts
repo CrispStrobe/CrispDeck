@@ -1,7 +1,18 @@
 import type { UnifiedPost } from '$lib/types';
 import { isTauri } from '$lib/platform';
+import { toast } from '$lib/toast.svelte';
 
-function triggerDownload(content: string, mimeType: string, fileName: string) {
+export function triggerDownload(content: string, mimeType: string, fileName: string) {
+  if (isTauri()) {
+    void (async () => {
+      const { save } = await import('@tauri-apps/plugin-dialog');
+      const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+      const extension = fileName.split('.').pop() ?? 'txt';
+      const path = await save({ defaultPath: fileName, filters: [{ name: extension.toUpperCase(), extensions: [extension] }] });
+      if (path) await writeTextFile(path, content);
+    })().catch(error => toast.error(`Could not save export: ${String(error)}`));
+    return;
+  }
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');

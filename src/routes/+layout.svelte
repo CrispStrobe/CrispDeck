@@ -317,7 +317,6 @@
       {#if !collapsed}
         <div>
           <h1 class="text-base font-bold text-[var(--color-text)]">CrispDeck</h1>
-          <p class="text-[10px] text-[var(--color-text-muted)]">Bluesky + Mastodon + Threads</p>
         </div>
       {/if}
       <div class="flex items-center gap-1">

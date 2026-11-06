@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.3.1 — 2026-11-06
 
 ### Deck workflows and parity
 
@@ -32,7 +32,13 @@
   the macOS 14 runner image.
 
 
-## v1.3.1 — 2026-11-05
+### Stability and usability
+
+- Fix macOS settings import file access and retain Bluesky sessions across app restarts with configurable credential storage.
+- Fit and navigate embedded media, play Bluesky videos, show reply context, and keep an author’s thread posts together.
+- Improve account refresh, multi-account search, deck reordering, and cached view switching.
+- Add platform icons, link actions, Wallabag bookmarklet support, and shared desktop Threads sign-in.
+- Explain that Meta’s official Threads API provides account posts rather than a home timeline.
 
 ### macOS App Store
 
