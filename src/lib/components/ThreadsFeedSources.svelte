@@ -30,7 +30,7 @@
 </script>
 <details class="mt-2 p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
   <summary class="cursor-pointer text-sm font-medium">Threads feed sources for {account}</summary>
-  <p class="text-xs text-[var(--color-text-muted)] mt-2">Your feed combines your posts, mentions, public profiles and keyword results. Threads does not provide your following list or home timeline through this API. Public-profile discovery and keyword search require Meta permissions; standard access restricts profiles to certain Meta accounts. Public profiles must have at least 100 followers. Meta limits profile discovery to 1,000 requests per day. Results are cached for two hours on this device.</p>
+  <p class="text-xs text-[var(--color-text-muted)] mt-2">Your feed combines your posts, mentions, public profiles and keyword results. Threads does not provide your following list or home timeline through this API. Public-profile discovery and keyword search require Meta permissions; without Meta approval, keyword search may return only your own posts and profile discovery is limited to certain Meta accounts. Mentions may be limited to testers. Public profiles must have at least 100 followers. Meta limits profile discovery to 1,000 requests per day. Results are cached for two hours on this device.</p>
   <label class="block text-sm mt-3" for={'threads-profiles-' + account}>{i18n.t.settings.threadsFeedProfiles}</label>
   <textarea id={'threads-profiles-' + account} bind:value={profiles} rows="4" class="w-full mt-1 p-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm"></textarea>
   <label class="block text-sm mt-2">Import following list (Meta JSON export)
