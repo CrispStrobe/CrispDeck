@@ -545,7 +545,7 @@
         return { acct, ...(await fetchAccountPage(acct, entry, { limit: 50, resolveReposts: true })) };
       } catch (e) {
         // Name the account — "Failed to load feed" alone is useless with several connected.
-        throw new Error(`Failed to load feed for @${acct.handle}: ${e}`);
+        throw new Error(`Failed to load feed for @${acct.handle.replace(/^@+/, "")}: ${e instanceof Error ? e.message : String(e)}`);
       }
     }));
 

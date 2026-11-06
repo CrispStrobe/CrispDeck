@@ -424,7 +424,7 @@
         </span>
       {/if}
     </div>
-    <div class="flex items-center gap-1 flex-wrap">
+    <div class="column-actions flex items-center flex-nowrap w-full">
       <button onclick={onsettings} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)]" title={i18n.t.deck.columnSettings} aria-label={i18n.t.deck.columnSettings}><Settings2 size={13} /></button>
       <button onclick={onpause} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)]" title={paused ? i18n.t.deck.resumeColumn : i18n.t.deck.pauseColumn} aria-label={paused ? i18n.t.deck.resumeColumn : i18n.t.deck.pauseColumn}>{#if paused}<Play size={13} />{:else}<Pause size={13} />{/if}</button>
       <button onclick={onduplicate} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)]" title={i18n.t.deck.duplicateColumn} aria-label={i18n.t.deck.duplicateColumn}><Copy size={13} /></button>
@@ -719,6 +719,10 @@
 {/if}
 
 <style>
+  /* The narrowest supported column is 280px: compact padding keeps every action on one row. */
+  .column-actions > button, .column-actions > div > button { padding: 2px; flex-shrink: 0; }
+  .column-actions > div { flex-shrink: 0; }
+
   /**
    * Skip layout, style and paint for posts scrolled out of a column.
    *
