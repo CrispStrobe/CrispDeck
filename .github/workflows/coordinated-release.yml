@@ -9,6 +9,10 @@ on:
         description: Publish verified packages (requires matching version tag and Windows signing)
         type: boolean
         default: false
+      allow_unsigned_windows:
+        description: Explicitly allow unsigned Windows packages for this release
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -30,6 +34,7 @@ jobs:
       commit: ${{ steps.source.outputs.commit }}
       ios_build: ${{ steps.source.outputs.ios_build }}
       publish: ${{ steps.source.outputs.publish }}
+      allow_unsigned_windows: ${{ steps.source.outputs.allow_unsigned_windows }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
@@ -41,6 +46,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_PUBLISH: ${{ github.event_name == 'push' || inputs.publish }}
+          ALLOW_UNSIGNED_WINDOWS: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_unsigned_windows }}
           ASC_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
           ASC_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
@@ -68,7 +74,7 @@ jobs:
     uses: ./.github/workflows/release.yml
     with:
       source_sha: ${{ needs.prepare.outputs.commit }}
-      require_windows_signing: ${{ needs.prepare.outputs.publish == 'true' }}
+      require_windows_signing: ${{ needs.prepare.outputs.publish == 'true' && needs.prepare.outputs.allow_unsigned_windows != 'true' }}
     secrets: inherit
 
   ios:
@@ -100,6 +106,78 @@ jobs:
     needs: prepare
     uses: ./.github/workflows/web-release.yml
     with:
+      source_sha: ${{ needs.prepare.outputs.commit }}
+
+  stage_linux:
+    needs: [prepare, desktop]
+    if: needs.prepare.outputs.publish == 'true'
+    permissions:
+      contents: write
+      actions: read
+    uses: ./.github/workflows/release-stage.yml
+    with:
+      platform: linux
+      version: ${{ needs.prepare.outputs.version }}
+      source_sha: ${{ needs.prepare.outputs.commit }}
+
+  stage_windows:
+    needs: [prepare, desktop]
+    if: needs.prepare.outputs.publish == 'true'
+    permissions:
+      contents: write
+      actions: read
+    uses: ./.github/workflows/release-stage.yml
+    with:
+      platform: windows
+      version: ${{ needs.prepare.outputs.version }}
+      source_sha: ${{ needs.prepare.outputs.commit }}
+
+  stage_ios:
+    needs: [prepare, ios]
+    if: needs.prepare.outputs.publish == 'true'
+    permissions:
+      contents: write
+      actions: read
+    uses: ./.github/workflows/release-stage.yml
+    with:
+      platform: ios
+      version: ${{ needs.prepare.outputs.version }}
+      source_sha: ${{ needs.prepare.outputs.commit }}
+
+  stage_android:
+    needs: [prepare, android, android_smoke]
+    if: needs.prepare.outputs.publish == 'true'
+    permissions:
+      contents: write
+      actions: read
+    uses: ./.github/workflows/release-stage.yml
+    with:
+      platform: android
+      version: ${{ needs.prepare.outputs.version }}
+      source_sha: ${{ needs.prepare.outputs.commit }}
+
+  stage_macos:
+    needs: [prepare, macos]
+    if: needs.prepare.outputs.publish == 'true'
+    permissions:
+      contents: write
+      actions: read
+    uses: ./.github/workflows/release-stage.yml
+    with:
+      platform: macos
+      version: ${{ needs.prepare.outputs.version }}
+      source_sha: ${{ needs.prepare.outputs.commit }}
+
+  stage_web:
+    needs: [prepare, web]
+    if: needs.prepare.outputs.publish == 'true'
+    permissions:
+      contents: write
+      actions: read
+    uses: ./.github/workflows/release-stage.yml
+    with:
+      platform: web
+      version: ${{ needs.prepare.outputs.version }}
       source_sha: ${{ needs.prepare.outputs.commit }}
 
   android_smoke:
@@ -142,10 +220,11 @@ jobs:
           SOURCE_SHA: ${{ needs.prepare.outputs.commit }}
           IOS_BUILD: ${{ needs.prepare.outputs.ios_build }}
           PUBLISH: ${{ needs.prepare.outputs.publish }}
+          ALLOW_UNSIGNED_WINDOWS: ${{ needs.prepare.outputs.allow_unsigned_windows }}
           ANDROID_RELEASE_CERT_SHA256: ${{ vars.ANDROID_RELEASE_CERT_SHA256 }}
         run: |
           FLAGS=()
-          if [ "$PUBLISH" = true ]; then FLAGS+=(--require-windows-signing); fi
+          if [ "$PUBLISH" = true ] && [ "$ALLOW_UNSIGNED_WINDOWS" != true ]; then FLAGS+=(--require-windows-signing); fi
           python3 scripts/ios-release-metadata.py verify "release-assets/CrispDeck_${VERSION}_ios-appstore.ipa" "$VERSION" "$IOS_BUILD"
           python3 tools/release/manifest.py verify "$VERSION" release-assets --commit "$SOURCE_SHA" --build-number "$IOS_BUILD" --android-certificate "$ANDROID_RELEASE_CERT_SHA256" "${FLAGS[@]}"
           (cd release-assets && sha256sum --check SHA256SUMS)
@@ -153,7 +232,7 @@ jobs:
             echo '### Six-platform candidate verified'
             echo "Source: $SOURCE_SHA"
             echo "Publish requested: $PUBLISH"
-            echo 'Windows publisher signatures are mandatory for publication; unsigned build-only candidates are identified in release-evidence.json.'
+            echo "Allow unsigned Windows packages: $ALLOW_UNSIGNED_WINDOWS"
             echo 'Physical-device and authenticated publishing validation are separate; see docs/validation.md.'
           } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
@@ -190,8 +269,8 @@ jobs:
           echo 'Apple accepted the upload; TestFlight processing, beta review and App Store review remain separate.' >> "$GITHUB_STEP_SUMMARY"
 
   publish:
-    needs: [prepare, verify, apple_upload]
-    if: always() && needs.prepare.outputs.publish == 'true' && needs.verify.result == 'success' && needs.apple_upload.result == 'success'
+    needs: [prepare, verify, apple_upload, stage_linux, stage_windows, stage_ios, stage_android, stage_macos, stage_web]
+    if: always() && needs.stage_linux.result == 'success' && needs.stage_windows.result == 'success' && needs.stage_ios.result == 'success' && needs.stage_android.result == 'success' && needs.stage_macos.result == 'success' && needs.stage_web.result == 'success' && needs.prepare.outputs.publish == 'true' && needs.verify.result == 'success' && needs.apple_upload.result == 'success'
     permissions:
       contents: write
     runs-on: ubuntu-24.04
@@ -209,4 +288,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SOURCE_SHA: ${{ needs.prepare.outputs.commit }}
           VERSION: ${{ needs.prepare.outputs.version }}
-        run: python3 tools/release/publish.py release-assets --version "$VERSION" --commit "$SOURCE_SHA"
+          ALLOW_UNSIGNED_WINDOWS: ${{ needs.prepare.outputs.allow_unsigned_windows }}
+        run: |
+          FLAGS=()
+          if [ "$ALLOW_UNSIGNED_WINDOWS" = true ]; then FLAGS+=(--allow-unsigned-windows); fi
+          python3 tools/release/publish.py release-assets --version "$VERSION" --commit "$SOURCE_SHA" "${FLAGS[@]}"

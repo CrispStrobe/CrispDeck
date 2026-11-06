@@ -20,6 +20,20 @@ class PublishGuardsTests(unittest.TestCase):
             publish.publish(self.root, '1.3.0', 'a' * 40)
         command.assert_not_called()
 
+    def test_unsigned_override_still_requires_a_fully_verified_manifest(self):
+        self.evidence.write_text(json.dumps({'version': '1.3.0', 'commit': 'a' * 40, 'publishable': False, 'all_platforms_verified': False}))
+        with patch.object(publish, 'gh') as command, self.assertRaisesRegex(ValueError, 'complete signed manifest'):
+            publish.publish(self.root, '1.3.0', 'a' * 40, allow_unsigned_windows=True)
+        command.assert_not_called()
+
+    def test_unsigned_override_does_not_bypass_tag_validation(self):
+        self.evidence.write_text(json.dumps({'version': '1.3.0', 'commit': 'a' * 40, 'publishable': False, 'all_platforms_verified': True}))
+        responses = [{'nameWithOwner': 'CrispStrobe/CrispDeck'}, {'object': {'type': 'commit', 'sha': 'b' * 40}}]
+        with patch.object(publish, 'json_gh', side_effect=responses), patch.object(publish.subprocess, 'run'), patch.object(publish, 'gh') as command:
+            with self.assertRaisesRegex(ValueError, 'Remote version tag differs'):
+                publish.publish(self.root, '1.3.0', 'a' * 40, allow_unsigned_windows=True)
+            command.assert_not_called()
+
     def test_published_release_never_receives_upload_or_edit(self):
         def read(*args):
             if args[0] == 'repo': return {'nameWithOwner': 'CrispStrobe/CrispDeck'}
@@ -33,6 +47,28 @@ class PublishGuardsTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'already published'):
                 publish.publish(self.root, '1.3.0', 'a' * 40)
         command.assert_not_called()
+
+    def test_complete_staged_prerelease_can_be_finalized(self):
+        import hashlib
+        checksum = self.root / 'SHA256SUMS'
+        checksum.write_text('checksum evidence')
+        files = [self.evidence, checksum]
+        assets = [{'name': p.name, 'size': p.stat().st_size, 'digest': 'sha256:' + hashlib.sha256(p.read_bytes()).hexdigest()} for p in files]
+        prerelease = {'isDraft': False, 'isPrerelease': True, 'assets': assets}
+        def read(*args):
+            if args[0] == 'repo': return {'nameWithOwner': 'CrispStrobe/CrispDeck'}
+            if args[0] == 'api': return {'object': {'type': 'commit', 'sha': 'a' * 40}}
+            return prerelease
+        def process(args, **kwargs):
+            class Result:
+                returncode = 0
+                stdout = json.dumps(prerelease)
+            return Result()
+        with patch.object(publish, 'json_gh', side_effect=read), patch.object(publish.subprocess, 'run', side_effect=process), patch.object(publish, 'gh') as command:
+            publish.publish(self.root, '1.3.0', 'a' * 40)
+        edits = [call.args for call in command.call_args_list if call.args[:2] == ('release', 'edit')]
+        self.assertEqual(len(edits), 1)
+        self.assertIn('--prerelease=false', edits[0])
 
     def test_moved_tag_is_rejected_before_release_creation(self):
         responses = [{'nameWithOwner': 'CrispStrobe/CrispDeck'}, {'object': {'type': 'commit', 'sha': 'b' * 40}}]

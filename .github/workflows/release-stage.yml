@@ -1,0 +1,34 @@
+name: Stage verified release assets
+on:
+  workflow_call:
+    inputs:
+      platform:
+        type: string
+        required: true
+      version:
+        type: string
+        required: true
+      source_sha:
+        type: string
+        required: true
+permissions:
+  contents: write
+  actions: read
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.source_sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: package-${{ inputs.platform }}
+          path: platform-assets
+      - name: Verify and stage the platform packages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PLATFORM: ${{ inputs.platform }}
+          VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: python3 tools/release/stage.py platform-assets --platform "$PLATFORM" --version "$VERSION" --commit "$SOURCE_SHA"

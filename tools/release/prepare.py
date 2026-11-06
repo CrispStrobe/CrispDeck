@@ -23,11 +23,14 @@ def main():
     if commit != os.environ['GITHUB_SHA']:
         raise SystemExit('Checkout differs from the workflow source commit')
     publish = os.getenv('RELEASE_PUBLISH') == 'true'
+    allow_unsigned = os.getenv('ALLOW_UNSIGNED_WINDOWS') == 'true'
+    if allow_unsigned and os.getenv('GITHUB_EVENT_NAME') != 'workflow_dispatch':
+        raise SystemExit('Unsigned Windows release must be explicitly requested through workflow dispatch')
     if publish:
         if os.environ.get('GITHUB_REF') != f'refs/tags/v{version}':
             raise SystemExit('Publication requires the matching immutable vVERSION tag')
-        current = subprocess.run(['gh', 'release', 'view', f'v{version}', '--json', 'isDraft'], capture_output=True, text=True)
-        if current.returncode == 0 and not json.loads(current.stdout)['isDraft']:
+        current = subprocess.run(['gh', 'release', 'view', f'v{version}', '--json', 'isDraft,isPrerelease'], capture_output=True, text=True)
+        if current.returncode == 0 and not (json.loads(current.stdout)['isDraft'] or json.loads(current.stdout).get('isPrerelease', False)):
             raise SystemExit('This release is already published; refusing to replace its artifacts')
         if current.returncode and 'release not found' not in current.stderr.lower():
             raise SystemExit('Could not verify whether the release already exists: ' + current.stderr)
@@ -35,14 +38,14 @@ def main():
         fields = {'pfx': ['WINDOWS_CERT_PFX_BASE64', 'WINDOWS_CERT_PASSWORD'],
                   'azure': ['AZURE_CLIENT_ID', 'AZURE_TENANT_ID', 'AZURE_SIGNING_ENDPOINT',
                             'AZURE_SIGNING_ACCOUNT', 'AZURE_CERTIFICATE_PROFILE']}
-        if mode not in fields or any(not os.getenv(field) for field in fields[mode]):
+        if not allow_unsigned and (mode not in fields or any(not os.getenv(field) for field in fields[mode])):
             raise SystemExit('Publication requires configured Windows publisher signing; see docs/releasing.md')
     if not re.fullmatch(r'[0-9a-f]{64}', os.getenv('ANDROID_RELEASE_CERT_SHA256', '')):
         raise SystemExit('Pin the retained Android certificate before building')
     sys.path.insert(0, str(Path('tools/asc').resolve()))
     from next_build import for_version
     build = for_version(version)
-    values = {'version': version, 'commit': commit, 'ios_build': build, 'publish': str(publish).lower()}
+    values = {'version': version, 'commit': commit, 'ios_build': build, 'publish': str(publish).lower(), 'allow_unsigned_windows': str(allow_unsigned).lower()}
     with Path(os.environ['GITHUB_OUTPUT']).open('a') as file:
         for key, value in values.items():
             file.write(f'{key}={value}\n')
