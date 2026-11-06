@@ -12,6 +12,7 @@ import type { Account, UnifiedPost } from '$lib/types';
 import type { ClientEntry } from '$lib/api/client-factory';
 import { createLayout, getLayout, listLayouts, setActiveLayoutName } from '$lib/deck-layouts';
 import { listAccounts } from '$lib/db';
+import { subscribeDeckColumn } from '$lib/deck-live';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/components/Post.svelte', async () => ({ default: (await import('$lib/components/deck/test-fixtures/PostStub.svelte')).default }));
@@ -150,6 +151,114 @@ describe('deck integration boundaries', () => {
     expect(target.querySelector('[role="region"][aria-label="Offline workspace"]')).not.toBeNull();
     flushSync(() => workspaces.click());
     expect(target.querySelector('dialog[open]')).not.toBeNull();
+  });
+
+  it('refreshes changed account metadata and clients while retaining older pages and pagination', async () => {
+    const cleanupStream = vi.fn();
+    vi.mocked(subscribeDeckColumn).mockReturnValueOnce(cleanupStream);
+    vi.mocked(loadDeckPage).mockResolvedValueOnce(page({ posts: [row('head')], hasMore: true, cursors: { '1': 'page-two' } }))
+      .mockResolvedValueOnce(page({ posts: [row('older')], hasMore: true, cursors: { '1': 'page-three' } }))
+      .mockResolvedValueOnce(page({ posts: [row('new-head')], hasMore: true, cursors: { '1': 'fresh-head-cursor' } }))
+      .mockResolvedValueOnce(page());
+    const saved: DeckColumnConfig = { id: 'column', title: 'Following', type: 'timeline', accountIds: [1] };
+    const target = await render([saved]);
+    const olderButton = () => [...target.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.trim() === i18n.t.deck.loadOlder)!;
+    flushSync(() => olderButton().click()); await settle();
+    const updatedAccounts = [{ ...accounts[0], display_name: 'Updated profile', avatar_url: 'https://avatar.example/new.png' }, accounts[1]];
+    const clients = new Map<number, ClientEntry>([[1, { accountId: 1, platform: 'bluesky', handle: accounts[0].handle, client: {} as ClientEntry['client'] }]]);
+    vi.mocked(listAccounts).mockResolvedValue(updatedAccounts);
+    vi.mocked(initAllClients).mockResolvedValue({ accounts: updatedAccounts, clients });
+    window.dispatchEvent(new CustomEvent('crispdeck:accounts-changed', { detail: { membershipChanged: false } }));
+    await settle();
+    expect(cleanupStream).toHaveBeenCalledOnce();
+    expect(loadDeckPage).toHaveBeenNthCalledWith(3, saved, updatedAccounts, clients, undefined);
+    expect(target.querySelector('[data-post-uri="older"]')).not.toBeNull();
+    expect(target.querySelector('[data-post-uri="new-head"]')).not.toBeNull();
+    flushSync(() => olderButton().click()); await settle();
+    expect(vi.mocked(loadDeckPage).mock.calls[3][3]).toEqual({ '1': 'page-three' });
+    expect(JSON.parse(localStorage.getItem('crispdeck-deck-columns')!)).toEqual([saved]);
+    await unmount(instance!); instance = undefined;
+    const calls = vi.mocked(initAllClients).mock.calls.length;
+    window.dispatchEvent(new CustomEvent('crispdeck:accounts-changed', { detail: { membershipChanged: true } }));
+    await settle(); expect(initAllClients).toHaveBeenCalledTimes(calls);
+  });
+
+  it('retires removed-account rows, streams and in-flight pages without widening an explicit selection', async () => {
+    const cleanupStream = vi.fn();
+    vi.mocked(subscribeDeckColumn).mockReturnValueOnce(cleanupStream);
+    let finishPage!: (value: LoadedPage) => void;
+    let finishClients!: (value: Awaited<ReturnType<typeof initAllClients>>) => void;
+    vi.mocked(loadDeckPage).mockResolvedValueOnce(page({ posts: [row('removed-account', { platform: 'mastodon', sourceAccountId: 2 })] }))
+      .mockImplementationOnce(() => new Promise(resolve => { finishPage = resolve; }));
+    const saved: DeckColumnConfig = { id: 'column', title: 'Account two only', type: 'timeline', accountIds: [2] };
+    const target = await render([saved]);
+    await refresh(target);
+    vi.mocked(listAccounts).mockResolvedValue([accounts[0]]);
+    vi.mocked(initAllClients).mockImplementationOnce(() => new Promise(resolve => { finishClients = resolve; }));
+    flushSync(() => window.dispatchEvent(new CustomEvent('crispdeck:accounts-changed', { detail: { membershipChanged: true } })));
+    expect(target.querySelector('[data-post-uri="removed-account"]')).toBeNull();
+    expect(cleanupStream).toHaveBeenCalledOnce();
+    await settle();
+    finishPage(page({ posts: [row('stale-private-row', { platform: 'mastodon', sourceAccountId: 2 })] })); await settle();
+    expect(target.querySelector('[data-post-uri="stale-private-row"]')).toBeNull();
+    finishClients({ accounts: [accounts[0]], clients: new Map() }); await settle();
+    expect(target.textContent).toContain(i18n.t.deck.noSelectedAccounts);
+    expect(loadDeckPage).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(localStorage.getItem('crispdeck-deck-columns')!)).toEqual([saved]);
+  });
+
+  it('clears old identity data on a metadata event when the remote account identity changed', async () => {
+    vi.mocked(loadDeckPage).mockResolvedValueOnce(page({ posts: [row('previous-identity', { sourceAccountId: 1 })], hasMore: true, cursors: { '1': 'old-identity-cursor' } }))
+      .mockResolvedValueOnce(page({ posts: [row('new-identity', { sourceAccountId: 1 })] }));
+    const target = await render({ accountIds: [1] });
+    const rebound = [{ ...accounts[0], did: 'did:plc:replacement' }, accounts[1]];
+    let finishClients!: (value: Awaited<ReturnType<typeof initAllClients>>) => void;
+    vi.mocked(listAccounts).mockResolvedValue(rebound);
+    vi.mocked(initAllClients).mockImplementationOnce(() => new Promise(resolve => { finishClients = resolve; }));
+    window.dispatchEvent(new CustomEvent('crispdeck:accounts-changed', { detail: { membershipChanged: false } })); await settle();
+    expect(target.querySelector('[data-post-uri="previous-identity"]')).toBeNull();
+    finishClients({ accounts: rebound, clients: new Map() }); await settle();
+    expect(target.querySelector('[data-post-uri="new-identity"]')).not.toBeNull();
+    expect(vi.mocked(loadDeckPage).mock.calls[1][3]).toBeUndefined();
+    expect([...target.querySelectorAll<HTMLButtonElement>('button')].some(button => button.textContent?.trim() === i18n.t.deck.loadOlder)).toBe(false);
+  });
+
+  it('ignores a stale initial client result after a newer account change has loaded the deck', async () => {
+    let finishOldClients!: (value: Awaited<ReturnType<typeof initAllClients>>) => void;
+    vi.mocked(initAllClients).mockImplementationOnce(() => new Promise(resolve => { finishOldClients = resolve; }));
+    const target = await render({ accountIds: [2] });
+    vi.mocked(listAccounts).mockResolvedValue([accounts[0]]);
+    vi.mocked(initAllClients).mockResolvedValue({ accounts: [accounts[0]], clients: new Map() });
+    window.dispatchEvent(new CustomEvent('crispdeck:accounts-changed', { detail: { membershipChanged: true } })); await settle();
+    expect(target.textContent).toContain(i18n.t.deck.noSelectedAccounts);
+    finishOldClients({ accounts, clients: new Map() }); await settle();
+    expect(loadDeckPage).not.toHaveBeenCalled();
+    expect(target.textContent).toContain(i18n.t.deck.noSelectedAccounts);
+  });
+
+  it('reorders from the dedicated keyboard and drag handle while respecting pinned columns', async () => {
+    const saved: DeckColumnConfig[] = [
+      { id: 'one', title: 'One', type: 'timeline' },
+      { id: 'two', title: 'Two', type: 'timeline' },
+      { id: 'pinned', title: 'Pinned', type: 'timeline', pinned: true },
+    ];
+    const target = await render(saved);
+    const region = (name: string) => target.querySelector<HTMLElement>(`[role="region"][aria-label="${name}"]`)!;
+    const handle = (name: string) => region(name).querySelector<HTMLButtonElement>('.drag-handle')!;
+    const order = () => JSON.parse(localStorage.getItem('crispdeck-deck-columns')!).map((col: DeckColumnConfig) => col.id);
+    expect(region('One').draggable).toBe(false);
+    expect(handle('One').draggable).toBe(true);
+    expect(handle('Pinned').draggable).toBe(false);
+    flushSync(() => handle('One').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true })));
+    expect(order()).toEqual(['two', 'one', 'pinned']);
+    flushSync(() => handle('One').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true })));
+    expect(order()).toEqual(['two', 'one', 'pinned']);
+    flushSync(() => handle('One').dispatchEvent(new Event('dragstart', { bubbles: true })));
+    flushSync(() => region('Two').parentElement!.dispatchEvent(new Event('dragover', { bubbles: true, cancelable: true })));
+    expect(region('Two').parentElement!.className).toContain('ring-2');
+    flushSync(() => region('Two').parentElement!.dispatchEvent(new Event('drop', { bubbles: true, cancelable: true })));
+    expect(order()).toEqual(['one', 'two', 'pinned']);
+    expect(region('Two').parentElement!.className).not.toContain('ring-2');
   });
 
   it('alerts and counts only matching new notifications, never the first load or an older page', async () => {

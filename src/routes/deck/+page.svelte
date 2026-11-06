@@ -78,7 +78,10 @@
   function handleTouchStart(colId: string, e: TouchEvent) {
     if (touchLongPressTimer) clearTimeout(touchLongPressTimer);
     touchLongPressTimer = null;
-    if (columns.find(col => col.id === colId)?.pinned || (e.target instanceof Element && e.target.closest('button, input, select, textarea, a'))) return;
+    if (columns.find(col => col.id === colId)?.pinned) return;
+    if (e.target instanceof Element && !e.target.closest('.drag-handle')) {
+      if (e.target.closest('button, input, select, textarea, a')) return;
+    }
     const touch = e.touches[0];
     if (!touch) return;
     touchStartX = touch.clientX;
@@ -385,13 +388,92 @@
   }
 
   let refreshInterval: ReturnType<typeof setInterval> | undefined;
+  let accountRevision = 0;
+  let clientsRefreshing = true;
+
+  function accountIdentitySnapshot(items: Account[]): string {
+    return JSON.stringify([...items].sort((a, b) => a.id - b.id).map(account => [
+      account.id, account.platform, account.handle, account.did,
+      account.instance_url, account.mastodon_id, account.threads_user_id,
+    ]));
+  }
+
+  function needsAccountClients(col: DeckColumnConfig): boolean {
+    return !['rss', 'bookmarks', 'drafts', 'scheduled'].includes(col.type);
+  }
+
+  function resetAccountColumns() {
+    for (const col of columns.filter(needsAccountClients)) clearColumnRuntime(col.id);
+    unlikedAtRequest.clear();
+    focusedPostIdx = -1;
+  }
+
+  function adoptAccounts(next: Account[]) {
+    // A credential rebind can keep the numeric account ID while changing its
+    // remote identity. Metadata-only edits retain older pages and their cursors.
+    if (accountIdentitySnapshot(accounts) !== accountIdentitySnapshot(next)) resetAccountColumns();
+    accounts = next;
+  }
+
+  async function refreshAccountClients(initial = false) {
+    const revision = accountRevision;
+    const isCurrent = () => !disposed && revision === accountRevision;
+    try {
+      if (!initial) {
+        const next = await listAccounts();
+        if (!isCurrent()) return;
+        adoptAccounts(next);
+      }
+      let result = await initAllClients();
+      if (!isCurrent()) return;
+      if (initial && result.accounts.length === 0) {
+        invalidateClientCache();
+        result = await initAllClients();
+        if (!isCurrent()) return;
+      }
+      adoptAccounts(result.accounts);
+      clientEntries = result.clients;
+      clientsRefreshing = false;
+      const liveCounters = localStorage.getItem('crispdeck-live-counters') !== 'false';
+      jetstream.setEnabled(liveCounters && accounts.some(account => account.platform === 'bluesky'));
+
+      // The current workspace may have been edited or switched during login.
+      for (const col of columns) {
+        columnLoading[col.id] = false;
+        const requested = pendingHeadRefresh.delete(col.id);
+        if (initial || !col.paused || requested) void loadColumn(col);
+      }
+    } catch (error) {
+      if (!isCurrent()) return;
+      clientsRefreshing = false;
+      swallow('deck.init', error);
+      toast.error(i18n.t.deck.initFailed);
+      for (const col of columns) columnLoading[col.id] = false;
+    }
+  }
+
+  function handleAccountsChanged(event: Event) {
+    accountRevision++;
+    if (!deckReady || disposed) return;
+    clientsRefreshing = true;
+    clientEntries = new Map();
+    for (const col of columns.filter(needsAccountClients)) stopColumnRequests(col.id);
+    if ((event as CustomEvent<{ membershipChanged?: boolean }>).detail?.membershipChanged !== false) resetAccountColumns();
+    void refreshAccountClients();
+  }
 
   onMount(async () => {
+    window.addEventListener('crispdeck:accounts-changed', handleAccountsChanged);
     try {
       // Restore the editable workspace before waiting for credentials, OAuth,
       // or provider requests. Account metadata is needed for portable exports.
       const saved = readJson('crispdeck-deck-columns', defaultColumns, Array.isArray);
-      const storedAccounts = await listAccounts();
+      let restoredRevision = accountRevision;
+      let storedAccounts = await listAccounts();
+      while (!disposed && restoredRevision !== accountRevision) {
+        restoredRevision = accountRevision;
+        storedAccounts = await listAccounts();
+      }
       if (disposed) return;
       accounts = storedAccounts;
       try { columns = parseDeckColumns(saved); } catch { columns = defaultColumns; }
@@ -400,26 +482,7 @@
       loading = false;
       for (const col of columns) columnLoading[col.id] = true;
 
-      let result = await initAllClients();
-      if (result.accounts.length === 0) {
-        invalidateClientCache();
-        result = await initAllClients();
-      }
-      if (disposed) return;
-      accounts = result.accounts;
-      clientEntries = result.clients;
-
-      // Enable live engagement counters (Jetstream) if user hasn't disabled them
-      const liveCounters = localStorage.getItem('crispdeck-live-counters') !== 'false';
-      if (liveCounters && accounts.some(a => a.platform === 'bluesky')) {
-        jetstream.setEnabled(true);
-      }
-
-      // Load columns one by one (show as they load, don't block all)
-      for (const col of columns) {
-        columnLoading[col.id] = false;
-        loadColumn(col); // fire and forget — each shows its own spinner
-      }
+      await refreshAccountClients(true);
     } catch (e) {
       swallow('deck.init', e);
       toast.error(i18n.t.deck.initFailed);
@@ -457,6 +520,7 @@
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('crispdeck-bookmarks-changed', handleBookmarkChange);
+      window.removeEventListener('crispdeck:accounts-changed', handleAccountsChanged);
     }
     streamManager.disconnectAll();
     streamCleanups.clear();
@@ -514,13 +578,19 @@
     }).map(account => account.id);
   }
 
-  function clearColumnRuntime(id: string) {
+  function stopColumnRequests(id: string) {
     columnRequests.delete(id);
     streamCleanups.get(id)?.(); streamCleanups.delete(id);
     const timer = liveRefreshTimers.get(id);
     if (timer) clearTimeout(timer);
     liveRefreshTimers.delete(id);
     pendingHeadRefresh.delete(id);
+    columnLoading[id] = false;
+    columnLive[id] = false;
+  }
+
+  function clearColumnRuntime(id: string) {
+    stopColumnRequests(id);
     delete columnCursors[id]; delete columnErrors[id]; delete columnPosts[id];
     delete columnNotifGroups[id]; delete columnNotifications[id];
     delete columnHasMore[id]; delete columnLoaded[id]; delete columnUnread[id]; delete columnLive[id];
@@ -557,6 +627,10 @@
 
   async function loadColumn(col: DeckColumnConfig, older = false) {
     if (disposed || !columns.some(column => column.id === col.id)) return;
+    if (clientsRefreshing && needsAccountClients(col)) {
+      pendingHeadRefresh.add(col.id);
+      return;
+    }
     if (columnLoading[col.id]) {
       if (!older) pendingHeadRefresh.add(col.id);
       return;
@@ -878,6 +952,7 @@
 
   function handleDragOver(colId: string, e: DragEvent) {
     if (!draggedColumnId || colId === draggedColumnId) return;
+    if (columns.find(col => col.id === colId)?.pinned) return;
     e.preventDefault();
     dragOverColumnId = colId;
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
@@ -901,6 +976,7 @@
   }
 
   async function handleLike(post: UnifiedPost, active = true, column?: DeckColumnConfig) {
+    const revision = accountRevision;
     const selected = column ? columnAccounts(column, accounts) : accounts;
     const allowed = selected.map(account => account.id);
     const candidates = allowed.map(id => clientEntries.get(id)).filter(entry => entry?.platform === post.platform);
@@ -919,7 +995,7 @@
     }
     wasLiked.set(post, liked(post));
     await performDeckAction(post, 'like', active, clientEntries, allowed);
-    if (disposed || sourceId === undefined) return;
+    if (disposed || revision !== accountRevision || sourceId === undefined) return;
     if (active) unlikedAtRequest.delete(likeSourceKey(post, sourceId));
     else unlikedAtRequest.set(likeSourceKey(post, sourceId), requestSequence);
     const actedRaw = post.raw as any;

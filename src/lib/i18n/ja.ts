@@ -159,7 +159,8 @@ export default {
     search: { people: "ユーザー", partialFailure: "一部の検索結果を読み込めませんでした。再試行してください。", retrySearch: "もう一度検索してください。", threadsOnly: 'Threads のみ', threadsNote: '単純なキーワード検索のみ（演算子は使えません）', searchingAcross: '接続済みの {count} アカウントを検索中', searchAcrossNetworks: 'すべてのネットワークを横断して検索', resultsByNetwork: 'Bluesky {bluesky} 件 · Mastodon {mastodon} 件 · Threads {threads} 件', requiresScope: '必要な権限:', opUntil: '— 指定日より前の投稿', opTag: '— ハッシュタグ付きの投稿', opSince: '— 指定日より後の投稿', opMedia: '— 画像や動画のある投稿', opLang: '— 言語で絞り込む', opFromUser: '— 特定ユーザーの投稿', mastodonOnly: 'Mastodon のみ', fullTextNote: '全文検索はサーバー側のインデックスに依存します', blueskyOnly: 'Bluesky のみ', allNetworks: 'すべてのネットワーク', addAccountsToSearch: '検索するにはアカウントを追加してください:', title: '検索', placeholder: 'すべてのアカウントで投稿を検索...', button: '検索', searching: '検索中...', noResults: '結果なし', noPostsFor: '「{query}」の投稿が見つかりませんでした。', results: '{count}件の結果', noAccounts: 'アカウント未接続', addAccounts: '検索するには設定でアカウントを追加してください。' },
     bookmarks: { importFromPlatforms: '接続済みのプラットフォームからブックマークを取り込む', title: 'ブックマーク', noBookmarks: 'ブックマークなし', hint: '投稿のブックマークアイコンをクリックしてここに保存。', sync: 'プラットフォームから同期' },
     drafts: { savedFromCompose: '保存した下書きはここに表示されます:', preview: 'プレビュー', title: '下書き', newPost: '新しい投稿', posted: '投稿済み', failed: '失敗', noDrafts: '下書きなし', hint: '保存した下書きがここに表示されます。', scheduled: 'スケジュール済み', to: '宛先：', postNow: '今すぐ投稿', delete: '削除', edit: '編集', schedule: 'スケジュール', cancel: 'キャンセル', saved: '{date}に保存', calendarView: 'カレンダー' },
-    deck: { moveColumn: "{title}列を左右の矢印キーで移動",
+    deck: {
+      moveColumn: "{title}列を左右の矢印キーで移動",
       cancelSchedule: "予約を解除",
       deleteDraftConfirm: "この下書きを削除しますか？公開済みの投稿と送信履歴は保持されます。",
       publishingLoadFailed: "この端末の下書きを読み込めませんでした。カラムを更新してください。",

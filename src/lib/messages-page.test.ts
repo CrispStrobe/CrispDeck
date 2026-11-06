@@ -171,4 +171,76 @@ describe('account-safe messaging page', () => {
     expect(personal.sendMessage).not.toHaveBeenCalled();
     expect(work.sendMessage).not.toHaveBeenCalled();
   });
+
+  it('keeps the selected account and draft through overlapping reconnection events and uses its refreshed client', async () => {
+    const target = await render();
+    await select(target, 'work.bsky.social'); input(target, 'Draft survives reconnection');
+    let releaseStale!: (value: unknown) => void;
+    const restored = clientFixture(accounts[1]);
+    restored.getMessages.mockResolvedValue({ data: { messages: [message('restored', 'Reconnected private thread', accounts[1])] } });
+    mocks.initAllClients.mockImplementationOnce(() => new Promise(resolve => { releaseStale = resolve; }))
+      .mockResolvedValueOnce({ accounts, clients: new Map([[1, personal.entry], [2, restored.entry]]) });
+    window.dispatchEvent(new CustomEvent('crispdeck:accounts-changed', { detail: { membershipChanged: false } }));
+    flushSync();
+    window.dispatchEvent(new CustomEvent('crispdeck:accounts-changed', { detail: { membershipChanged: false } }));
+    await vi.waitFor(() => { flushSync(); expect(target.querySelector('[role=log]')?.textContent).toContain('Reconnected private thread'); });
+    expect(target.querySelector<HTMLInputElement>('input[aria-label="Type a message..."]')?.value).toBe('Draft survives reconnection');
+    releaseStale({ accounts, clients: new Map([[1, personal.entry], [2, work.entry]]) });
+    await Promise.resolve(); await Promise.resolve(); flushSync();
+    submitMessage(target);
+    await vi.waitFor(() => expect(restored.sendMessage).toHaveBeenCalledOnce());
+    expect(work.sendMessage).not.toHaveBeenCalled(); expect(personal.sendMessage).not.toHaveBeenCalled();
+    expect(work.getMessages).toHaveBeenCalledOnce();
+  });
+
+  it('retires an in-flight private read when its account is removed without switching to another account', async () => {
+    let releaseRead!: (value: unknown) => void;
+    work.getMessages.mockReturnValueOnce(new Promise(resolve => { releaseRead = resolve; }));
+    const target = await render();
+    row(target, 'work.bsky.social').click(); flushSync();
+    await vi.waitFor(() => expect(work.getMessages).toHaveBeenCalledOnce());
+    mocks.initAllClients.mockResolvedValue({ accounts: [accounts[0]], clients: new Map([[1, personal.entry]]) });
+    window.dispatchEvent(new CustomEvent('crispdeck:accounts-changed', { detail: { membershipChanged: true } }));
+    await vi.waitFor(() => { flushSync(); expect(target.querySelectorAll('button[aria-pressed]')).toHaveLength(1); });
+    expect(target.querySelector('[role=alert]')?.textContent).toContain('not available for the selected account');
+    releaseRead({ data: { messages: [message('late', 'Removed account private content', accounts[1])] } });
+    await Promise.resolve(); await Promise.resolve(); flushSync();
+    expect(target.textContent).not.toContain('Removed account private content');
+    expect(target.querySelector('[role=log]')).toBeNull();
+    expect(personal.getMessages).not.toHaveBeenCalled();
+  });
+
+  it('does not carry a private draft or selection to a different actor reusing a local account ID', async () => {
+    const target = await render();
+    await select(target, 'work.bsky.social'); input(target, 'For the original actor only');
+    const replacementAccount = { ...accounts[1], did: 'did:plc:replacement' };
+    const replacement = clientFixture(replacementAccount);
+    mocks.initAllClients.mockResolvedValue({ accounts: [accounts[0], replacementAccount], clients: new Map([[1, personal.entry], [2, replacement.entry]]) });
+    window.dispatchEvent(new CustomEvent('crispdeck:accounts-changed', { detail: { membershipChanged: true } }));
+    await vi.waitFor(() => { flushSync(); expect(target.querySelector('[role=alert]')?.textContent).toContain('not available for the selected account'); });
+    expect(replacement.getMessages).not.toHaveBeenCalled();
+    await select(target, 'work.bsky.social');
+    expect(target.querySelector<HTMLInputElement>('input[aria-label="Type a message..."]')?.value).toBe('');
+    expect(replacement.sendMessage).not.toHaveBeenCalled(); expect(work.sendMessage).not.toHaveBeenCalled();
+    instance?.$destroy(); instance = undefined;
+    const count = mocks.initAllClients.mock.calls.length;
+    window.dispatchEvent(new CustomEvent('crispdeck:accounts-changed', { detail: { membershipChanged: true } }));
+    expect(mocks.initAllClients).toHaveBeenCalledTimes(count);
+  });
+
+  it('requires another explicit destination after a new-chat account is disconnected', async () => {
+    const target = await render();
+    [...target.querySelectorAll('button')].find(button => button.textContent?.includes('New Conversation'))!.click(); flushSync();
+    const accountSelect = target.querySelector('select')!;
+    accountSelect.value = '2'; accountSelect.dispatchEvent(new Event('change', { bubbles: true })); flushSync();
+    const recipient = target.querySelector<HTMLInputElement>('input[aria-label="@user or handle..."]')!;
+    recipient.value = 'recipient.bsky.social'; recipient.dispatchEvent(new Event('input', { bubbles: true })); flushSync();
+    mocks.initAllClients.mockResolvedValue({ accounts: [accounts[0]], clients: new Map([[1, personal.entry]]) });
+    window.dispatchEvent(new CustomEvent('crispdeck:accounts-changed', { detail: { membershipChanged: true } }));
+    await vi.waitFor(() => { flushSync(); expect(target.querySelector('select')).not.toBeNull(); });
+    const submit = target.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    expect(submit.disabled).toBe(true);
+    expect(target.querySelector<HTMLInputElement>('input[aria-label="@user or handle..."]')?.value).toBe('recipient.bsky.social');
+    expect(personal.getConvoForMembers).not.toHaveBeenCalled(); expect(work.getConvoForMembers).not.toHaveBeenCalled();
+  });
 });

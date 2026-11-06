@@ -158,7 +158,8 @@ export default {
     search: { people: "用户", partialFailure: "部分搜索结果无法加载，请重试。", retrySearch: "请重新搜索。", threadsOnly: '仅 Threads', threadsNote: '仅支持简单关键词搜索（不支持运算符）', searchingAcross: '正在 {count} 个已连接账户中搜索', searchAcrossNetworks: '跨你的所有网络搜索', resultsByNetwork: 'Bluesky {bluesky} · Mastodon {mastodon} · Threads {threads}', requiresScope: '需要权限：', opUntil: '— 某日期之前的帖子', opTag: '— 含话题标签的帖子', opSince: '— 某日期之后的帖子', opMedia: '— 含图片/视频的帖子', opLang: '— 按语言筛选', opFromUser: '— 某位用户的帖子', mastodonOnly: '仅 Mastodon', fullTextNote: '全文搜索取决于服务器的索引情况', blueskyOnly: '仅 Bluesky', allNetworks: '全部网络', addAccountsToSearch: '添加账户以搜索，前往', title: '搜索', placeholder: '在所有账户中搜索帖子...', button: '搜索', searching: '搜索中...', noResults: '无结果', noPostsFor: '未找到"{query}"的帖子。', results: '{count}条结果', noAccounts: '未连接账户', addAccounts: '请在设置中添加账户以进行搜索。' },
     bookmarks: { importFromPlatforms: '从已连接的平台导入书签', title: '书签', noBookmarks: '暂无书签', hint: '点击任意帖子上的书签图标将其保存到此处。', sync: '从平台同步' },
     drafts: { savedFromCompose: '保存的草稿会显示在这里，来自', preview: '预览', title: '草稿', newPost: '新建帖子', posted: '已发布', failed: '失败', noDrafts: '暂无草稿', hint: '已保存的草稿显示在此处。', scheduled: '已定时', to: '发给：', postNow: '立即发布', delete: '删除', edit: '编辑', schedule: '定时发布', cancel: '取消', saved: '保存于{date}', calendarView: '日历' },
-    deck: { moveColumn: "使用左右方向键移动 {title} 列",
+    deck: {
+      moveColumn: "使用左右方向键移动 {title} 列",
       cancelSchedule: "取消定时发布",
       deleteDraftConfirm: "删除此草稿？已发布的帖子和发送历史将保留。",
       publishingLoadFailed: "无法加载此设备上的草稿。请刷新该栏。",

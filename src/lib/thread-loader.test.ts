@@ -53,6 +53,24 @@ describe('thread account selection', () => {
     expect(work.client.login).toHaveBeenCalledOnce(); expect(work.getPostThread).toHaveBeenCalledOnce();
   });
 
+  it('retains long author continuations through the scoped OAuth loader', async () => {
+    const work = bskyEntry(bskyAccounts[1]);
+    const thread: any = { post: bskyPost('main'), replies: [] };
+    let parent = thread;
+    for (let index = 1; index <= 12; index++) {
+      const post = bskyPost(`part-${index}`);
+      const child = { post: { ...post, record: { ...post.record, reply: { parent: { uri: parent.post.uri, cid: parent.post.cid }, root: { uri, cid: 'cid-main' } } } }, replies: [] };
+      parent.replies.push(child);
+      parent = child;
+    }
+    // A malformed duplicate must not turn traversal into an infinite cycle.
+    parent.replies.push(thread);
+    work.getPostThread.mockResolvedValueOnce({ data: { thread } });
+    const result = await loadThreadPage(request(`account=2&uri=${encodeURIComponent(uri)}`), bskyAccounts, new Map([[2, work.entry]]));
+    expect(result.replies).toHaveLength(12);
+    expect(result.replies.at(-1)).toMatchObject({ text: 'part-12', sourceAccountId: 2, replyParentUri: 'at://did:plc:author/app.bsky.feed.post/part-11' });
+  });
+
   it.each([99, 3])('never substitutes another account when scoped account %s is unavailable or belongs to a different network', async accountId => {
     const personal = bskyEntry(bskyAccounts[0]);
     await expect(loadThreadPage(request(`platform=bluesky&account=${accountId}&uri=${encodeURIComponent(uri)}`), [...bskyAccounts, ...mastoAccounts], new Map([[1, personal.entry], [3, mastoEntry(mastoAccounts[0])]]))).rejects.toThrow('selected account');
