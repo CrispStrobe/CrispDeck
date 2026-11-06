@@ -145,7 +145,7 @@
     {#if error}<p role="alert" class="text-sm text-[var(--color-danger)]">{error}</p>{/if}
     <div class="flex justify-end gap-2">
       <button type="button" onclick={() => dialog.close()} class="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm">{i18n.t.common.cancel}</button>
-      <button type="submit" class="rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm text-white">{i18n.t.common.save}</button>
+      <button type="submit" class="rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm text-white">{i18n.t.deck.save}</button>
     </div>
   </form>
 </dialog>

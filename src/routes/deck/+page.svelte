@@ -12,6 +12,7 @@
   import WorkspaceManager from '$lib/components/deck/WorkspaceManager.svelte';
   import PublishingColumn from '$lib/components/deck/PublishingColumn.svelte';
   import { listBookmarks } from '$lib/bookmarks';
+  import { listAccounts } from '$lib/db';
   import { loadConversationInbox } from '$lib/messages';
   import { isColumnLocked } from '$lib/deck-scroll';
   import * as deckFocus from '$lib/deck-focus';
@@ -28,6 +29,7 @@
   }
   let showStarters = $state(false);
   function applyStarter(next: DeckColumnConfig[]) {
+    if (!deckReady) return;
     for (const col of columns) clearColumnRuntime(col.id);
     columns = next; columnPosts = {}; columnNotifGroups = {};
     focusedColumnIdx = -1; focusedPostIdx = -1;
@@ -161,6 +163,9 @@
 
   let accounts: Account[] = $state([]);
   let loading = $state(true);
+  // Loading can finish with an initialization error. Only a restored column
+  // configuration and resolved account identities make workspace writes safe.
+  let deckReady = $state(false);
   let showAddMenu = $state(false);
   let showWorkspaces = $state(false);
   let editingColumn: DeckColumnConfig | null = $state(null);
@@ -306,6 +311,7 @@
 
     // 'a' opens add column menu
     if (e.key === 'a') {
+      if (!deckReady) return;
       e.preventDefault();
       showAddMenu = !showAddMenu;
       return;
@@ -381,6 +387,18 @@
 
   onMount(async () => {
     try {
+      // Restore the editable workspace before waiting for credentials, OAuth,
+      // or provider requests. Account metadata is needed for portable exports.
+      const saved = readJson('crispdeck-deck-columns', defaultColumns, Array.isArray);
+      const storedAccounts = await listAccounts();
+      if (disposed) return;
+      accounts = storedAccounts;
+      try { columns = parseDeckColumns(saved); } catch { columns = defaultColumns; }
+      refreshLayoutList();
+      deckReady = true;
+      loading = false;
+      for (const col of columns) columnLoading[col.id] = true;
+
       let result = await initAllClients();
       if (result.accounts.length === 0) {
         invalidateClientCache();
@@ -390,13 +408,6 @@
       accounts = result.accounts;
       clientEntries = result.clients;
 
-      // Load saved column config or use defaults
-      const saved = readJson('crispdeck-deck-columns', defaultColumns, Array.isArray);
-      try { columns = parseDeckColumns(saved); } catch { columns = defaultColumns; }
-
-      // Load saved layouts via module
-      refreshLayoutList();
-
       // Enable live engagement counters (Jetstream) if user hasn't disabled them
       const liveCounters = localStorage.getItem('crispdeck-live-counters') !== 'false';
       if (liveCounters && accounts.some(a => a.platform === 'bluesky')) {
@@ -404,14 +415,15 @@
       }
 
       // Load columns one by one (show as they load, don't block all)
-      loading = false;
       for (const col of columns) {
+        columnLoading[col.id] = false;
         loadColumn(col); // fire and forget — each shows its own spinner
       }
     } catch (e) {
       swallow('deck.init', e);
       toast.error(i18n.t.deck.initFailed);
       loading = false;
+      for (const col of columns) columnLoading[col.id] = false;
     }
 
     // Auto-refresh every 5 minutes, skip when tab is hidden.
@@ -451,6 +463,7 @@
   });
 
   function saveColumns(): boolean {
+    if (!deckReady) return false;
     if (!writeJson('crispdeck-deck-columns', columns)) { toast.error(i18n.t.deck.workspaceSaveFailed); return false; }
     const active = getActiveLayoutName();
     if (active) {
@@ -748,6 +761,7 @@
 
   function addFeedColumn(choice: FeedChoice) {
     showFeedPicker = false;
+    if (!deckReady) return;
     if (!choice.uri) return;
     const id = `feed-${Date.now()}`;
     columns = [...columns, { id, title: choice.title, type: choice.kind === 'list' ? 'list' : 'feed', query: choice.uri, platform: 'bluesky' }];
@@ -757,6 +771,7 @@
 
   function addColumn(type: ColumnType) {
     showAddMenu = false;
+    if (!deckReady) return;
     if (type === 'feed') { showFeedPicker = true; return; }
     const next: DeckColumnConfig = { id: crypto.randomUUID(), title: availableColumns.find(column => column.type === type)?.label.replace(/\.\.\.$/, '') ?? type, type };
     if (requiresQuery(type)) { editingColumn = next; return; }
@@ -764,6 +779,7 @@
   }
 
   function saveColumnSettings(next: DeckColumnConfig) {
+    if (!deckReady) return;
     const exists = columns.some(column => column.id === next.id);
     if (exists) clearColumnRuntime(next.id);
     columns = exists ? columns.map(column => column.id === next.id ? next : column) : [...columns, next];
@@ -938,8 +954,10 @@
 <svelte:head><title>CrispDeck — Deck</title><meta name="description" content="Multi-column deck view" /></svelte:head>
 
 <div class="h-full flex flex-col">
+  {#if deckReady}
   {#if showStarters || (!loading && accounts.length === 0)}
     <div class="p-4 border-b border-[var(--color-border)] overflow-y-auto max-h-[70vh]"><StarterWorkspaces connected={accounts.length > 0} onapply={applyStarter} /></div>
+  {/if}
   {/if}
   <!-- Deck header -->
   <div class="flex flex-wrap gap-2 items-center justify-between px-4 py-2 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex-shrink-0">
@@ -949,10 +967,11 @@
         <h1 class="text-lg font-bold">{i18n.t.nav.deck}</h1>
         <span class="text-xs text-[var(--color-text-muted)]">{columns.length} col</span>
       </div>
-      <button onclick={() => showStarters = !showStarters} class="px-2 py-1 text-xs border border-[var(--color-border)] rounded-lg">{i18n.t.workflow.starterWorkspaces}</button>
+      <button disabled={!deckReady} onclick={() => showStarters = !showStarters} class="px-2 py-1 text-xs border border-[var(--color-border)] rounded-lg disabled:opacity-50">{i18n.t.workflow.starterWorkspaces}</button>
       <!-- Saved layouts -->
       {#if savedLayoutNames.length > 0}
         <select
+          disabled={!deckReady}
           onchange={(e) => { const v = (e.target as HTMLSelectElement).value; if (v) { try { loadLayoutByName(v); } catch (error) { swallow('deck.switchWorkspace', error); toast.error(i18n.t.deck.workspaceSaveFailed); } } }}
           class="px-2 py-1 text-[10px] bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-[var(--color-text)]"
         >
@@ -962,13 +981,14 @@
           {/each}
         </select>
       {/if}
-      <button onclick={() => showWorkspaces = true} class="px-2 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] rounded">{i18n.t.deck.manageWorkspaces}</button>
+      <button disabled={!deckReady} onclick={() => showWorkspaces = true} class="px-2 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] rounded disabled:opacity-50">{i18n.t.deck.manageWorkspaces}</button>
       <button onclick={() => openCompose()} class="flex items-center gap-1 px-2 py-1 text-xs border border-[var(--color-border)] rounded"><Pencil size={12} />{i18n.t.nav.compose}</button>
     </div>
     <div class="relative">
       <button
+        disabled={!deckReady}
         onclick={() => showAddMenu = !showAddMenu}
-        class="flex items-center gap-1 px-3 py-1.5 text-xs bg-[var(--color-primary)] text-white rounded-md"
+        class="flex items-center gap-1 px-3 py-1.5 text-xs bg-[var(--color-primary)] text-white rounded-md disabled:opacity-50"
       >
         <Plus size={12} /> Add Column
       </button>
@@ -1104,4 +1124,4 @@
 </div>
 
 {#if editingColumn}<ColumnSettings column={editingColumn} {accounts} clients={clientEntries} onsave={saveColumnSettings} onclose={() => editingColumn = null} />{/if}
-{#if showWorkspaces}<WorkspaceManager {columns} {accounts} onload={loadLayoutByName} onchange={refreshLayoutList} onclose={() => showWorkspaces = false} />{/if}
+{#if showWorkspaces && deckReady}<WorkspaceManager {columns} {accounts} onload={loadLayoutByName} onchange={refreshLayoutList} onclose={() => showWorkspaces = false} />{/if}

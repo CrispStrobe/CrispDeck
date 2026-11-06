@@ -54,6 +54,7 @@ describe('column source settings', () => {
 
   it('does not turn an explicitly empty account selection into all accounts on save', async () => {
     const { target, onsave } = await render({ id: 'home', title: 'Home', type: 'timeline', accountIds: [] });
+    expect(target.querySelector('button[type="submit"]')?.textContent?.trim()).toBe('Save');
     submit(target);
     expect(onsave).toHaveBeenCalledWith(expect.objectContaining({ accountIds: [] }));
   });

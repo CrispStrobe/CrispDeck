@@ -10,6 +10,8 @@ import { i18n } from '$lib/i18n.svelte';
 import type { DeckColumnConfig } from '$lib/deck-layouts';
 import type { Account, UnifiedPost } from '$lib/types';
 import type { ClientEntry } from '$lib/api/client-factory';
+import { createLayout, getLayout, listLayouts, setActiveLayoutName } from '$lib/deck-layouts';
+import { listAccounts } from '$lib/db';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/components/Post.svelte', async () => ({ default: (await import('$lib/components/deck/test-fixtures/PostStub.svelte')).default }));
@@ -23,6 +25,7 @@ vi.mock('$lib/column-notify', () => ({ notifyColumn: vi.fn(), playColumnSound: v
 vi.mock('$lib/haptics', () => ({ haptic: vi.fn() }));
 vi.mock('$lib/toast.svelte', () => ({ toast: { error: vi.fn() } }));
 vi.mock('$lib/messages', () => ({ loadConversationInbox: vi.fn() }));
+vi.mock('$lib/db', async importOriginal => ({ ...await importOriginal<typeof import('$lib/db')>(), listAccounts: vi.fn() }));
 vi.mock('$lib/deck-publishing', async importOriginal => ({
   ...await importOriginal<typeof import('$lib/deck-publishing')>(), loadPublishingEntries: vi.fn(),
 }));
@@ -39,12 +42,15 @@ let instance: ReturnType<typeof mount> | undefined;
 beforeEach(() => {
   vi.clearAllMocks(); localStorage.clear();
   localStorage.setItem('crispdeck-live-counters', 'false');
-  vi.mocked(initAllClients).mockResolvedValue({ accounts, clients: new Map() });
+  vi.mocked(listAccounts).mockReset().mockResolvedValue(accounts);
+  vi.mocked(initAllClients).mockReset().mockResolvedValue({ accounts, clients: new Map() });
   vi.mocked(loadDeckPage).mockReset().mockResolvedValue(page());
   vi.mocked(loadPublishingEntries).mockReset().mockResolvedValue([]);
   vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
   Object.defineProperty(HTMLElement.prototype, 'scrollTo', { configurable: true, value: vi.fn() });
   Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: vi.fn() });
+  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value: function(this: HTMLDialogElement) { this.open = true; } });
+  Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value: function(this: HTMLDialogElement) { this.open = false; } });
 });
 afterEach(async () => {
   if (instance) await unmount(instance); instance = undefined;
@@ -65,6 +71,79 @@ async function refresh(target: ParentNode) {
 }
 
 describe('deck integration boundaries', () => {
+  it('prevents workspace writes during local restore, then saves restored columns while network clients are still initializing', async () => {
+    const saved: DeckColumnConfig[] = [{ id: 'restored', title: 'Saved column', type: 'timeline', accountIds: [2] }];
+    createLayout('Existing', saved); setActiveLayoutName('Existing');
+    let restore!: (value: Account[]) => void;
+    vi.mocked(listAccounts).mockImplementationOnce(() => new Promise(resolve => { restore = resolve; }));
+    vi.mocked(initAllClients).mockImplementationOnce(() => new Promise(() => {}));
+    const target = await render(saved);
+    const button = (name: string) => [...target.querySelectorAll<HTMLButtonElement>('button')].find(item => item.textContent?.trim() === name)!;
+    const workspaces = button(i18n.t.deck.manageWorkspaces);
+    expect(workspaces.disabled).toBe(true);
+    expect(button(i18n.t.workflow.starterWorkspaces).disabled).toBe(true);
+    expect(button('Add Column').disabled).toBe(true);
+    flushSync(() => workspaces.click());
+    expect(target.querySelector('dialog')).toBeNull();
+    expect(listLayouts().map(layout => layout.name)).toEqual(['Existing']);
+    expect(getLayout('Existing')?.columns).toEqual(saved);
+    expect(JSON.parse(localStorage.getItem('crispdeck-deck-columns')!)).toEqual(saved);
+    restore(accounts); await settle();
+    expect(workspaces.disabled).toBe(false);
+    expect(target.querySelector('[role="region"][aria-label="Saved column"]')).not.toBeNull();
+    flushSync(() => workspaces.click());
+    const input = target.querySelector<HTMLInputElement>('#workspace-name')!;
+    flushSync(() => { input.value = 'Monitoring'; input.dispatchEvent(new Event('input', { bubbles: true })); });
+    flushSync(() => button(i18n.t.deck.saveCurrentWorkspace).click());
+    expect(getLayout('Monitoring')?.columns).toEqual(saved);
+    expect(getLayout('Monitoring')?.columns[0].accountIds).toEqual([2]);
+    expect(loadDeckPage).not.toHaveBeenCalled();
+  });
+
+  it('keeps setup controls protected after initialization fails instead of saving the initial empty array', async () => {
+    const saved: DeckColumnConfig[] = [{ id: 'restored', title: 'Saved column', type: 'timeline', accountIds: [2] }];
+    createLayout('Existing', saved); setActiveLayoutName('Existing');
+    vi.mocked(listAccounts).mockRejectedValueOnce(new Error('Account storage unavailable'));
+    const target = await render(saved);
+    const controls = [...target.querySelectorAll<HTMLButtonElement>('button')].filter(button => [i18n.t.deck.manageWorkspaces, i18n.t.workflow.starterWorkspaces, 'Add Column'].includes(button.textContent?.trim() ?? ''));
+    expect(controls).toHaveLength(3);
+    expect(controls.every(button => button.disabled)).toBe(true);
+    expect(getLayout('Existing')?.columns).toEqual(saved);
+    expect(JSON.parse(localStorage.getItem('crispdeck-deck-columns')!)).toEqual(saved);
+  });
+
+  it('allows workspace management after an intentionally empty deck has initialized', async () => {
+    const target = await render([]);
+    const workspaces = [...target.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.trim() === i18n.t.deck.manageWorkspaces)!;
+    expect(workspaces.disabled).toBe(false);
+  });
+
+  it('keeps a workspace switched during a slow login when the client result eventually arrives', async () => {
+    const switched: DeckColumnConfig[] = [{ id: 'switched', title: 'Switched while waiting', type: 'timeline', accountIds: [1] }];
+    createLayout('Other workspace', switched);
+    let initialize!: (value: Awaited<ReturnType<typeof initAllClients>>) => void;
+    vi.mocked(initAllClients).mockImplementationOnce(() => new Promise(resolve => { initialize = resolve; }));
+    const target = await render({ id: 'original', title: 'Original column', accountIds: [2] });
+    const select = target.querySelector<HTMLSelectElement>('select')!;
+    flushSync(() => { select.value = 'Other workspace'; select.dispatchEvent(new Event('change', { bubbles: true })); });
+    await settle();
+    initialize({ accounts, clients: new Map() }); await settle();
+    expect(target.querySelector('[role="region"][aria-label="Switched while waiting"]')).not.toBeNull();
+    expect(target.querySelector('[role="region"][aria-label="Original column"]')).toBeNull();
+    expect(JSON.parse(localStorage.getItem('crispdeck-deck-columns')!)).toEqual(switched);
+    expect(getLayout('Other workspace')?.columns).toEqual(switched);
+  });
+
+  it('keeps a locally restored workspace editable if later network-client initialization fails', async () => {
+    vi.mocked(initAllClients).mockRejectedValueOnce(new Error('Provider unavailable'));
+    const target = await render({ title: 'Offline workspace', accountIds: [2] });
+    const workspaces = [...target.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.trim() === i18n.t.deck.manageWorkspaces)!;
+    expect(workspaces.disabled).toBe(false);
+    expect(target.querySelector('[role="region"][aria-label="Offline workspace"]')).not.toBeNull();
+    flushSync(() => workspaces.click());
+    expect(target.querySelector('dialog[open]')).not.toBeNull();
+  });
+
   it('alerts and counts only matching new notifications, never the first load or an older page', async () => {
     const first = notification('first');
     vi.mocked(loadDeckPage).mockResolvedValueOnce(page({ notifications: [first], hasMore: true, cursors: { '1': 'older' } }))
