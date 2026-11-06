@@ -26,6 +26,16 @@ try {
       await assertCard(card, viewport.height);
     }
     const first = cards.nth(0);
+    const altBounds = await first.evaluate(el => {
+      const preview = el.querySelector('.feed-preview').getBoundingClientRect();
+      const alt = el.querySelector('button[aria-expanded]').getBoundingClientRect();
+      return {top: alt.top, bottom: alt.bottom, previewTop: preview.top, previewBottom: preview.bottom};
+    });
+    assert.ok(altBounds.top >= altBounds.previewTop && altBounds.bottom <= altBounds.previewBottom, 'ALT button must be fully visible');
+    const altButton = first.locator('button[aria-expanded]');
+    await altButton.click();
+    assert.equal(await altButton.getAttribute('aria-expanded'), 'true');
+    await altButton.click();
     assert.equal(await first.locator('.post-layout').evaluate(e=>getComputedStyle(e).display),viewport.width>700?'grid':'block');
     const quoted = cards.nth(2);
     const quote = quoted.locator('.quote-copy');

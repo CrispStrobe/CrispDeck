@@ -879,7 +879,7 @@
   function mediaBoxStyle(w?: number, h?: number): string {
     if (!w || !h || w <= 0 || h <= 0) return '';
     const ratio = Math.min(Math.max(w / h, MEDIA_MIN_RATIO), MEDIA_MAX_RATIO);
-    return `aspect-ratio: ${ratio.toFixed(4)}; max-height: min(18rem, 32svh);`;
+    return `aspect-ratio: ${ratio.toFixed(4)}; max-height: min(18rem, 32svh, var(--preview-media-limit, 100vh));`;
   }
   // Klipy GIF URLs carry their dimensions as ww=/hh= query params
   const gifBoxStyle = $derived.by(() => {
@@ -1103,13 +1103,13 @@
               {#if hasAltText(image.alt)}
                 <button
                   type="button"
-                  class="absolute bottom-1 left-1 px-1 py-0.5 text-[9px] font-bold bg-black/70 text-white rounded"
+                  class="absolute top-1 left-1 px-1 py-0.5 text-[9px] font-bold bg-black/70 text-white rounded"
                   onclick={(e) => toggleAltPopover(i, e)}
                   aria-expanded={altPopoverIndex === i}
                   aria-label={i18n.t.post.showAltText}
                 >ALT</button>
                 {#if altPopoverIndex === i}
-                  <div class="absolute bottom-7 left-0 p-2 bg-black/90 text-white text-xs rounded-lg max-w-[250px] max-h-[80%] overflow-auto z-10">
+                  <div class="absolute top-7 left-0 p-2 bg-black/90 text-white text-xs rounded-lg max-w-[250px] max-h-[80%] overflow-auto z-10">
                     {image.alt}
                   </div>
                 {/if}
@@ -1249,13 +1249,13 @@
                 {#if hasAltText(attachment.description)}
                   <button
                     type="button"
-                    class="absolute bottom-1 left-1 px-1 py-0.5 text-[9px] font-bold bg-black/70 text-white rounded"
+                    class="absolute top-1 left-1 px-1 py-0.5 text-[9px] font-bold bg-black/70 text-white rounded"
                     onclick={(e) => toggleAltPopover(mastoAltIndex, e)}
                     aria-expanded={altPopoverIndex === mastoAltIndex}
                     aria-label={i18n.t.post.showAltText}
                   >ALT</button>
                   {#if altPopoverIndex === mastoAltIndex}
-                      <div class="absolute bottom-7 left-0 p-2 bg-black/90 text-white text-xs rounded-lg max-w-[250px] max-h-[80%] overflow-auto z-10">
+                      <div class="absolute top-7 left-0 p-2 bg-black/90 text-white text-xs rounded-lg max-w-[250px] max-h-[80%] overflow-auto z-10">
                       {attachment.description}
                     </div>
                   {/if}
@@ -1571,7 +1571,7 @@
   .reply-context-label { display: block; font-size: 0.7rem; }
   .reply-context-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; font-size: 0.75rem; white-space: pre-wrap; overflow-wrap: anywhere; }
   .preview-wrap { position: relative; }
-  .feed-preview { max-height: calc(50svh - 9rem); overflow: clip; }
+  .feed-preview { max-height: calc(50svh - 9rem); overflow: clip; --preview-media-limit: max(0px, calc(50svh - 10.5rem)); }
   .preview-toggle { color: var(--color-primary-text); font-size: 0.75rem; }
   .post-layout-container { container-type: inline-size; }
   .feed-preview .media-preview-image, .feed-preview .link-preview-image { max-height: min(18rem, 22svh); }
