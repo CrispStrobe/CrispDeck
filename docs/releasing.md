@@ -2,8 +2,9 @@
 
 `Coordinated Release` is the only workflow triggered by `v*` tags. Desktop,
 mobile, notarized Mac and web workflows are reusable builders. They upload
-packages and source receipts to the current workflow run; they do not create
-GitHub releases or upload to Apple independently.
+packages and source receipts to the current workflow run; the coordinator stages
+verified platform assets into an explicitly incomplete GitHub prerelease as each
+platform finishes. Store upload and final publication remain coordinated.
 
 Run a complete candidate without publishing:
 
@@ -70,15 +71,23 @@ git tag -a v1.3.1 -m 'CrispDeck v1.3.1'
 git push origin v1.3.1
 ```
 
-The tag automatically invokes the coordinator in publication mode. Publication
-requires Windows publisher signing. Preparation fails before native builds if
-signing is absent, versions disagree, the tag differs or the release is already
-published. Once all platforms pass, the verified IPA is uploaded to Apple and
-the exact verified package set is assembled into a draft GitHub release.
-Uploaded hashes are checked before that draft becomes public/latest.
+The tag automatically invokes the coordinator in publication mode. Each platform
+is checked against its source receipt and staged in a public prerelease when its
+checks pass; Android also waits for its emulator check. The prerelease explicitly
+says that assembly is incomplete. Once every platform passes, the verified IPA
+is uploaded to Apple, all asset hashes are checked, and the prerelease becomes
+the final/latest release. Published final assets are immutable.
+
+Windows publisher signing is required by default. When the release owner has
+explicitly authorized unsigned Windows installers, dispatch the workflow on the
+version tag with `publish=true` and `allow_unsigned_windows=true`. This opt-in
+still requires all platform and mobile smoke checks, and the final release notes
+identify the Windows packages as unsigned. A tag push alone cannot enable it.
+Preparation fails when versions disagree, the tag differs, a final release already
+exists, or signing is unavailable without that explicit opt-in.
 
 If publication is interrupted, rerun the failed job in the same workflow run.
-It reuses the original verified artifacts, accepts identical draft assets and
+It reuses the original verified artifacts, accepts identical staged assets and
 refuses different ones. Published release assets are immutable to this tool.
 Apple processing, TestFlight distribution/review and App Store approval are
 separate; existing `testflight.yml` and App Store tooling remain available.

@@ -16,9 +16,9 @@ def json_gh(*args):
     return json.loads(gh(*args))
 
 
-def publish(root, version, commit):
+def publish(root, version, commit, allow_unsigned_windows=False):
     evidence = json.loads((root / f'CrispDeck_{version}_release-evidence.json').read_text())
-    if evidence.get('commit') != commit or evidence.get('version') != version or evidence.get('publishable') is not True:
+    if evidence.get('commit') != commit or evidence.get('version') != version or (evidence.get('publishable') is not True and not (allow_unsigned_windows and evidence.get('all_platforms_verified') is True)):
         raise ValueError('Publication requires a complete signed manifest for this source/version')
     subprocess.run(['sha256sum', '--check', 'SHA256SUMS'], cwd=root, check=True)
     repo = json_gh('repo', 'view', '--json', 'nameWithOwner')['nameWithOwner']
@@ -27,10 +27,10 @@ def publish(root, version, commit):
     if ref.get('type') != 'commit' or ref['sha'] != commit:
         raise ValueError('Remote version tag differs from verified source commit')
     tag = 'v' + version
-    result = subprocess.run(['gh', 'release', 'view', tag, '--json', 'isDraft,assets'], capture_output=True, text=True)
+    result = subprocess.run(['gh', 'release', 'view', tag, '--json', 'isDraft,isPrerelease,assets'], capture_output=True, text=True)
     if result.returncode == 0:
         release = json.loads(result.stdout)
-        if not release['isDraft']:
+        if not (release['isDraft'] or release.get('isPrerelease', False)):
             raise ValueError('Release is already published; artifacts are immutable')
     else:
         if 'release not found' not in result.stderr.lower():
@@ -47,8 +47,8 @@ def publish(root, version, commit):
                 raise ValueError(f'Draft asset differs: {name}; rerun the failed publication job with its original verified artifact')
         else:
             gh('release', 'upload', tag, str(path))
-    uploaded = json_gh('release', 'view', tag, '--json', 'isDraft,assets')
-    if not uploaded['isDraft'] or {item['name'] for item in uploaded['assets']} != set(local):
+    uploaded = json_gh('release', 'view', tag, '--json', 'isDraft,isPrerelease,assets')
+    if not (uploaded['isDraft'] or uploaded.get('isPrerelease', False)) or {item['name'] for item in uploaded['assets']} != set(local):
         raise ValueError('Release visibility or asset inventory changed during assembly')
     for asset in uploaded['assets']:
         with local[asset['name']].open('rb') as file:
@@ -57,10 +57,11 @@ def publish(root, version, commit):
     changelog = Path('CHANGELOG.md').read_text()
     marker = f'## v{version}'
     body = changelog.split(marker, 1)[1].split('\n## ', 1)[0] if marker in changelog else 'See CHANGELOG.md for changes.'
-    notes = f'CrispDeck {tag}\n\n{body}\n\nAll six platform packages were built from `{commit}` and verified before publication. Verify downloads against SHA256SUMS; release-evidence.json and platform receipts record the checks. Windows app/installers are publisher signed and timestamped; macOS is universal, signed and notarized.\n\nThe iOS IPA is an App Store distribution archive. Apple processing, TestFlight review and App Store approval are separate. Google Play publication is separate from the signed APK/AAB downloads. Web ZIP hosting requires configuration for optional server endpoints. Scheduling remains on-device and requires the app to remain open.\n'
+    windows_note = 'Windows installers are unsigned.' if evidence.get('publishable') is not True else 'Windows app/installers are publisher signed and timestamped.'
+    notes = f'CrispDeck {tag}\n\n{body}\n\nAll six platform packages were built from `{commit}` and verified before publication. Verify downloads against SHA256SUMS; release-evidence.json and platform receipts record the checks. {windows_note} macOS is universal, signed and notarized.\n\nThe iOS IPA is an App Store distribution archive. Apple processing, TestFlight review and App Store approval are separate. Google Play publication is separate from the signed APK/AAB downloads. Web ZIP hosting requires configuration for optional server endpoints. Scheduling remains on-device and requires the app to remain open.\n'
     with tempfile.TemporaryDirectory() as temp:
         path = Path(temp) / 'notes.txt'; path.write_text(notes)
-        gh('release', 'edit', tag, '--target', commit, '--notes-file', str(path), '--draft=false', '--latest')
+        gh('release', 'edit', tag, '--target', commit, '--notes-file', str(path), '--draft=false', '--prerelease=false', '--latest')
     print(gh('release', 'view', tag, '--json', 'url').strip())
 
 
@@ -69,5 +70,6 @@ if __name__ == '__main__':
     parser.add_argument('directory', type=Path)
     parser.add_argument('--version', required=True)
     parser.add_argument('--commit', required=True)
+    parser.add_argument('--allow-unsigned-windows', action='store_true')
     args = parser.parse_args()
-    publish(args.directory, args.version, args.commit)
+    publish(args.directory, args.version, args.commit, args.allow_unsigned_windows)
