@@ -29,14 +29,30 @@ def require_callback_delivery(log, count):
         raise RuntimeError('OS callbacks did not reach the running app deep-link plugin')
 
 
-def ios_log_messages(log):
+def ios_log_messages(log, process_id=None):
     messages = []
     for line in log.splitlines():
         try: item = json.loads(line)
         except json.JSONDecodeError: continue
-        if isinstance(item, dict) and item.get('subsystem') == BUNDLE and isinstance(item.get('eventMessage'), str):
+        if (isinstance(item, dict) and item.get('subsystem') == BUNDLE
+                and (process_id is None or item.get('processID') == process_id)
+                and isinstance(item.get('eventMessage'), str)):
             messages.append(item['eventMessage'])
     return '\n'.join(messages)
+
+
+def ios_persisted_log(identifier, pid, predicate, output):
+    """Recover the same process's receipts if the live stream drops events."""
+    try:
+        result = subprocess.run(['xcrun', 'simctl', 'spawn', identifier, 'log', 'show',
+                                 '--last', '10m', '--style', 'ndjson', '--debug',
+                                 '--process', str(pid), '--predicate', predicate],
+                                text=True, capture_output=True, timeout=20, check=True)
+        (output / 'native-log-show.ndjson').write_text(result.stdout)
+        return ios_log_messages(result.stdout, pid)
+    except (OSError, subprocess.SubprocessError) as error:
+        (output / 'native-log-show-error.txt').write_text(str(error))
+        return ''
 
 
 def require_android_callback_result(result, component):
@@ -277,17 +293,23 @@ def ios(output):
         pid = int(re.search(r':\s*(\d+)\s*$', result).group(1))
         for _ in range(12): time.sleep(1); os.kill(pid, 0)
         for _ in range(20):
-            if STARTUP_DELIVERED in ios_log_messages(native_log.read_text()): break
+            if STARTUP_DELIVERED in ios_log_messages(native_log.read_text(), pid): break
             time.sleep(0.5)
-        if STARTUP_DELIVERED not in ios_log_messages(native_log.read_text()):
+        live_messages = ios_log_messages(native_log.read_text(), pid)
+        if STARTUP_DELIVERED not in live_messages and STARTUP_DELIVERED not in ios_persisted_log(identifier, pid, predicate, output):
             raise RuntimeError('Simulator system log has no app startup receipt; callback logging is unavailable')
         subprocess.run(['xcrun', 'simctl', 'io', identifier, 'screenshot', str(output / 'native-startup.png')], check=True)
         ios_callback_tests(identifier, output)
         os.kill(pid, 0)
         for _ in range(20):
-            if ios_log_messages(native_log.read_text()).count(CALLBACK_DELIVERED) >= len(CALLBACKS): break
+            if ios_log_messages(native_log.read_text(), pid).count(CALLBACK_DELIVERED) >= len(CALLBACKS): break
             time.sleep(0.5)
-        require_callback_delivery(ios_log_messages(native_log.read_text()), len(CALLBACKS))
+        live_messages = ios_log_messages(native_log.read_text(), pid)
+        if live_messages.count(CALLBACK_DELIVERED) >= len(CALLBACKS):
+            require_callback_delivery(live_messages, len(CALLBACKS))
+        else:
+            # Do not add the streams: the same event can appear in both.
+            require_callback_delivery(ios_persisted_log(identifier, pid, predicate, output), len(CALLBACKS))
         subprocess.run(['xcrun', 'simctl', 'io', identifier, 'screenshot', str(output / 'oauth-callbacks.png')], check=True)
         report = {'platform': 'ios', 'version': json.loads(Path('package.json').read_text())['version'],
                   'commit': run('git', 'rev-parse', 'HEAD').strip(), 'simulator': device['name'],

@@ -19,6 +19,13 @@ class CallbackEvidenceTests(unittest.TestCase):
             smoke.require_callback_delivery(smoke.ios_log_messages(header + other + actual), 2)
         smoke.require_callback_delivery(smoke.ios_log_messages(header + other + actual * 2), 2)
 
+    def test_receipts_must_come_from_the_running_process(self):
+        own = json.dumps({'subsystem': smoke.BUNDLE, 'eventMessage': smoke.CALLBACK_DELIVERED, 'processID': 42})
+        stale = json.dumps({'subsystem': smoke.BUNDLE, 'eventMessage': smoke.CALLBACK_DELIVERED, 'processID': 99})
+        self.assertEqual(smoke.ios_log_messages(stale + '\n' + own, 42), smoke.CALLBACK_DELIVERED)
+        with self.assertRaisesRegex(RuntimeError, 'did not reach'):
+            smoke.require_callback_delivery(smoke.ios_log_messages(stale + '\n' + own, 42), 2)
+
     def test_process_start_or_successful_url_open_is_not_delivery(self):
         for log in ['', 'CrispDeck v1.3.0 started', 'Open in CrispDeck?']:
             with self.assertRaisesRegex(RuntimeError, 'did not reach'):
