@@ -3,6 +3,7 @@ import type { OAuthClient, OAuthClientMetadataInput, RuntimeImplementation, Sess
 import { invoke } from '@tauri-apps/api/core';
 import { JoseKey } from '@atproto/jwk-jose';
 import { loadOAuthSdk } from './atproto-sdk';
+import { readString, removeKey } from '$lib/safe-storage';
 
 export async function createMacOAuthClient(metadata: OAuthClientMetadataInput, backend: 'local' | 'keychain', keychain = 'login'): Promise<OAuthClient> {
   const { OAuthClient } = await loadOAuthSdk();
@@ -72,7 +73,7 @@ export async function createMacOAuthClient(metadata: OAuthClientMetadataInput, b
     stateStore,
     onDelete(sub) {
       const pointer = '@@atproto/oauth-client-browser(sub)';
-      if (localStorage.getItem(pointer) === sub) localStorage.removeItem(pointer);
+      if (readString(pointer) === sub) removeKey(pointer);
     },
   });
 }

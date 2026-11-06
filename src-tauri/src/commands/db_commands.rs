@@ -742,6 +742,7 @@ mod tests {
         std::fs::remove_dir_all(dir).unwrap();
     }
 
+    #[cfg(unix)]
     #[test]
     fn keychain_path_expands_home_directory() {
         let expanded = expand_mac_keychain_path("~/Library/Keychains/Work.keychain-db").unwrap();
