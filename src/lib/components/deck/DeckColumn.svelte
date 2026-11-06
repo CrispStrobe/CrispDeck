@@ -556,7 +556,7 @@
   {#if errors.length}
     <div role="status" class="border-b border-[var(--color-border)] p-2 text-xs text-amber-500 break-words">
       {#each errors as error}<p>{error}</p>{/each}
-      <button onclick={onrefresh} disabled={loading} class="underline mt-1">{i18n.t.common.retry}</button>
+      <button onclick={onrefresh} disabled={loading} class="underline mt-1">{i18n.t.feed.retry}</button>
     </div>
   {/if}
   {#if unread > 0}

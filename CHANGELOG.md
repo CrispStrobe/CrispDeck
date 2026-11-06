@@ -26,6 +26,8 @@
   account, preserve reading position, and clean up subscriptions and stale loads.
 - Translate new controls into all eight interface languages and add behavioral
   service/component/browser coverage. See [coverage and boundaries](docs/deck-parity.md).
+- Move CI and OS secret-store checks to macOS 15 after GitHub's retirement of
+  the macOS 14 runner image.
 
 
 ## v1.3.1 — 2026-11-05

@@ -53,6 +53,19 @@ function button(target: ParentNode, text: string) {
 }
 
 describe('deck column rendering and continuous reading', () => {
+  it('renders a named retry action for account errors and disables it during refresh', async () => {
+    const onrefresh = vi.fn();
+    const target = await render({ errors: ['The source account is disconnected.'], onrefresh });
+    const status = target.querySelector('[role="status"]')!;
+    expect(status.textContent).toContain('The source account is disconnected.');
+    const retry = button(status, 'Retry');
+    expect(retry.textContent?.trim()).toBe(i18n.t.feed.retry);
+    flushSync(() => retry.click());
+    expect(onrefresh).toHaveBeenCalledOnce();
+    await update({ loading: true });
+    expect(button(status, 'Retry').disabled).toBe(true);
+  });
+
   it('renders canonical parent matches without rejecting a trimmed display-name match', async () => {
     const target = await render({ posts: [post('one', { text: 'Hello', author: { handle: 'writer.test', displayName: 'Alice' } })], filters: { searchTerm: ' Alice ' } });
     expect(target.querySelectorAll('[data-post-uri]')).toHaveLength(1);

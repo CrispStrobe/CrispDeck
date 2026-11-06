@@ -90,7 +90,10 @@ test('like and unlike use the row source account on a shared instance', async ({
 test('workspaces export/import safely, retain account identity and stay usable on mobile', async ({ page }, testInfo) => {
   await network(page); await seedDeck(page);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: 'Workspaces', exact: true }).click();
+  const workspaces = page.getByRole('button', { name: 'Workspaces', exact: true });
+  await expect(workspaces).toBeEnabled();
+  await expect(page.getByRole('region', { name: 'Following two', exact: true })).toBeVisible();
+  await workspaces.click();
   const dialog = page.getByRole('dialog', { name: 'Workspaces', exact: true });
   await dialog.getByLabel('Workspace name', { exact: true }).fill('Monitoring');
   await dialog.getByRole('button', { name: 'Save current columns', exact: true }).click();
@@ -103,7 +106,13 @@ test('workspaces export/import safely, retain account identity and stay usable o
   const contents = await readFile(path!, 'utf8');
   expect(contents).not.toContain('deck-token');
   expect(contents).not.toContain('accountIds');
-  expect(JSON.parse(contents).layouts[0].columns[0].selectedAccounts[0].handle).toBe('writer2@social.test');
+  const exported = JSON.parse(contents);
+  expect(exported.layouts).toHaveLength(1);
+  expect(exported.layouts[0].columns).toHaveLength(1);
+  expect(exported.layouts[0].columns[0]).toMatchObject({
+    title: 'Following two', type: 'timeline',
+    selectedAccounts: [{ platform: 'mastodon', handle: 'writer2@social.test' }],
+  });
   await dialog.locator('input[type=file]').setInputFiles({ name: 'workspaces.json', mimeType: 'application/json', buffer: Buffer.from(contents) });
   await expect(dialog.getByText('Imported 1 workspace(s).', { exact: true })).toBeVisible();
   expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
