@@ -26,9 +26,9 @@ beforeEach(() => {
 });
 afterEach(async () => { if (instance) await unmount(instance); instance = undefined; document.body.innerHTML = ''; vi.unstubAllGlobals(); });
 
-async function render(value = post) {
+async function render(value = post, props: { feedPreview?: boolean } = {}) {
   const target = document.createElement('div'); document.body.append(target);
-  instance = mount(Post, { target, props: { post: value } }); flushSync();
+  instance = mount(Post, { target, props: { post: value, ...props } }); flushSync();
   const bookmark = target.querySelector<HTMLButtonElement>('[aria-label="Bookmark this post"]')!;
   await vi.waitFor(() => { flushSync(); expect(bookmark.disabled).toBe(false); });
   return { target, bookmark };
@@ -58,6 +58,19 @@ function mastodonClients() {
 }
 
 describe('post actions use their source account', () => {
+  it.each([
+    { platform: 'bluesky' as const, parent: 'at://did:plc:parent/app.bsky.feed.post/2', parameter: 'uri' },
+    { platform: 'mastodon' as const, parent: '123456', parameter: 'id' },
+    { platform: 'mastodon' as const, parent: 'https://remote.example/users/alice/statuses/789', parameter: 'uri' },
+  ])('retains the source account in $platform reply-context navigation for $parameter', async ({ platform, parent, parameter }) => {
+    const { target } = await render({ ...post, platform, replyParentUri: parent }, { feedPreview: true });
+    const href = new URL(target.querySelector<HTMLAnchorElement>('.reply-context')!.href);
+    expect(href.searchParams.get('account')).toBe('2');
+    expect(href.searchParams.get('platform')).toBe(platform);
+    expect(href.searchParams.get(parameter)).toBe(parent);
+    expect(href.searchParams.has(parameter === 'id' ? 'uri' : 'id')).toBe(false);
+  });
+
   it('creates and removes a native Bluesky bookmark using the second account only', async () => {
     const { first, second } = blueskyClients();
     const { bookmark } = await render();

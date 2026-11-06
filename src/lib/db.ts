@@ -54,6 +54,10 @@ async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T
 
 // ── Accounts ───────────────────────────────────────────────────────────────
 
+function accountsChanged(membershipChanged: boolean): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('crispdeck:accounts-changed', { detail: { membershipChanged } }));
+}
+
 export async function listAccounts(): Promise<Account[]> {
   if (!isTauri()) return browserDb.listAccounts();
   return invoke<Account[]>('db_list_accounts');
@@ -70,8 +74,9 @@ export async function addAccount(params: {
   credentials: string;
   is_primary?: boolean;
 }): Promise<Account> {
-  if (!isTauri()) return browserDb.addAccount(params);
-  return invoke<Account>('db_add_account', params);
+  const account = !isTauri() ? await browserDb.addAccount(params) : await invoke<Account>('db_add_account', params);
+  accountsChanged(true);
+  return account;
 }
 
 export async function updateAccount(params: {
@@ -80,13 +85,22 @@ export async function updateAccount(params: {
   avatar_url?: string;
   is_primary?: boolean;
 }): Promise<void> {
-  if (!isTauri()) return browserDb.updateAccount(params);
-  return invoke('db_update_account', params);
+  if (!isTauri()) await browserDb.updateAccount(params);
+  else await invoke('db_update_account', params);
+  accountsChanged(false);
 }
 
 export async function deleteAccount(id: number): Promise<void> {
-  if (!isTauri()) return browserDb.deleteAccount(id);
-  return invoke('db_delete_account', { id });
+  if (!isTauri()) await browserDb.deleteAccount(id);
+  else await invoke('db_delete_account', { id });
+  accountsChanged(true);
+}
+
+/** Refresh the non-secret account marker after native OAuth reconnection. */
+export async function rebindOAuthAccount(id: number, did: string): Promise<void> {
+  if (!isTauri()) return;
+  await invoke('db_rebind_oauth_account', { id, did });
+  accountsChanged(false);
 }
 
 export async function getDecryptedCredentials(accountId: number): Promise<string> {

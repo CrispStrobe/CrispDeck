@@ -36,6 +36,8 @@
   import * as embeds from '$lib/components/post-embeds';
   import { readJson } from '$lib/safe-storage';
   import { hrefOrHash, safeExternalUrl } from '$lib/safe-url';
+  import { openExternalLink } from '$lib/external-link';
+  import { replyContext } from '$lib/reply-context';
   import { hasAltText } from '$lib/alt-text';
   import { formatDate, relativeTime } from '$lib/time-format';
   import { i18n } from '$lib/i18n.svelte';
@@ -57,6 +59,7 @@
   import type { UnifiedPost } from '$lib/types';
   import { sanitizeHtml, injectCustomEmoji } from '$lib/sanitize';
   import MediaLightbox from '$lib/components/MediaLightbox.svelte';
+  import BlueskyVideo from '$lib/components/BlueskyVideo.svelte';
   import { haptic } from '$lib/haptics';
   import { toast } from '$lib/toast.svelte';
   import { swallow } from '$lib/debug-log';
@@ -64,10 +67,11 @@
 
   const _postPrefs = getPostPrefs();
 
-  let { post, hideMedia = false, compact = false, onlike, onboost, onreply, onquote, onfollow }: {
+  let { post, hideMedia = false, compact = false, feedPreview = false, onlike, onboost, onreply, onquote, onfollow }: {
     post: UnifiedPost;
     hideMedia?: boolean;
     compact?: boolean;
+    feedPreview?: boolean;
     /** May reject to signal the action failed; the optimistic update is then reverted. */
     onlike?: (post: UnifiedPost, active?: boolean) => void | Promise<void>;
     onboost?: (post: UnifiedPost, active?: boolean) => void | Promise<void>;
@@ -75,6 +79,22 @@
     onquote?: (post: UnifiedPost) => void;
     onfollow?: (post: UnifiedPost, following: boolean) => void;
   } = $props();
+
+  let previewElement: HTMLDivElement | undefined = $state();
+  let previewContent: HTMLDivElement | undefined = $state();
+  let previewExpanded = $state(false);
+  let previewClipped = $state(false);
+  $effect(() => {
+    if (!feedPreview || !previewElement || !previewContent || typeof ResizeObserver === 'undefined') return;
+    const box = previewElement;
+    const content = previewContent;
+    const measure = () => { previewClipped = !previewExpanded && content.scrollHeight > box.clientHeight + 1; };
+    const observer = new ResizeObserver(measure);
+    observer.observe(box);
+    observer.observe(content);
+    measure();
+    return () => observer.disconnect();
+  });
 
   const initialReactions = untrack(() => postReactionSnapshot(post));
   let liked = $state(initialReactions.liked);
@@ -168,7 +188,7 @@
   let mediaPreviewMode = $state<'lightbox' | 'browser'>('lightbox');
 
   function openLightbox(items: LightboxItem[], index: number) {
-    if (mediaPreviewMode === 'browser') {
+    if (mediaPreviewMode === 'browser' && items.length === 1) {
       window.open(items[index].url, '_blank', 'noopener,noreferrer');
       return;
     }
@@ -179,6 +199,11 @@
   function closeLightbox() {
     lightboxIndex = null;
     lightboxItems = [];
+  }
+
+  function scrollMedia(event: MouseEvent, direction: number) {
+    const container = (event.currentTarget as HTMLElement).parentElement?.querySelector<HTMLElement>('.media-strip');
+    container?.scrollBy({ left: direction * container.clientWidth * 0.5, behavior: 'smooth' });
   }
 
   function handlePin() {
@@ -629,6 +654,14 @@
     return `${base}/thread?uri=${encodeURIComponent(p.uri)}&platform=bluesky${account}`;
   }
 
+  function getRelatedThreadUrl(uri: string): string {
+    const account = post.sourceAccountId === undefined ? '' : `&account=${post.sourceAccountId}`;
+    // Mastodon feed replies carry an instance-local parent ID. Other sources
+    // can provide a canonical URL, which must be resolved on the same account.
+    const parameter = post.platform === 'mastodon' && /^\d+$/.test(uri) ? 'id' : 'uri';
+    return `${base}/thread?${parameter}=${encodeURIComponent(uri)}&platform=${post.platform}${account}`;
+  }
+
   function getPostUrl(p: UnifiedPost): string {
     if (p.platform === 'mastodon') {
       const raw = (p.raw ?? {}) as any;
@@ -755,6 +788,7 @@
     } catch {
       // Not a valid URL — let it pass through to browser
     }
+    if (e instanceof MouseEvent) openExternalLink(e, href, () => toast.error(i18n.t.post.openLinkFailed));
   }
 
   function getMastodonMedia(): any[] {
@@ -798,6 +832,8 @@
   const bskyImages = $derived(getBskyImages());
   const bskyExternal = $derived(getBskyExternal());
   const bskyQuote = $derived(getBskyQuote());
+  const quoteImages = $derived(embeds.getBskyImages(bskyQuote?.embeds?.[0]));
+  const splitQuote = $derived(!hideMedia && quoteImages.length > 0 && bskyImages.length === 0 && !getBskyExternal() && !getBskyVideo());
   const threadsQuote = $derived(getThreadsQuote());
   const bskyVideo = $derived(getBskyVideo());
   const mastodonHtml = $derived.by(() =>
@@ -836,36 +872,14 @@
   });
   let gifVideoFailed = $state(false);
 
-  /**
-   * Media sizing, following the official Bluesky app's model: media fills
-   * the column width at its native aspect ratio, clamped so the box is
-   * never taller than square (tall images center-crop like bsky.app web),
-   * plus a viewport cap (80svh / 32rem) so it stays reasonable on any
-   * screen size or orientation. Returns '' when dimensions are unknown —
-   * callers then fall back to a fixed-height contain box.
-   */
-  /**
-   * Reserve space for media at its own shape, clamped the way Bluesky clamps it.
-   *
-   * Setting aspect-ratio up front means the post does not reflow when the image
-   * arrives. The clamp is two-sided on purpose: `Math.max(w / h, 1)` squared off
-   * every portrait image, so a 1200x1500 photo rendered 1:1 while bsky.app shows
-   * it 4:5. Bluesky displays native ratio out to roughly 2:1 either way and
-   * centre-crops past that, with the full frame a tap away — which we already
-   * have, since the image opens the lightbox.
-   *
-   * The height cap is half the viewport rather than 80svh: a tall image that
-   * fills the screen pushes the next post out of view entirely, and in a
-   * timeline the next post is the point. object-fit: cover is applied by the
-   * caller's class list, so the crop stays centred.
-   */
+  /** Reserve a bounded preview frame before the image loads. */
   const MEDIA_MIN_RATIO = 0.5;   // 1:2, the tallest we render uncropped
   const MEDIA_MAX_RATIO = 2;     // 2:1, the widest
 
   function mediaBoxStyle(w?: number, h?: number): string {
     if (!w || !h || w <= 0 || h <= 0) return '';
     const ratio = Math.min(Math.max(w / h, MEDIA_MIN_RATIO), MEDIA_MAX_RATIO);
-    return `aspect-ratio: ${ratio.toFixed(4)}; max-height: min(28rem, 60svh);`;
+    return `aspect-ratio: ${ratio.toFixed(4)}; max-height: min(18rem, 32svh);`;
   }
   // Klipy GIF URLs carry their dimensions as ww=/hh= query params
   const gifBoxStyle = $derived.by(() => {
@@ -947,13 +961,19 @@
       {/each}
     </div>
   {/if}
-  {#if post.isRepost && post.repostAuthor}
-    <div class="text-sm text-[var(--color-text-muted)] flex items-center gap-2 mb-2">
-      <Repeat size={14} />
-      <span>Reposted by {post.repostAuthor.displayName || post.repostAuthor.handle}</span>
-    </div>
-  {/if}
 
+  <div class="preview-wrap">
+  <div class:feed-preview={feedPreview && !previewExpanded} bind:this={previewElement}>
+  <div class="post-layout-container" bind:this={previewContent}>
+  <div class="post-layout {(!hideMedia && (splitQuote || (!bskyQuote && !threadsQuote && (bskyExternal || mastodonCard || (bskyImages.length === 1 && !bskyVideo) || (mastodonMedia.length === 1 && !bskyVideo) || (bskyVideo && bskyImages.length === 0 && mastodonMedia.length === 0))))) ? 'can-side' : ''}">
+  <div class="post-copy">
+  {#if feedPreview && replyContext(post)}
+    {@const context = replyContext(post)!}
+    <a class="reply-context" href={hrefOrHash(getRelatedThreadUrl(context.uri))}>
+      <span class="reply-context-label">↪ {context.author ? i18n.t.post.replyingTo.replace('{name}', context.author) : i18n.t.post.replyingToPost}</span>
+      {#if context.text}<span class="reply-context-text">{context.text}</span>{/if}
+    </a>
+  {/if}
   <div class="flex items-start {compact ? 'gap-2' : 'gap-3'}">
     <div class="relative group/avatar">
       <a href={getProfileUrl(post)}>
@@ -983,6 +1003,11 @@
           <span class="text-[var(--color-text-muted)] text-xs truncate">{post.author.handle}</span>
           <span class="w-2 h-2 rounded-full flex-shrink-0" style="background: {platformColor}"></span>
         </a>
+        {#if post.isRepost && post.repostAuthor}
+          <span class="flex items-center gap-1 text-[10px] text-[var(--color-text-muted)] min-w-0 truncate" title="Reposted by {post.repostAuthor.displayName || post.repostAuthor.handle}">
+            <Repeat size={12} /> <span class="truncate">Reposted by {post.repostAuthor.displayName || post.repostAuthor.handle}</span>
+          </span>
+        {/if}
         <a href={getThreadUrl(post)} class="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:underline flex-shrink-0 ml-auto" title={formatDate(post.createdAt)}>
           <!-- <time datetime> carries the real instant. "2h" read aloud on its
                own says nothing, and the title attribute is mouse-only. -->
@@ -1036,25 +1061,44 @@
   {#if translateError}
     <p class="mt-1 pl-13 text-[10px] text-red-400">{translateError}</p>
   {/if}
+  {#if splitQuote}
+    <button type="button" class="quote-copy mt-2 ml-13 text-left border border-[var(--color-border)] rounded-lg p-3 bg-[var(--color-bg)] hover:border-[var(--color-text-muted)]" onclick={() => goto(getRelatedThreadUrl(bskyQuote.uri))}>
+      <span class="flex items-center gap-2 mb-1">
+        {#if bskyQuote.author?.avatar}<img decoding="async" loading="lazy" src={bskyQuote.author.avatar} alt="" class="w-5 h-5 rounded-full" />{/if}
+        <span class="text-xs font-medium">{bskyQuote.author?.displayName || bskyQuote.author?.handle}</span>
+        <span class="text-[10px] text-[var(--color-text-muted)]">@{bskyQuote.author?.handle}</span>
+      </span>
+      <span class="block text-sm text-[var(--color-text)] line-clamp-6">{(bskyQuote.value as any)?.text ?? ''}</span>
+    </button>
+  {/if}
+  </div>
 
   {#if !hideMedia}
-    <div class="mt-2 pl-13">
+    <div class="post-media mt-2 pl-13">
+      {#if splitQuote}
+        <button type="button" class="media-preview-button w-full" onclick={() => openLightbox(quoteImages.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0)} aria-label={i18n.t.post.viewQuotedImages}>
+          <img decoding="async" loading="lazy" src={quoteImages[0].thumb} alt={quoteImages[0].alt || ''} class="media-preview-image" />
+        </button>
+        {#if quoteImages.length > 1}<p class="mt-1 text-[10px] text-[var(--color-text-muted)]">+{quoteImages.length - 1} more</p>{/if}
+      {/if}
       <!-- Bluesky images -->
       {#if bskyImages.length > 0}
-        <div class="{bskyImages.length === 1 ? '' : 'grid grid-cols-2 gap-2'} pt-2">
+        <div class="relative pt-2">
+        <div class={bskyImages.length > 1 ? 'media-strip' : ''}>
           {#each bskyImages as image, i}
             {@const boxStyle = bskyImages.length === 1 ? mediaBoxStyle(image.aspectRatio?.width, image.aspectRatio?.height) : ''}
             <!-- The ALT badge is a sibling of the image button, not a child
                  of it: nesting one control inside another is invalid HTML,
                  and the tabindex="-1" it needed to survive there left the
                  alt text reachable by mouse only. -->
-            <div class="relative">
+            <div class="relative {bskyImages.length > 1 ? 'media-tile' : ''}">
               <button
                 type="button"
                 onclick={() => openLightbox(bskyImages.map(img => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), i)}
-                class="cursor-pointer text-left w-full block"
+                style={boxStyle}
+                class="media-preview-button cursor-pointer w-full {bskyImages.length > 1 ? 'h-full' : ''}"
               >
-                <img decoding="async" loading="lazy" src={image.thumb} alt={image.alt || ''} style={boxStyle} class="rounded-md w-full {bskyImages.length === 1 ? (boxStyle ? 'object-cover bg-black/10' : 'max-h-64 object-contain bg-black/10') : 'aspect-square object-cover'}" />
+                <img decoding="async" loading="lazy" src={image.thumb} alt={image.alt || ''} class="media-preview-image" />
               </button>
               {#if hasAltText(image.alt)}
                 <button
@@ -1065,13 +1109,18 @@
                   aria-label={i18n.t.post.showAltText}
                 >ALT</button>
                 {#if altPopoverIndex === i}
-                  <div class="absolute bottom-full left-0 mb-1 p-2 bg-black/90 text-white text-xs rounded-lg max-w-[250px] z-10">
+                  <div class="absolute bottom-7 left-0 p-2 bg-black/90 text-white text-xs rounded-lg max-w-[250px] max-h-[80%] overflow-auto z-10">
                     {image.alt}
                   </div>
                 {/if}
               {/if}
             </div>
           {/each}
+        </div>
+        {#if bskyImages.length > 2}
+          <button type="button" class="media-scroll media-scroll-left" aria-label={i18n.t.post.scrollImagesLeft} onclick={(e) => scrollMedia(e, -1)}>‹</button>
+          <button type="button" class="media-scroll media-scroll-right" aria-label={i18n.t.post.scrollImagesRight} onclick={(e) => scrollMedia(e, 1)}>›</button>
+        {/if}
         </div>
       {/if}
 
@@ -1082,7 +1131,7 @@
           <!-- Animated GIF with MP4/WebM variants — render as auto-playing muted video.
                If every source fails, fall back to the plain GIF image below. -->
           <div class="mt-2 rounded-lg overflow-hidden border border-[var(--color-border)]">
-            <video autoplay loop muted playsinline poster={bskyExternal.thumb} style={gifBoxStyle} class="w-full {gifBoxStyle ? 'object-cover' : 'max-h-64 object-contain'} bg-black/10" onerror={() => gifVideoFailed = true}>
+            <video autoplay loop muted playsinline poster={bskyExternal.thumb} style={gifBoxStyle} class="w-full object-contain {gifBoxStyle ? '' : 'max-h-64'} bg-black/10" onerror={() => gifVideoFailed = true}>
               {#if gifVideo.mp4}<source src={gifVideo.mp4} type="video/mp4" onerror={() => { if (!gifVideo.webm) gifVideoFailed = true; }} />{/if}
               {#if gifVideo.webm}<source src={gifVideo.webm} type="video/webm" onerror={() => gifVideoFailed = true} />{/if}
             </video>
@@ -1090,13 +1139,13 @@
         {:else if isGif}
           <!-- Animated GIF — render inline -->
           <div class="mt-2 rounded-lg overflow-hidden border border-[var(--color-border)]">
-            <img decoding="async" loading="lazy" src={bskyExternal.uri} alt={bskyExternal.title || 'GIF'} style={gifBoxStyle} class="w-full {gifBoxStyle ? 'object-cover' : 'max-h-64 object-contain'} bg-black/10" />
+            <img decoding="async" loading="lazy" src={bskyExternal.uri} alt={bskyExternal.title || 'GIF'} style={gifBoxStyle} class="w-full object-contain {gifBoxStyle ? '' : 'max-h-64'} bg-black/10" />
           </div>
         {:else}
           <!-- Standard link card -->
-          <a href={hrefOrHash(bskyExternal.uri)} target="_blank" rel="noopener noreferrer" class="mt-2 block border border-[var(--color-border)] rounded-lg overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
+          <a href={hrefOrHash(bskyExternal.uri)} onclick={(e) => openExternalLink(e, bskyExternal.uri, () => toast.error(i18n.t.post.openLinkFailed))} target="_blank" rel="noopener noreferrer" class="mt-2 block border border-[var(--color-border)] rounded-lg overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
             {#if bskyExternal.thumb}
-              <img decoding="async" loading="lazy" src={bskyExternal.thumb} alt="" class="w-full h-32 object-cover" />
+              <div class="link-preview-media"><img decoding="async" loading="lazy" src={bskyExternal.thumb} alt="" class="link-preview-image" /></div>
             {/if}
             <div class="p-3">
               <p class="text-xs text-[var(--color-text-muted)]">{bskyExternalHost}</p>
@@ -1110,10 +1159,10 @@
       {/if}
 
       <!-- Bluesky quoted post -->
-      {#if bskyQuote}
+      {#if bskyQuote && !splitQuote}
         <button
           type="button"
-          onclick={() => goto(`${base}/thread?uri=${encodeURIComponent(bskyQuote.uri)}&platform=bluesky`)}
+          onclick={() => goto(getRelatedThreadUrl(bskyQuote.uri))}
           class="mt-2 w-full text-left border border-[var(--color-border)] rounded-lg p-3 bg-[var(--color-bg)] cursor-pointer hover:border-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] transition-colors"
         >
           <div class="flex items-center gap-2 mb-1">
@@ -1126,19 +1175,19 @@
           <p class="text-sm text-[var(--color-text)] line-clamp-6">{(bskyQuote.value as any)?.text ?? ''}</p>
           {#if bskyQuote.embeds?.[0]}
             {@const qEmbed = bskyQuote.embeds[0]}
-            {@const quoteImages = embeds.getBskyImages(qEmbed)}
-            {#if quoteImages.length > 0}
-              <div onclick={(e: MouseEvent) => { e.stopPropagation(); openLightbox(quoteImages.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0); }} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openLightbox(quoteImages.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0); } }} class="cursor-pointer" role="button" tabindex="0" aria-label={i18n.t.post.viewQuotedImages}>
-                <img decoding="async" loading="lazy" src={quoteImages[0].thumb} alt={quoteImages[0].alt || ''} class="mt-2 rounded w-full max-h-48 object-cover" />
-                {#if quoteImages.length > 1}
-                  <p class="mt-1 text-[10px] text-[var(--color-text-muted)]">+{quoteImages.length - 1} more</p>
+            {@const embeddedQuoteImages = embeds.getBskyImages(qEmbed)}
+            {#if embeddedQuoteImages.length > 0}
+              <div onclick={(e: MouseEvent) => { e.stopPropagation(); openLightbox(embeddedQuoteImages.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0); }} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openLightbox(embeddedQuoteImages.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0); } }} class="cursor-pointer" role="button" tabindex="0" aria-label={i18n.t.post.viewQuotedImages}>
+                <div class="link-preview-media mt-2 rounded"><img decoding="async" loading="lazy" src={embeddedQuoteImages[0].thumb} alt={embeddedQuoteImages[0].alt || ''} class="link-preview-image" /></div>
+                {#if embeddedQuoteImages.length > 1}
+                  <p class="mt-1 text-[10px] text-[var(--color-text-muted)]">+{embeddedQuoteImages.length - 1} more</p>
                 {/if}
               </div>
             {/if}
             {#if qEmbed.$type === 'app.bsky.embed.external#view' && qEmbed.external}
               <div class="mt-2 flex items-center gap-2 text-[10px] text-[var(--color-text-muted)]">
                 {#if qEmbed.external.thumb}
-                  <img decoding="async" loading="lazy" src={qEmbed.external.thumb} alt="" class="w-12 h-12 rounded object-cover" />
+                  <img decoding="async" loading="lazy" src={qEmbed.external.thumb} alt="" class="w-12 h-12 rounded object-contain" />
                 {/if}
                 <div class="min-w-0">
                   <p class="font-medium truncate">{qEmbed.external.title}</p>
@@ -1167,34 +1216,20 @@
             <p class="text-sm text-[var(--color-text)] line-clamp-6">{threadsQuote.text}</p>
           {/if}
           {#if threadsQuote.media_url && threadsQuote.media_type !== 'TEXT_POST'}
-            <img decoding="async" loading="lazy" src={threadsQuote.thumbnail_url ?? threadsQuote.media_url} alt="" class="mt-2 rounded w-full max-h-48 object-cover" />
+            <img decoding="async" loading="lazy" src={threadsQuote.thumbnail_url ?? threadsQuote.media_url} alt="" class="mt-2 rounded w-full max-h-48 object-contain" />
           {/if}
         </button>
       {/if}
 
       <!-- Bluesky video -->
       {#if bskyVideo}
-        {@const videoBoxStyle = mediaBoxStyle(bskyVideo.aspectRatio?.width, bskyVideo.aspectRatio?.height)}
-        <div class="mt-2 rounded-lg overflow-hidden border border-[var(--color-border)]">
-          {#if bskyVideo.thumbnail}
-            <div class="relative">
-              <img decoding="async" loading="lazy" src={bskyVideo.thumbnail} alt={bskyVideo.alt || 'Video'} style={videoBoxStyle} class="w-full {videoBoxStyle ? '' : 'aspect-video'} object-cover" />
-              <div class="absolute inset-0 flex items-center justify-center">
-                <div class="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center">
-                  <svg class="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                </div>
-              </div>
-            </div>
-          {/if}
-          {#if bskyVideo.alt}
-            <p class="px-3 py-1.5 text-[10px] text-[var(--color-text-muted)]">{bskyVideo.alt}</p>
-          {/if}
-        </div>
+        <BlueskyVideo playlist={bskyVideo.playlist} thumbnail={bskyVideo.thumbnail} alt={bskyVideo.alt} postUrl={getPostUrl(post)} />
       {/if}
 
       <!-- Mastodon images -->
       {#if mastodonMedia.length > 0}
-        <div class="{mastodonMedia.length === 1 ? '' : 'grid grid-cols-2 gap-2'} pt-2">
+        <div class="relative pt-2">
+        <div class={mastodonMedia.length > 1 ? 'media-strip' : ''}>
           {#each mastodonMedia as attachment, i}
             {@const imageUrl = attachment.previewUrl || attachment.url || attachment.remoteUrl}
             {@const mastoAltIndex = bskyImages.length + i}
@@ -1202,13 +1237,14 @@
               {@const mastoBoxStyle = mastodonMedia.length === 1 ? mediaBoxStyle(attachment.meta?.original?.width, attachment.meta?.original?.height) : ''}
               <!-- ALT badge as a sibling button, not nested in the image
                    button: see the Bluesky block above. -->
-              <div class="relative">
+              <div class="relative {mastodonMedia.length > 1 ? 'media-tile' : ''}">
                 <button
                   type="button"
                   onclick={() => openLightbox(mastodonMedia.map(a => ({ url: a.url || a.previewUrl || a.remoteUrl || '', thumb: a.previewUrl || a.url || '', alt: a.description })), i)}
-                  class="cursor-pointer text-left w-full block"
+                  style={mastoBoxStyle}
+                  class="media-preview-button cursor-pointer w-full {mastodonMedia.length > 1 ? 'h-full' : ''}"
                 >
-                  <img decoding="async" loading="lazy" src={imageUrl} alt={attachment.description || `Image ${i + 1}`} style={mastoBoxStyle} class="rounded-md w-full {mastodonMedia.length === 1 ? (mastoBoxStyle ? 'object-cover bg-black/10' : 'max-h-64 object-contain bg-black/10') : 'aspect-square object-cover'} bg-[var(--color-surface-hover)]" />
+                  <img decoding="async" loading="lazy" src={imageUrl} alt={attachment.description || `Image ${i + 1}`} class="media-preview-image" />
                 </button>
                 {#if hasAltText(attachment.description)}
                   <button
@@ -1219,7 +1255,7 @@
                     aria-label={i18n.t.post.showAltText}
                   >ALT</button>
                   {#if altPopoverIndex === mastoAltIndex}
-                      <div class="absolute bottom-full left-0 mb-1 p-2 bg-black/90 text-white text-xs rounded-lg max-w-[250px] z-10">
+                      <div class="absolute bottom-7 left-0 p-2 bg-black/90 text-white text-xs rounded-lg max-w-[250px] max-h-[80%] overflow-auto z-10">
                       {attachment.description}
                     </div>
                   {/if}
@@ -1228,13 +1264,18 @@
             {/if}
           {/each}
         </div>
+        {#if mastodonMedia.length > 2}
+          <button type="button" class="media-scroll media-scroll-left" aria-label={i18n.t.post.scrollImagesLeft} onclick={(e) => scrollMedia(e, -1)}>‹</button>
+          <button type="button" class="media-scroll media-scroll-right" aria-label={i18n.t.post.scrollImagesRight} onclick={(e) => scrollMedia(e, 1)}>›</button>
+        {/if}
+        </div>
       {/if}
 
       <!-- Mastodon link card -->
       {#if mastodonCard}
-        <a href={hrefOrHash(mastodonCard.url)} target="_blank" rel="noopener noreferrer" class="mt-2 block border border-[var(--color-border)] rounded-lg overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
+        <a href={hrefOrHash(mastodonCard.url)} onclick={(e) => openExternalLink(e, mastodonCard.url, () => toast.error(i18n.t.post.openLinkFailed))} target="_blank" rel="noopener noreferrer" class="mt-2 block border border-[var(--color-border)] rounded-lg overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
           {#if mastodonCard.image}
-            <img decoding="async" loading="lazy" src={mastodonCard.image} alt="" class="w-full h-32 object-cover" />
+            <div class="link-preview-media"><img decoding="async" loading="lazy" src={mastodonCard.image} alt="" class="link-preview-image" /></div>
           {/if}
           <div class="p-3">
             <p class="text-xs text-[var(--color-text-muted)]">{mastodonCard.provider_name || mastodonCardHost}</p>
@@ -1281,9 +1322,16 @@
       {/if}
     </div>
   {/if}
+  </div>
+  </div>
+  </div>
+  </div>
 
   <div class="flex items-center justify-between mt-3 pl-13">
-    <div class="flex items-center gap-4">
+    <div class="flex items-center gap-4 flex-wrap">
+      {#if feedPreview && (previewClipped || previewExpanded)}
+        <button type="button" class="preview-toggle" onclick={() => { previewExpanded = !previewExpanded; }}>{previewExpanded ? i18n.t.post.showLessPost : i18n.t.post.showFullPost}</button>
+      {/if}
       {#if onreply}
         <button onclick={() => onreply?.(post)} class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-blue-400 transition-all hover:scale-110 active:scale-90" title={i18n.t.post.reply} aria-label="Reply ({post.replyCount ?? 0} replies)">
           <MessageCircle size={14} />
@@ -1516,3 +1564,88 @@
   <MediaLightbox items={lightboxItems} index={lightboxIndex} onclose={closeLightbox} />
 {/if}
 {/if}
+
+<style>
+  .reply-context { display: block; margin: 0 0 0.45rem 3.25rem; padding: 0.25rem 0.55rem; border-left: 2px solid var(--color-border); color: var(--color-text-muted); }
+  .reply-context:hover { color: var(--color-text); }
+  .reply-context-label { display: block; font-size: 0.7rem; }
+  .reply-context-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; font-size: 0.75rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .preview-wrap { position: relative; }
+  .feed-preview { max-height: calc(50svh - 9rem); overflow: clip; }
+  .preview-toggle { color: var(--color-primary-text); font-size: 0.75rem; }
+  .post-layout-container { container-type: inline-size; }
+  .feed-preview .media-preview-image, .feed-preview .link-preview-image { max-height: min(18rem, 22svh); }
+  .feed-preview .media-tile { height: min(22svh, 13rem); }
+  @container (min-width: 42rem) {
+    :global(html[data-side-media='true']) .post-layout.can-side {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(14rem, 40%);
+      gap: 1rem;
+      align-items: start;
+    }
+    :global(html[data-side-media='true']) .post-layout.can-side .post-media {
+      padding-inline-start: 0;
+      margin-top: 0;
+      min-width: 0;
+    }
+  }
+  .link-preview-media {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: var(--color-surface-hover);
+  }
+  .link-preview-image {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: min(18rem, 32svh);
+    object-fit: contain;
+  }
+  .media-preview-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: 0.375rem;
+    background: var(--color-surface-hover);
+  }
+  .media-preview-image {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: min(18rem, 32svh);
+    object-fit: contain;
+  }
+  .media-tile .media-preview-image { max-height: 100%; }
+  .media-strip {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+  }
+  .media-tile {
+    flex: 0 0 calc((100% - 0.5rem) / 2);
+    height: min(30svh, 15rem);
+    min-width: 0;
+    scroll-snap-align: start;
+  }
+  .media-scroll {
+    position: absolute;
+    top: 50%;
+    z-index: 10;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 9999px;
+    background: rgb(0 0 0 / 0.7);
+    color: white;
+    font-size: 1.5rem;
+    line-height: 1;
+  }
+  .media-scroll-left { left: 0.25rem; }
+  .media-scroll-right { right: 0.25rem; }
+</style>

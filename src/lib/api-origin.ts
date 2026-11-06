@@ -1,3 +1,4 @@
+import { isTauri } from '$lib/platform';
 /**
  * Where CrispDeck's own serverless functions live.
  *
@@ -23,7 +24,8 @@ const ORIGIN = (typeof __API_ORIGIN__ === 'string' ? __API_ORIGIN__ : '').replac
  * serves the functions itself, so nothing changes for Vercel or dev.
  */
 export function apiUrl(path: string): string {
-  return ORIGIN ? `${ORIGIN}${path}` : path;
+  const origin = ORIGIN || (isTauri() ? 'https://crispdeck.vercel.app' : '');
+  return origin ? `${origin}${path}` : path;
 }
 
 /** True when API calls cross an origin, so the caller can expect CORS rules. */

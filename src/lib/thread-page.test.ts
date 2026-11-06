@@ -70,4 +70,46 @@ describe('scoped thread page navigation', () => {
     expect(target.textContent).not.toContain('Thread for personal.bsky.social');
     expect(personal.getPostThread).toHaveBeenCalledOnce(); expect(work.getPostThread).not.toHaveBeenCalled();
   });
+
+  it('keeps author continuations distinct from other replies and includes them in article mode', async () => {
+    const loaded = response('Root article');
+    const thread: any = loaded.data.thread;
+    const child = (id: string, text: string, author: string, parent: string) => ({ post: {
+      uri: `at://${author}/app.bsky.feed.post/${id}`, cid: id, author: { did: author, handle: author === 'did:plc:author' ? 'author.bsky.social' : 'visitor.bsky.social' },
+      record: { text, createdAt: '2026-01-01T00:00:00Z', reply: { parent: { uri: parent, cid: 'parent' }, root: { uri, cid: 'root' } } },
+    } });
+    const first: any = child('part-2', 'Second article section', 'did:plc:author', uri);
+    const visitor: any = child('visitor', 'A visitor question', 'did:plc:visitor', uri);
+    visitor.replies = [child('answer', 'Answer outside the article', 'did:plc:author', visitor.post.uri)];
+    first.replies = [child('part-3', 'Third article section', 'did:plc:author', first.post.uri)];
+    thread.replies = [visitor, first];
+    personal.getPostThread.mockResolvedValueOnce(loaded);
+    const target = render();
+    await vi.waitFor(() => { flushSync(); expect(target.textContent).toContain('Third article section'); });
+    const continuation = target.querySelector('[aria-label="Original author’s thread"]');
+    expect(continuation?.textContent).toContain('Second article section');
+    expect(continuation?.textContent).not.toContain('A visitor question');
+    const articleToggle = [...target.querySelectorAll('button')].find(button => button.textContent?.includes('Read as article'));
+    expect(articleToggle).toBeDefined();
+    articleToggle!.click(); flushSync();
+    const article = target.querySelector('article');
+    expect(article?.textContent).toContain('Root article'); expect(article?.textContent).toContain('Third article section');
+    expect(article?.textContent).not.toContain('Answer outside the article');
+  });
+
+  it('refreshes a scoped thread after reconnection and removes it when that account disappears', async () => {
+    const target = render();
+    await vi.waitFor(() => { flushSync(); expect(target.textContent).toContain('Thread for personal.bsky.social'); });
+    const restored = fixture(accounts[0]);
+    restored.getPostThread.mockResolvedValue(response('Refreshed account session'));
+    mocks.initAllClients.mockResolvedValue({ accounts, clients: new Map([[1, restored.entry], [2, work.entry]]) });
+    window.dispatchEvent(new CustomEvent('crispdeck:accounts-changed', { detail: { membershipChanged: false } }));
+    await vi.waitFor(() => { flushSync(); expect(target.textContent).toContain('Refreshed account session'); });
+    expect(personal.getPostThread).toHaveBeenCalledOnce();
+    mocks.initAllClients.mockResolvedValue({ accounts: [accounts[1]], clients: new Map([[2, work.entry]]) });
+    window.dispatchEvent(new CustomEvent('crispdeck:accounts-changed', { detail: { membershipChanged: true } }));
+    await vi.waitFor(() => { flushSync(); expect(target.querySelector('[role=alert]')?.textContent).toContain('selected account is not available'); });
+    expect(target.textContent).not.toContain('Refreshed account session');
+    expect(work.getPostThread).not.toHaveBeenCalled();
+  });
 });

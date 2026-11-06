@@ -29,6 +29,9 @@
   let clientEntries: Map<number, ClientEntry> = new Map();
   const drafts = new Map<string, string>();
   let selectionVersion = 0;
+  let inboxVersion = 0;
+  let hasInitializedAccounts = false;
+  let refreshSelection: { conversation: Conversation; owner: Account | undefined } | undefined;
   let disposed = false;
   const chatAccounts = $derived(accounts.filter(account => account.platform === 'bluesky' || account.platform === 'mastodon'));
 
@@ -42,32 +45,64 @@
     return accounts.find(account => account.id === conversation.accountId)?.handle ?? 'Disconnected account';
   }
 
+  function accountIdentity(account: Account | undefined): string {
+    return JSON.stringify(account ? [account.platform, account.handle, account.did, account.instance_url, account.mastodon_id, account.threads_user_id] : null);
+  }
+
+  function draftKey(conversation: Conversation, owner = accounts.find(account => account.id === conversation.accountId)): string {
+    return `${conversationKey(conversation)}:${accountIdentity(owner)}`;
+  }
+
   onMount(() => {
+    const refreshAccounts = () => { void initialize(); };
+    window.addEventListener('crispdeck:accounts-changed', refreshAccounts);
     void initialize();
-    return () => { disposed = true; selectionVersion++; };
+    return () => {
+      disposed = true; selectionVersion++; inboxVersion++;
+      window.removeEventListener('crispdeck:accounts-changed', refreshAccounts);
+    };
   });
 
   async function initialize() {
+    const version = ++inboxVersion;
+    const selection = selectedConvo;
+    if (selection) {
+      const owner = accounts.find(account => account.id === selection.accountId);
+      refreshSelection = { conversation: selection, owner };
+      drafts.set(draftKey(selection, owner), newMessage);
+    }
+    const previous = refreshSelection?.conversation;
+    const previousOwner = refreshSelection?.owner;
+    selectionVersion++;
+    loading = true; loadingMessages = false; error = ''; inboxError = '';
+    selectedConvo = null; messages = []; newMessage = ''; conversations = [];
+    accounts = []; clientEntries = new Map();
     try {
       const result = await initAllClients();
-      if (disposed) return;
+      if (disposed || version !== inboxVersion) return;
       accounts = result.accounts;
       clientEntries = result.clients;
-      newConvoAccountId = chatAccounts.find(account => account.is_primary)?.id ?? chatAccounts[0]?.id;
+      if (!hasInitializedAccounts) newConvoAccountId = chatAccounts.find(account => account.is_primary)?.id ?? chatAccounts[0]?.id;
+      else if (!chatAccounts.some(account => account.id === newConvoAccountId)) newConvoAccountId = undefined;
+      hasInitializedAccounts = true;
       const inbox = await loadConversationInbox(accounts, clientEntries);
-      if (disposed) return;
+      if (disposed || version !== inboxVersion) return;
       conversations = inbox.conversations;
       inboxError = inbox.errors.map(item => `${accounts.find(account => account.id === item.accountId)?.handle ?? item.accountId}: ${item.message}`).join('\n');
       const params = new URLSearchParams(window.location.search);
-      if (params.has('conversation')) {
-        const linked = findLinkedConversation(conversations, params);
+      if (previous || params.has('conversation')) {
+        const sameOwner = previous && accountIdentity(previousOwner) === accountIdentity(accounts.find(account => account.id === previous.accountId));
+        const linked = previous
+          ? sameOwner ? conversations.find(conversation => conversationKey(conversation) === conversationKey(previous)) : undefined
+          : findLinkedConversation(conversations, params);
         if (linked) await selectConversation(linked);
         else error = 'This conversation is not available for the selected account. Refresh your inbox or reconnect that account in Settings.';
       }
+      if (!disposed && version === inboxVersion) refreshSelection = undefined;
     } catch (cause) {
-      if (!disposed) error = messageErrorMessage(cause);
+      if (!disposed && version === inboxVersion) error = messageErrorMessage(cause);
     } finally {
-      if (!disposed) loading = false;
+      if (!disposed && version === inboxVersion) loading = false;
     }
   }
 
@@ -78,10 +113,10 @@
   }
 
   async function selectConversation(conversation: Conversation) {
-    if (selectedConvo) drafts.set(conversationKey(selectedConvo), newMessage);
+    if (selectedConvo) drafts.set(draftKey(selectedConvo), newMessage);
     const version = ++selectionVersion;
     selectedConvo = conversation;
-    newMessage = drafts.get(conversationKey(conversation)) ?? '';
+    newMessage = drafts.get(draftKey(conversation)) ?? '';
     messages = [];
     loadingMessages = true;
     error = '';
@@ -106,7 +141,7 @@
   }
 
   function showConversationList() {
-    if (selectedConvo) drafts.set(conversationKey(selectedConvo), newMessage);
+    if (selectedConvo) drafts.set(draftKey(selectedConvo), newMessage);
     selectionVersion++;
     selectedConvo = null;
     messages = [];
@@ -115,16 +150,25 @@
   }
 
   async function sendMessage() {
-    if (sending || loadingMessages || !newMessage.trim() || !selectedConvo) return;
+    if (sending || loading || loadingMessages || !newMessage.trim() || !selectedConvo) return;
     const conversation = selectedConvo;
     const key = conversationKey(conversation);
+    const savedDraftKey = draftKey(conversation);
+    const originEntry = clientEntries.get(conversation.accountId!);
+    const originOwner = accounts.find(account => account.id === conversation.accountId);
+    const originLabel = accountLabel(conversation);
+    const version = inboxVersion;
     const text = newMessage;
-    drafts.set(key, text);
+    drafts.set(savedDraftKey, text);
     sending = true;
     error = '';
     try {
       const sent = await sendConversationMessage(conversation, text, accounts, clientEntries);
       if (disposed) return;
+      // The receipt belongs to the original remote account even if an account
+      // change occurred while the request was in flight.
+      if (drafts.get(savedDraftKey) === text) drafts.delete(savedDraftKey);
+      if (accountIdentity(originOwner) !== accountIdentity(accounts.find(account => account.id === conversation.accountId))) return;
       const current = conversations.find(candidate => conversationKey(candidate) === key) ?? conversation;
       updateConversation({ ...current, lastMessage: sent.text, lastDate: sent.createdAt, unread: false, isNew: false,
         ...(conversation.platform === 'mastodon' ? { lastStatusId: sent.id } : {}),
@@ -134,30 +178,31 @@
         if (newMessage === text) newMessage = '';
         scrollToLatest();
       }
-      if (drafts.get(key) === text) drafts.delete(key);
     } catch (cause) {
-      const message = messageErrorMessage(cause, clientEntries.get(conversation.accountId!));
+      const message = messageErrorMessage(cause, originEntry);
       swallow('messages.sendMessage', new Error(message));
-      if (!disposed) error = `${accountLabel(conversation)}: ${message}`;
+      if (!disposed && version === inboxVersion) error = `${originLabel}: ${message}`;
     } finally {
       if (!disposed) sending = false;
     }
   }
 
   async function startNewConversation() {
-    if (starting || !newConvoHandle.trim() || newConvoAccountId === undefined) return;
+    if (starting || loading || !newConvoHandle.trim() || newConvoAccountId === undefined) return;
+    const version = inboxVersion;
+    const originEntry = clientEntries.get(newConvoAccountId);
     starting = true;
     error = '';
     try {
       const conversation = await createConversation(newConvoAccountId, newConvoHandle, accounts, clientEntries);
-      if (disposed) return;
+      if (disposed || version !== inboxVersion) return;
       const key = conversationKey(conversation);
       conversations = [conversation, ...conversations.filter(candidate => conversationKey(candidate) !== key)];
       showNewConvo = false;
       newConvoHandle = '';
       await selectConversation(conversation);
     } catch (cause) {
-      if (!disposed) error = messageErrorMessage(cause, clientEntries.get(newConvoAccountId));
+      if (!disposed && version === inboxVersion) error = messageErrorMessage(cause, originEntry);
     } finally {
       if (!disposed) starting = false;
     }
@@ -191,6 +236,7 @@
               <label class="text-xs text-[var(--color-text-muted)]">
                 {i18n.t.settings.tabAccount}
                 <select bind:value={newConvoAccountId} disabled={starting} class="w-full mt-1 px-2 py-1 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-[var(--color-text)]">
+                  <option value={undefined} disabled>{i18n.t.settings.tabAccount}</option>
                   {#each chatAccounts as account (account.id)}<option value={account.id}>{account.handle} · {account.platform}</option>{/each}
                 </select>
               </label>

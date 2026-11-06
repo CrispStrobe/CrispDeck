@@ -9,14 +9,15 @@ import type { BlueskyClient } from './api/bluesky';
 import type { MastodonClient } from './api/mastodon';
 import { swallow } from './debug-log';
 
-const following = new Map<number, { expires: number; value: Promise<Set<string>> }>();
+const following = new Map<number, { identity: string; expires: number; value: Promise<Set<string>> }>();
 // Bound setup traffic during an outage. The socket manages its own reconnects
 // once the account's follows/profile lookup has succeeded.
 const SETUP_RETRY_DELAYS = [5_000, 10_000, 20_000, 40_000, 60_000];
 
 async function followedDids(account: Account, entry: ClientEntry): Promise<Set<string>> {
+  const identity = account.did ?? account.handle.toLowerCase().replace(/^@/, '');
   const cached = following.get(account.id);
-  if (cached && cached.expires > Date.now()) return cached.value;
+  if (cached?.identity === identity && cached.expires > Date.now()) return cached.value;
   const value = (async () => {
     const dids = new Set<string>(account.did ? [account.did] : []);
     let cursor: string | undefined;
@@ -32,8 +33,13 @@ async function followedDids(account: Account, entry: ClientEntry): Promise<Set<s
     } while (cursor);
     return dids;
   })();
-  following.set(account.id, { expires: Date.now() + 300_000, value });
-  try { return await value; } catch (error) { following.delete(account.id); throw error; }
+  const next = { identity, expires: Date.now() + 300_000, value };
+  following.set(account.id, next);
+  try { return await value; } catch (error) {
+    // A retired identity's late rejection must not evict its replacement.
+    if (following.get(account.id) === next) following.delete(account.id);
+    throw error;
+  }
 }
 
 /** Jetstream contains the whole network. It is a refresh signal, never a feed. */

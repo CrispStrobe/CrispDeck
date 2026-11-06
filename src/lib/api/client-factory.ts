@@ -15,6 +15,7 @@ import { listAccounts, getDecryptedCredentials } from '$lib/db';
 import type { Agent } from '@atproto/api';
 import { prefetchAtprotoSdk, prefetchOAuthSdk } from './atproto-sdk';
 import { browser } from '$app/environment';
+import { clearAllCache } from '$lib/view-cache';
 import type { Account, Platform } from '$lib/types';
 
 /**
@@ -54,6 +55,7 @@ export interface ClientEntry {
 // Module-level cache: avoids re-initializing clients when navigating between pages
 let _cachedResult: { accounts: Account[]; clients: Map<number, ClientEntry> } | null = null;
 let _cacheTime = 0;
+let _cacheGeneration = 0;
 let _cacheTtl = 300000; // 5 minutes; shortened when an OAuth restore failed transiently
 
 /**
@@ -67,6 +69,7 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
   const now = Date.now();
   if (_cachedResult && now - _cacheTime < _cacheTtl) return _cachedResult;
 
+  const generation = _cacheGeneration;
   const accounts = await listAccounts();
 
   // The OAuth stack is a further ~200 KB and only OAuth accounts need it, so
@@ -181,6 +184,8 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
     if (entry) clients.set(entry.accountId, entry);
   }
 
+  // Account changes may happen while OAuth restores or credentials load.
+  if (generation !== _cacheGeneration) return initAllClients();
   _cachedResult = { accounts, clients };
   _cacheTime = Date.now();
   // A transient OAuth failure must not lock users into a degraded read-only
@@ -189,10 +194,23 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
   return _cachedResult;
 }
 
+/** Existing clients, only while valid; lets a returning view render synchronously. */
+export function peekCachedClients(): { accounts: Account[]; clients: Map<number, ClientEntry> } | null {
+  return _cachedResult && Date.now() - _cacheTime < _cacheTtl ? _cachedResult : null;
+}
+
 /** Invalidate the client cache (e.g. after adding/removing an account) */
 export function invalidateClientCache(): void {
   _cachedResult = null;
   _cacheTime = 0;
+  _cacheGeneration++;
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('crispdeck:accounts-changed', (event) => {
+    invalidateClientCache();
+    if ((event as CustomEvent<{ membershipChanged?: boolean }>).detail?.membershipChanged) clearAllCache();
+  });
 }
 
 /** True when any entry fell back to a read-only client despite being an OAuth account. */

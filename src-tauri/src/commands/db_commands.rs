@@ -144,6 +144,9 @@ fn delete_account_impl(
     // Drop the keychain entry too, or it outlives the account that owned it.
     // Best effort: failing to tidy up must not block removing the account.
     if let Ok(column) = accounts::get_credentials_enc(conn, id) {
+        if cfg!(target_os = "macos") && preferred_backend(conn) == secret_store::Backend::Local && secret_store::is_keychain_ref(&column) {
+            return accounts::delete(conn, id).map_err(|e| e.to_string());
+        }
         if let Err(e) = secret_store::forget(secrets, &column) {
             log::warn!("could not remove the stored secret for account {id}: {e}");
         }
@@ -163,9 +166,32 @@ fn get_credentials_impl(
     id: i64,
 ) -> Result<String, String> {
     let column = accounts::get_credentials_enc(conn, id).map_err(|e| e.to_string())?;
+    if cfg!(target_os = "macos") && preferred_backend(conn) == secret_store::Backend::Local && secret_store::is_keychain_ref(&column) {
+        return Err("This account is stored in a keychain. Reconnect it to use local-only mode.".into());
+    }
     // Dispatches on what is in the column, not on the current preference, so
     // rows written by either backend keep working after a switch.
     secret_store::load(secrets, &column).map_err(|e| e.to_string())
+}
+
+/// Rebind an existing OAuth account after reauthentication without reading or
+/// deleting its old credential. The marker contains no token or signing key.
+#[tauri::command]
+pub fn db_rebind_oauth_account(state: State<'_, AppState>, id: i64, did: String) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    rebind_oauth_account_impl(&conn, id, &did)
+}
+
+fn rebind_oauth_account_impl(conn: &rusqlite::Connection, id: i64, did: &str) -> Result<(), String> {
+    oauth_marker_key(did)?;
+    let marker = serde_json::json!({ "auth_method": "oauth", "did": did }).to_string();
+    let encrypted = crate::auth::credentials::encrypt(&marker).map_err(|e| e.to_string())?;
+    let rows = conn.execute(
+        "UPDATE accounts SET credentials_enc = ?1, updated_at = datetime('now') WHERE id = ?2 AND platform = 'bluesky' AND did = ?3",
+        rusqlite::params![encrypted, id, did],
+    ).map_err(|e| e.to_string())?;
+    if rows != 1 { return Err("Bluesky account does not match the signed-in identity".into()); }
+    Ok(())
 }
 
 /// The backend the user asked for, defaulting to the OS store where there is
@@ -179,6 +205,94 @@ const CREDENTIAL_BACKEND_KEY: &str = "credential_backend";
 /// Which macOS keychain: "login", "data-protection", or a path to one the
 /// user manages. Ignored on other platforms.
 const MAC_KEYCHAIN_KEY: &str = "macos_keychain";
+
+/// Store native Bluesky OAuth sessions in the selected backend. The record
+/// identifies its backend so changing settings never consults another one.
+fn oauth_marker_key(did: &str) -> Result<String, String> {
+    if !did.starts_with("did:") || did.len() > 256 || !did.bytes().all(|b| b.is_ascii_alphanumeric() || b":._%-".contains(&b)) {
+        return Err("Invalid Bluesky session identifier".into());
+    }
+    Ok(format!("oauth_session:{did}"))
+}
+
+#[tauri::command]
+pub fn oauth_session_get(state: State<'_, AppState>, did: String, backend: String, keychain: String) -> Result<Option<String>, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    ensure_oauth_storage(&conn, &backend, &keychain)?;
+    oauth_session_get_impl(&conn, &secret_store::OsSecretStore, &did)
+}
+
+fn oauth_session_get_impl(conn: &rusqlite::Connection, secrets: &dyn secret_store::SecretStore, did: &str) -> Result<Option<String>, String> {
+    let key = oauth_marker_key(did)?;
+    match preferred_backend(conn) {
+        secret_store::Backend::Local => {
+            let stored = crate::db::get_setting(conn, &format!("{key}/local"), "");
+            match stored.strip_prefix("local:v1:") {
+                Some(blob) => crate::auth::credentials::decrypt(blob).map(Some).map_err(|e| e.to_string()),
+                None => Ok(None),
+            }
+        }
+        secret_store::Backend::Keychain => {
+            let selected = crate::db::get_setting(conn, MAC_KEYCHAIN_KEY, "login");
+            if crate::db::get_setting(conn, &format!("{key}/keychain/{selected}"), "") != "present" { return Ok(None); }
+            secrets.get(&key).map(Some).map_err(|e| e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+pub fn oauth_session_set(state: State<'_, AppState>, did: String, value: String, backend: String, keychain: String) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    ensure_oauth_storage(&conn, &backend, &keychain)?;
+    oauth_session_set_impl(&conn, &secret_store::OsSecretStore, &did, &value)
+}
+
+fn oauth_session_set_impl(conn: &rusqlite::Connection, secrets: &dyn secret_store::SecretStore, did: &str, value: &str) -> Result<(), String> {
+    let key = oauth_marker_key(did)?;
+    if value.len() > 65536 { return Err("Bluesky session is too large".into()); }
+    let (record_key, record) = match preferred_backend(conn) {
+        secret_store::Backend::Local => (format!("{key}/local"), format!("local:v1:{}", crate::auth::credentials::encrypt(value).map_err(|e| e.to_string())?)),
+        secret_store::Backend::Keychain => {
+            let selected = crate::db::get_setting(conn, MAC_KEYCHAIN_KEY, "login");
+            // Never silently downgrade a user-selected keychain to local storage.
+            secrets.set(&key, value).map_err(|e| e.to_string())?;
+            (format!("{key}/keychain/{selected}"), "present".to_string())
+        }
+    };
+    crate::db::set_setting(conn, &record_key, &record).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn oauth_session_delete(state: State<'_, AppState>, did: String, backend: String, keychain: String) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    ensure_oauth_storage(&conn, &backend, &keychain)?;
+    oauth_session_delete_impl(&conn, &secret_store::OsSecretStore, &did)
+}
+
+fn ensure_oauth_storage(conn: &rusqlite::Connection, backend: &str, keychain: &str) -> Result<(), String> {
+    if preferred_backend(conn).as_str() != backend ||
+        (backend == "keychain" && crate::db::get_setting(conn, MAC_KEYCHAIN_KEY, "login") != keychain) {
+        return Err("Credential storage changed; reconnect Bluesky".into());
+    }
+    Ok(())
+}
+
+fn oauth_session_delete_impl(conn: &rusqlite::Connection, secrets: &dyn secret_store::SecretStore, did: &str) -> Result<(), String> {
+    let key = oauth_marker_key(did)?;
+    let record_key = match preferred_backend(conn) {
+        secret_store::Backend::Local => format!("{key}/local"),
+        secret_store::Backend::Keychain => {
+            let selected = crate::db::get_setting(conn, MAC_KEYCHAIN_KEY, "login");
+            let record_key = format!("{key}/keychain/{selected}");
+            if crate::db::get_setting(conn, &record_key, "") == "present" {
+                secrets.delete(&key).map_err(|e| e.to_string())?;
+            }
+            record_key
+        }
+    };
+    conn.execute("DELETE FROM app_settings WHERE key = ?1", [&record_key]).map_err(|e| e.to_string())?;
+    Ok(())
+}
 
 /// What the settings screen needs: which backend is in use, whether this build
 /// has an OS store to offer at all, and on macOS which keychain.
@@ -221,6 +335,7 @@ pub fn macos_keychain_set(state: State<'_, AppState>, keychain: String) -> Resul
     // Checked here rather than at the next account save. A mistyped path was
     // stored happily and only surfaced later, as a keychain error on a save
     // the user had no reason to connect to a setting they changed earlier.
+    let keychain = expand_mac_keychain_path(&keychain)?;
     validate_mac_keychain(&keychain)?;
     {
         let conn = state.db.lock().map_err(|e| e.to_string())?;
@@ -228,6 +343,14 @@ pub fn macos_keychain_set(state: State<'_, AppState>, keychain: String) -> Resul
     }
     secret_store::set_mac_keychain_choice(&keychain);
     Ok(())
+}
+
+fn expand_mac_keychain_path(choice: &str) -> Result<String, String> {
+    if let Some(rest) = choice.strip_prefix("~/") {
+        let home = std::env::var_os("HOME").ok_or("Cannot resolve the home directory")?;
+        return Ok(std::path::PathBuf::from(home).join(rest).to_string_lossy().into_owned());
+    }
+    Ok(choice.to_string())
 }
 
 /// "login", "data-protection", or a keychain that is actually there.
@@ -558,6 +681,103 @@ mod tests {
         conn
     }
 
+    #[test]
+    fn oauth_sessions_respect_the_selected_backend_and_keychain() {
+        let conn = test_db();
+        let store = FakeStore::default();
+        let did = "did:plc:example";
+        crate::db::set_setting(&conn, CREDENTIAL_BACKEND_KEY, "local").unwrap();
+        oauth_session_set_impl(&conn, &store, did, "secret").unwrap();
+        assert_eq!(oauth_session_get_impl(&conn, &store, did).unwrap().as_deref(), Some("secret"));
+        assert!(!crate::db::get_setting(&conn, &format!("{}/local", oauth_marker_key(did).unwrap()), "").contains("secret"));
+        assert_eq!(store.len(), 0);
+        crate::db::set_setting(&conn, CREDENTIAL_BACKEND_KEY, "keychain").unwrap();
+        crate::db::set_setting(&conn, MAC_KEYCHAIN_KEY, "/keychain/a").unwrap();
+        oauth_session_set_impl(&conn, &store, did, "secret").unwrap();
+        assert_eq!(oauth_session_get_impl(&conn, &store, did).unwrap().as_deref(), Some("secret"));
+        assert!(!crate::db::get_setting(&conn, &format!("{}/keychain//keychain/a", oauth_marker_key(did).unwrap()), "").contains("secret"));
+        crate::db::set_setting(&conn, MAC_KEYCHAIN_KEY, "/keychain/b").unwrap();
+        assert_eq!(oauth_session_get_impl(&conn, &store, did).unwrap(), None);
+        assert!(ensure_oauth_storage(&conn, "keychain", "/keychain/a").is_err());
+        assert!(ensure_oauth_storage(&conn, "local", "/keychain/b").is_err());
+        oauth_session_delete_impl(&conn, &store, did).unwrap();
+        assert_eq!(store.len(), 1, "switching keychains must not delete the old session");
+        crate::db::set_setting(&conn, MAC_KEYCHAIN_KEY, "/keychain/a").unwrap();
+        oauth_session_delete_impl(&conn, &store, did).unwrap();
+        assert_eq!(store.len(), 0);
+        crate::db::set_setting(&conn, CREDENTIAL_BACKEND_KEY, "local").unwrap();
+        assert_eq!(oauth_session_get_impl(&conn, &store, did).unwrap().as_deref(), Some("secret"));
+    }
+
+    #[test]
+    fn oauth_keychain_failure_never_falls_back_to_local_storage() {
+        let conn = test_db();
+        crate::db::set_setting(&conn, CREDENTIAL_BACKEND_KEY, "keychain").unwrap();
+        let store = FakeStore { fail_writes: true, ..Default::default() };
+        assert!(oauth_session_set_impl(&conn, &store, "did:plc:example", "secret").is_err());
+        assert_eq!(crate::db::get_setting(&conn, &format!("{}/keychain/login", oauth_marker_key("did:plc:example").unwrap()), ""), "");
+        assert!(oauth_marker_key("not-a-did").is_err());
+    }
+
+    #[test]
+    fn local_oauth_session_survives_database_reopen_without_a_keychain() {
+        let dir = std::env::temp_dir().join(format!("crispdeck-oauth-test-{}", rand::random::<u64>()));
+        std::fs::create_dir(&dir).unwrap();
+        let path = dir.join("test.db");
+        let store = FakeStore::default();
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch("CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)").unwrap();
+            crate::db::set_setting(&conn, CREDENTIAL_BACKEND_KEY, "local").unwrap();
+            oauth_session_set_impl(&conn, &store, "did:plc:example", "refresh-token-and-key").unwrap();
+        }
+        {
+            let conn = Connection::open(&path).unwrap();
+            assert_eq!(oauth_session_get_impl(&conn, &store, "did:plc:example").unwrap().as_deref(), Some("refresh-token-and-key"));
+            assert!(!crate::db::get_setting(&conn, &format!("{}/local", oauth_marker_key("did:plc:example").unwrap()), "").contains("refresh-token-and-key"));
+            assert_eq!(store.len(), 0);
+            oauth_session_delete_impl(&conn, &store, "did:plc:example").unwrap();
+            assert_eq!(oauth_session_get_impl(&conn, &store, "did:plc:example").unwrap(), None);
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn keychain_path_expands_home_directory() {
+        let expanded = expand_mac_keychain_path("~/Library/Keychains/Work.keychain-db").unwrap();
+        assert_eq!(expanded, std::path::PathBuf::from(std::env::var_os("HOME").unwrap()).join("Library/Keychains/Work.keychain-db").to_string_lossy());
+        assert_eq!(expand_mac_keychain_path("login").unwrap(), "login");
+    }
+
+    #[test]
+    fn oauth_reconnect_rebinds_only_the_matching_account_without_touching_old_keychain() {
+        let conn = test_db();
+        let store = FakeStore::default();
+        crate::db::set_setting(&conn, CREDENTIAL_BACKEND_KEY, "keychain").unwrap();
+        let account = add_account_impl(&conn, &store, "bluesky", "alice.test", None, None, Some("did:plc:alice"), None, None, "old secret", false).unwrap();
+        assert!(rebind_oauth_account_impl(&conn, account.id, "did:plc:someoneelse").is_err());
+        rebind_oauth_account_impl(&conn, account.id, "did:plc:alice").unwrap();
+        let column = accounts::get_credentials_enc(&conn, account.id).unwrap();
+        assert!(!secret_store::is_keychain_ref(&column));
+        let decoded = crate::auth::credentials::decrypt(&column).unwrap();
+        assert_eq!(serde_json::from_str::<serde_json::Value>(&decoded).unwrap()["did"], "did:plc:alice");
+        assert_eq!(store.len(), 1, "the old keychain item is not deleted");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn local_only_mode_does_not_access_or_delete_old_keychain_items() {
+        let conn = test_db();
+        let store = FakeStore::default();
+        crate::db::set_setting(&conn, CREDENTIAL_BACKEND_KEY, "keychain").unwrap();
+        let account = add(&conn, &store, "@old@example.com", "secret").unwrap();
+        crate::db::set_setting(&conn, CREDENTIAL_BACKEND_KEY, "local").unwrap();
+        assert!(get_credentials_impl(&conn, &store, account.id).is_err());
+        delete_account_impl(&conn, &store, account.id).unwrap();
+        assert_eq!(store.len(), 1, "the old keychain item must remain untouched");
+    }
+
     fn add(
         conn: &Connection,
         store: &FakeStore,
@@ -628,7 +848,11 @@ mod tests {
         crate::db::set_setting(&conn, CREDENTIAL_BACKEND_KEY, "local").unwrap();
         let in_blob = add(&conn, &store, "@b@x.social", "token-b").unwrap();
 
-        assert_eq!(get_credentials_impl(&conn, &store, in_keychain.id).unwrap(), "token-a");
+        if cfg!(target_os = "macos") {
+            assert!(get_credentials_impl(&conn, &store, in_keychain.id).is_err());
+        } else {
+            assert_eq!(get_credentials_impl(&conn, &store, in_keychain.id).unwrap(), "token-a");
+        }
         assert_eq!(get_credentials_impl(&conn, &store, in_blob.id).unwrap(), "token-b");
     }
 

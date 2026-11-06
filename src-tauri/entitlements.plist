@@ -13,12 +13,15 @@
   <key>com.apple.security.network.client</key>
   <true/>
 
+  <!-- File pickers are used for settings/OPML import and media attachments.
+       User-selected write access also permits saving exports through a panel. -->
+  <key>com.apple.security.files.user-selected.read-write</key>
+  <true/>
+
   <!-- Deliberately NOT requested:
        * network.server — native OAuth callbacks use the app URL scheme, not
          a loopback listener.
-       * files.user-selected / bookmarks.app-scope — the app never opens a file
-         the user picked. Its SQLite database and model cache live in
-         app_data_dir, which is inside the container and needs no entitlement.
+       * bookmarks.app-scope — access to selected files is not persisted.
        * temporary-exception.* — restricted entitlements that need review
          justification, and nothing here needs one. -->
 </dict>
