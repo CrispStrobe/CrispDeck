@@ -11,6 +11,7 @@ import { normalizePost } from './api/unified';
 import { columnAccounts } from './deck-accounts';
 import { requiresQuery } from './deck-columns';
 import { fetchJson, fetchOk, safeUrl } from './http';
+import { isTauri } from './platform';
 import { parseKeywords, buildKeywordMatcher } from './keyword-monitor';
 
 /** Missing means the first page; null means this source has been exhausted. */
@@ -491,9 +492,16 @@ async function loadThreadsPage(column: DeckColumnConfig, account: Account, clien
   // Match the Threads client: query authentication without a CORS preflight.
   // safeError strips query strings and redacts the token from failures.
   params.set('access_token', token);
-  const data = await fetchJson<{ data: ThreadsPost[]; paging?: { cursors?: { after?: string } } }>(`${THREADS_API}${path}?${params}`, {
-    redirect: 'error',
-  }, 'Load Threads column');
+  const url = `${THREADS_API}${path}?${params}`;
+  let data: { data: ThreadsPost[]; paging?: { cursors?: { after?: string } } };
+  if (isTauri()) {
+    const { fetch: nativeFetch } = await import('@tauri-apps/plugin-http');
+    const response = await nativeFetch(url, { redirect: 'error' });
+    if (!response.ok) throw new Error(`Threads request failed (${response.status}).`);
+    data = await response.json();
+  } else {
+    data = await fetchJson<typeof data>(url, { redirect: 'error' }, 'Load Threads column');
+  }
   const posts = arrayResponse<ThreadsPost>(data?.data, 'Threads');
   return {
     posts: posts.map(post => withSource(normalizePost(post, 'threads'), account)),

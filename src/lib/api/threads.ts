@@ -194,7 +194,10 @@ export class ThreadsClient {
       }
     }
 
-    const resp = await fetch(url.toString());
+    // Native HTTP avoids WKWebView CORS/preflight failures for the Graph API.
+    // Web builds retain normal browser fetch and its origin protections.
+    const request = isTauri() ? (await import('@tauri-apps/plugin-http')).fetch : fetch;
+    const resp = await request(url.toString());
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
       throw new Error(err.error?.message || `Threads API error: ${resp.statusText}`);
