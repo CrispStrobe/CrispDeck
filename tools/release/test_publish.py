@@ -48,6 +48,20 @@ class PublishGuardsTests(unittest.TestCase):
                 publish.publish(self.root, '1.3.0', 'a' * 40)
         command.assert_not_called()
 
+    def test_partial_checksums_must_match_verified_packages(self):
+        import hashlib
+        package = self.root / 'package.deb'
+        package.write_bytes(b'verified package')
+        partial = self.root / 'partial-list'
+        partial.write_text(hashlib.sha256(package.read_bytes()).hexdigest() + '  package.deb\n')
+        publish.verify_partial_checksums(self.root, partial)
+        package.write_bytes(b'changed')
+        with self.assertRaisesRegex(ValueError, 'differs from verified'):
+            publish.verify_partial_checksums(self.root, partial)
+        partial.write_text('0' * 64 + '  ../outside\n')
+        with self.assertRaisesRegex(ValueError, 'Invalid partial'):
+            publish.verify_partial_checksums(self.root, partial)
+
     def test_complete_staged_prerelease_can_be_finalized(self):
         import hashlib
         checksum = self.root / 'SHA256SUMS'
