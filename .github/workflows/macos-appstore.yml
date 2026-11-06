@@ -206,6 +206,8 @@ jobs:
             --type macos \
             --apple-id ${{ vars.APPSTORE_APP_ID }} \
             --bundle-id ${{ env.BUNDLE_ID }} \
+            --bundle-version "${{ github.run_number }}" \
+            --bundle-short-version-string "$VERSION" \
             --api-key ${{ secrets.APPLE_API_KEY_ID }} \
             --api-issuer ${{ secrets.APPLE_API_ISSUER_ID }}
 
