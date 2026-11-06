@@ -102,6 +102,7 @@ export const translations = {
       alerts: 'Alerts',
       dms: 'DMs',
     },
+    linkMenu: { title: "Link actions", open: "Open link", copy: "Copy link", share: "Share link", saveWallabag: "Save to Wallabag", setupWallabag: "Set up Wallabag", copied: "Link copied", copyFailed: "Could not copy link", systemMenuHint: "Shift-right-click for system menu", wallabagInstance: "Wallabag server URL", wallabagHint: "Uses your browser’s Wallabag sign-in to save links." },
     app: {
       keyboardShortcuts: 'Keyboard Shortcuts',
       voiceCommandsHint: 'Speak these while the mic is active in Compose. Also works in German.',
@@ -213,7 +214,7 @@ export const translations = {
       autoSaveRestored: 'Unsent text restored from auto-save.',
       discard: 'Discard',
     },
-    post: {
+    post: { replyingTo: "Replying to {name}", replyingToPost: "Replying to a post", openLinkFailed: "Could not open the link.", showFullPost: "Show full post", showLessPost: "Show less", playVideo: "Play video", videoPlaybackFailed: "Video could not be played.", openVideoPost: "Open the post", scrollImagesLeft: "Scroll images left", scrollImagesRight: "Scroll images right",
       reportHint: "To complete the report, use the platform's reporting tool on the opened page.",
       noReadingLists: 'No reading lists yet',
       engagementBreakdown: 'Engagement breakdown',
@@ -264,7 +265,7 @@ export const translations = {
       voted: 'Voted',
       open: 'Open',
     },
-    settings: { macosKeychainApply: 'Use this keychain', macosKeychainSignedOnly: 'Needs a signed build; an unsigned one falls back to the encrypted store.', macosKeychainPathHint: 'Full path, e.g. ~/Library/Keychains/Work.keychain-db. CrispDeck never stores its password — macOS asks you if it is locked.', macosKeychainPath: 'A keychain you manage', macosKeychainDataProtection: 'Passwords (iCloud-capable)', macosKeychainLogin: 'Login keychain', macosKeychain: 'macOS keychain', credentialNoKeychain: 'No system keychain on this platform yet, so credentials are encrypted in the app.', credentialAppliesToNew: 'Applies to accounts you connect from now on; existing ones stay where they are.', credentialLocalHint: 'Encrypted with a key derived from this machine. Weaker, but always available.', credentialKeychainHint: 'The operating system holds the secret. Preferred where available.', credentialLocal: 'Encrypted in this app', credentialKeychain: 'System keychain', oauthWindowMode: 'Sign-in window', oauthWindowApp: 'In CrispDeck', oauthWindowAppHint: 'Opens in a CrispDeck window. Lets an expired Bluesky session renew itself.', oauthWindowBrowser: 'System browser', oauthWindowBrowserHint: 'Your own browser, with its saved passwords. No automatic re-login.', credentialStorage: 'Credential storage',
+    settings: { sideMedia: "Media beside post text", sideMediaHint: "On wide posts, place a single image or video to the right of the text.", noKeychain: "No keychain", oauthLocalStorageHint: "Bluesky sessions persist without a keychain. Local encryption uses machine details rather than a private password, so it offers weaker protection. Previously keychain-stored accounts must be reconnected.", oauthKeychainStorageHint: "Bluesky sessions use the selected keychain. Switching storage may require reconnecting; existing sessions are not moved or deleted.", macosKeychainApply: 'Use this keychain', macosKeychainSignedOnly: 'Needs a signed build; an unsigned one falls back to the encrypted store.', macosKeychainPathHint: 'Full path, e.g. ~/Library/Keychains/Work.keychain-db. CrispDeck never stores its password — macOS asks you if it is locked.', macosKeychainPath: 'A keychain you manage', macosKeychainDataProtection: 'Passwords (iCloud-capable)', macosKeychainLogin: 'Login keychain', macosKeychain: 'macOS keychain', credentialNoKeychain: 'No system keychain on this platform yet, so credentials are encrypted in the app.', credentialAppliesToNew: 'Applies to accounts you connect from now on; existing ones stay where they are.', credentialLocalHint: 'Encrypted with a key derived from this machine. Weaker, but always available.', credentialKeychainHint: 'The operating system holds the secret. Preferred where available.', credentialLocal: 'Encrypted in this app', credentialKeychain: 'System keychain', oauthWindowMode: 'Sign-in window', oauthWindowApp: 'In CrispDeck', oauthWindowAppHint: 'Opens in a CrispDeck window. Lets an expired Bluesky session renew itself.', oauthWindowBrowser: 'System browser', oauthWindowBrowserHint: 'Your own browser, with its saved passwords. No automatic re-login.', credentialStorage: 'Credential storage',
       twoFactorCode: '2FA Code (check your email)',
       densityDesc: 'Adjusts spacing, avatar size, and padding across the entire UI',
       displayHeading: 'Display',
@@ -690,7 +691,7 @@ export const translations = {
       typePlaceholder: 'Type a message...',
       selectConversation: 'Select a conversation',
     },
-    search: {
+    search: { people: "People", partialFailure: "Some search results could not be loaded. Try again.", retrySearch: "Try searching again.",
       requiresScope: 'Requires permission:',
       addAccountsToSearch: 'Add accounts to search, in',
       opFromUser: '— posts by a user',
@@ -745,7 +746,7 @@ export const translations = {
       saved: 'Saved {date}',
       calendarView: 'Calendar',
     },
-    deck: { initFailed: 'The deck could not be set up',
+    deck: { moveColumn: "Move {title} column; use left or right arrow keys", initFailed: 'The deck could not be set up',
       loadLayoutPlaceholder: 'Load layout...',
       liveStreaming: 'Live streaming',
       refreshColumn: 'Refresh column',
@@ -845,7 +846,7 @@ export const translations = {
       bothPlatforms: 'Both',
       totalMatched: 'matched identities',
     },
-    thread: {
+    thread: { authorThread: "Original author’s thread",
       postNotFound: 'Post not found.',
       readAsArticle: 'Read as article',
       parts: 'parts',

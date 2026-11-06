@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('$lib/platform', () => ({ isTauri: () => true }));
+vi.mock('$lib/db', () => ({ getCredentialBackend: async () => ({ backend: 'local', macosKeychainChoices: [] }) }));
 const goto = vi.fn();
 vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => goto(...args) }));
 vi.mock('$app/paths', () => ({ base: '' }));

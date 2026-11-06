@@ -7,6 +7,7 @@
   import { swallow } from '$lib/debug-log';
   import DelayedSpinner from '$lib/components/DelayedSpinner.svelte';
   import Post from '$lib/components/Post.svelte';
+  import AccountAttribution from '$lib/components/AccountAttribution.svelte';
   import CrosspostGroup from '$lib/components/CrosspostGroup.svelte';
   import SkeletonPost from '$lib/components/SkeletonPost.svelte';
   import AdvancedFilters from '$lib/components/AdvancedFilters.svelte';
@@ -14,7 +15,7 @@
   import { MastodonClient } from '$lib/api/mastodon';
   import { ThreadsClient } from '$lib/api/threads';
   import { notifyNewPosts, getPermission } from '$lib/push-notifications';
-  import { initAllClients, invalidateClientCache, retryDegradedClients, type ClientEntry } from '$lib/api/client-factory';
+  import { initAllClients, peekCachedClients, invalidateClientCache, retryDegradedClients, type ClientEntry } from '$lib/api/client-factory';
   import { normalizePost, filterPosts, sortPosts, detectCrossposts, buildIdentityPairs, isCrosspostGroup } from '$lib/api/unified';
   import { listIdentities } from '$lib/db';
   import type { UnifiedPost, Filters, Account, Platform } from '$lib/types';
@@ -133,10 +134,11 @@
     feedMode === 'custom' && customFeed ? customFeed.title : null
   );
 
-  // Reading position. `feed:v2:` rather than `feed:` because the stored shape
+  // Reading position. `feed:v3:` resets positions saved by the old clipped-card layout.
+  // `feed:v2:` rather than `feed:` was used because the stored shape
   // changed meaning: scrollY used to be a container offset and is now an
   // offset within the anchored post, so old entries must not be replayed.
-  const posKey = $derived('feed:v2:' + viewKey);
+  const posKey = $derived('feed:v3:' + viewKey);
   let scrollRaf = 0;
 
   function scrollContainer(): HTMLElement | null {
@@ -185,6 +187,15 @@
   }
 
   onMount(async () => {
+    const warm = peekCachedClients();
+    const cached = getCached<UnifiedPost[]>('feed-' + viewKey);
+    if (warm?.accounts.length && cached) {
+      accounts = warm.accounts;
+      clientEntries = warm.clients;
+      posts = cached.data;
+      initialLoading = false;
+      requestAnimationFrame(restorePosition);
+    }
     try {
       let result = await initAllClients();
       // If cache returned 0 accounts but DB might have some, force re-init
@@ -212,10 +223,7 @@
         }
       }
       // Load confirmed identities for crosspost dedup + affinity for "For You"
-      try {
-        const ids = await listIdentities({ confirmed_only: true });
-        identityPairs = buildIdentityPairs(ids);
-      } catch { /* non-critical */ }
+      void listIdentities({ confirmed_only: true }).then(ids => { identityPairs = buildIdentityPairs(ids); }).catch(() => {});
       // Affinity is loaded when For You is first opened, not here. It reads
       // 1,500 records out of IndexedDB and is used by nothing else — the feed
       // always starts in timeline mode, so on most loads that work was thrown
@@ -229,11 +237,10 @@
       // Show cached feed instantly while fresh data loads, and put the reader
       // straight back where they were — this is the path taken when they open
       // a post and come back, so it has to land before the network does.
-      const cached = getCached<UnifiedPost[]>('feed-' + viewKey);
-      if (cached) {
+      if (cached && !warm) {
         posts = cached.data;
         initialLoading = false;
-        restorePosition();
+        requestAnimationFrame(restorePosition);
       }
       if (accounts.length > 0) {
         // Returning from a thread within half a minute: the cache is the same
@@ -523,7 +530,7 @@
 
     const feedResults = await Promise.allSettled(accounts.map(async (acct) => {
       const entry = clientEntries.get(acct.id);
-      if (!entry) return { posts: [] as UnifiedPost[], acct, cursor: undefined as string | undefined, degraded: false };
+      if (!entry) throw new Error(`Unable to access the connected account ${acct.handle}. Reconnect it in Settings.`);
       try {
         return { acct, ...(await fetchAccountPage(acct, entry, { limit: 50, resolveReposts: true })) };
       } catch (e) {
@@ -819,8 +826,8 @@
 
 <svelte:head><title>CrispDeck — Feed</title><meta name="description" content="Your unified Mastodon + Bluesky timeline" /></svelte:head>
 
-<div class="p-6" role="feed" aria-label={i18n.t.feed.socialFeed} ontouchstart={onTouchStart} ontouchmove={onTouchMove} ontouchend={onTouchEnd}>
-  <div class="flex items-center justify-between mb-4">
+<div class="p-3 md:p-4" role="feed" aria-label={i18n.t.feed.socialFeed} ontouchstart={onTouchStart} ontouchmove={onTouchMove} ontouchend={onTouchEnd}>
+  <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
     <div class="flex items-center gap-2">
       <Rss size={24} />
       <h1 class="text-2xl font-bold">{i18n.t.feed.title}</h1>
@@ -828,6 +835,11 @@
         <span class="text-sm text-[var(--color-text-muted)] ml-2">({progress} posts)</span>
       {/if}
     </div>
+    {#if newPostsAvailable > 0}
+      <button onclick={loadNewPosts} class="px-2 py-1 bg-[var(--color-primary)]/20 text-[var(--color-primary-text)] text-xs font-medium rounded-lg hover:bg-[var(--color-primary)]/30">
+        {newPostsAvailable} new post{newPostsAvailable > 1 ? 's' : ''} — refresh
+      </button>
+    {/if}
     <div class="flex items-center gap-3">
       <!-- Feed mode toggle -->
       <div class="flex items-center bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-0.5">
@@ -1045,16 +1057,6 @@
       <AdvancedFilters {filters} onchange={handleFilterChange} startOpen={true} />
     {/if}
 
-    <!-- New posts banner -->
-    {#if newPostsAvailable > 0}
-      <button
-        onclick={loadNewPosts}
-        class="w-full mb-3 py-2 bg-[var(--color-primary)]/20 text-[var(--color-primary-text)] text-sm font-medium rounded-lg hover:bg-[var(--color-primary)]/30 transition-colors"
-      >
-        {newPostsAvailable} new post{newPostsAvailable > 1 ? 's' : ''} available — click to refresh
-      </button>
-    {/if}
-
     {#if loading && posts.length === 0}
       <div class="space-y-3">
         {#each { length: 4 } as _}
@@ -1085,13 +1087,11 @@
           {:else}
             {#if multiAccount && item.sourceAccount}
               <div class="relative">
-                <span class="absolute -top-1 right-2 text-[9px] px-1.5 py-0.5 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-muted)] z-10">
-                  via {item.sourceAccount.split('.')[0]}
-                </span>
-                <Post post={item} {hideMedia} onlike={handleLike} onboost={handleBoost} onreply={handleReply} onquote={handleQuote} />
+                <AccountAttribution platform={item.platform} account={item.sourceAccount} />
+                <Post post={item} feedPreview {hideMedia} onlike={handleLike} onboost={handleBoost} onreply={handleReply} onquote={handleQuote} />
               </div>
             {:else}
-              <Post post={item} {hideMedia} onlike={handleLike} onboost={handleBoost} onreply={handleReply} onquote={handleQuote} />
+              <Post post={item} feedPreview {hideMedia} onlike={handleLike} onboost={handleBoost} onreply={handleReply} onquote={handleQuote} />
             {/if}
           {/if}
           </div>

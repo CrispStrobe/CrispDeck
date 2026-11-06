@@ -9,7 +9,7 @@
  * - Sessions stored in IndexedDB, persist across reloads
  */
 
-import type { BrowserOAuthClient } from '@atproto/oauth-client-browser';
+import type { BrowserOAuthClient, OAuthClient } from '@atproto/oauth-client-browser';
 import { writeString } from '$lib/safe-storage';
 import { swallow } from '$lib/debug-log';
 import type { Agent } from '@atproto/api';
@@ -47,7 +47,11 @@ import { loadAtprotoSdk, loadOAuthSdk, oauthSdkIfLoaded } from './atproto-sdk';
  */
 const DEPLOYED_CLIENT_METADATA = clientMetadataJson as unknown as OAuthClientMetadataInput;
 
-let oauthClientPromise: Promise<BrowserOAuthClient> | null = null;
+let oauthClientPromise: Promise<BrowserOAuthClient | OAuthClient> | null = null;
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('crispdeck:credential-storage-changed', () => { oauthClientPromise = null; });
+}
 
 /** Entryway used to resolve handles, and to sign in when no handle is given. */
 const HANDLE_RESOLVER = 'https://bsky.social';
@@ -84,13 +88,19 @@ const APP_CLIENT_METADATA = nativeClientMetadataJson as unknown as OAuthClientMe
 /** Where BrowserOAuthClient keeps the DID of the current session. */
 const SESSION_POINTER_KEY = '@@atproto/oauth-client-browser(sub)';
 
-async function createOAuthClient(): Promise<BrowserOAuthClient> {
+async function createOAuthClient(): Promise<BrowserOAuthClient | OAuthClient> {
   if (isTauri()) {
     // The webview's origin (`tauri://localhost`, `http://tauri.localhost`)
     // can neither serve a client-metadata document nor receive a redirect, so
     // the app signs in as a native client instead: the authorization page
     // opens in a sign-in window or the system browser, and the redirect to
     // app.vercel.crispdeck: comes back to the app (see oauth-window.ts).
+    const { getCredentialBackend } = await import('$lib/db');
+    const storage = await getCredentialBackend();
+    if (storage.macosKeychainChoices?.length) {
+      const { createMacOAuthClient } = await import('./macos-oauth');
+      return createMacOAuthClient(APP_CLIENT_METADATA, storage.backend, storage.macosKeychain ?? 'login');
+    }
     const { BrowserOAuthClient } = await loadOAuthSdk();
     return new BrowserOAuthClient({
       clientMetadata: APP_CLIENT_METADATA,
@@ -133,7 +143,7 @@ async function createOAuthClient(): Promise<BrowserOAuthClient> {
 }
 
 /** Get or create the OAuth client singleton. */
-export function getOAuthClient(): Promise<BrowserOAuthClient> {
+export function getOAuthClient(): Promise<BrowserOAuthClient | OAuthClient> {
   // Memoize the promise, not the client, so concurrent callers share one
   // metadata fetch — but drop it again on failure so a transient network error
   // does not poison every later attempt.
@@ -156,7 +166,7 @@ export async function startBlueskyOAuth(handle: string): Promise<void> {
     await signInInApp(client, input);
     return;
   }
-  await client.signIn(input, {
+  await (client as BrowserOAuthClient).signIn(input, {
     signal: new AbortController().signal,
   });
   // This redirects — execution stops here
@@ -168,7 +178,7 @@ export async function startBlueskyOAuth(handle: string): Promise<void> {
  * and a deep link back (see oauth-window.ts).
  */
 async function authorizeInApp(
-  client: BrowserOAuthClient,
+  client: OAuthClient,
   input: string,
 ) {
   const url = await client.authorize(input, {
@@ -194,7 +204,7 @@ async function authorizeInApp(
 }
 
 /** Interactive sign-in in the app, landing on the page that stores the account. */
-async function signInInApp(client: BrowserOAuthClient, input: string): Promise<void> {
+async function signInInApp(client: OAuthClient, input: string): Promise<void> {
   await authorizeInApp(client, input);
   const { goto } = await import('$app/navigation');
   const { base } = await import('$app/paths');
@@ -217,7 +227,7 @@ export async function initBlueskyOAuth(): Promise<{
     // init() would look for callback params in the window URL and insist on a
     // loopback http origin; in the app the callback is completed in
     // signInInApp, so only restoring is left to do.
-    const result = isTauri() ? await restoreFromPointer(client) : await client.init();
+    const result = isTauri() ? await restoreFromPointer(client) : await (client as BrowserOAuthClient).init();
 
     if (result?.session) {
       const { Agent } = await loadAtprotoSdk();
@@ -237,7 +247,7 @@ export async function initBlueskyOAuth(): Promise<{
   return null;
 }
 
-async function restoreFromPointer(client: BrowserOAuthClient) {
+async function restoreFromPointer(client: OAuthClient) {
   let sub: string | null = null;
   try {
     sub = localStorage.getItem(SESSION_POINTER_KEY);
@@ -304,7 +314,7 @@ export type OAuthRestoreResult =
  * access token is stale.
  */
 export async function restoreBlueskyOAuthSession(did: string): Promise<OAuthRestoreResult> {
-  let client: BrowserOAuthClient;
+  let client: OAuthClient;
   try {
     client = await getOAuthClient();
   } catch (e) {

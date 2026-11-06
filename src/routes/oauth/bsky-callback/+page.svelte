@@ -5,7 +5,7 @@
   import { getHomeMode, homeRedirectPath } from '$lib/settings';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { addAccount, updateAccount, listAccounts } from '$lib/db';
+  import { addAccount, updateAccount, listAccounts, rebindOAuthAccount } from '$lib/db';
   import { initBlueskyOAuth, OAUTH_RETURN_TO_KEY } from '$lib/api/bluesky-oauth';
   import { invalidateClientCache } from '$lib/api/client-factory';
   import { Loader2, Check, AlertTriangle } from '@lucide/svelte';
@@ -36,6 +36,7 @@
       const allAccounts = await listAccounts();
       const existing = allAccounts.find((a) => a.platform === 'bluesky' && a.did === did);
       if (existing) {
+        await rebindOAuthAccount(existing.id, did);
         await updateAccount({
           id: existing.id,
           display_name: profile.data.displayName,

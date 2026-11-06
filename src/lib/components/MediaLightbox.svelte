@@ -29,6 +29,12 @@
   $effect(() => { currentIndex = index; });
 
   function close() { onclose?.(); }
+  // A timeline post may use content-visibility or a transformed ancestor,
+  // which otherwise confines fixed-position overlays to that post.
+  function portal(node: HTMLElement) {
+    document.body.appendChild(node);
+    return { destroy: () => node.remove() };
+  }
   function prev() { if (currentIndex > 0) { currentIndex--; haptic('selection'); } }
   function next() { if (currentIndex < items.length - 1) { currentIndex++; haptic('selection'); } }
 
@@ -69,6 +75,7 @@
 {#if items.length > 0 && current}
   <!-- svelte-ignore a11y_autofocus -->
   <div
+    use:portal
     class="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center"
     role="dialog"
     tabindex="-1"

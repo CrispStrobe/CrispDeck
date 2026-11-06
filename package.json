@@ -18,6 +18,7 @@
   "license": "(AGPL-3.0-only OR LicenseRef-LICENSE-COMMERCIAL)",
   "dependencies": {
     "@atproto/api": "^0.15.23",
+    "@atproto/jwk-jose": "^0.2.4",
     "@atproto/oauth-client-browser": "^0.4.1",
     "@lucide/svelte": "^1.17.0",
     "@tauri-apps/api": "~2.11.0",
@@ -30,6 +31,7 @@
     "@tauri-apps/plugin-store": "^2.4.2",
     "@vercel/blob": "^2.4.0",
     "dompurify": "^3.4.9",
+    "hls.js": "^1.7.4",
     "html2canvas": "^1.4.1",
     "masto": "^7.1.0"
   },

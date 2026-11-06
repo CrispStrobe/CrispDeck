@@ -52,6 +52,7 @@
 
   // Drag-and-drop reorder state (mouse)
   let draggedColumnId: string | null = $state(null);
+  let dragOverColumnId: string | null = $state(null);
 
   // Touch drag-and-drop reorder state
   let touchDragColumnId: string | null = $state(null);
@@ -1143,8 +1144,20 @@
   }
 
   function handleDragOver(colId: string, e: DragEvent) {
+    if (!draggedColumnId || colId === draggedColumnId) return;
     e.preventDefault();
+    dragOverColumnId = colId;
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+  }
+
+  function moveColumn(colId: string, direction: -1 | 1) {
+    const from = columns.findIndex(c => c.id === colId);
+    const to = from + direction;
+    if (from < 0 || to < 0 || to >= columns.length || columns[from].pinned) return;
+    const updated = [...columns];
+    updated.splice(to, 0, updated.splice(from, 1)[0]);
+    columns = updated;
+    saveColumns();
   }
 
   function handleDrop(colId: string, e: DragEvent) {
@@ -1160,6 +1173,7 @@
     columns = updated;
     saveColumns();
     draggedColumnId = null;
+    dragOverColumnId = null;
   }
 
   async function handleLike(post: UnifiedPost) {
@@ -1304,8 +1318,10 @@
       {#each columns as col, colIdx (col.id)}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
-          class="transition-all duration-200 {draggedColumnId === col.id || touchDragColumnId === col.id ? 'opacity-40 scale-[0.95]' : ''} {touchDropTargetId === col.id ? 'ring-2 ring-[var(--color-primary)] rounded-lg' : draggedColumnId && draggedColumnId !== col.id ? 'hover:ring-2 hover:ring-[var(--color-primary)]/30 hover:rounded-lg' : ''} {focusedColumnIdx === colIdx ? 'ring-2 ring-[var(--color-primary)]/50 rounded-lg' : ''}"
+          class="transition-all duration-200 {draggedColumnId === col.id || touchDragColumnId === col.id ? 'opacity-40 scale-[0.95]' : ''} {touchDropTargetId === col.id || dragOverColumnId === col.id ? 'ring-2 ring-[var(--color-primary)] rounded-lg' : draggedColumnId && draggedColumnId !== col.id ? 'hover:ring-2 hover:ring-[var(--color-primary)]/30 hover:rounded-lg' : ''} {focusedColumnIdx === colIdx ? 'ring-2 ring-[var(--color-primary)]/50 rounded-lg' : ''}"
           ontouchstart={(e) => handleTouchStart(col.id, e)}
+          ondragover={(e) => handleDragOver(col.id, e)}
+          ondrop={(e) => handleDrop(col.id, e)}
         >
           <DeckColumn
             id={col.id}
@@ -1335,10 +1351,9 @@
             pinned={col.pinned ?? false}
             onpinnedchange={(p) => handlePinnedChange(col.id, p)}
             onclear={() => handleClear(col.id)}
+            onmove={(direction) => moveColumn(col.id, direction)}
             ondragstart={(e) => handleDragStart(col.id, e)}
-            ondragover={(e) => handleDragOver(col.id, e)}
-            ondrop={(e) => handleDrop(col.id, e)}
-            ondragend={() => draggedColumnId = null}
+            ondragend={() => { draggedColumnId = null; dragOverColumnId = null; }}
           />
         </div>
       {/each}
