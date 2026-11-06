@@ -18,13 +18,15 @@
   import { listTemplates, saveTemplate, deleteTemplate, type PostTemplate } from '$lib/templates';
   import { graphemeLength, type ThreadGate } from '$lib/compose/adapter';
   import { validateMediaFile, createPreviewUrl, revokePreviewUrl, isVideoFile } from '$lib/compose/media';
+  import { mediaAttachmentLimit, parseMediaUrls, validateMediaForPlatform } from '$lib/compose/media-policy';
+  import { hasDraftContent } from '$lib/compose/context';
   import { tryVoiceCommand, looksLikeCommand } from '$lib/voice-commands';
   import { runAIAction, isAIConfigured, type AIAction } from '$lib/compose/ai';
   import { computeBestHour, formatHour, type PostingTimeInsight } from '$lib/posting-times';
   import { toast } from '$lib/toast.svelte';
   import { searchArchive } from '$lib/archive';
   import type { Account, Platform } from '$lib/types';
-  import { snapshot, saveSnapshot, loadSnapshot, deleteSnapshot, restoreFiles, type ComposerSnapshot } from '$lib/publishing/snapshots';
+  import { snapshot, saveSnapshot, loadSnapshot, deleteSnapshot, restoreFiles, type ComposerSnapshot, type StoredOptions } from '$lib/publishing/snapshots';
   import { persistDraft, draftSnapshot, removeDraft } from '$lib/publishing/drafts';
   import { createJob, deliverJob, getJob, isComplete, type PublishJob } from '$lib/publishing/outbox';
   import DeliveryStatus from '$lib/components/DeliveryStatus.svelte';
@@ -38,13 +40,16 @@
   let saveError = $state('');
 
   function currentSnapshot(id = 'autosave') {
-    const quoteUrl = quoteUri && quoteAuthor ? `https://bsky.app/profile/${quoteAuthor}/post/${quoteUri.split('/').pop()}` : undefined;
+    const publicQuoteUrl = quoteUrl || (quoteUri && quoteAuthor ? `https://bsky.app/profile/${quoteAuthor}/post/${quoteUri.split('/').pop()}` : undefined);
     return { ...snapshot(id, text, selectedAccountIds, overrides, {
       visibility, contentWarning: showCW ? contentWarning : undefined,
-      mediaFiles, altTexts, mediaUrls: threadsMediaUrl.trim() ? [threadsMediaUrl.trim()] : undefined,
-      quoteUri: quoteUri || undefined, quoteCid: quoteCid || undefined, quoteUrl,
+      mediaFiles, altTexts, mediaUrls: parseMediaUrls(threadsMediaUrl),
+      quoteUri: quoteUri || undefined, quoteCid: quoteCid || undefined, quoteUrl: publicQuoteUrl,
       threadGate, selfLabel: selfLabel === 'none' ? undefined : selfLabel, disableQuotes,
-      replyTo: replyTo ? { uri: replyTo, platform: replyPlatform as Platform } : undefined,
+      replyTo: replyTo ? {
+        ...(replyDetails?.uri === replyTo && (replyDetails.platform ?? '') === replyPlatform ? replyDetails : {}),
+        uri: replyTo, platform: replyPlatform ? replyPlatform as Platform : undefined,
+      } : undefined,
       poll: showPoll ? { options: pollOptions.filter(o => o.trim()), expiresIn: pollExpiry, multiple: pollMultiple } : undefined,
     }, pendingJob && !isComplete(pendingJob) ? pendingJob.id : undefined), context: { quoteAuthor, quoteText, replyAuthor } };
   }
@@ -56,7 +61,7 @@
     contentWarning = saved.options.contentWarning ?? ''; showCW = !!contentWarning;
     mediaFiles = restoreFiles(saved); mediaPreviews = mediaFiles.map(createPreviewUrl);
     altTexts = saved.options.altTexts ?? mediaFiles.map(() => '');
-    threadsMediaUrl = saved.options.mediaUrls?.[0] ?? '';
+    threadsMediaUrl = saved.options.mediaUrls?.join('\n') ?? '';
     threadGate = saved.options.threadGate ?? 'everyone';
     selfLabel = (saved.options.selfLabel ?? 'none') as typeof selfLabel;
     disableQuotes = saved.options.disableQuotes ?? false;
@@ -64,7 +69,8 @@
     pollOptions = saved.options.poll?.options ?? ['', ''];
     pollExpiry = saved.options.poll?.expiresIn ?? 86400;
     pollMultiple = saved.options.poll?.multiple ?? false;
-    quoteUri = saved.options.quoteUri ?? ''; quoteCid = saved.options.quoteCid ?? '';
+    quoteUri = saved.options.quoteUri ?? ''; quoteCid = saved.options.quoteCid ?? ''; quoteUrl = saved.options.quoteUrl ?? '';
+    replyDetails = saved.options.replyTo;
     replyTo = saved.options.replyTo?.uri ?? ''; replyPlatform = saved.options.replyTo?.platform ?? '';
   }
 
@@ -101,6 +107,7 @@
 
   // Reply context
   let replyTo = $state('');
+  let replyDetails: StoredOptions['replyTo'] = $state();
   let replyAuthor = $state('');
   let replyPlatform = $state('');
   let editingDraftId: number | null = $state(null);
@@ -130,9 +137,9 @@
   let scheduleTime = $state('');
 
   async function handleSchedule() {
-    if ((!text.trim() && !mediaFiles.length) || !selectedAccountIds.length || !checkAltText() || posting) return;
+    if (!hasContent || !selectedAccountIds.length || !checkAltText() || !checkMedia() || posting) return;
     const scheduledAt = buildScheduledAt(scheduleDate, scheduleTime);
-    if (!scheduledAt) return;
+    if (!scheduledAt || Date.parse(scheduledAt) <= Date.now()) { error = i18n.t.compose.scheduleFuture; return; }
     posting = true;
     try {
       await persistDraft(currentSnapshot(), scheduledAt, editingDraftId ?? undefined);
@@ -179,7 +186,7 @@
 
   function queueAutoSave(saved: ComposerSnapshot) {
     autoSaveWrite = autoSaveWrite.catch(() => {}).then(async () => {
-      if (saved.text.trim() || saved.media.length || saved.jobId) await saveSnapshot(saved);
+      if (hasDraftContent(saved) || saved.jobId) await saveSnapshot(saved);
       else await deleteSnapshot('autosave');
       saveError = '';
     }).catch(() => { saveError = i18n.t.workflow.saveError; });
@@ -201,7 +208,7 @@
     text = ''; contentWarning = ''; showCW = false;
     mediaPreviews.forEach(revokePreviewUrl); mediaFiles = []; mediaPreviews = []; altTexts = [];
     overrides = {}; editingDraftId = null; threadsMediaUrl = '';
-    quoteUri = ''; quoteCid = ''; quoteAuthor = ''; quoteText = ''; replyTo = ''; replyAuthor = ''; replyPlatform = '';
+    quoteUri = ''; quoteCid = ''; quoteUrl = ''; quoteAuthor = ''; quoteText = ''; replyTo = ''; replyDetails = undefined; replyAuthor = ''; replyPlatform = '';
   }
   function newDraft() { resetComposer(); pendingJob = null; void clearAutoSave(); }
 
@@ -211,6 +218,7 @@
   // Quote context
   let quoteUri = $state('');
   let quoteCid = $state('');
+  let quoteUrl = $state('');
   let quoteAuthor = $state('');
   let quoteText = $state('');
   let textareaEl: HTMLTextAreaElement | undefined = $state();
@@ -265,8 +273,11 @@
       }
 
       // Quote context
-      quoteUri = params.get('quoteUri') ?? quoteUri;
+      const requestedQuoteUri = params.get('quoteUri');
+      if (requestedQuoteUri !== null && requestedQuoteUri !== quoteUri) quoteUrl = '';
+      quoteUri = requestedQuoteUri ?? quoteUri;
       quoteCid = params.get('quoteCid') ?? quoteCid;
+      quoteUrl = params.get('quoteUrl') ?? quoteUrl;
       quoteAuthor = params.get('quoteAuthor') ?? quoteAuthor;
       quoteText = params.get('quoteText') ?? quoteText;
 
@@ -279,7 +290,7 @@
       }
 
       // Auto-restore unsent text (only if no draft/reply/quote context)
-      if (!text && !replyTo && !quoteUri && !draftId) {
+      if (!text && !replyTo && !quoteUri && !quoteUrl && !draftId) {
         const durable = await loadSnapshot('autosave');
         if (durable) {
           pendingJob = durable.jobId ? await getJob(durable.jobId) ?? null : null;
@@ -328,19 +339,15 @@
 
   function addMedia(event: Event) {
     const input = event.target as HTMLInputElement;
-    if (!input.files) return;
-    for (const file of Array.from(input.files)) {
-      if (mediaFiles.length >= 4) break;
-      const err = validateMediaFile(file);
-      if (err) {
-        error = err;
-        continue;
-      }
-      mediaFiles = [...mediaFiles, file];
-      mediaPreviews = [...mediaPreviews, createPreviewUrl(file)];
-      altTexts = [...altTexts, ''];
-    }
+    if (!input.files || posting) return;
+    const additions = Array.from(input.files);
     input.value = '';
+    if (mediaFiles.length + additions.length > mediaLimit) { error = i18n.t.compose.tooManyMedia.replace('{count}', String(mediaLimit)); return; }
+    const invalid = additions.map(validateMediaFile).find(Boolean);
+    if (invalid) { error = invalid; return; }
+    mediaFiles = [...mediaFiles, ...additions];
+    mediaPreviews = [...mediaPreviews, ...additions.map(createPreviewUrl)];
+    altTexts = [...altTexts, ...additions.map(() => '')];
   }
 
   function removeMedia(index: number) {
@@ -357,7 +364,7 @@
     const missingAlt = mediaFiles.some((_, i) => !altTexts[i]?.trim());
     if (!missingAlt) return true;
     if (mode === 'require') {
-      error = 'Alt text is required for all images. Add descriptions before posting.';
+      error = i18n.t.compose.altTextRequired;
       return false;
     }
     if (mode === 'warn') {
@@ -366,9 +373,17 @@
     return true;
   }
 
+  function checkMedia(): boolean {
+    for (const account of selectedAccounts) {
+      const issue = validateMediaForPlatform(account.platform, mediaFiles, parseMediaUrls(threadsMediaUrl));
+      if (issue) { error = `@${account.handle}: ${issue}`; return false; }
+    }
+    return true;
+  }
+
   async function handlePost() {
     if (posting || pendingJob && !isComplete(pendingJob)) return;
-    if ((!text.trim() && !mediaFiles.length) || !checkAltText()) return;
+    if (!hasContent || !selectedAccountIds.length || !checkAltText() || !checkMedia()) return;
     posting = true; error = '';
     try {
       if (autoSaveTimer) clearTimeout(autoSaveTimer);
@@ -403,7 +418,7 @@
   }
 
   async function handleSaveDraft() {
-    if ((!text.trim() && !mediaFiles.length) || posting) return;
+    if (!hasContent || posting) return;
     posting = true;
     try {
       editingDraftId = await persistDraft(currentSnapshot(), null, editingDraftId ?? undefined);
@@ -415,13 +430,16 @@
 
   // Character counts per selected platform
   async function addGif(gif: { url: string; preview: string; width: number; height: number; title: string }) {
-    if (mediaFiles.length >= 4) return;
+    if (mediaFiles.length >= mediaLimit) { error = i18n.t.compose.tooManyMedia.replace('{count}', String(mediaLimit)); return; }
     try {
       // A 404 from the GIF host returns an HTML error page, which was
       // attached as a .gif and rejected later by the upload.
       const resp = await fetchOk(gif.url, undefined, 'load GIF');
       const blob = await resp.blob();
       const file = new File([blob], `gif-${Date.now()}.gif`, { type: 'image/gif' });
+      const invalid = validateMediaFile(file);
+      if (invalid) { error = invalid; return; }
+      if (mediaFiles.length >= mediaLimit) { error = i18n.t.compose.tooManyMedia.replace('{count}', String(mediaLimit)); return; }
       mediaFiles = [...mediaFiles, file];
       mediaPreviews = [...mediaPreviews, createPreviewUrl(file)];
       altTexts = [...altTexts, gif.title];
@@ -569,6 +587,8 @@
   }
 
   const selectedAccounts = $derived(accounts.filter(a => selectedAccountIds.includes(a.id)));
+  const mediaLimit = $derived(mediaAttachmentLimit(selectedAccounts.map(account => account.platform)));
+  const hasContent = $derived(!!text.trim() || mediaFiles.length > 0 || Object.values(overrides).some(value => !!value.trim()) || !!threadsMediaUrl.trim());
   const hasBsky = $derived(selectedAccounts.some(a => a.platform === 'bluesky'));
   const hasMasto = $derived(selectedAccounts.some(a => a.platform === 'mastodon'));
   const hasThreads = $derived(selectedAccounts.some(a => a.platform === 'threads'));
@@ -638,10 +658,10 @@
         {/if}
 
         <!-- Quote context -->
-        {#if quoteUri}
+        {#if quoteUri || quoteUrl}
           <div class="p-3 bg-purple-950/30 border-l-4 border-purple-500 rounded-r-lg text-sm">
             <span class="text-purple-300">{i18n.t.compose.quoting}</span>
-            <span class="font-medium text-purple-400 ml-1">@{quoteAuthor}</span>
+            <span class="font-medium text-purple-400 ml-1">{quoteAuthor ? `@${quoteAuthor}` : quoteUrl}</span>
             {#if quoteText}
               <p class="text-xs text-[var(--color-text-muted)] mt-1 line-clamp-2">{quoteText}</p>
             {/if}
@@ -733,6 +753,8 @@
         </div>
 
         <!-- Media with alt text -->
+        <p class="text-xs text-[var(--color-text-muted)]">{i18n.t.compose.mediaLimitHint.replace('{count}', String(mediaLimit))}</p>
+        {#if mediaFiles.length > mediaLimit}<p role="alert" class="text-xs text-red-400">{i18n.t.compose.tooManyMedia.replace('{count}', String(mediaLimit))}</p>{/if}
         {#if mediaPreviews.length > 0}
           <div class="grid grid-cols-2 gap-3">
             {#each mediaPreviews as preview, i}
@@ -770,9 +792,9 @@
         <!-- Toolbar -->
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex flex-wrap items-center gap-2">
-            <label class="p-2 text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] rounded-md cursor-pointer transition-colors {mediaFiles.length >= 4 ? 'opacity-50 pointer-events-none' : ''}">
+            <label title={i18n.t.compose.addMedia} class="p-2 text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] rounded-md cursor-pointer transition-colors {mediaFiles.length >= mediaLimit ? 'opacity-50 pointer-events-none' : ''}">
               <ImagePlus size={18} />
-              <input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" multiple class="hidden" onchange={addMedia} />
+              <input type="file" aria-label={i18n.t.compose.addMedia} accept="image/*,video/mp4,video/webm,video/quicktime" disabled={mediaFiles.length >= mediaLimit} multiple class="sr-only" onchange={addMedia} />
             </label>
             <GifPicker onselect={addGif} />
             <EmojiPicker onselect={(emoji) => {
@@ -954,19 +976,19 @@
             {/if}
             <button
               onclick={handleSaveDraft}
-              disabled={!text.trim()}
+              disabled={!hasContent || posting}
               class="px-3 py-2 text-sm whitespace-nowrap text-[var(--color-text-muted)] hover:text-[var(--color-text)] disabled:opacity-30"
             >
-              Save Draft
+              {i18n.t.compose.saveDraft}
             </button>
             <div class="relative">
               <button
                 onclick={() => showSchedule = !showSchedule}
-                disabled={!text.trim()}
+                disabled={!hasContent || posting}
                 class="flex items-center gap-1 px-3 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] disabled:opacity-30"
               >
                 <Clock size={14} />
-                Schedule
+                {i18n.t.drafts.schedule}
               </button>
               {#if showSchedule}
                 <div class="absolute bottom-full right-0 mb-1 p-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl z-50 w-56">
@@ -985,7 +1007,7 @@
                       disabled={!scheduleDate || !scheduleTime}
                       class="w-full px-3 py-1.5 bg-[var(--color-primary)] text-white text-xs rounded disabled:opacity-50"
                     >
-                      Schedule Post
+                      {i18n.t.compose.schedulePost}
                     </button>
                   </div>
                 </div>
@@ -994,7 +1016,7 @@
             <button
               onclick={handlePost}
               data-testid="publish-post"
-              disabled={posting || (!text.trim() && mediaFiles.length === 0) || selectedAccountIds.length === 0}
+              disabled={posting || !hasContent || selectedAccountIds.length === 0}
               class="flex items-center gap-2 whitespace-nowrap px-5 py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm font-medium rounded-md disabled:opacity-50 transition-colors"
             >
               {#if posting}
@@ -1066,8 +1088,9 @@
         {#if hasThreads}
           <label class="block text-sm space-y-2">
             <span>{i18n.t.workflow.mediaUrl}</span>
-            <input type="url" bind:value={threadsMediaUrl} placeholder="https://" class="w-full p-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)]" />
+            <textarea bind:value={threadsMediaUrl} rows="3" placeholder="https://" class="w-full p-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)]"></textarea>
             <span class="block text-xs text-[var(--color-text-muted)]">{i18n.t.workflow.threadsMediaHint}</span>
+            <span class="block text-xs text-[var(--color-text-muted)]">{i18n.t.compose.threadsUrlsHint}</span>
           </label>
         {/if}
       </div>

@@ -119,9 +119,10 @@ describe('like', () => {
     const onlike = vi.fn(async () => { if (++attempt === 2) throw new Error('nope'); });
     const view = render({ onlike });
 
-    view.click(/like/i);                                   // like succeeds
-    await vi.waitFor(() => expect(view.likeCount()).toBe('11'));
+    const button = view.click(/like/i);                     // like succeeds
+    await vi.waitFor(() => expect(button.disabled).toBe(false));
     view.click(/like/i);                                   // unlike fails
+    await vi.waitFor(() => expect(onlike).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(view.likeCount()).toBe('11'));
     view.destroy();
   });
@@ -156,6 +157,30 @@ describe('no handler attached', () => {
     const view = render({});
     expect(() => view.click(/like/i)).not.toThrow();
     expect(getToasts()).toHaveLength(0);
+    view.destroy();
+  });
+});
+
+
+describe('pending action controls', () => {
+  it.each([['onlike', /like/i], ['onboost', /repost|boost/i]] as const)('prevents overlapping %s requests until the first settles', async (prop, label) => {
+    let finish!: () => void;
+    const pending = new Promise<void>(resolve => finish = resolve);
+    const callback = vi.fn((_post: UnifiedPost, _active?: boolean) => pending);
+    const view = render({ [prop]: callback });
+    const button = view.click(label);
+    expect(button.disabled).toBe(true);
+    expect(button.getAttribute('aria-busy')).toBe('true');
+    view.click(label);
+    expect(callback).toHaveBeenCalledTimes(1);
+    finish();
+    await pending;
+    await vi.waitFor(() => expect(button.disabled).toBe(false));
+    view.click(label);
+    expect(callback).toHaveBeenCalledTimes(2);
+    expect(callback.mock.calls[0][1]).toBe(true);
+    expect(callback.mock.calls[1][1]).toBe(false);
+    await pending;
     view.destroy();
   });
 });

@@ -4,6 +4,7 @@
   import { resolveMentionsForPlatform } from '$lib/compose/mentions';
   import { splitForPlatform, type ThreadPlan } from '$lib/compose/thread';
   import type { ThreadGate } from '$lib/compose/adapter';
+  import { parseMediaUrls } from '$lib/compose/media-policy';
   let { accounts, selected, sharedText, overrides = $bindable({}), mediaPreviews = [], mediaTypes = [], altTexts = [], threadsMediaUrl = '', visibility, contentWarning, threadGate, disableQuotes, selfLabel }: {
     accounts: Account[]; selected: number[]; sharedText: string; overrides: Record<string, string>;
     mediaPreviews?: string[]; mediaTypes?: string[]; altTexts?: string[]; threadsMediaUrl?: string; visibility: string; contentWarning: string;
@@ -11,6 +12,7 @@
   } = $props();
   let plans: Record<string, ThreadPlan> = $state({});
   let previewError = $state('');
+  const publicMediaUrls = $derived(parseMediaUrls(threadsMediaUrl));
   $effect(() => {
     const destinations = accounts.filter(a => selected.includes(a.id));
     const inputs = destinations.map(a => ({ account: a, text: overrides[String(a.id)] ?? sharedText }));
@@ -42,7 +44,7 @@
       {#if account.platform === 'mastodon' && contentWarning}<p class="text-xs">{i18n.t.post.contentWarning}: {contentWarning}</p>{/if}
       {#if account.platform === 'threads' && mediaPreviews.length && !threadsMediaUrl.trim()}<p class="text-xs text-[var(--color-text-muted)]">{i18n.t.workflow.threadsMediaHint}</p>{/if}
       <div class="grid grid-cols-2 gap-1">
-        {#each account.platform === 'threads' ? (threadsMediaUrl.trim() ? [threadsMediaUrl.trim()] : []) : mediaPreviews as url, index}
+        {#each account.platform === 'threads' ? publicMediaUrls : mediaPreviews as url, index}
           {#if account.platform === 'threads' ? /\.(mp4|mov|webm)(?:[?#]|$)/i.test(url) : mediaTypes[index]?.startsWith('video/')}
             <video src={url} controls class="rounded max-h-36 w-full"><track kind="captions" /></video>
           {:else}

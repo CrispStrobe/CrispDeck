@@ -1,14 +1,12 @@
 <script lang="ts">
   import { base } from '$app/paths';
-  import { onMount } from 'svelte';
-  import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { MessageCircle, Loader2, ArrowLeft, BookOpen, Share2 } from '@lucide/svelte';
-  import { goto } from '$app/navigation';
+  import { onDestroy } from 'svelte';
+  import { initAllClients } from '$lib/api/client-factory';
+  import { MessageCircle, ArrowLeft, BookOpen, Share2 } from '@lucide/svelte';
+  import { afterNavigate, goto } from '$app/navigation';
   import { i18n } from '$lib/i18n.svelte';
-  import { BlueskyClient } from '$lib/api/bluesky';
-  import { MastodonClient } from '$lib/api/mastodon';
-  import { normalizePost } from '$lib/api/unified';
-  import { isThread, extractThreadText, planThreadSync, type ThreadSyncPlan } from '$lib/thread-sync';
+  import { loadThreadPage, parseThreadRequest, threadErrorMessage } from '$lib/thread-loader';
+  import { isThread, extractThreadText } from '$lib/thread-sync';
   import Post from '$lib/components/Post.svelte';
   import type { UnifiedPost, Account, Platform } from '$lib/types';
 
@@ -20,116 +18,33 @@
   let platform: Platform = $state('bluesky');
 
   let accounts: Account[] = $state([]);
-  let clientEntries: Map<number, ClientEntry> = new Map();
+  let externalUrl = $state('');
+  let requestSequence = 0;
+  let disposed = false;
 
-  onMount(async () => {
-    const params = new URLSearchParams(window.location.search);
-    const uri = params.get('uri') ?? '';
-    platform = (params.get('platform') as Platform) ?? 'bluesky';
-    const statusId = params.get('id') ?? '';
-
-    // Auto-detect Threads URIs even if platform param is wrong
-    if (uri.includes('threads.com') || uri.startsWith('threads://')) {
-      platform = 'threads';
-    }
-
-    if (!uri && !statusId) {
-      error = 'No post URI specified';
-      loading = false;
-      return;
-    }
-
+  async function loadCurrentThread(url: URL) {
+    const sequence = ++requestSequence;
+    loading = true; error = ''; ancestors = []; mainPost = null; replies = []; externalUrl = ''; articleMode = false;
     try {
+      const request = parseThreadRequest(url.searchParams);
+      platform = request.platform;
       const result = await initAllClients();
+      if (disposed || sequence !== requestSequence) return;
       accounts = result.accounts;
-      clientEntries = result.clients;
-
-      if (platform === 'bluesky' && uri) {
-        await loadBskyThread(uri);
-      } else if (platform === 'mastodon' && (statusId || uri)) {
-        await loadMastoThread(statusId || uri);
-      } else if (platform === 'threads' && uri) {
-        // Threads API has no thread view — open permalink directly
-        if (uri.startsWith('https://')) {
-          window.open(uri, '_blank');
-          goto(`${base}/feed`);
-          return;
-        }
-      }
-    } catch (e) {
-      error = String(e);
+      const thread = await loadThreadPage(request, result.accounts, result.clients);
+      if (disposed || sequence !== requestSequence) return;
+      mainPost = thread.mainPost; ancestors = thread.ancestors; replies = thread.replies; externalUrl = thread.externalUrl ?? '';
+    } catch (reason) {
+      if (!disposed && sequence === requestSequence) error = threadErrorMessage(reason);
     } finally {
-      loading = false;
+      if (!disposed && sequence === requestSequence) loading = false;
     }
-  });
-
-  function getBskyClient(): BlueskyClient | null {
-    for (const [id, entry] of clientEntries) {
-      if (accounts.find(a => a.id === id)?.platform === 'bluesky') return entry.client as BlueskyClient;
-    }
-    return BlueskyClient.readOnly('_');
   }
 
-  async function loadBskyThread(uri: string) {
-    const client = getBskyClient();
-    if (!client) { error = 'No Bluesky client'; return; }
-
-    const thread = await client.getPostThread(uri);
-    if (!thread || thread.$type === 'app.bsky.feed.defs#notFoundPost') {
-      error = 'Post not found';
-      return;
-    }
-
-    // Extract main post
-    if ('post' in thread) {
-      mainPost = normalizePost({ post: thread.post, reason: undefined } as any, 'bluesky');
-    }
-
-    // Extract parent chain
-    let parent = (thread as any).parent;
-    const parentPosts: UnifiedPost[] = [];
-    while (parent && 'post' in parent) {
-      parentPosts.unshift(normalizePost({ post: parent.post, reason: undefined } as any, 'bluesky'));
-      parent = parent.parent;
-    }
-    ancestors = parentPosts;
-
-    // Extract replies
-    const replyPosts: UnifiedPost[] = [];
-    function collectReplies(node: any, depth: number) {
-      if (!node?.replies || depth > 3) return;
-      for (const reply of node.replies) {
-        if ('post' in reply) {
-          replyPosts.push(normalizePost({ post: reply.post, reason: undefined } as any, 'bluesky'));
-          collectReplies(reply, depth + 1);
-        }
-      }
-    }
-    collectReplies(thread, 0);
-    replies = replyPosts;
-  }
-
-  async function loadMastoThread(idOrUri: string) {
-    let mastoClient: MastodonClient | null = null;
-    for (const [id, entry] of clientEntries) {
-      if (accounts.find(a => a.id === id)?.platform === 'mastodon') { mastoClient = entry.client as MastodonClient; break; }
-    }
-    if (!mastoClient) { error = 'No Mastodon client'; return; }
-
-    // If URI, extract ID from it
-    let statusId = idOrUri;
-    if (idOrUri.includes('/')) {
-      const parts = idOrUri.split('/');
-      statusId = parts[parts.length - 1];
-    }
-
-    const status = await mastoClient.getStatus(statusId);
-    mainPost = normalizePost(status, 'mastodon');
-
-    const context = await mastoClient.getStatusContext(statusId);
-    ancestors = context.ancestors.map(s => normalizePost(s, 'mastodon'));
-    replies = context.descendants.map(s => normalizePost(s, 'mastodon'));
-  }
+  // SvelteKit reuses this page for query-only navigation, including account
+  // switches. Only the newest navigation may replace the visible thread.
+  afterNavigate(({ to }) => { if (to?.url) void loadCurrentThread(to.url); });
+  onDestroy(() => { disposed = true; requestSequence++; });
 
   let articleMode = $state(false);
 
@@ -195,7 +110,11 @@
   </div>
 
   {#if error}
-    <div class="p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">{error}</div>
+    <div role="alert" class="p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">{error}</div>
+  {/if}
+
+  {#if externalUrl}
+    <a href={externalUrl} target="_blank" rel="noopener noreferrer" class="inline-flex px-4 py-2 rounded bg-[var(--color-primary)] text-white">{i18n.t.common.openInBrowser}</a>
   {/if}
 
   {#if loading}
@@ -300,7 +219,7 @@
       </div>
     {/if}
 
-    {#if !mainPost && !error}
+    {#if !mainPost && !error && !externalUrl}
       <p class="text-center py-12 text-[var(--color-text-muted)]">{i18n.t.thread.postNotFound}</p>
     {/if}
   {/if}

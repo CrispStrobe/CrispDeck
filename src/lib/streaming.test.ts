@@ -460,3 +460,46 @@ describe('streamManager', () => {
     expect(mockDoc.removeEventListener).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
   });
 });
+
+
+describe('stream lifecycle races', () => {
+  it.each(['mastodon', 'bluesky'] as const)('ignores a closing %s socket after a visibility reconnect', platform => {
+    const stream = platform === 'mastodon' ? new MastodonStream('https://social.test', 'token') : new BlueskyStream();
+    const listener = vi.fn();
+    stream.subscribe(listener);
+    stream.setEnabled(true);
+    const previous = MockWebSocket.instances[0];
+    // A real close event is asynchronous and may arrive after the tab returns.
+    previous.close = vi.fn(() => { previous.closed = true; previous.readyState = 3; });
+    stream.setEnabled(false);
+    stream.setEnabled(true);
+    const current = MockWebSocket.instances[1];
+    previous.onerror?.();
+    previous.onclose?.();
+    const event = platform === 'mastodon'
+      ? { event: 'update', payload: { id: '1' } }
+      : { did: 'did:plc:one', commit: { collection: 'app.bsky.feed.post', operation: 'create', record: { text: 'hello' }, rkey: '1' } };
+    previous.simulateMessage(event);
+    expect(listener).not.toHaveBeenCalled();
+    current.simulateMessage(event);
+    expect(listener).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(60000);
+    expect(MockWebSocket.instances).toHaveLength(2);
+    expect(current.closed).toBe(false);
+    expect(stream.isConnected()).toBe(true);
+    stream.disconnect();
+  });
+
+  it('makes stale column cleanup harmless after replacing a subscription', () => {
+    const config = { columnId: 'same', platform: 'mastodon' as const, instanceUrl: 'https://social.test', accessToken: 'token' };
+    const previousCleanup = streamManager.enableColumn(config, vi.fn());
+    const listener = vi.fn();
+    const currentCleanup = streamManager.enableColumn(config, listener);
+    previousCleanup();
+    expect(streamManager.isColumnStreaming('same')).toBe(true);
+    MockWebSocket.instances.at(-1)!.simulateMessage({ event: 'update', payload: { id: '1' } });
+    expect(listener).toHaveBeenCalledTimes(1);
+    currentCleanup();
+    expect(streamManager.isColumnStreaming('same')).toBe(false);
+  });
+});

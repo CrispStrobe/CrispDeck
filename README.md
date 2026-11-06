@@ -12,14 +12,17 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 
 ## Features
 
-### Full Social Client (29 pages)
+### Full Social Client (31 routes)
 - **3-network client**: Bluesky + Mastodon + Threads
 - **Timeline feed**: Bluesky + Mastodon home timelines merged, Threads own posts (Threads API has no home timeline), infinite scroll, "new posts" indicator, multi-account merge
 - **Platform filter**: All / Bluesky / Mastodon / Threads toggle
-- **Multi-column Deck**: 20 column types (timeline, mentions, notifications, hashtag, user, local, federated, search, list, feed, my-posts, tag-group, RSS, keyword-monitor, threads-search, messages, trending, activity, likes, followers), per-column filters, saved layouts/workspaces, drag-reorder, column width presets + resize, color coding, collapse/pin, per-column notifications, scroll-lock, platform-aware column picker
+- **Multi-column Deck**: 23 column types (timeline, mentions, notifications, hashtag, user, local, federated, search, list, feed, my-posts, tag-group, RSS, keyword-monitor, threads-search, messages, trending, activity, likes, followers, bookmarks, drafts, scheduled), per-column filters, saved layouts/workspaces, drag-reorder, column width presets + resize, color coding, collapse/pin, per-column notifications, scroll-lock, platform-aware column picker
 - **Keyword monitoring columns**: real-time streaming filtered by user-defined keywords + regex, with Bluesky Jetstream firehose + Mastodon WebSocket, LIVE indicator
-- **Streaming timelines**: live-push of new posts via Bluesky Jetstream + Mastodon WebSocket, all column types stream
-- **Floating compose panel**: slide-out compose overlay on deck, reply/quote without leaving the view, `n` keyboard shortcut
+- **Live deck updates**: Bluesky Jetstream and Mastodon WebSocket signals refresh the selected account's authoritative feed; configurable polling covers other supported columns, and columns can be paused individually
+- **Account-aware columns**: selected accounts and network per column, persistent text/author/language/media/engagement filters, real per-source pagination, visible errors, pause/resume and configurable refresh intervals
+- **Portable workspaces**: save, update, rename, duplicate, delete, and import/export with validated account identity mapping and no credentials
+- **Publishing queue columns**: drafts and scheduled posts with editing, rescheduling and cancellation through the durable local outbox
+- **Floating compose panel**: slide-out compose overlay on deck, reply/quote without leaving the view, `n` keyboard shortcut, explicit Save Draft and Schedule controls
 - **Column-aware keyboard navigation**: h/l or arrow keys between columns, j/k within, 1-9 jump, `a` to add column, `o` to open, `r` to reply
 - **Per-column notifications**: sound, desktop alerts, or both — configurable per column
 - **Column management**: color coding, collapse/minimize, pin/lock, clear, width presets (narrow/medium/wide), scroll-lock toggle
@@ -180,6 +183,9 @@ Threads users' posts can also be read via **Mastodon federation** (`@user@thread
 - **Security headers**: CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy
 - **Encryption**: AES-256-GCM with 600k PBKDF2 iterations + per-device random salt
 - 1,520 unit tests across 107 test files + 44 Playwright E2E tests
+
+For the current TweetDeck/X Pro and Deck.Blue comparison, including service and
+network limitations, see [Deck coverage](docs/deck-parity.md).
 
 ## Architecture
 
@@ -498,7 +504,7 @@ only routes the scheme to a built `.app`, so test "System browser" with
 ## Stats
 
 - 2,026 frontend unit tests + 92 Playwright browser checks + Rust tests on three operating systems
-- 29 pages, 15 deck column types
+- 31 routes, 23 deck column types
 - 3 networks: Bluesky (OAuth + app password), Mastodon (OAuth), Threads (OAuth with server proxy)
 - 8 UI languages (EN, DE, ES, FR, JA, PT, ZH, AR — all 100%) with RTL support
 - Dark + light + OLED dark themes

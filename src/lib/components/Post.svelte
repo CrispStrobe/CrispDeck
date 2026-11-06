@@ -46,9 +46,12 @@
   import { addBookmark, removeBookmark, isBookmarked } from '$lib/bookmarks';
   import { listReadingLists, addPostToList, type ReadingList } from '$lib/reading-lists';
   import { createBlueskyBookmark, deleteBlueskyBookmark } from '$lib/api/bluesky-bookmarks';
-  import { initAllClients, getBskyAgent } from '$lib/api/client-factory';
+  import { initAllClients } from '$lib/api/client-factory';
+  import type { BlueskyClient } from '$lib/api/bluesky';
+  import type { MastodonClient } from '$lib/api/mastodon';
+  import { postSourceClient } from '$lib/post-source';
   import { translateText, type TranslationResult } from '$lib/translate';
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, untrack } from 'svelte';
   import { jetstream } from '$lib/jetstream';
   import type { UnifiedPost } from '$lib/types';
   import { sanitizeHtml, injectCustomEmoji } from '$lib/sanitize';
@@ -65,20 +68,24 @@
     hideMedia?: boolean;
     compact?: boolean;
     /** May reject to signal the action failed; the optimistic update is then reverted. */
-    onlike?: (post: UnifiedPost) => void | Promise<void>;
-    onboost?: (post: UnifiedPost) => void | Promise<void>;
+    onlike?: (post: UnifiedPost, active?: boolean) => void | Promise<void>;
+    onboost?: (post: UnifiedPost, active?: boolean) => void | Promise<void>;
     onreply?: (post: UnifiedPost) => void;
     onquote?: (post: UnifiedPost) => void;
     onfollow?: (post: UnifiedPost, following: boolean) => void;
   } = $props();
 
-  let liked = $state(false);
+  let liked = $state(untrack(() => !!(post.sourceAccountId !== undefined && ((post.raw as any)?.post?.viewer?.like || (post.raw as any)?.favourited || (post.raw as any)?.reblog?.favourited))));
   let likeAnimating = $state(false);
-  let boosted = $state(false);
+  let likePending = $state(false);
+  let boostPending = $state(false);
+  let boosted = $state(untrack(() => !!(post.sourceAccountId !== undefined && ((post.raw as any)?.post?.viewer?.repost || (post.raw as any)?.reblogged || (post.raw as any)?.reblog?.reblogged))));
   // Optimistic/live offsets applied on top of the server counts below.
   let likeDelta = $state(0);
   let boostDelta = $state(0);
   let bookmarked = $state(false);
+  let bookmarkPending = $state(false);
+  let bookmarkLoaded = $state(false);
   let hideEngagement = $state(false);
   let showStats = $state(false);
   let following = $state(false);
@@ -127,6 +134,7 @@
 
   onMount(async () => {
     bookmarked = await isBookmarked(post.uri);
+    bookmarkLoaded = true;
     pinned = isPinned(post.uri);
     hideEngagement = _postPrefs.hideEngagement;
     mediaPreviewMode = _postPrefs.mediaPreview;
@@ -259,11 +267,17 @@
       // Try Mastodon server-side translation first (free, private)
       if (post.platform === 'mastodon') {
         const raw = (post.raw ?? {}) as any;
-        const statusId = raw?.id ?? raw?.reblog?.id;
-        const instanceUrl = raw?.uri ? new URL(raw.uri).origin : null;
-        if (statusId && instanceUrl) {
-          try {
-            const resp = await fetch(`${instanceUrl}/api/v1/statuses/${statusId}/translate`, { method: 'POST' });
+        const statusId = raw?.reblog?.id ?? raw?.id;
+        try {
+          const { clients } = await initAllClients();
+          const entry = postSourceClient(post, clients);
+          const client = entry?.client as MastodonClient | undefined;
+          const token = client?.getAccessToken();
+          const instanceUrl = client?.getInstanceUrl();
+          if (statusId && token && instanceUrl) {
+            const resp = await fetch(`${instanceUrl.replace(/\/$/, '')}/api/v1/statuses/${encodeURIComponent(statusId)}/translate`, {
+              method: 'POST', headers: { Authorization: `Bearer ${token}` }, redirect: 'error',
+            });
             if (resp.ok) {
               const data = await resp.json();
               if (data.content) {
@@ -271,8 +285,8 @@
                 return;
               }
             }
-          } catch { /* fall through to client-side */ }
-        }
+          }
+        } catch { /* fall through to the configured client-side translator */ }
       }
       const sourceText = post.platform === 'mastodon' ? mastodonHtml || post.text : post.text;
       translation = await translateText(sourceText);
@@ -343,14 +357,18 @@
   }
 
   let voteError = $state('');
+  let votePending = $state(false);
+  let updatedPoll: any = $state(null);
+  const mastodonPoll = $derived(updatedPoll ?? (post.raw as any)?.reblog?.poll ?? (post.raw as any)?.poll);
   async function votePoll(pollId: string, choiceIndex: number) {
+    if (votePending) return;
+    votePending = true;
     voteError = '';
     try {
       // Get Mastodon client for auth token
-      const { accounts: accts, clients } = await initAllClients();
-      const mastoAcct = accts.find(a => a.platform === 'mastodon');
-      const mastoEntry = mastoAcct ? clients.get(mastoAcct.id) : undefined;
-      const mastoClient = mastoEntry?.client as any;
+      const { clients } = await initAllClients();
+      const mastoEntry = postSourceClient(post, clients);
+      const mastoClient = mastoEntry?.client as MastodonClient | undefined;
       const token = mastoClient?.getAccessToken?.();
       const instanceUrl = mastoClient?.getInstanceUrl?.();
 
@@ -361,8 +379,9 @@
       }
 
       try {
-        const updated = await mastoClient.votePoll(pollId, [choiceIndex]);
-        ((post.raw ?? {}) as any).poll = updated;
+        const updated = await mastoClient!.votePoll(pollId, [choiceIndex]) as any;
+        updatedPoll = { ...updated, votesCount: updated.votesCount ?? updated.votes_count, ownVotes: updated.ownVotes ?? updated.own_votes,
+          options: updated.options.map((option: any) => ({ ...option, votesCount: option.votesCount ?? option.votes_count })) };
         toast.success(i18n.t.post.voteRecorded);
       } catch (err) {
         voteError = String(err instanceof Error ? err.message : err);
@@ -371,6 +390,8 @@
     } catch (e) {
       voteError = String(e);
       toast.error(i18n.t.post.voteFailed);
+    } finally {
+      votePending = false;
     }
   }
 
@@ -396,35 +417,41 @@
   }
 
   async function handleBookmark() {
+    if (bookmarkPending || !bookmarkLoaded) return;
+    bookmarkPending = true;
+    const target = post;
+    const desired = !bookmarked;
     try {
-      if (bookmarked) {
-        await removeBookmark(post.uri);
-      } else {
-        await addBookmark(post);
-      }
-      bookmarked = !bookmarked;
-    } catch (e) {
-      swallow('Post.handleBookmark', e);
-      toast.error(i18n.t.post.bookmarkFailed);
-      return;
-    }
-    // Best-effort write-through to Bluesky's official server-side bookmarks
-    // (app.bsky.bookmark.*) — local bookmark stands even if this fails.
-    if (post.platform === 'bluesky' && post.uri.startsWith('at://')) {
       try {
-        const { clients } = await initAllClients();
-        const agent = getBskyAgent(clients);
-        if (!agent) return;
-        if (bookmarked) {
-          const cid = (post.raw as any)?.post?.cid;
-          if (cid) await createBlueskyBookmark(agent, post.uri, cid);
-        } else {
-          await deleteBlueskyBookmark(agent, post.uri);
-        }
+        if (desired) await addBookmark(target);
+        else await removeBookmark(target.uri);
+        bookmarked = desired;
       } catch (e) {
-        swallow('Post.bookmarkServerSync', e);
-        toast.warning(i18n.t.post.savedLocallyOnly);
+        swallow('Post.handleBookmark', e);
+        toast.error(i18n.t.post.bookmarkFailed);
+        return;
       }
+      // Local bookmarks remain available if native synchronization fails.
+      if (target.platform === 'bluesky' && target.uri.startsWith('at://')) {
+        try {
+          const { clients } = await initAllClients();
+          const entry = postSourceClient(target, clients);
+          if (!entry) throw new Error('The source account is unavailable or ambiguous. Reconnect it before syncing this bookmark.');
+          const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
+          if (desired) {
+            const cid = (target.raw as any)?.post?.cid ?? (target.raw as any)?.cid;
+            if (!cid) throw new Error('Refresh this post before syncing its bookmark.');
+            await createBlueskyBookmark(agent, target.uri, cid);
+          } else {
+            await deleteBlueskyBookmark(agent, target.uri);
+          }
+        } catch (e) {
+          swallow('Post.bookmarkServerSync', e);
+          toast.warning(i18n.t.post.savedLocallyOnly);
+        }
+      }
+    } finally {
+      bookmarkPending = false;
     }
   }
   // Server count + our offset, not a $state seeded from `post`: the feed keys
@@ -443,7 +470,8 @@
    * only trace was a console line the user was never going to see.
    */
   async function handleLike() {
-    if (!onlike) return;
+    if (!onlike || likePending) return;
+    likePending = true;
     const previouslyLiked = liked;
     const applied = !liked ? 1 : -1;
 
@@ -453,19 +481,22 @@
     if (liked) { likeAnimating = true; setTimeout(() => likeAnimating = false, 600); }
 
     try {
-      await onlike(post);
+      await onlike(post, liked);
     } catch (e) {
       liked = previouslyLiked;
       likeDelta -= applied;
       likeAnimating = false;
       toast.error(i18n.t.post.likeFailed);
       swallow('Post.handleLike', e);
+    } finally {
+      likePending = false;
     }
   }
 
   /** Repost, with the same optimistic-then-revert contract as handleLike. */
   async function handleBoost() {
-    if (!onboost) return;
+    if (!onboost || boostPending) return;
+    boostPending = true;
     const previouslyBoosted = boosted;
     const applied = !boosted ? 1 : -1;
 
@@ -474,12 +505,14 @@
     haptic('medium');
 
     try {
-      await onboost(post);
+      await onboost(post, boosted);
     } catch (e) {
       boosted = previouslyBoosted;
       boostDelta -= applied;
       toast.error(i18n.t.post.boostFailed);
       swallow('Post.handleBoost', e);
+    } finally {
+      boostPending = false;
     }
   }
 
@@ -501,15 +534,16 @@
   }
 
   function getThreadUrl(p: UnifiedPost): string {
+    const account = p.sourceAccountId === undefined ? '' : `&account=${p.sourceAccountId}`;
     if (p.platform === 'mastodon') {
       const raw = (p.raw ?? {}) as any;
       const id = raw.reblog?.id ?? raw.id ?? '';
-      return `${base}/thread?id=${id}&platform=mastodon`;
+      return `${base}/thread?id=${encodeURIComponent(id)}&platform=mastodon${account}`;
     }
     if (p.platform === 'threads') {
-      return `${base}/thread?uri=${encodeURIComponent(p.uri)}&platform=threads`;
+      return `${base}/thread?uri=${encodeURIComponent(p.uri)}&platform=threads${account}`;
     }
-    return `${base}/thread?uri=${encodeURIComponent(p.uri)}&platform=bluesky`;
+    return `${base}/thread?uri=${encodeURIComponent(p.uri)}&platform=bluesky${account}`;
   }
 
   function getPostUrl(p: UnifiedPost): string {
@@ -1009,11 +1043,12 @@
           <p class="text-sm text-[var(--color-text)] line-clamp-6">{(bskyQuote.value as any)?.text ?? ''}</p>
           {#if bskyQuote.embeds?.[0]}
             {@const qEmbed = bskyQuote.embeds[0]}
-            {#if qEmbed.$type === 'app.bsky.embed.images#view' && qEmbed.images?.[0]}
-              <div onclick={(e: MouseEvent) => { e.stopPropagation(); openLightbox(qEmbed.images.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0); }} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openLightbox(qEmbed.images.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0); } }} class="cursor-pointer" role="button" tabindex="0" aria-label={i18n.t.post.viewQuotedImages}>
-                <img decoding="async" loading="lazy" src={qEmbed.images[0].thumb} alt={qEmbed.images[0].alt || ''} class="mt-2 rounded w-full max-h-48 object-cover" />
-                {#if qEmbed.images.length > 1}
-                  <p class="mt-1 text-[10px] text-[var(--color-text-muted)]">+{qEmbed.images.length - 1} more</p>
+            {@const quoteImages = embeds.getBskyImages(qEmbed)}
+            {#if quoteImages.length > 0}
+              <div onclick={(e: MouseEvent) => { e.stopPropagation(); openLightbox(quoteImages.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0); }} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openLightbox(quoteImages.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0); } }} class="cursor-pointer" role="button" tabindex="0" aria-label={i18n.t.post.viewQuotedImages}>
+                <img decoding="async" loading="lazy" src={quoteImages[0].thumb} alt={quoteImages[0].alt || ''} class="mt-2 rounded w-full max-h-48 object-cover" />
+                {#if quoteImages.length > 1}
+                  <p class="mt-1 text-[10px] text-[var(--color-text-muted)]">+{quoteImages.length - 1} more</p>
                 {/if}
               </div>
             {/if}
@@ -1129,8 +1164,8 @@
       {/if}
 
       <!-- Mastodon poll -->
-      {#if post.platform === 'mastodon' && (post.raw as any)?.poll}
-        {@const poll = (post.raw as any).poll}
+      {#if post.platform === 'mastodon' && mastodonPoll}
+        {@const poll = mastodonPoll}
         {@const hasVoted = poll.voted || poll.ownVotes?.length > 0}
         <div class="mt-2 space-y-1.5">
           {#each poll.options as option, i}
@@ -1148,6 +1183,8 @@
             {:else}
               <button
                 onclick={() => votePoll(poll.id, i)}
+                disabled={votePending}
+                aria-busy={votePending}
                 class="w-full text-left px-3 py-1.5 text-xs rounded-md border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 transition-colors"
               >
                 {option.title}
@@ -1178,7 +1215,8 @@
 
       <button
         onclick={handleBoost}
-        disabled={!onboost}
+        disabled={!onboost || boostPending}
+        aria-busy={boostPending}
         class="flex items-center gap-1.5 transition-all {boosted ? 'text-green-400' : 'text-[var(--color-text-muted)]'} {onboost ? 'hover:text-green-400 hover:scale-110 active:scale-90' : ''}"
         title={i18n.t.post.boost}
         aria-label="{boosted ? 'Undo boost' : 'Boost'} ({localBoostCount} boosts)"
@@ -1201,7 +1239,8 @@
 
       <button
         onclick={handleLike}
-        disabled={!onlike}
+        disabled={!onlike || likePending}
+        aria-busy={likePending}
         class="flex items-center gap-1.5 transition-all relative {liked ? 'text-red-400' : 'text-[var(--color-text-muted)]'} {onlike ? 'hover:text-red-400 hover:scale-110 active:scale-90' : ''}"
         title={i18n.t.post.like}
         aria-label="{liked ? 'Unlike' : 'Like'} ({localLikeCount} likes)"
@@ -1218,6 +1257,8 @@
 
       <button
         onclick={handleBookmark}
+        disabled={bookmarkPending || !bookmarkLoaded}
+        aria-busy={bookmarkPending}
         class="flex items-center gap-1.5 transition-all {bookmarked ? 'text-yellow-400' : 'text-[var(--color-text-muted)]'} hover:text-yellow-400 hover:scale-110 active:scale-90"
         title={bookmarked ? 'Remove bookmark' : 'Bookmark'}
         aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark this post'}

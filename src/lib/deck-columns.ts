@@ -12,7 +12,7 @@ export const COLUMN_TYPES = [
   'timeline', 'mentions', 'notifications', 'my-posts', 'search', 'list',
   'hashtag', 'user', 'feed', 'local', 'federated', 'tag-group', 'rss',
   'keyword-monitor', 'threads-search', 'messages', 'trending', 'activity',
-  'likes', 'followers',
+  'likes', 'followers', 'bookmarks', 'drafts', 'scheduled',
 ] as const;
 
 export type ColumnType = (typeof COLUMN_TYPES)[number];

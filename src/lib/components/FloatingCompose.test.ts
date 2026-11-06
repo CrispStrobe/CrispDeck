@@ -1,304 +1,310 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { flushSync } from 'svelte';
+import { createClassComponent } from 'svelte/legacy';
+import type { Account, UnifiedPost } from '$lib/types';
+import type { ComposerSnapshot } from '$lib/publishing/snapshots';
+import type { PublishJob } from '$lib/publishing/outbox';
 
-// Mock dependencies
-vi.mock('$lib/api/client-factory', () => ({
-  initAllClients: vi.fn().mockResolvedValue({
-    accounts: [
-      { id: 1, platform: 'bluesky', handle: 'alice.bsky.social' },
-      { id: 2, platform: 'mastodon', handle: '@bob@mastodon.social' },
-    ],
-    clients: new Map([
-      [1, { client: { getAgent: () => ({ session: true }) } }],
-      [2, { client: {} }],
-    ]),
-  }),
+const mocks = vi.hoisted(() => ({
+  initAllClients: vi.fn(), loadSnapshot: vi.fn(), saveSnapshot: vi.fn(), deleteSnapshot: vi.fn(),
+  persistDraft: vi.fn(), createJob: vi.fn(), deliverJob: vi.fn(), getJob: vi.fn(), success: vi.fn(),
 }));
-
-vi.mock('$lib/compose/adapter', () => ({
-  crosspostThread: vi.fn().mockResolvedValue([
-    { platform: 'bluesky', success: true, uri: 'at://did:plc:abc/post/123' },
-  ]),
-  graphemeLength: (text: string) => text.length,
+vi.mock('$lib/api/client-factory', () => ({ initAllClients: mocks.initAllClients }));
+vi.mock('$lib/compose/mentions', () => ({ resolveMentionsForPlatform: async (text: string) => text }));
+vi.mock('$lib/publishing/snapshots', async importOriginal => ({
+  ...await importOriginal<typeof import('$lib/publishing/snapshots')>(),
+  loadSnapshot: mocks.loadSnapshot, saveSnapshot: mocks.saveSnapshot, deleteSnapshot: mocks.deleteSnapshot,
 }));
-
-vi.mock('$lib/compose/thread', () => ({
-  splitForPlatform: (text: string, _platform: string) => ({
-    parts: [{ text, charCount: text.length, charLimit: 300 }],
-    needsThread: false,
-  }),
+vi.mock('$lib/publishing/drafts', () => ({ persistDraft: mocks.persistDraft }));
+vi.mock('$lib/publishing/outbox', async importOriginal => ({
+  ...await importOriginal<typeof import('$lib/publishing/outbox')>(),
+  createJob: mocks.createJob, deliverJob: mocks.deliverJob, getJob: mocks.getJob,
 }));
+vi.mock('$lib/toast.svelte', () => ({ toast: { success: mocks.success } }));
 
-vi.mock('$lib/compose/media', () => ({
-  validateMediaFile: () => null,
-  createPreviewUrl: () => 'blob:test',
-  revokePreviewUrl: vi.fn(),
-  isVideoFile: () => false,
-}));
+import FloatingCompose from './FloatingCompose.svelte';
+import { snapshot } from '$lib/publishing/snapshots';
+import { postContext } from '$lib/compose/context';
 
-vi.mock('$lib/db', () => ({
-  logCrosspost: vi.fn().mockResolvedValue(undefined),
-}));
+const accounts = [
+  { id: 1, platform: 'bluesky', handle: 'primary.bsky.social', is_primary: true },
+  { id: 2, platform: 'bluesky', handle: 'work.bsky.social' },
+  { id: 3, platform: 'mastodon', handle: 'writer@social.example' },
+] as Account[];
+const post: UnifiedPost = {
+  uri: 'at://did:plc:alice/app.bsky.feed.post/123', text: 'An interesting post',
+  author: { handle: 'alice.bsky.social', displayName: 'Alice' },
+  platform: 'bluesky', sourceAccountId: 2, createdAt: '2026-01-01T00:00:00Z', isRepost: false,
+  raw: { post: { cid: 'cid123', record: { reply: { root: { uri: 'at://did:plc:root/app.bsky.feed.post/root', cid: 'root-cid' } } } } },
+};
+let saved: ComposerSnapshot | undefined;
+let job: PublishJob | undefined;
+let instance: ReturnType<typeof createClassComponent> | undefined;
 
-vi.mock('$lib/toast.svelte', () => ({
-  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
-}));
-
-vi.mock('$lib/i18n.svelte', () => ({
-  i18n: {
-    t: {
-      compose: {
-        title: 'Compose',
-        placeholder: "What's on your mind?",
-        posting: 'Posting...',
-        replyingTo: 'Replying to',
-        quoting: 'Quoting',
-        cwPlaceholder: 'Content warning...',
-        altTextPlaceholder: 'Describe image...',
-        public: 'Public',
-        unlisted: 'Unlisted',
-        followersOnlyVis: 'Followers only',
-        direct: 'Direct',
-      },
-    },
-  },
-}));
-
-import type { UnifiedPost } from '$lib/types';
-
-describe('FloatingCompose', () => {
-  const mockPost: UnifiedPost = {
-    uri: 'at://did:plc:abc/app.bsky.feed.post/123',
-    text: 'Hello world',
-    author: { handle: 'alice.bsky.social', displayName: 'Alice', avatar: '' },
-    createdAt: '2026-01-01T00:00:00Z',
-    platform: 'bluesky',
-    isRepost: false,
-    raw: { post: { cid: 'cid123' } },
+function pending(saved: ComposerSnapshot): PublishJob {
+  return {
+    id: 'job-1', snapshot: saved, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', status: 'failed',
+    destinations: [{ accountId: 2, handle: 'work.bsky.social', platform: 'bluesky', parts: [{ text: saved.text, status: 'failed', error: 'Reconnect' }] }],
   };
+}
 
-  describe('props and state', () => {
-    it('accepts open, replyToPost, quotePost props', () => {
-      const props = {
-        open: true,
-        replyToPost: mockPost,
-        quotePost: null,
-        onposted: vi.fn(),
-      };
-      expect(props.open).toBe(true);
-      expect(props.replyToPost?.author.handle).toBe('alice.bsky.social');
-      expect(props.quotePost).toBeNull();
-    });
+beforeEach(() => {
+  vi.clearAllMocks(); localStorage.clear(); saved = undefined; job = undefined;
+  mocks.initAllClients.mockResolvedValue({ accounts, clients: new Map() });
+  mocks.loadSnapshot.mockImplementation(async () => saved);
+  mocks.saveSnapshot.mockImplementation(async value => { saved = value; });
+  mocks.deleteSnapshot.mockImplementation(async () => { saved = undefined; });
+  mocks.persistDraft.mockResolvedValue(42);
+  mocks.getJob.mockImplementation(async () => job);
+  mocks.createJob.mockImplementation(async (value: ComposerSnapshot) => { job = pending(value); return job; });
+  mocks.deliverJob.mockImplementation(async () => {
+    job = { ...job!, status: 'posted', destinations: job!.destinations.map(destination => ({ ...destination, parts: destination.parts.map(part => ({ ...part, status: 'posted' })) })) };
+    return job;
+  });
+});
 
-    it('replyToPost generates @mention prefix', () => {
-      const text = `@${mockPost.author.handle} `;
-      expect(text).toBe('@alice.bsky.social ');
-    });
+afterEach(async () => {
+  instance?.$destroy(); instance = undefined;
+  // Component destruction flushes its latest draft. Do not let that queued write
+  // from one test overwrite the restored fixture of the next test.
+  for (let i = 0; i < 8; i++) await Promise.resolve();
+  document.body.innerHTML = '';
+});
 
-    it('quotePost extracts CID from raw data', () => {
-      const raw = mockPost.raw as any;
-      const cid = raw?.post?.cid ?? raw?.cid ?? '';
-      expect(cid).toBe('cid123');
-    });
+async function render(props: Partial<{ open: boolean; replyToPost: UnifiedPost | null; quotePost: UnifiedPost | null }> = {}) {
+  const target = document.createElement('div'); document.body.append(target);
+  instance = createClassComponent({ component: FloatingCompose, target, props: { open: true, ...props } });
+  flushSync();
+  await vi.waitFor(() => { flushSync(); expect(target.querySelector('textarea')).not.toBeNull(); });
+  await vi.waitFor(() => { flushSync(); expect(target.querySelector('fieldset')?.disabled).toBe(false); });
+  return target;
+}
+function button(target: HTMLElement, name: string): HTMLButtonElement {
+  const found = [...target.querySelectorAll('button')].find(b => (b.getAttribute('aria-label') ?? b.textContent?.trim().replace(/\s+/g, ' ')) === name);
+  if (!found) throw new Error(`Missing button: ${name}`);
+  return found;
+}
+function click(target: HTMLElement, name: string) { button(target, name).click(); flushSync(); }
+function input(target: HTMLElement, selector: string, value: string) {
+  const field = target.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector);
+  if (!field) throw new Error(`Missing field: ${selector}`);
+  field.value = value; field.dispatchEvent(new Event('input', { bubbles: true })); flushSync();
+}
+function attach(target: HTMLElement) {
+  const file = new File(['photo bytes'], 'photo.png', { type: 'image/png', lastModified: 123 });
+  attachFiles(target, [file]);
+  return file;
+}
+function attachFiles(target: HTMLElement, files: File[]) {
+  const field = target.querySelector<HTMLInputElement>('input[type=file]')!;
+  Object.defineProperty(field, 'files', { configurable: true, value: files });
+  field.dispatchEvent(new Event('change', { bubbles: true })); flushSync();
+}
+
+/** These mount the actual composer. Only storage and network boundaries are mocked. */
+describe('floating composer drafts and scheduling', () => {
+  it('saves a media-only draft with alt text and closes the panel without posting', async () => {
+    const target = await render();
+    const file = attach(target);
+    input(target, 'input[placeholder*="Describe this image"]', 'The photo description');
+    expect(button(target, 'Save Draft').disabled).toBe(false);
+    click(target, 'Save Draft');
+    await vi.waitFor(() => expect(mocks.persistDraft).toHaveBeenCalledTimes(1));
+    const value = mocks.persistDraft.mock.calls[0][0] as ComposerSnapshot;
+    expect(value.text).toBe('');
+    expect(value.media).toEqual([{ blob: file, name: 'photo.png', lastModified: 123 }]);
+    expect(value.options.altTexts).toEqual(['The photo description']);
+    expect(value.accountIds).toEqual([1, 2, 3]);
+    expect(mocks.createJob).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(target.querySelector('[role=dialog]')).toBeNull());
   });
 
-  describe('character counting', () => {
-    it('counts grapheme length for Bluesky (300 limit)', () => {
-      // graphemeLength is mocked to return text.length
-      const graphemeLength = (text: string) => text.length;
-      expect(graphemeLength('Hello')).toBe(5);
-      expect(graphemeLength('a'.repeat(301))).toBeGreaterThan(300);
+  it('preserves restored destinations, overrides, visibility, polls and Bluesky controls', async () => {
+    saved = snapshot('floating-compose', 'A restored draft', [3, 2], { '2': 'Bluesky variation' }, {
+      visibility: 'private', contentWarning: 'Spoiler', threadGate: 'mentioned', disableQuotes: true, selfLabel: 'graphic-media',
+      poll: { options: ['Yes', 'No'], expiresIn: 3600, multiple: true },
     });
-
-    it('uses text.length for Mastodon and Threads (500 limit)', () => {
-      const text = 'Hello world';
-      expect(text.length).toBe(11);
-    });
-
-    it('detects thread needed when over limit', () => {
-      const bskyLen = 350;
-      const mastoLen = 550;
-      const needsThread = bskyLen > 300 || mastoLen > 500;
-      expect(needsThread).toBe(true);
-    });
+    const target = await render();
+    click(target, 'Save Draft');
+    await vi.waitFor(() => expect(mocks.persistDraft).toHaveBeenCalledTimes(1));
+    const value = mocks.persistDraft.mock.calls[0][0] as ComposerSnapshot;
+    expect(value.accountIds).toEqual([3, 2]);
+    expect(value.overrides).toEqual({ '2': 'Bluesky variation' });
+    expect(value.options).toMatchObject({ visibility: 'private', contentWarning: 'Spoiler', threadGate: 'mentioned', disableQuotes: true, selfLabel: 'graphic-media', poll: { options: ['Yes', 'No'], expiresIn: 3600, multiple: true } });
   });
 
-  describe('media handling', () => {
-    it('limits to 4 media files', () => {
-      const mediaFiles = ['a', 'b', 'c', 'd'];
-      expect(mediaFiles.length >= 4).toBe(true);
-    });
-
-    it('validates media files before adding', () => {
-      // validateMediaFile is mocked to return null (no error)
-      const validateMediaFile = () => null;
-      expect(validateMediaFile()).toBeNull();
-    });
+  it('schedules the complete draft locally and states the open-app limitation', async () => {
+    const target = await render({ quotePost: post });
+    input(target, 'textarea', 'Schedule this quote');
+    const file = attach(target);
+    input(target, 'input[placeholder*="Describe this image"]', 'Scheduled photo');
+    click(target, 'Schedule');
+    expect(target.textContent).toContain('Keep CrispDeck open');
+    expect(target.textContent).toContain('Scheduling timezone');
+    input(target, 'input[type=date]', '2099-12-01');
+    input(target, 'input[type=time]', '14:30');
+    click(target, 'Schedule Post');
+    await vi.waitFor(() => expect(mocks.persistDraft).toHaveBeenCalledTimes(1));
+    const [value, at] = mocks.persistDraft.mock.calls[0] as [ComposerSnapshot, string];
+    expect(at).toBe(new Date('2099-12-01T14:30').toISOString());
+    expect(value.text).toBe('Schedule this quote');
+    expect(value.options).toMatchObject({ quoteUri: post.uri, quoteCid: 'cid123', quoteUrl: 'https://bsky.app/profile/alice.bsky.social/post/123', altTexts: ['Scheduled photo'] });
+    expect(value.media[0].blob).toBe(file);
+    expect(value.context).toEqual({ quoteAuthor: 'alice.bsky.social', quoteText: post.text, replyAuthor: '' });
+    expect(mocks.createJob).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(target.querySelector('[role=dialog]')).toBeNull());
   });
 
-  describe('quote URL construction', () => {
-    it('builds bsky.app URL from AT URI', () => {
-      const quoteUri = 'at://did:plc:abc/app.bsky.feed.post/xyz789';
-      const quoteAuthor = 'alice.bsky.social';
-      const rkey = quoteUri.split('/').pop();
-      const url = `https://bsky.app/profile/${quoteAuthor}/post/${rkey}`;
-      expect(url).toBe('https://bsky.app/profile/alice.bsky.social/post/xyz789');
-    });
-
-    it('handles missing quote fields gracefully', () => {
-      const quoteUri = '';
-      const quoteAuthor = '';
-      const quoteUrl = quoteUri && quoteAuthor ? 'url' : undefined;
-      expect(quoteUrl).toBeUndefined();
-    });
+  it('rejects a past schedule instead of turning it into an immediate post', async () => {
+    const target = await render();
+    input(target, 'textarea', 'For later'); click(target, 'Schedule');
+    input(target, 'input[type=date]', '2000-01-01'); input(target, 'input[type=time]', '12:00');
+    click(target, 'Schedule Post');
+    expect(target.querySelector('[role=alert]')?.textContent).toContain('Choose a date and time in the future');
+    expect(mocks.persistDraft).not.toHaveBeenCalled(); expect(mocks.createJob).not.toHaveBeenCalled();
+    expect(target.querySelector('textarea')?.value).toBe('For later');
   });
 
-  describe('keyboard shortcuts', () => {
-    it('Escape should close', () => {
-      let open = true;
-      const handler = (e: { key: string }) => {
-        if (e.key === 'Escape') open = false;
-      };
-      handler({ key: 'Escape' });
-      expect(open).toBe(false);
-    });
-
-    it('Ctrl+Enter should trigger post', () => {
-      let posted = false;
-      const handler = (e: { ctrlKey: boolean; key: string }) => {
-        if (e.ctrlKey && e.key === 'Enter') posted = true;
-      };
-      handler({ ctrlKey: true, key: 'Enter' });
-      expect(posted).toBe(true);
-    });
+  it('keeps text and attachments when saving fails, and allows a real retry', async () => {
+    const target = await render();
+    input(target, 'textarea', 'Keep this draft'); const file = attach(target);
+    mocks.persistDraft.mockRejectedValueOnce(new Error('Storage is full'));
+    click(target, 'Save Draft');
+    await vi.waitFor(() => expect(target.querySelector('[role=alert]')?.textContent).toContain('Storage is full'));
+    expect(target.querySelector('textarea')?.value).toBe('Keep this draft');
+    expect(target.querySelector('img')).not.toBeNull();
+    click(target, 'Save Draft');
+    await vi.waitFor(() => expect(mocks.persistDraft).toHaveBeenCalledTimes(2));
+    expect(mocks.persistDraft.mock.calls[1][0].media[0].blob).toBe(file);
+    await vi.waitFor(() => expect(target.querySelector('[role=dialog]')).toBeNull());
   });
 
-  describe('crosspost logging', () => {
-    it('builds crosspost log entry correctly', () => {
-      const results = [
-        { platform: 'bluesky', success: true, uri: 'at://uri' },
-        { platform: 'mastodon', success: true, uri: 'https://mastodon.social/@bob/123' },
-      ];
-      const entry = {
-        bluesky_uri: results.find(r => r.platform === 'bluesky')?.uri ?? null,
-        mastodon_uri: results.find(r => r.platform === 'mastodon')?.uri ?? null,
-        threads_uri: null,
-        text_preview: 'Hello world'.substring(0, 280),
-        media_count: 0,
-        status: results.every(r => r.success) ? 'success' : 'partial',
-      };
-      expect(entry.bluesky_uri).toBe('at://uri');
-      expect(entry.mastodon_uri).toBe('https://mastodon.social/@bob/123');
-      expect(entry.status).toBe('success');
-    });
+  it('enforces required alt text for scheduled posts while still allowing unfinished drafts', async () => {
+    localStorage.setItem('crispdeck-alt-text-mode', 'require');
+    const target = await render(); attach(target); click(target, 'Schedule');
+    input(target, 'input[type=date]', '2099-12-01'); input(target, 'input[type=time]', '14:30');
+    click(target, 'Schedule Post');
+    expect(target.querySelector('[role=alert]')?.textContent).toContain('Add alt text');
+    expect(mocks.persistDraft).not.toHaveBeenCalled();
+    expect(button(target, 'Save Draft').matches(':disabled')).toBe(false);
+    await Promise.resolve();
+    click(target, 'Save Draft');
+    await vi.waitFor(() => expect(mocks.persistDraft).toHaveBeenCalledTimes(1));
+    expect(mocks.persistDraft.mock.calls[0][1]).toBeNull();
   });
 
-  describe('form reset', () => {
-    it('clears all state on successful post', () => {
-      let text = 'Hello';
-      let mediaFiles: string[] = ['file1'];
-      let altTexts: string[] = ['alt'];
-      let showCW = true;
-      let contentWarning = 'warning';
-
-      // Reset
-      text = '';
-      contentWarning = '';
-      showCW = false;
-      mediaFiles = [];
-      altTexts = [];
-
-      expect(text).toBe('');
-      expect(mediaFiles).toEqual([]);
-      expect(altTexts).toEqual([]);
-      expect(showCW).toBe(false);
-      expect(contentWarning).toBe('');
-    });
+  it('keeps all ten gallery images in the persisted draft', async () => {
+    const target = await render({ quotePost: post });
+    const files = Array.from({ length: 10 }, (_, index) => new File([`photo ${index}`], `${index}.png`, { type: 'image/png' }));
+    attachFiles(target, files);
+    expect(target.querySelectorAll('input[placeholder*="Describe this image"]')).toHaveLength(10);
+    expect(target.textContent).toContain('Up to 10 attachments');
+    click(target, 'Save Draft');
+    await vi.waitFor(() => expect(mocks.persistDraft).toHaveBeenCalledTimes(1));
+    const value = mocks.persistDraft.mock.calls[0][0] as ComposerSnapshot;
+    expect(value.media.map(item => item.blob)).toEqual(files);
+    expect(value.options.altTexts).toHaveLength(10);
   });
 
-  describe('deck integration', () => {
-    it('n key opens compose when not in input', () => {
-      let composeOpen = false;
-      const handler = (e: { key: string; target: { tagName: string } }) => {
-        if (e.key === 'n' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) {
-          composeOpen = true;
-        }
-      };
-      handler({ key: 'n', target: { tagName: 'DIV' } });
-      expect(composeOpen).toBe(true);
-    });
+  it('retains all images when changing to a destination with a smaller media limit', async () => {
+    const target = await render({ quotePost: post });
+    const files = Array.from({ length: 6 }, (_, index) => new File([`photo ${index}`], `${index}.png`, { type: 'image/png' }));
+    attachFiles(target, files);
+    const mastodon = [...target.querySelectorAll('button')].find(item => item.textContent?.includes('writer@social.example'))!;
+    mastodon.click(); flushSync();
+    expect(target.textContent).toContain('The selected accounts support up to 4 attachments');
+    click(target, 'Post');
+    expect(mocks.createJob).not.toHaveBeenCalled();
+    expect(target.textContent).toContain('@writer@social.example: Mastodon supports up to 4 attachments');
+    expect(target.querySelectorAll('input[placeholder*="Describe this image"]')).toHaveLength(6);
+    click(target, 'Save Draft');
+    await vi.waitFor(() => expect(mocks.persistDraft).toHaveBeenCalledTimes(1));
+    const value = mocks.persistDraft.mock.calls[0][0] as ComposerSnapshot;
+    expect(value.accountIds).toEqual([2, 3]);
+    expect(value.media.map(item => item.blob)).toEqual(files);
+  });
+});
 
-    it('n key does NOT open compose when typing in input', () => {
-      let composeOpen = false;
-      const handler = (e: { key: string; target: { tagName: string } }) => {
-        if (e.key === 'n' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) {
-          composeOpen = true;
-        }
-      };
-      handler({ key: 'n', target: { tagName: 'INPUT' } });
-      expect(composeOpen).toBe(false);
-    });
-
-    // State lives on an object rather than in `let` locals: TS narrows a
-    // `let ... = null` to `null` and never widens it back for a write made
-    // inside a callback, so reading the field afterwards is typed `never`.
-    // A call that could mutate does reset narrowing for object properties.
-    type ComposeState = { post: UnifiedPost | null; open: boolean };
-
-    it('reply opens compose with replyToPost', () => {
-      const compose: ComposeState = { post: null, open: false };
-      const handleReply = (post: UnifiedPost) => {
-        compose.post = post;
-        compose.open = true;
-      };
-      handleReply(mockPost);
-      expect(compose.open).toBe(true);
-      expect(compose.post?.author.handle).toBe('alice.bsky.social');
-    });
-
-    it('quote opens compose with quotePost', () => {
-      const compose: ComposeState = { post: null, open: false };
-      const handleQuote = (post: UnifiedPost) => {
-        compose.post = post;
-        compose.open = true;
-      };
-      handleQuote(mockPost);
-      expect(compose.open).toBe(true);
-      expect(compose.post?.uri).toBe(mockPost.uri);
-    });
-
-    it('onposted callback refreshes columns', () => {
-      const refresh = vi.fn();
-      const onposted = () => {
-        [{ id: 'col1' }, { id: 'col2' }].forEach(() => refresh());
-      };
-      onposted();
-      expect(refresh).toHaveBeenCalledTimes(2);
-    });
+describe('floating composer reply and delivery context', () => {
+  it('uses the column source account and preserves a Bluesky reply root', async () => {
+    const target = await render({ replyToPost: post });
+    input(target, 'textarea', '@alice.bsky.social A response'); click(target, 'Post');
+    await vi.waitFor(() => expect(mocks.createJob).toHaveBeenCalledTimes(1));
+    const value = mocks.createJob.mock.calls[0][0] as ComposerSnapshot;
+    expect(value.accountIds).toEqual([2]);
+    expect(value.options.replyTo).toEqual({ uri: post.uri, platform: 'bluesky', cid: 'cid123', rootUri: 'at://did:plc:root/app.bsky.feed.post/root', rootCid: 'root-cid' });
+    expect(value.context?.replyAuthor).toBe('alice.bsky.social');
   });
 
-  describe('visibility options', () => {
-    it('supports all Mastodon visibility levels', () => {
-      const levels = ['public', 'unlisted', 'private', 'direct'] as const;
-      for (const level of levels) {
-        expect(['public', 'unlisted', 'private', 'direct']).toContain(level);
-      }
-    });
+  it('reopens the same reply without replacing the text already written', async () => {
+    const target = await render({ replyToPost: post });
+    input(target, 'textarea', '@alice.bsky.social A carefully written response'); attach(target);
+    click(target, 'Close');
+    expect(target.querySelector('[role=dialog]')).toBeNull();
+    instance!.$set({ open: true }); flushSync();
+    await vi.waitFor(() => expect(target.querySelector('textarea')?.value).toBe('@alice.bsky.social A carefully written response'));
+    expect(target.querySelector('img')).not.toBeNull();
+    expect(mocks.persistDraft).not.toHaveBeenCalled();
   });
 
-  describe('focus trap', () => {
-    it('Tab cycles focus within panel', () => {
-      // Simulated focus trap logic
-      const focusable = ['textarea', 'button1', 'button2', 'button3'];
-      const currentIdx = focusable.length - 1; // Last element
-      const nextIdx = (currentIdx + 1) % focusable.length; // Should wrap to first
-      expect(nextIdx).toBe(0);
-    });
+  it('preserves the old reply as a draft before switching to a different post', async () => {
+    const target = await render({ replyToPost: post });
+    input(target, 'textarea', '@alice.bsky.social Preserve this'); const file = attach(target);
+    const other = { ...post, uri: 'at://did:plc:bob/app.bsky.feed.post/second', author: { handle: 'bob.bsky.social' }, sourceAccountId: 1 };
+    instance!.$set({ replyToPost: other }); flushSync();
+    await vi.waitFor(() => expect(target.querySelector('textarea')?.value).toBe('@bob.bsky.social '));
+    expect(mocks.persistDraft).toHaveBeenCalledTimes(1);
+    expect(mocks.persistDraft.mock.calls[0][0]).toMatchObject({ text: '@alice.bsky.social Preserve this', accountIds: [2], options: { replyTo: { uri: post.uri } } });
+    expect(mocks.persistDraft.mock.calls[0][0].media[0].blob).toBe(file);
+    expect(target.querySelector('img')).toBeNull();
+    input(target, 'textarea', '@bob.bsky.social A new reply'); click(target, 'Save Draft');
+    await vi.waitFor(() => expect(mocks.persistDraft).toHaveBeenCalledTimes(2));
+    expect(mocks.persistDraft.mock.calls[1][0]).toMatchObject({ accountIds: [1], options: { replyTo: { uri: other.uri } } });
+  });
 
-    it('Shift+Tab wraps backwards', () => {
-      const focusable = ['textarea', 'button1', 'button2', 'button3'];
-      const currentIdx = 0; // First element
-      const nextIdx = (currentIdx - 1 + focusable.length) % focusable.length;
-      expect(nextIdx).toBe(3);
-    });
+  it('keeps the original context if preserving it before switching fails', async () => {
+    const target = await render({ replyToPost: post }); input(target, 'textarea', 'Original reply');
+    mocks.persistDraft.mockRejectedValueOnce(new Error('Cannot preserve draft'));
+    instance!.$set({ quotePost: post, replyToPost: null }); flushSync();
+    await vi.waitFor(() => expect(target.querySelector('[role=alert]')?.textContent).toContain('Cannot preserve draft'));
+    expect(target.querySelector('textarea')?.value).toBe('Original reply');
+    expect(target.textContent).toContain('Replying to @alice.bsky.social');
+    click(target, 'Save Draft');
+    await vi.waitFor(() => expect(mocks.persistDraft).toHaveBeenCalledTimes(2));
+    expect(mocks.persistDraft.mock.calls[1][0].options.replyTo.uri).toBe(post.uri);
+    expect(mocks.persistDraft.mock.calls[1][0].options.quoteUri).toBeUndefined();
+  });
+
+  it('restores visible reply context and selected destinations without reinitializing them', async () => {
+    const context = postContext(post, null);
+    saved = { ...snapshot('floating-compose', 'An existing reply', [3], {}, context.options), context: context.display };
+    const target = await render({ replyToPost: post });
+    expect(target.querySelector('textarea')?.value).toBe('An existing reply');
+    expect(target.textContent).toContain('Replying to @alice.bsky.social');
+    click(target, 'Save Draft');
+    await vi.waitFor(() => expect(mocks.persistDraft).toHaveBeenCalledTimes(1));
+    expect(mocks.persistDraft.mock.calls[0][0].accountIds).toEqual([3]);
+  });
+
+  it('never retargets a pending delivery; new-draft explicitly sets it aside in the outbox', async () => {
+    const context = postContext(post, null);
+    const original = { ...snapshot('floating-compose', 'Pending response', [2], {}, context.options), context: context.display };
+    job = pending(original); saved = { ...original, jobId: job.id };
+    const target = document.createElement('div'); document.body.append(target);
+    instance = createClassComponent({ component: FloatingCompose, target, props: { open: true, quotePost: post } }); flushSync();
+    await vi.waitFor(() => expect(target.textContent).toContain('Pending response'));
+    expect(target.querySelector('textarea')?.value).toBe('Pending response');
+    expect(target.querySelector('input[type=file]')?.matches(':disabled')).toBe(true);
+    target.querySelector('[role=dialog]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true })); flushSync();
+    expect(mocks.createJob).not.toHaveBeenCalled(); expect(mocks.deliverJob).not.toHaveBeenCalled();
+    click(target, 'New draft');
+    await vi.waitFor(() => expect(target.querySelector('textarea')?.value).toBe(''));
+    expect(target.textContent).not.toContain('Replying to');
+    expect(job?.snapshot.text).toBe('Pending response');
+    input(target, 'textarea', 'A new standalone post'); click(target, 'Save Draft');
+    await vi.waitFor(() => expect(mocks.persistDraft).toHaveBeenCalledTimes(1));
+    expect(mocks.persistDraft.mock.calls[0][0].options.replyTo).toBeUndefined();
+    expect(mocks.persistDraft.mock.calls[0][0].options.quoteUri).toBeUndefined();
+    expect(mocks.persistDraft.mock.calls[0][0].jobId).toBeUndefined();
   });
 });

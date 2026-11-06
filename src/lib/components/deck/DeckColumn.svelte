@@ -1,15 +1,18 @@
 <script lang="ts">
-  import { shouldAutoScroll } from '$lib/deck-scroll';
   import { pickAnchor, measureItems, restoreAnchor, type ScrollAnchor } from '$lib/feed-scroll';
   import { saveReadPosition, getReadPosition, flushReadPositions } from '$lib/read-position';
-  import { onMount, onDestroy } from 'svelte';
-  import { X, RefreshCw, Loader2, GripVertical, Heart, Repeat, UserPlus, MessageCircle, AtSign, Bell, BellOff, BellRing, Quote, ChevronDown, ChevronUp, Radio, Lock, Unlock, Pin, PinOff, Trash2, Minimize2, Maximize2, Palette, Columns3 } from '@lucide/svelte';
+  import { onMount, onDestroy, tick, untrack, type Snippet } from 'svelte';
+  import { base } from '$app/paths';
+  import { X, RefreshCw, Loader2, GripVertical, Heart, Repeat, UserPlus, MessageCircle, AtSign, Bell, BellOff, BellRing, Quote, ChevronDown, ChevronUp, Radio, Lock, Unlock, Pin, PinOff, Trash2, Minimize2, Maximize2, Palette, Columns3, Settings2, Pause, Play, Copy, ArrowLeft, ArrowRight } from '@lucide/svelte';
   import type { ColumnNotifyMode } from '$lib/deck-layouts';
   import { COLUMN_WIDTH_PRESETS, type ColumnWidthPreset } from '$lib/deck-layouts';
   import Post from '$lib/components/Post.svelte';
-  import type { UnifiedPost } from '$lib/types';
+  import type { UnifiedPost, Account } from '$lib/types';
+  import type { DeckColumnFilters } from '$lib/deck-filters';
   import type { NotificationGroup } from '$lib/notification-grouping';
   import { i18n } from '$lib/i18n.svelte';
+  import { playColumnSound } from '$lib/column-notify';
+  import { swallow } from '$lib/debug-log';
 
   import { clampColumnWidth, MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH, type ColumnType } from '$lib/deck-columns';
 
@@ -24,6 +27,10 @@
     width = 380,
     focusedPostIdx = -1,
     onrefresh,
+    children,
+    accounts = [], filters = {}, errors = [], hasOlder = false,
+    onloadmore, onsettings, onduplicate, onmoveleft, onmoveright,
+    paused = false, onpause, unread = 0, onmarkread, onfilterchange,
     onremove,
     onlike,
     onboost,
@@ -56,9 +63,24 @@
     width?: number;
     focusedPostIdx?: number;
     onrefresh?: () => void;
+    children?: Snippet;
+    accounts?: Account[];
+    filters?: DeckColumnFilters;
+    errors?: string[];
+    hasOlder?: boolean;
+    onloadmore?: () => void;
+    onsettings?: () => void;
+    onduplicate?: () => void;
+    onmoveleft?: () => void;
+    onmoveright?: () => void;
+    paused?: boolean;
+    onpause?: () => void;
+    unread?: number;
+    onmarkread?: () => void;
+    onfilterchange?: (query: string) => void;
     onremove?: () => void;
-    onlike?: (post: UnifiedPost) => void;
-    onboost?: (post: UnifiedPost) => void;
+    onlike?: (post: UnifiedPost, active?: boolean) => void | Promise<void>;
+    onboost?: (post: UnifiedPost, active?: boolean) => void | Promise<void>;
     onreply?: (post: UnifiedPost) => void;
     onquote?: (post: UnifiedPost) => void;
     onwidthchange?: (width: number) => void;
@@ -85,17 +107,21 @@
   let showColorPicker = $state(false);
   let showWidthMenu = $state(false);
   let contentEl: HTMLDivElement | undefined = $state();
-  let prevPostCount = $state(0);
+  let previousHead: string | undefined;
+  let pendingReadAnchor: ScrollAnchor | null = $state(null);
 
   const colorPresets = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', ''];
 
-  // Auto-scroll to top when new posts arrive and scroll-lock is off
+  // Only new content at the head follows the reader to the top. Appending an
+  // older page must leave them beside the page they just requested.
   $effect(() => {
-    const currentCount = filteredPosts.length;
-    if (shouldAutoScroll(scrollLock, prevPostCount, currentCount) && contentEl) {
+    const head = useGroupedNotifs
+      ? notificationGroups[0] && `${notificationGroups[0].id}:${notificationGroups[0].latestAt}`
+      : posts[0]?.uri;
+    if (!scrollLock && previousHead && head && head !== previousHead && contentEl) {
       contentEl.scrollTo({ top: 0, behavior: 'smooth' });
     }
-    prevPostCount = currentCount;
+    previousHead = head;
   });
 
   /**
@@ -120,6 +146,9 @@
   }
 
   function onColumnScroll() {
+    // A deliberate scroll takes precedence over a saved position whose post
+    // has not arrived yet.
+    pendingReadAnchor = null;
     if (scrollRaf) return;
     scrollRaf = requestAnimationFrame(() => {
       scrollRaf = 0;
@@ -128,14 +157,11 @@
   }
 
   onMount(() => {
-    if (!contentEl) return;
-    contentEl.addEventListener('scroll', onColumnScroll, { passive: true });
     if (scrollLock) {
       const pos = getReadPosition(posKey);
-      const anchor: ScrollAnchor | null = pos
+      pendingReadAnchor = pos
         ? { key: pos.lastSeenUri, offset: pos.scrollY ?? 0 }
         : null;
-      restoreAnchor(contentEl, anchor);
     }
   });
 
@@ -157,6 +183,13 @@
   function cycleNotify() {
     const modes: ColumnNotifyMode[] = ['off', 'sound', 'desktop', 'both'];
     const next = modes[(modes.indexOf(notify) + 1) % modes.length];
+    // Permission and AudioContext activation must happen in this user gesture,
+    // not later in an asynchronous feed refresh.
+    if (next === 'sound' || next === 'both') playColumnSound();
+    const desktop = next === 'desktop' || next === 'both';
+    if (desktop && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      void Notification.requestPermission().catch(error => swallow('deck.notificationPermission', error));
+    }
     onnotifychange?.(next);
   }
 
@@ -221,31 +254,69 @@
   }
 
   /** Whether this column should render grouped notifications instead of posts */
-  const useGroupedNotifs = $derived(type === 'notifications' && notificationGroups.length > 0);
+  const useGroupedNotifs = $derived(['notifications', 'activity', 'followers'].includes(type));
 
-  let filterText = $state('');
-  let debouncedFilter = $state('');
+  function notificationDestination(group: NotificationGroup): string | undefined {
+    if (!group.postUri) return;
+    if (group.postUri.startsWith('at://') && group.platforms.has('bluesky')) {
+      return `${base}/thread?uri=${encodeURIComponent(group.postUri)}&platform=bluesky`;
+    }
+    // Mastodon status IDs belong to the instance that fetched them. A public
+    // canonical URI is safe to open without guessing a different account's ID.
+    try {
+      const url = new URL(group.postUri);
+      if (['https:', 'http:'].includes(url.protocol) && !url.username && !url.password) return url.href;
+    } catch { /* Notifications without a public post destination stay text. */ }
+  }
+
+  let filterText = $state(untrack(() => filters.searchTerm ?? ''));
+  $effect(() => { filterText = filters.searchTerm ?? ''; });
   let filterTimer: ReturnType<typeof setTimeout> | undefined;
 
   function onFilterInput(value: string) {
     filterText = value;
     clearTimeout(filterTimer);
-    filterTimer = setTimeout(() => { debouncedFilter = value; }, 200);
+    filterTimer = setTimeout(() => { visiblePostCount = POST_PAGE_SIZE; onfilterchange?.(value); }, 200);
   }
+
+  let updateAnchor: ScrollAnchor | null = null;
+  $effect.pre(() => {
+    posts; notificationGroups;
+    updateAnchor = contentEl && scrollLock && contentEl.scrollTop > 0
+      ? pickAnchor(measureItems(contentEl), contentEl.scrollTop) : null;
+  });
+  $effect(() => {
+    posts; notificationGroups;
+    const anchor = updateAnchor;
+    if (anchor && contentEl && scrollLock) void tick().then(() => {
+      if (contentEl && scrollLock && contentEl.scrollTop > 0) restoreAnchor(contentEl, anchor);
+    });
+  });
 
   const POST_PAGE_SIZE = 50;
   let visiblePostCount = $state(POST_PAGE_SIZE);
 
-  const filteredPosts = $derived(
-    debouncedFilter
-      ? posts.filter(p => {
-          const q = debouncedFilter.toLowerCase();
-          return p.text.toLowerCase().includes(q) || p.author.handle.toLowerCase().includes(q);
-        })
-      : posts
-  );
+  // The parent supplies the canonical filtered rows, also used by keyboard
+  // actions and unread counts. Filtering a second time here made display-name
+  // matches disappear and gave shortcuts a different row order.
+  const filteredPosts = $derived(posts);
   const visiblePosts = $derived(filteredPosts.slice(0, visiblePostCount));
-  const hasMorePosts = $derived(filteredPosts.length > visiblePostCount);
+  const hasMorePosts = $derived(!useGroupedNotifs && !children && filteredPosts.length > visiblePostCount);
+
+  $effect(() => {
+    posts; notificationGroups; visiblePostCount;
+    if (!pendingReadAnchor || !contentEl || !scrollLock) return;
+    const anchor = pendingReadAnchor;
+    const index = posts.findIndex(post => post.uri === anchor.key);
+    if (index >= visiblePostCount) {
+      visiblePostCount = Math.ceil((index + 1) / POST_PAGE_SIZE) * POST_PAGE_SIZE;
+      return;
+    }
+    if (measureItems(contentEl).some(item => item.key === anchor.key)) {
+      pendingReadAnchor = null;
+      restoreAnchor(contentEl, anchor);
+    }
+  });
 
   // Resize handle
   let resizing = $state(false);
@@ -297,6 +368,7 @@
   }
 
   onDestroy(() => {
+    clearTimeout(filterTimer);
     document.removeEventListener('mousemove', onResizeMove);
     document.removeEventListener('mouseup', onResizeEnd);
   });
@@ -334,11 +406,12 @@
     <div class="h-0.5 flex-shrink-0" style="background: {color}"></div>
   {/if}
   <!-- Column header -->
-  <div class="flex items-center justify-between px-3 py-2 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex-shrink-0">
-    <div class="flex items-center gap-2">
+  <div class="flex flex-wrap items-center justify-between gap-y-2 px-3 py-2 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex-shrink-0">
+    <div class="flex items-center gap-2 w-full min-w-0">
       <GripVertical size={14} class="text-[var(--color-text-muted)] cursor-grab" />
       <span class="text-sm font-medium truncate">{title}</span>
-      {#if streaming}
+      {#if paused}<span class="ml-auto text-[10px] text-amber-500">{i18n.t.deck.paused}</span>{/if}
+      {#if streaming && !paused}
         <span class="flex items-center gap-1 text-[9px] text-green-400 font-medium" title={i18n.t.deck.liveStreaming}>
           <span class="relative flex h-2 w-2">
             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -348,7 +421,15 @@
         </span>
       {/if}
     </div>
-    <div class="flex items-center gap-1">
+    <div class="flex items-center gap-1 flex-wrap">
+      <button onclick={onsettings} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)]" title={i18n.t.deck.columnSettings} aria-label={i18n.t.deck.columnSettings}><Settings2 size={13} /></button>
+      <button onclick={onpause} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)]" title={paused ? i18n.t.deck.resumeColumn : i18n.t.deck.pauseColumn} aria-label={paused ? i18n.t.deck.resumeColumn : i18n.t.deck.pauseColumn}>{#if paused}<Play size={13} />{:else}<Pause size={13} />{/if}</button>
+      <button onclick={onduplicate} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)]" title={i18n.t.deck.duplicateColumn} aria-label={i18n.t.deck.duplicateColumn}><Copy size={13} /></button>
+      {#if !pinned}
+        <button onclick={onmoveleft} disabled={!onmoveleft} class="p-1 text-[var(--color-text-muted)] disabled:opacity-30" title={i18n.t.deck.moveLeft} aria-label={i18n.t.deck.moveLeft}><ArrowLeft size={13} /></button>
+        <button onclick={onmoveright} disabled={!onmoveright} class="p-1 text-[var(--color-text-muted)] disabled:opacity-30" title={i18n.t.deck.moveRight} aria-label={i18n.t.deck.moveRight}><ArrowRight size={13} /></button>
+      {/if}
+      {#if !children}
       <!-- Scroll-lock toggle -->
       <button
         onclick={() => onscrolllockchange?.(!scrollLock)}
@@ -377,6 +458,7 @@
           {/if}
         </button>
       </div>
+      {/if}
       <!-- Pin toggle -->
       <button
         onclick={() => onpinnedchange?.(!pinned)}
@@ -466,30 +548,67 @@
     </div>
   </div>
 
+  {#if accounts.length}
+    <button onclick={onsettings} class="flex items-center gap-1 px-3 py-1 text-[10px] text-[var(--color-text-muted)] text-left" aria-label={i18n.t.deck.columnAccounts}>
+      {#each accounts.slice(0, 3) as account}{#if account.avatar_url}<img src={account.avatar_url} alt="" class="w-4 h-4 rounded-full" />{/if}{/each}
+      <span class="truncate">{accounts.map(account => `@${account.handle}`).join(', ')}</span>
+    </button>
+  {/if}
+  {#if errors.length}
+    <div role="status" class="border-b border-[var(--color-border)] p-2 text-xs text-amber-500 break-words">
+      {#each errors as error}<p>{error}</p>{/each}
+      <button onclick={onrefresh} disabled={loading} class="underline mt-1">{i18n.t.common.retry}</button>
+    </div>
+  {/if}
+  {#if unread > 0}
+    <button onclick={() => { onmarkread?.(); contentEl?.scrollTo({ top: 0, behavior: 'smooth' }); }} class="w-full py-1.5 text-xs bg-[var(--color-primary)]/15 text-[var(--color-primary-text)]">{i18n.t.deck.newPosts.replace('{count}', String(unread))}</button>
+  {/if}
   <!-- Inline filter -->
   <div class="px-2 py-1 border-b border-[var(--color-border)]">
     <input
       type="text"
       value={filterText}
       oninput={(e) => onFilterInput((e.target as HTMLInputElement).value)}
-      placeholder="Filter..."
+      placeholder={i18n.t.feed.searchInPosts}
+      aria-label={i18n.t.deck.includeText}
       class="w-full px-2 py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-[10px] text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]"
     />
   </div>
 
   <!-- Column content -->
-  <div bind:this={contentEl} class="flex-1 overflow-y-auto p-2 space-y-2">
-    {#if loading && filteredPosts.length === 0 && notificationGroups.length === 0}
+  <div bind:this={contentEl} onscroll={onColumnScroll} class="flex-1 overflow-y-auto p-2 space-y-2">
+    {#if children}
+      {@render children()}
+    {:else if loading && filteredPosts.length === 0 && notificationGroups.length === 0}
       <div class="text-center py-8">
         <Loader2 size={20} class="text-[var(--color-text-muted)] animate-spin mx-auto" />
       </div>
+    {:else if type === 'messages' || type === 'trending'}
+      {#each visiblePosts as post, postIdx (post.uri)}
+        {@const raw = post.raw as any}
+        {@const unreadConversation = raw?.unreadCount || raw?.unread}
+        {@const destination = type === 'messages'
+          ? `${base}/messages?account=${post.sourceAccountId ?? ''}&conversation=${encodeURIComponent(raw?.id ?? '')}&platform=${post.platform}`
+          : `${base}/search?q=${encodeURIComponent(raw?.topic ?? (raw?.name ? `#${raw.name}` : raw?.title ?? post.text))}`}
+        <a href={destination} data-feed-key={post.uri} data-post-uri={post.uri} class="block p-3 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-surface)] {focusedPostIdx === postIdx ? 'ring-1 ring-[var(--color-primary)]/60' : ''}">
+          <div class="flex items-center gap-2 text-sm font-medium">
+            {#if post.author.avatar}<img src={post.author.avatar} alt="" class="w-7 h-7 rounded-full" />{/if}
+            <span>{post.author.displayName || post.author.handle}</span>
+            {#if type === 'messages' && unreadConversation}<span class="w-2 h-2 rounded-full bg-[var(--color-primary)]"></span>{/if}
+          </div>
+          <p class="text-sm mt-1 line-clamp-3">{post.text}</p>
+          {#if post.sourceAccount}<p class="text-[10px] mt-1 text-[var(--color-text-muted)]">@{post.sourceAccount}</p>{/if}
+        </a>
+      {/each}
+      {#if visiblePosts.length === 0}<p class="text-xs text-center text-[var(--color-text-muted)] py-8">{i18n.t.feed.noPostsFound}</p>{/if}
     {:else if useGroupedNotifs}
       <!-- Grouped notification rendering for notification columns -->
       {#each notificationGroups as group (group.id)}
         {@const NIcon = getNotifIcon(group.type)}
         {@const isGrouped = group.actors.length > 1}
         {@const isExpanded = expandedGroups.has(group.id)}
-        <div class="rounded-lg hover:bg-[var(--color-surface)] transition-colors">
+        {@const destination = notificationDestination(group)}
+        <div data-feed-key={`notification:${group.id}`} class="rounded-lg hover:bg-[var(--color-surface)] transition-colors">
           <div class="flex items-start gap-2 p-2">
             <div class="flex-shrink-0 mt-0.5 {getNotifColor(group.type)}">
               <NIcon size={12} />
@@ -511,19 +630,19 @@
                   </div>
                   <span class="font-semibold">{group.actors[0].displayName || group.actors[0].handle}</span>
                   <span class="text-[var(--color-text-muted)]"> {getNotifActionText(group.type, group.actors.length)}</span>
-                  <button onclick={() => toggleGroup(group.id)} class="inline-flex ml-0.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+                  <button onclick={() => toggleGroup(group.id)} aria-expanded={isExpanded} aria-label={getNotifActionText(group.type, group.actors.length)} class="inline-flex ml-0.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
                     {#if isExpanded}<ChevronUp size={10} />{:else}<ChevronDown size={10} />{/if}
                   </button>
                 {:else}
                   {#if group.actors[0]?.avatar}
                     <img loading="lazy" src={group.actors[0].avatar} alt="" class="w-5 h-5 rounded-full inline mr-1 align-text-bottom" />
                   {/if}
-                  <span class="font-semibold">{group.actors[0]?.displayName || group.actors[0]?.handle}</span>
+                  <a href={`${base}/profile?handle=${encodeURIComponent(group.actors[0]?.handle ?? '')}&platform=${group.actors[0]?.platform}`} class="font-semibold hover:underline">{group.actors[0]?.displayName || group.actors[0]?.handle}</a>
                   <span class="text-[var(--color-text-muted)]"> {getNotifActionText(group.type, 1)}</span>
                 {/if}
               </div>
               {#if group.text}
-                <p class="text-[10px] text-[var(--color-text-muted)] mt-0.5 line-clamp-1">{group.text}</p>
+                {#if destination}<a href={destination} class="block text-[10px] text-[var(--color-text-muted)] mt-0.5 line-clamp-2 hover:underline">{group.text}</a>{:else}<p class="text-[10px] text-[var(--color-text-muted)] mt-0.5 line-clamp-2">{group.text}</p>{/if}
               {/if}
               {#if isGrouped && isExpanded}
                 <div class="mt-1 space-y-0.5">
@@ -541,9 +660,10 @@
           </div>
         </div>
       {/each}
+      {#if notificationGroups.length === 0}<p class="text-xs text-center text-[var(--color-text-muted)] py-8">{filterText ? i18n.t.search.noResults : i18n.t.feed.noPostsFound}</p>{/if}
     {:else if filteredPosts.length === 0}
       <div class="text-center py-8">
-        <p class="text-xs text-[var(--color-text-muted)] mb-2">{filterText ? 'No matches' : 'No posts yet'}</p>
+        <p class="text-xs text-[var(--color-text-muted)] mb-2">{filterText ? i18n.t.search.noResults : i18n.t.feed.noPostsFound}</p>
         {#if onrefresh && !filterText}
           <button onclick={onrefresh} class="text-[10px] text-[var(--color-primary-text)] hover:underline">{i18n.t.deck.refreshColumn}</button>
         {/if}
@@ -555,17 +675,21 @@
              post count twice — j/k keyboard navigation needed two presses to
              move one post, and the scroll anchor could match either element. -->
         <div class="deck-post {focusedPostIdx === postIdx ? 'ring-1 ring-[var(--color-primary)]/60 rounded-lg' : ''}" data-feed-key={post.uri}>
+          {#if post.sourceAccount}<p class="px-2 pt-1 text-[10px] text-[var(--color-text-muted)] truncate" title={i18n.t.deck.columnAccounts}>@{post.sourceAccount}</p>{/if}
           <Post {post} {onlike} {onboost} {onreply} {onquote} />
         </div>
       {/each}
-      {#if hasMorePosts}
-        <button
-          onclick={() => visiblePostCount += POST_PAGE_SIZE}
-          class="w-full py-2 text-xs text-[var(--color-primary-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
-        >
-          Show more ({filteredPosts.length - visiblePostCount} remaining)
-        </button>
-      {/if}
+    {/if}
+    {#if hasMorePosts}
+      <button
+        onclick={() => visiblePostCount += POST_PAGE_SIZE}
+        class="w-full py-2 text-xs text-[var(--color-primary-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
+      >
+        {i18n.t.deck.showMore.replace('{count}', String(filteredPosts.length - visiblePostCount))}
+      </button>
+    {/if}
+    {#if hasOlder && !hasMorePosts}
+      <button onclick={onloadmore} disabled={loading} class="w-full py-3 text-xs text-[var(--color-primary-text)] disabled:opacity-50">{loading ? i18n.t.common.loading : i18n.t.deck.loadOlder}</button>
     {/if}
   </div>
 

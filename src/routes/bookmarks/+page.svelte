@@ -8,8 +8,8 @@
   import { listBookmarks, importPlatformBookmarks } from '$lib/bookmarks';
   import { getAllBlueskyBookmarks } from '$lib/api/bluesky-bookmarks';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
-  import { BlueskyClient } from '$lib/api/bluesky';
-  import { MastodonClient } from '$lib/api/mastodon';
+  import type { BlueskyClient } from '$lib/api/bluesky';
+  import type { MastodonClient } from '$lib/api/mastodon';
   import { normalizePost } from '$lib/api/unified';
   import Post from '$lib/components/Post.svelte';
   import type { UnifiedPost, Account } from '$lib/types';
@@ -18,6 +18,7 @@
   let loading = $state(true);
   let syncing = $state(false);
   let syncResult = $state('');
+  let error = $state('');
   let accounts: Account[] = $state([]);
   let clientEntries: Map<number, ClientEntry> = new Map();
 
@@ -27,44 +28,51 @@
       accounts = result.accounts;
       clientEntries = result.clients;
     } catch (e) { swallow('bookmarks:L27', e); }
-    posts = await listBookmarks();
+    try { posts = await listBookmarks(); }
+    catch (e) { error = String(e); }
     loading = false;
   });
 
+  onMount(() => {
+    let active = true;
+    const refresh = async () => {
+      try { const saved = await listBookmarks(); if (active) posts = saved; }
+      catch (e) { if (active) error = String(e); }
+    };
+    window.addEventListener('crispdeck-bookmarks-changed', refresh);
+    return () => { active = false; window.removeEventListener('crispdeck-bookmarks-changed', refresh); };
+  });
+
   async function syncBookmarks() {
+    if (syncing) return;
     let failedAccounts = 0;
     syncing = true;
     syncResult = '';
     let totalImported = 0;
 
     for (const acct of accounts) {
+      if (acct.platform !== 'bluesky' && acct.platform !== 'mastodon') continue;
       const entry = clientEntries.get(acct.id);
-      if (!entry) continue;
+      if (!entry || entry.platform !== acct.platform || entry.degraded) { failedAccounts++; continue; }
 
       try {
         if (acct.platform === 'bluesky') {
           // Official Bluesky bookmarks (app.bsky.bookmark.*, since Bluesky 1.108)
-          const agent = entry.oauthAgent ?? (() => { try { const a = (entry.client as BlueskyClient).getAgent(); return a?.session ? a : null; } catch { return null; } })();
-          if (agent) {
-            const bookmarks = await getAllBlueskyBookmarks(agent);
-            const normalized = bookmarks
-              .filter(b => b.item?.$type === 'app.bsky.feed.defs#postView')
-              .map(b => normalizePost({ post: b.item } as any, 'bluesky'));
-            totalImported += await importPlatformBookmarks(normalized);
-          }
+          const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
+          if (!agent.did) throw new Error('Reconnect this Bluesky account before importing bookmarks.');
+          const bookmarks = await getAllBlueskyBookmarks(agent);
+          const normalized = bookmarks
+            .filter(b => b.item?.$type === 'app.bsky.feed.defs#postView')
+            .map(b => ({ ...normalizePost({ post: b.item } as any, 'bluesky'), sourceAccount: acct.handle, sourceAccountId: acct.id }));
+          totalImported += await importPlatformBookmarks(normalized);
         } else if (acct.platform === 'mastodon') {
           const client = entry.client as MastodonClient;
-          const token = client.getAccessToken();
-          if (token) {
-            const resp = await fetch(`${client.getInstanceUrl()}/api/v1/bookmarks?limit=40`, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            if (resp.ok) {
-              const statuses = await resp.json();
-              const normalized = statuses.map((s: any) => normalizePost(s, 'mastodon'));
-              totalImported += await importPlatformBookmarks(normalized);
-            }
-          }
+          // The existing client authenticates and converts Mastodon's wire
+          // fields to the camelCase media/poll fields consumed by Post.
+          const statuses = await client.getBookmarks();
+          const normalized = statuses.map(status => ({ ...normalizePost(status, 'mastodon'), sourceAccount: acct.handle, sourceAccountId: acct.id,
+            contentWarning: (status.reblog ?? status).spoilerText || undefined }));
+          totalImported += await importPlatformBookmarks(normalized);
         }
       } catch (e) {
         swallow(`bookmarks.sync:${acct.handle}`, e);
@@ -72,11 +80,12 @@
       }
     }
 
-    posts = await listBookmarks();
+    try { posts = await listBookmarks(); }
+    catch (e) { error = String(e); }
     // "All bookmarks already synced" is a lie when an account never answered.
     syncResult = totalImported > 0
       ? `Imported ${totalImported} new bookmark${totalImported > 1 ? 's' : ''}.`
-      : 'All bookmarks already synced.';
+      : failedAccounts ? i18n.t.common.someAccountsFailed.replace('{count}', String(failedAccounts)) : 'All bookmarks already synced.';
     if (failedAccounts > 0) {
       toast.warning(i18n.t.common.someAccountsFailed.replace('{count}', String(failedAccounts)));
     }
@@ -121,6 +130,8 @@
       <button onclick={() => syncResult = ''} class="ml-2 underline">dismiss</button>
     </div>
   {/if}
+
+  {#if error}<p role="alert" class="mb-4 text-sm text-red-400">{error}</p>{/if}
 
   {#if loading}
     <div class="text-center py-12"><Loader2 size={32} class="text-[var(--color-text-muted)] animate-spin mx-auto" /></div>

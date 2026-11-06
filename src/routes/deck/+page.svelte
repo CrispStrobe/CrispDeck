@@ -2,13 +2,23 @@
   import { swallow } from '$lib/debug-log';
   import { readJson, writeJson } from '$lib/safe-storage';
   import { toast } from '$lib/toast.svelte';
-  import { isStreamableColumn, isBlueskyStreamable, mastodonStreamFor } from '$lib/deck-streaming';
+  import { subscribeDeckColumn } from '$lib/deck-live';
+  import { columnAccounts } from '$lib/deck-accounts';
+  import { performDeckAction } from '$lib/deck-actions';
+  import { loadDeckPage, supportsDeckLoader } from '$lib/deck-loader';
+  import { filterColumnPosts, filterColumnNotifications } from '$lib/deck-filters';
+  import { mergeColumnPosts, withoutDeletedPosts } from '$lib/deck-state';
+  import ColumnSettings from '$lib/components/deck/ColumnSettings.svelte';
+  import WorkspaceManager from '$lib/components/deck/WorkspaceManager.svelte';
+  import PublishingColumn from '$lib/components/deck/PublishingColumn.svelte';
+  import { listBookmarks } from '$lib/bookmarks';
+  import { loadConversationInbox } from '$lib/messages';
   import { isColumnLocked } from '$lib/deck-scroll';
   import * as deckFocus from '$lib/deck-focus';
   import { base } from '$app/paths';
   import { onMount, onDestroy } from 'svelte';
   import { initAllClients, invalidateClientCache, type ClientEntry } from '$lib/api/client-factory';
-  import { Columns3, Plus, Loader2 } from '@lucide/svelte';
+  import { Columns3, Plus, Loader2, Pencil } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import StarterWorkspaces from '$lib/components/StarterWorkspaces.svelte';
   import { STARTER_WORKSPACES, type WorkspaceId } from '$lib/starter-workspaces';
@@ -18,8 +28,9 @@
   }
   let showStarters = $state(false);
   function applyStarter(next: DeckColumnConfig[]) {
-    streamManager.disconnectAll(); streamCleanups.clear();
+    for (const col of columns) clearColumnRuntime(col.id);
     columns = next; columnPosts = {}; columnNotifGroups = {};
+    focusedColumnIdx = -1; focusedPostIdx = -1;
     refreshLayoutList();
     columns.forEach(col => loadColumn(col));
     showStarters = false;
@@ -27,24 +38,22 @@
   import { haptic } from '$lib/haptics';
   import DelayedSpinner from '$lib/components/DelayedSpinner.svelte';
   import DeckColumn from '$lib/components/deck/DeckColumn.svelte';
-  import type { ColumnType } from '$lib/deck-columns';
+  import { requiresQuery, moveColumn, type ColumnType } from '$lib/deck-columns';
   import FloatingCompose from '$lib/components/FloatingCompose.svelte';
   import FeedPickerDialog from '$lib/components/FeedPickerDialog.svelte';
   import type { FeedChoice } from '$lib/bluesky-feeds';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
-  import { ThreadsClient } from '$lib/api/threads';
-  import { normalizePost, sortPosts } from '$lib/api/unified';
+  import { sortPosts } from '$lib/api/unified';
+  import { fetchOk } from '$lib/http';
   import type { UnifiedPost, Account } from '$lib/types';
   import { groupNotifications, type UnifiedNotification, type NotificationGroup } from '$lib/notification-grouping';
-  import { listTagGroups } from '$lib/tag-groups';
-  import { listFeeds, fetchFeed, rssItemToPost } from '$lib/rss';
-  import { applyMuteFilter } from '$lib/muted-words';
-  import { parseKeywords, buildKeywordMatcher, listKeywordSets } from '$lib/keyword-monitor';
-  import { streamManager, type StreamEvent } from '$lib/streaming';
+  import { fetchFeed, rssItemToPost } from '$lib/rss';
+  import { applyMuteFilter, buildMuteFilter } from '$lib/muted-words';
+  import { streamManager } from '$lib/streaming';
   import {
-    listLayouts, getLayout, saveLayout, deleteLayout,
-    getActiveLayoutName, setActiveLayoutName,
+    listLayouts, getLayout, saveLayout,
+    getActiveLayoutName, setActiveLayoutName, parseDeckColumns,
     type DeckColumnConfig, type ColumnNotifyMode,
   } from '$lib/deck-layouts';
   import { notifyColumn } from '$lib/column-notify';
@@ -64,7 +73,11 @@
   let deckContainerEl: HTMLDivElement | undefined = $state();
 
   function handleTouchStart(colId: string, e: TouchEvent) {
+    if (touchLongPressTimer) clearTimeout(touchLongPressTimer);
+    touchLongPressTimer = null;
+    if (columns.find(col => col.id === colId)?.pinned || (e.target instanceof Element && e.target.closest('button, input, select, textarea, a'))) return;
     const touch = e.touches[0];
+    if (!touch) return;
     touchStartX = touch.clientX;
     touchStartY = touch.clientY;
 
@@ -78,6 +91,7 @@
 
   function handleTouchMove(e: TouchEvent) {
     const touch = e.touches[0];
+    if (!touch) return;
 
     // If we haven't entered drag mode yet, check if touch moved too far (cancel long-press)
     if (!touchDragColumnId && touchLongPressTimer) {
@@ -115,7 +129,7 @@
     touchDropTargetId = foundTarget;
   }
 
-  function handleTouchEnd() {
+  function handleTouchEnd(event?: TouchEvent) {
     // Clear long-press timer
     if (touchLongPressTimer) {
       clearTimeout(touchLongPressTimer);
@@ -125,15 +139,16 @@
     if (!touchDragColumnId) return;
 
     // Perform the reorder if we have a valid drop target
-    if (touchDropTargetId && touchDropTargetId !== touchDragColumnId) {
+    if (event?.type !== 'touchcancel' && touchDropTargetId && touchDropTargetId !== touchDragColumnId) {
       const fromIdx = columns.findIndex(c => c.id === touchDragColumnId);
       const toIdx = columns.findIndex(c => c.id === touchDropTargetId);
-      if (fromIdx >= 0 && toIdx >= 0) {
+      if (fromIdx >= 0 && toIdx >= 0 && !columns[fromIdx]?.pinned && !columns[toIdx]?.pinned) {
         const moved = columns[fromIdx];
         const updated = [...columns];
         updated.splice(fromIdx, 1);
         updated.splice(toIdx, 0, moved);
         columns = updated;
+        focusedColumnIdx = -1; focusedPostIdx = -1;
         saveColumns();
         haptic('light');
       }
@@ -147,12 +162,14 @@
   let accounts: Account[] = $state([]);
   let loading = $state(true);
   let showAddMenu = $state(false);
+  let showWorkspaces = $state(false);
+  let editingColumn: DeckColumnConfig | null = $state(null);
   let columns: DeckColumnConfig[] = $state([]);
   let columnPosts: Record<string, UnifiedPost[]> = $state({});
   let columnNotifGroups: Record<string, NotificationGroup[]> = $state({});
   let columnLoading: Record<string, boolean> = $state({});
 
-  let clientEntries: Map<number, ClientEntry> = new Map();
+  let clientEntries: Map<number, ClientEntry> = $state(new Map());
   let streamCleanups: Map<string, () => void> = new Map();
 
   // Floating compose state
@@ -192,30 +209,31 @@
 
   function focusPost(idx: number) {
     if (focusedColumnIdx < 0) return;
-    const col = columns[focusedColumnIdx];
-    const posts = columnPosts[col?.id] ?? [];
+    const postEls = renderedPostElements();
     focusedPostIdx = deckFocus.focusPost(
-      { column: focusedColumnIdx, post: focusedPostIdx }, idx, posts.length,
+      { column: focusedColumnIdx, post: focusedPostIdx }, idx, postEls.length,
     ).post;
-    idx = focusedPostIdx;
-    // Scroll the post into view within the column
-    if (deckContainerEl) {
-      const colEl = deckContainerEl.children[focusedColumnIdx] as HTMLElement;
-      const postEls = colEl?.querySelectorAll('[data-post-uri]');
-      const postEl = postEls?.[idx] as HTMLElement;
-      postEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
+    postEls[focusedPostIdx]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function renderedPostElements(): HTMLElement[] {
+    if (!deckContainerEl || focusedColumnIdx < 0) return [];
+    return [...(deckContainerEl.children[focusedColumnIdx]?.querySelectorAll<HTMLElement>('[data-post-uri]') ?? [])];
   }
 
   function getFocusedPost(): UnifiedPost | null {
     if (focusedColumnIdx < 0 || focusedPostIdx < 0) return null;
     const col = columns[focusedColumnIdx];
-    return (columnPosts[col?.id] ?? [])[focusedPostIdx] ?? null;
+    const uri = renderedPostElements()[focusedPostIdx]?.dataset.postUri;
+    return (col ? displayedPosts(col) : []).find(post => post.uri === uri) ?? null;
   }
 
   function handleKeydown(e: KeyboardEvent) {
     const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement;
-    if (isInput || composeOpen) return;
+    if (isInput || composeOpen || showWorkspaces || editingColumn || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target instanceof HTMLElement) {
+      if (e.target.isContentEditable || e.target.closest('dialog')) return;
+    }
 
     // 'n' opens compose
     if (e.key === 'n') {
@@ -259,16 +277,28 @@
 
     // 'o' opens focused post in thread view
     if (e.key === 'o') {
+      const element = renderedPostElements()[focusedPostIdx];
+      if (element instanceof HTMLAnchorElement) {
+        e.preventDefault(); element.click(); return;
+      }
       const post = getFocusedPost();
       if (post) {
         e.preventDefault();
-        window.location.href = `${base}/thread?uri=${encodeURIComponent(post.uri)}&platform=${post.platform}`;
+        const params = new URLSearchParams({ uri: post.uri, platform: post.platform });
+        if (post.sourceAccountId !== undefined) {
+          params.set('account', String(post.sourceAccountId));
+          const raw = post.raw as any;
+          const localId = raw?.reblog?.id ?? raw?.id;
+          if (post.platform === 'mastodon' && localId) params.set('id', String(localId));
+        }
+        window.location.href = `${base}/thread?${params}`;
       }
       return;
     }
 
     // 'r' replies to focused post
     if (e.key === 'r') {
+      if (['messages', 'trending'].includes(columns[focusedColumnIdx]?.type)) return;
       const post = getFocusedPost();
       if (post) { e.preventDefault(); handleReply(post); }
       return;
@@ -312,7 +342,7 @@
     { type: 'search', label: 'Search...' },
     { type: 'hashtag', label: 'Hashtag...' },
     { type: 'user', label: 'User Feed...' },
-    { type: 'list', label: 'Mastodon List...' },
+    { type: 'list', label: 'List...' },
     { type: 'feed', label: 'Bluesky Feed...' },
     { type: 'tag-group', label: 'Tag Group...' },
     { type: 'rss', label: 'RSS Feed...' },
@@ -323,6 +353,9 @@
     { type: 'activity', label: 'Activity (Engagement)' },
     { type: 'likes', label: 'Liked Posts' },
     { type: 'followers', label: 'New Followers' },
+    { type: 'bookmarks', label: i18n.t.nav.bookmarks },
+    { type: 'drafts', label: i18n.t.nav.drafts },
+    { type: 'scheduled', label: i18n.t.drafts.scheduled },
   ];
 
   // Saved layouts (using deck-layouts.ts module)
@@ -333,13 +366,15 @@
   }
 
   function loadLayoutByName(name: string) {
+    if (!saveColumns()) throw new Error(i18n.t.deck.workspaceSaveFailed);
     const layout = getLayout(name);
-    if (layout) {
-      columns = [...layout.columns] as DeckColumnConfig[];
-      setActiveLayoutName(name);
-      saveColumns();
-      columns.forEach(col => loadColumn(col));
-    }
+    if (!layout) return;
+    setActiveLayoutName(name);
+    for (const col of columns) clearColumnRuntime(col.id);
+    columns = structuredClone(layout.columns);
+    focusedColumnIdx = -1; focusedPostIdx = -1;
+    if (!saveColumns()) throw new Error(i18n.t.deck.workspaceSaveFailed);
+    columns.forEach(col => loadColumn(col));
   }
 
   let refreshInterval: ReturnType<typeof setInterval> | undefined;
@@ -351,12 +386,13 @@
         invalidateClientCache();
         result = await initAllClients();
       }
+      if (disposed) return;
       accounts = result.accounts;
       clientEntries = result.clients;
-      rebuildClientGroups();
 
       // Load saved column config or use defaults
-      columns = readJson('crispdeck-deck-columns', defaultColumns, Array.isArray);
+      const saved = readJson('crispdeck-deck-columns', defaultColumns, Array.isArray);
+      try { columns = parseDeckColumns(saved); } catch { columns = defaultColumns; }
 
       // Load saved layouts via module
       refreshLayoutList();
@@ -383,221 +419,232 @@
     // the teardown lives in onDestroy — returning a cleanup here would leave
     // this interval, the listener and the Jetstream socket running for the
     // rest of the session, and stack another set on the next visit.
+    if (disposed) return;
     refreshInterval = setInterval(() => {
       if (document.hidden) return;
-      columns.forEach(col => loadColumn(col));
-    }, 300000);
+      columns.filter(col => !col.paused && Date.now() - (lastRefresh.get(col.id) ?? 0) >= (col.refreshIntervalSeconds ?? 300) * 1000).forEach(col => loadColumn(col));
+    }, 1000);
     document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('crispdeck-bookmarks-changed', handleBookmarkChange);
   });
 
   /** Refresh on tab re-focus — stagger to avoid a thundering herd. */
+  function handleBookmarkChange() { columns.filter(col => col.type === 'bookmarks' && !col.paused).forEach(col => loadColumn(col)); }
+
   function handleVisibility() {
-    if (!document.hidden) columns.forEach((col, i) => setTimeout(() => loadColumn(col), i * 150));
+    if (!document.hidden) columns.filter(col => !col.paused).forEach(col => loadColumn(col));
   }
 
   onDestroy(() => {
+    disposed = true;
+    if (touchLongPressTimer) clearTimeout(touchLongPressTimer);
+    for (const col of columns) clearColumnRuntime(col.id);
     if (refreshInterval) clearInterval(refreshInterval);
     refreshInterval = undefined;
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('crispdeck-bookmarks-changed', handleBookmarkChange);
     }
     streamManager.disconnectAll();
     streamCleanups.clear();
     jetstream.setEnabled(false);
   });
 
-  function saveColumns() {
-    writeJson('crispdeck-deck-columns', columns);
+  function saveColumns(): boolean {
+    if (!writeJson('crispdeck-deck-columns', columns)) { toast.error(i18n.t.deck.workspaceSaveFailed); return false; }
+    const active = getActiveLayoutName();
+    if (active) {
+      try { saveLayout(active, columns); }
+      catch (error) { swallow('deck.saveWorkspace', error); toast.error(i18n.t.deck.workspaceSaveFailed); return false; }
+    }
+    return true;
   }
 
-  // Precomputed client groups — rebuilt after initAllClients
-  let allBsky: [number, ClientEntry][] = [];
-  let allMasto: [number, ClientEntry][] = [];
-  let allThreads: [number, ClientEntry][] = [];
-  function rebuildClientGroups() {
-    allBsky = [...clientEntries.entries()].filter(([id]) => accounts.find(a => a.id === id)?.platform === 'bluesky');
-    allMasto = [...clientEntries.entries()].filter(([id]) => accounts.find(a => a.id === id)?.platform === 'mastodon');
-    allThreads = [...clientEntries.entries()].filter(([id]) => accounts.find(a => a.id === id)?.platform === 'threads');
+  const columnRequests = new Map<string, number>();
+  let requestSequence = 0;
+  let disposed = false;
+  let columnErrors: Record<string, string[]> = $state({});
+  let publishingRefresh: Record<string, number> = $state({});
+  let columnCursors: Record<string, Record<string, string | null>> = {};
+  let columnHasMore: Record<string, boolean> = $state({});
+  let columnLive: Record<string, boolean> = $state({});
+  let columnUnread: Record<string, number> = $state({});
+  let columnLoaded: Record<string, boolean> = {};
+  let columnNotifications: Record<string, UnifiedNotification[]> = {};
+  const loadedOlder = new Set<string>();
+  const lastRefresh = new Map<string, number>();
+  const liveRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const pendingHeadRefresh = new Set<string>();
+  const deletedUris = new Map<string, Set<string>>();
+
+  function displayedPosts(col: DeckColumnConfig): UnifiedPost[] {
+    return filterColumnPosts(applyMuteFilter(columnPosts[col.id] ?? []), col.filters, col.muteWords);
   }
 
-  async function loadColumn(col: DeckColumnConfig) {
+  function displayedNotificationGroups(col: DeckColumnConfig, groups = columnNotifGroups[col.id] ?? []): NotificationGroup[] {
+    const muted = buildMuteFilter();
+    return filterColumnNotifications(groups, col.filters, col.muteWords).filter(group => !muted(group.text ?? ''));
+  }
+
+  function publishingAccountIds(col: DeckColumnConfig): number[] | undefined {
+    if (!col.platform || col.platform === 'all') return col.accountIds;
+    return accounts.filter(account => {
+      if (account.platform !== col.platform) return false;
+      if (col.accountIds === undefined) return true;
+      return col.accountIds.includes(account.id);
+    }).map(account => account.id);
+  }
+
+  function clearColumnRuntime(id: string) {
+    columnRequests.delete(id);
+    streamCleanups.get(id)?.(); streamCleanups.delete(id);
+    const timer = liveRefreshTimers.get(id);
+    if (timer) clearTimeout(timer);
+    liveRefreshTimers.delete(id);
+    pendingHeadRefresh.delete(id);
+    delete columnCursors[id]; delete columnErrors[id]; delete columnPosts[id];
+    delete columnNotifGroups[id]; delete columnNotifications[id];
+    delete columnHasMore[id]; delete columnLoaded[id]; delete columnUnread[id]; delete columnLive[id];
+    columnLoading[id] = false;
+    loadedOlder.delete(id); lastRefresh.delete(id); deletedUris.delete(id);
+  }
+
+  function startColumnStream(col: DeckColumnConfig) {
+    if (streamCleanups.has(col.id) || col.paused || disposed) return;
+    const cleanup = subscribeDeckColumn(col, accounts, clientEntries, (event, accountId) => {
+      const current = columns.find(column => column.id === col.id);
+      if (!current || current.paused || disposed) return;
+      if (event.type === 'delete') {
+        const removed = (columnPosts[col.id] ?? []).filter(post => event.platform === 'bluesky'
+          ? post.uri === event.payload.uri
+          : post.sourceAccountId === accountId && String((post.raw as any)?.id) === String(event.payload.id));
+        const deleted = deletedUris.get(col.id) ?? new Set<string>();
+        for (const post of removed) deleted.add(post.uri);
+        if (event.payload.uri) deleted.add(event.payload.uri);
+        deletedUris.set(col.id, deleted);
+        columnPosts[col.id] = withoutDeletedPosts(columnPosts[col.id] ?? [], deleted);
+        return;
+      }
+      if (!liveRefreshTimers.has(col.id)) {
+        liveRefreshTimers.set(col.id, setTimeout(() => {
+          liveRefreshTimers.delete(col.id);
+          const latest = columns.find(column => column.id === col.id);
+          if (latest && !latest.paused && !disposed && !document.hidden) void loadColumn(latest);
+        }, 2000));
+      }
+    }, ready => columnLive[col.id] = ready);
+    streamCleanups.set(col.id, cleanup);
+  }
+
+  async function loadColumn(col: DeckColumnConfig, older = false) {
+    if (disposed || !columns.some(column => column.id === col.id)) return;
+    if (columnLoading[col.id]) {
+      if (!older) pendingHeadRefresh.add(col.id);
+      return;
+    }
+    const request = ++requestSequence;
+    lastRefresh.set(col.id, Date.now());
+    columnRequests.set(col.id, request);
     columnLoading[col.id] = true;
-    const posts: UnifiedPost[] = [];
+    const isCurrent = () => !disposed && columnRequests.get(col.id) === request && columns.some(column => column.id === col.id);
+    try {
+      if (col.type === 'drafts' || col.type === 'scheduled') { publishingRefresh[col.id] = (publishingRefresh[col.id] ?? 0) + 1; return; }
+      if (col.type === 'bookmarks') {
+        const bookmarks = await listBookmarks();
+        if (isCurrent()) {
+          columnPosts[col.id] = bookmarks.filter(post => {
+            if (col.platform && col.platform !== 'all' && post.platform !== col.platform) return false;
+            if (col.accountIds === undefined) return true;
+            if (post.sourceAccountId === undefined) return false;
+            return col.accountIds.includes(post.sourceAccountId);
+          });
+          columnErrors[col.id] = [];
+        }
+        return;
+      }
+      const selected = columnAccounts(col, accounts);
+      if (col.type !== 'rss' && selected.length === 0) {
+        if (isCurrent()) columnErrors[col.id] = [i18n.t.deck.noSelectedAccounts];
+        return;
+      }
+      let posts: UnifiedPost[] = [];
+      let notifications: UnifiedNotification[] | undefined;
+      let errors: string[] = [];
+      if (supportsDeckLoader(col.type)) {
+        const page = await loadDeckPage(col, accounts, clientEntries, older ? columnCursors[col.id] : undefined);
+        if (!isCurrent()) return;
+        posts = page.posts;
+        notifications = page.notifications;
+        errors = page.errors.map(error => `@${accounts.find(account => account.id === error.accountId)?.handle ?? error.accountId}: ${error.message}`);
+        if (older || !loadedOlder.has(col.id)) {
+          columnCursors[col.id] = page.cursors;
+          columnHasMore[col.id] = page.hasMore;
+        }
+        if (older) loadedOlder.add(col.id);
+      } else {
+        const results = await Promise.allSettled((col.type === 'rss' ? [[]] : selected.map(account => [account])).map(selection => loadLegacyColumn(col, selection)));
+        if (!isCurrent()) return;
+        results.forEach((result, index) => {
+          if (result.status === 'fulfilled') posts.push(...result.value);
+          else { swallow('deck.loadColumn', result.reason); errors.push(`${selected[index]?.handle ?? col.title}: ${i18n.t.deck.columnLoadFailed}`); }
+        });
+      }
+      if (!isCurrent()) return;
+      const current = columns.find(column => column.id === col.id)!;
+      columnErrors[col.id] = errors;
+      if (notifications) {
+        const previous = columnNotifications[col.id] ?? [];
+        const merged = new Map(previous.map(notification => [notification.id, notification]));
+        const arrivals = notifications.filter(notification => !merged.has(notification.id)
+          && displayedNotificationGroups(current, groupNotifications([notification])).length > 0);
+        for (const notification of notifications) merged.set(notification.id, notification);
+        columnNotifications[col.id] = [...merged.values()];
+        columnNotifGroups[col.id] = groupNotifications(columnNotifications[col.id]);
+        if (columnLoaded[col.id] && !older && arrivals.length) {
+          columnUnread[col.id] = (columnUnread[col.id] ?? 0) + arrivals.length;
+          notifyColumn(current.notify, current.title, arrivals[0].text ?? arrivals[0].author.displayName ?? arrivals[0].author.handle);
+        }
+      }
+      const incoming = withoutDeletedPosts(sortPosts(posts, 'newest'), deletedUris.get(col.id) ?? new Set());
+      const previous = columnPosts[col.id] ?? [];
+      const known = new Set(previous.map(post => post.uri));
+      const arrivals = filterColumnPosts(applyMuteFilter(incoming.filter(post => !known.has(post.uri))), current.filters, current.muteWords);
+      columnPosts[col.id] = mergeColumnPosts(previous, incoming, older);
+      if (columnLoaded[col.id] && !older && !notifications && arrivals.length) {
+        columnUnread[col.id] = (columnUnread[col.id] ?? 0) + arrivals.length;
+        notifyColumn(current.notify, current.title, arrivals[0].text);
+      }
+      if (!errors.length || posts.length || notifications?.length) columnLoaded[col.id] = true;
+      lastRefresh.set(col.id, Date.now());
+      startColumnStream(current);
+    } catch (error) {
+      if (isCurrent()) {
+        swallow(`deck.loadColumn:${col.id}`, error);
+        columnErrors[col.id] = [i18n.t.deck.columnLoadFailed];
+      }
+    } finally {
+      if (isCurrent()) {
+        columnLoading[col.id] = false;
+        if (pendingHeadRefresh.delete(col.id)) {
+          const current = columns.find(column => column.id === col.id);
+          if (current) void loadColumn(current);
+        }
+      }
+    }
+  }
 
+  async function loadLegacyColumn(col: DeckColumnConfig, selected: Account[]): Promise<UnifiedPost[]> {
+    const posts: UnifiedPost[] = [];
+    const selectedIds = new Set(selected.map(account => account.id));
+    const allBsky = [...clientEntries.entries()].filter(([id, entry]) => selectedIds.has(id) && entry.platform === 'bluesky');
+    const allMasto = [...clientEntries.entries()].filter(([id, entry]) => selectedIds.has(id) && entry.platform === 'mastodon');
     // First client per platform (for single-client operations)
     const bskyEntry = allBsky[0]?.[1];
     const mastoEntry = allMasto[0]?.[1];
-    const threadsEntry = allThreads[0]?.[1];
     const bskyClient = bskyEntry?.client as BlueskyClient | undefined;
-    const bskyAgent = bskyEntry?.oauthAgent ?? (bskyClient ? (() => { try { const a = bskyClient.getAgent(); return a?.session ? a : null; } catch { return null; } })() : null);
     const mastoClient = mastoEntry?.client as MastodonClient | undefined;
-    const threadsClient = threadsEntry?.client as ThreadsClient | undefined;
-    const bskyAcct = accounts.find(a => a.platform === 'bluesky');
-    const mastoAcct = accounts.find(a => a.platform === 'mastodon');
 
-    try {
-      // Multi-account merge: fetch ALL accounts in parallel for timeline and my-posts
-      if (col.type === 'timeline') {
-        const fetchers: Promise<UnifiedPost[]>[] = [
-          ...allBsky.map(([id, entry]) => (async () => {
-            const acct = accounts.find(a => a.id === id);
-            try {
-              if (entry.oauthAgent) {
-                const r = await entry.oauthAgent.api.app.bsky.feed.getTimeline({ limit: 50 });
-                return r.data.feed.map(p => ({ ...normalizePost(p, 'bluesky'), sourceAccount: acct?.handle }));
-              } else {
-                const r = await (entry.client as BlueskyClient).getTimeline();
-                return r.feed.map(p => ({ ...normalizePost(p, 'bluesky'), sourceAccount: acct?.handle }));
-              }
-            } catch { return []; }
-          })()),
-          ...allMasto.map(([id, entry]) => (async () => {
-            const acct = accounts.find(a => a.id === id);
-            try {
-              const timeline = await (entry.client as MastodonClient).getHomeTimeline();
-              return timeline.map(s => ({ ...normalizePost(s, 'mastodon'), sourceAccount: acct?.handle }));
-            } catch { return []; }
-          })()),
-        ];
-        const results = await Promise.all(fetchers);
-        posts.push(...results.flat());
-      } else if (col.type === 'my-posts') {
-        const fetchers: Promise<UnifiedPost[]>[] = [
-          ...allBsky.map(([id, entry]) => (async () => {
-            const acct = accounts.find(a => a.id === id);
-            if (!acct) return [];
-            try {
-              const r = await (entry.client as BlueskyClient).getAuthorFeed(acct.handle);
-              return r.feed.map(p => ({ ...normalizePost(p, 'bluesky'), sourceAccount: acct.handle }));
-            } catch { return []; }
-          })()),
-          ...allMasto.map(([id, entry]) => (async () => {
-            const acct = accounts.find(a => a.id === id);
-            if (!acct) return [];
-            try {
-              const a = await (entry.client as MastodonClient).getAccountByHandle(acct.handle);
-              const statuses = await (entry.client as MastodonClient).getAccountStatuses(a.id);
-              return statuses.map(s => ({ ...normalizePost(s, 'mastodon'), sourceAccount: acct.handle }));
-            } catch { return []; }
-          })()),
-          ...allThreads.map(([id, entry]) => (async () => {
-            const acct = accounts.find(a => a.id === id);
-            try {
-              const client = entry.client as ThreadsClient;
-              const threadsPosts = await client.getOwnPosts(25);
-              return threadsPosts.map(p => ({ ...client.normalizePost(p), sourceAccount: acct?.handle }));
-            } catch { return []; }
-          })()),
-        ];
-        const results = await Promise.all(fetchers);
-        posts.push(...results.flat());
-      } else if (col.type === 'mentions') {
-        if (bskyAgent) try {
-          const r = await bskyAgent.api.app.bsky.notification.listNotifications({ limit: 50 });
-          for (const n of (r.data.notifications ?? []).filter(n => n.reason === 'mention' || n.reason === 'reply')) {
-            if ((n.record as any)?.text) posts.push({ uri: n.uri, text: (n.record as any).text, author: { handle: n.author.handle, displayName: n.author.displayName, avatar: n.author.avatar }, createdAt: n.indexedAt, platform: 'bluesky', isRepost: false, raw: n });
-          }
-        } catch (e) { swallow('deck.loadColumn', e); } else if (bskyClient) try {
-          const { notifications } = await bskyClient.getNotifications();
-          for (const n of notifications.filter(n => n.reason === 'mention' || n.reason === 'reply')) {
-            if ((n.record as any)?.text) posts.push({ uri: n.uri, text: (n.record as any).text, author: { handle: n.author.handle, displayName: n.author.displayName, avatar: n.author.avatar }, createdAt: n.indexedAt, platform: 'bluesky', isRepost: false, raw: n });
-          }
-        } catch (e) { swallow('deck.loadColumn', e); }
-        if (mastoClient) try {
-          const token = mastoClient.getAccessToken();
-          if (token) {
-            const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/notifications?types[]=mention&limit=40`, { headers: { Authorization: `Bearer ${token}` } });
-            if (resp.ok) for (const n of await resp.json()) { if (n.status) posts.push(normalizePost(n.status, 'mastodon')); }
-          }
-        } catch (e) { swallow('deck.loadColumn', e); }
-      } else if (col.type === 'notifications') {
-        // Fetch from both platforms and group
-        const allNotifs: UnifiedNotification[] = [];
-        if (bskyAgent) try {
-          const r = await bskyAgent.api.app.bsky.notification.listNotifications({ limit: 50 });
-          for (const n of r.data.notifications ?? []) {
-            allNotifs.push({
-              id: `bsky-${n.uri}`,
-              platform: 'bluesky',
-              type: n.reason,
-              createdAt: n.indexedAt,
-              author: { handle: n.author.handle, displayName: n.author.displayName, avatar: n.author.avatar },
-              text: (n.record as any)?.text,
-              postUri: n.reasonSubject,
-            });
-          }
-        } catch (e) { swallow('deck.loadColumn', e); } else if (bskyClient) try {
-          const { notifications } = await bskyClient.getNotifications();
-          for (const n of notifications) {
-            allNotifs.push({
-              id: `bsky-${n.uri}`,
-              platform: 'bluesky',
-              type: n.reason,
-              createdAt: n.indexedAt,
-              author: { handle: n.author.handle, displayName: n.author.displayName, avatar: n.author.avatar },
-              text: (n.record as any)?.text,
-              postUri: n.reasonSubject,
-            });
-          }
-        } catch (e) { swallow('deck.loadColumn', e); }
-        if (mastoClient) try {
-          const token = mastoClient.getAccessToken();
-          if (token) {
-            const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/notifications?limit=40`, { headers: { Authorization: `Bearer ${token}` } });
-            if (resp.ok) for (const n of await resp.json()) {
-              allNotifs.push({
-                id: `masto-${n.id}`,
-                platform: 'mastodon',
-                type: n.type,
-                createdAt: n.created_at,
-                author: { handle: n.account?.acct ? `@${n.account.acct}` : '?', displayName: n.account?.display_name, avatar: n.account?.avatar },
-                text: n.status?.content?.replace(/<[^>]*>?/gm, ''),
-                postUri: n.status?.uri,
-              });
-            }
-          }
-        } catch (e) { swallow('deck.loadColumn', e); }
-        columnNotifGroups[col.id] = groupNotifications(allNotifs);
-        columnLoading[col.id] = false;
-        return; // Skip the post-based flow
-      } else if (col.type === 'search' && col.query && bskyClient) {
-        try {
-          const r = await bskyClient.searchPosts(col.query);
-          for (const p of r.posts) posts.push({ uri: p.uri, text: (p.record as any).text ?? '', author: { handle: p.author.handle, displayName: p.author.displayName, avatar: p.author.avatar }, createdAt: (p.record as any).createdAt ?? p.indexedAt, platform: 'bluesky', likeCount: p.likeCount, repostCount: p.repostCount, isRepost: false, raw: p });
-        } catch (e) { swallow('deck.loadColumn', e); }
-      } else if (col.type === 'hashtag' && col.query) {
-        if (bskyClient) try {
-          const r = await bskyClient.searchPosts(`#${col.query}`);
-          for (const p of r.posts) posts.push({ uri: p.uri, text: (p.record as any).text ?? '', author: { handle: p.author.handle, displayName: p.author.displayName, avatar: p.author.avatar }, createdAt: (p.record as any).createdAt ?? p.indexedAt, platform: 'bluesky', likeCount: p.likeCount, repostCount: p.repostCount, isRepost: false, raw: p });
-        } catch (e) { swallow('deck.loadColumn', e); }
-        if (mastoClient) try {
-          const token = mastoClient.getAccessToken();
-          const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/timelines/tag/${col.query}?limit=40`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-          if (resp.ok) posts.push(...(await resp.json()).map((s: any) => normalizePost(s, 'mastodon')));
-        } catch (e) { swallow('deck.loadColumn', e); }
-      } else if (col.type === 'tag-group' && col.query) {
-        // query is comma-separated tags — fetch all in parallel
-        const tags = col.query.split(',').filter(Boolean);
-        const tagFetchers: Promise<UnifiedPost[]>[] = [];
-        for (const tag of tags) {
-          if (bskyClient) tagFetchers.push((async () => {
-            try {
-              const r = await bskyClient.searchPosts(`#${tag}`);
-              return r.posts.map(p => ({ uri: p.uri, text: (p.record as any).text ?? '', author: { handle: p.author.handle, displayName: p.author.displayName, avatar: p.author.avatar }, createdAt: (p.record as any).createdAt ?? p.indexedAt, platform: 'bluesky' as const, likeCount: p.likeCount, repostCount: p.repostCount, isRepost: false, raw: p }));
-            } catch { return []; }
-          })());
-          if (mastoClient) tagFetchers.push((async () => {
-            try {
-              const token = mastoClient.getAccessToken();
-              const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/timelines/tag/${tag}?limit=20`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-              if (resp.ok) return (await resp.json()).map((s: any) => normalizePost(s, 'mastodon'));
-              return [];
-            } catch { return []; }
-          })());
-        }
-        const tagResults = await Promise.all(tagFetchers);
-        posts.push(...tagResults.flat());
-      } else if (col.type === 'rss' && col.query) {
+      if (col.type === 'rss' && col.query) {
         try {
           const items = await fetchFeed(col.query);
           const feedTitle = col.title.replace(/^RSS: /, '');
@@ -606,135 +653,24 @@
           // from every other column type for no stated reason.
           posts.push(...items.slice(0, 50).map(item => rssItemToPost(item, feedTitle)));
         } catch (e) {
-          swallow(`deck.rss:${col.query}`, e);
-        }
-      } else if (col.type === 'user' && col.query) {
-        // Try Bluesky first (handles with dots), then Mastodon (handles with @)
-        if (bskyClient && (col.query.includes('.') || !col.query.includes('@'))) try { posts.push(...(await bskyClient.getAuthorFeed(col.query)).feed.map(p => normalizePost(p, 'bluesky'))); } catch (e) { swallow('deck.loadColumn', e); }
-        if (mastoClient && col.query.includes('@')) try {
-          const a = await mastoClient.getAccountByHandle(col.query);
-          posts.push(...(await mastoClient.getAccountStatuses(a.id)).map(s => normalizePost(s, 'mastodon')));
-        } catch (e) { swallow('deck.loadColumn', e); }
-      } else if (col.type === 'local' && mastoClient) {
-        try {
-          const token = mastoClient.getAccessToken();
-          const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/timelines/public?local=true&limit=40`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-          if (resp.ok) posts.push(...(await resp.json()).map((s: any) => normalizePost(s, 'mastodon')));
-        } catch (e) { swallow('deck.loadColumn', e); }
-      } else if (col.type === 'federated' && mastoClient) {
-        try {
-          const token = mastoClient.getAccessToken();
-          const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/timelines/public?limit=40`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-          if (resp.ok) posts.push(...(await resp.json()).map((s: any) => normalizePost(s, 'mastodon')));
-        } catch (e) { swallow('deck.loadColumn', e); }
-      } else if (col.type === 'list' && col.query && mastoClient) {
-        try {
-          const token = mastoClient.getAccessToken();
-          if (token) {
-            const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/timelines/list/${col.query}?limit=40`, { headers: { Authorization: `Bearer ${token}` } });
-            if (resp.ok) posts.push(...(await resp.json()).map((s: any) => normalizePost(s, 'mastodon')));
-          }
-        } catch (e) { swallow('deck.loadColumn', e); }
-      } else if (col.type === 'feed' && col.query && bskyEntry) {
-        try {
-          const agent = bskyEntry.oauthAgent ?? (bskyEntry.client as BlueskyClient).getAgent();
-          const resp = await agent.api.app.bsky.feed.getFeed({ feed: col.query, limit: 50 });
-          posts.push(...resp.data.feed.map(p => normalizePost(p, 'bluesky')));
-        } catch (e) { swallow('deck.loadColumn', e); }
-      } else if (col.type === 'keyword-monitor' && col.query) {
-        const entries = parseKeywords(col.query);
-        const matches = buildKeywordMatcher(entries);
-        // Search all connected networks in parallel for keyword matches
-        const searchTerms = entries.filter(e => !e.isRegex).map(e => e.value);
-        const searchQuery = searchTerms.length > 0 ? searchTerms.join(' OR ') : entries[0]?.value ?? '';
-        if (searchQuery) {
-          const kwFetchers: Promise<UnifiedPost[]>[] = [];
-
-          if (bskyClient) kwFetchers.push((async () => {
-            try {
-              const r = await bskyClient.searchPosts(searchQuery);
-              return r.posts
-                .map(p => ({ uri: p.uri, text: (p.record as any).text ?? '', author: { handle: p.author.handle, displayName: p.author.displayName, avatar: p.author.avatar }, createdAt: (p.record as any).createdAt ?? p.indexedAt, platform: 'bluesky' as const, likeCount: p.likeCount, repostCount: p.repostCount, isRepost: false, raw: p }))
-                .filter(p => matches(p.text));
-            } catch { return []; }
-          })());
-
-          if (mastoClient) {
-            const token = mastoClient.getAccessToken();
-            const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-            // Mastodon search doesn't support OR — search each term in parallel
-            const terms = searchTerms.length > 0 ? searchTerms : [searchQuery];
-            for (const term of terms) {
-              kwFetchers.push((async () => {
-                try {
-                  const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v2/search?q=${encodeURIComponent(term)}&type=statuses&limit=20`, { headers });
-                  if (!resp.ok) return [];
-                  const data = await resp.json();
-                  return (data.statuses ?? []).map((s: any) => normalizePost(s, 'mastodon')).filter((p: UnifiedPost) => matches(p.text));
-                } catch { return []; }
-              })());
-            }
-          }
-
-          if (threadsClient) kwFetchers.push((async () => {
-            try {
-              const results = await threadsClient.keywordSearch(searchQuery, { searchType: 'RECENT', limit: 25 });
-              return results.map(p => normalizePost(p, 'threads')).filter(p => matches(p.text));
-            } catch { return []; }
-          })());
-
-          const kwResults = await Promise.all(kwFetchers);
-          posts.push(...kwResults.flat());
-        }
-      } else if (col.type === 'threads-search' && col.query && threadsClient) {
-        try {
-          const results = await threadsClient.keywordSearch(col.query, { searchType: 'RECENT', limit: 50 });
-          posts.push(...results.map(p => normalizePost(p, 'threads')));
-        } catch (e) {
-          swallow(`deck.threadsSearch:${col.query}`, e);
+          throw e;
         }
       } else if (col.type === 'messages') {
-        // Load conversations as pseudo-posts for deck display
-        if (bskyAgent) try {
-          const r = await bskyAgent.api.chat.bsky.convo.listConvos({ limit: 30 });
-          for (const convo of r.data.convos ?? []) {
-            const other = convo.members?.find((m: any) => m.did !== bskyAgent.did);
-            if (other) {
-              posts.push({
-                uri: `chat:bsky:${convo.id}`,
-                text: (convo.lastMessage as any)?.text ?? '(no messages)',
-                author: { handle: other.handle ?? other.did, displayName: other.displayName, avatar: other.avatar },
-                createdAt: (convo.lastMessage as any)?.sentAt ?? new Date().toISOString(),
-                platform: 'bluesky',
-                isRepost: false,
-                raw: convo,
-              });
-            }
-          }
-        } catch (e) { swallow('deck.loadColumn', e); }
-        if (mastoClient) try {
-          const token = mastoClient.getAccessToken();
-          if (token) {
-            const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/conversations?limit=30`, { headers: { Authorization: `Bearer ${token}` } });
-            if (resp.ok) for (const convo of await resp.json()) {
-              const acct = convo.accounts?.[0];
-              posts.push({
-                uri: `chat:masto:${convo.id}`,
-                text: convo.last_status?.content?.replace(/<[^>]*>?/gm, '') ?? '(no messages)',
-                author: { handle: acct?.acct ? `@${acct.acct}` : '?', displayName: acct?.display_name, avatar: acct?.avatar },
-                createdAt: convo.last_status?.created_at ?? new Date().toISOString(),
-                platform: 'mastodon',
-                isRepost: false,
-                raw: convo,
-              });
-            }
-          }
-        } catch (e) { swallow('deck.loadColumn', e); }
+        const inbox = await loadConversationInbox(selected, clientEntries);
+        if (inbox.errors.length) throw new Error(i18n.t.deck.columnLoadFailed);
+        posts.push(...inbox.conversations.map(conversation => ({
+          uri: `chat:${conversation.platform}:${conversation.accountId}:${conversation.id}`,
+          text: conversation.lastMessage ?? '',
+          author: conversation.participant,
+          createdAt: conversation.lastDate ?? '',
+          platform: conversation.platform,
+          isRepost: false,
+          raw: conversation,
+        })));
       } else if (col.type === 'trending') {
         // Load trending topics/posts from both platforms
         if (bskyClient) try {
           const agent = bskyEntry?.oauthAgent ?? bskyClient.getAgent();
-          const r = await agent.api.app.bsky.unspecced.getPopularFeedGenerators({ limit: 20 });
           // Also try trending topics
           try {
             const topics = await agent.api.app.bsky.unspecced.getTrendingTopics({});
@@ -749,14 +685,14 @@
                 raw: topic,
               });
             }
-          } catch (e) { swallow('deck.loadColumn', e); }
-        } catch (e) { swallow('deck.loadColumn', e); }
+          } catch (e) { throw e; }
+        } catch (e) { throw e; }
         if (mastoClient) try {
           const token = mastoClient.getAccessToken();
           const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
           const [tagsResp, linksResp] = await Promise.all([
-            fetch(`${mastoClient.getInstanceUrl()}/api/v1/trends/tags?limit=10`, { headers }),
-            fetch(`${mastoClient.getInstanceUrl()}/api/v1/trends/links?limit=10`, { headers }),
+            fetchOk(`${mastoClient.getInstanceUrl()}/api/v1/trends/tags?limit=10`, { headers }),
+            fetchOk(`${mastoClient.getInstanceUrl()}/api/v1/trends/links?limit=10`, { headers }),
           ]);
           if (tagsResp.ok) for (const tag of await tagsResp.json()) {
             const totalUses = (tag.history ?? []).reduce((sum: number, d: any) => sum + parseInt(d.uses ?? 0), 0);
@@ -781,196 +717,10 @@
               raw: link,
             });
           }
-        } catch (e) { swallow('deck.loadColumn', e); }
-      } else if (col.type === 'activity') {
-        // Engagement on your posts: likes, reposts, quotes only
-        const engagementTypes = ['like', 'favourite', 'repost', 'reblog', 'quote'];
-        if (bskyAgent) try {
-          const r = await bskyAgent.api.app.bsky.notification.listNotifications({ limit: 50 });
-          for (const n of (r.data.notifications ?? []).filter(n => engagementTypes.includes(n.reason))) {
-            posts.push({
-              uri: `activity:bsky:${n.uri}`,
-              text: `${n.author.displayName ?? n.author.handle} ${n.reason === 'like' ? 'liked' : n.reason === 'repost' ? 'reposted' : 'quoted'} your post`,
-              author: { handle: n.author.handle, displayName: n.author.displayName, avatar: n.author.avatar },
-              createdAt: n.indexedAt,
-              platform: 'bluesky',
-              isRepost: false,
-              raw: n,
-            });
-          }
-        } catch (e) { swallow('deck.loadColumn', e); }
-        if (mastoClient) try {
-          const token = mastoClient.getAccessToken();
-          if (token) {
-            const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/notifications?types[]=favourite&types[]=reblog&limit=40`, { headers: { Authorization: `Bearer ${token}` } });
-            if (resp.ok) for (const n of await resp.json()) {
-              posts.push({
-                uri: `activity:masto:${n.id}`,
-                text: `${n.account?.display_name ?? n.account?.acct ?? '?'} ${n.type === 'favourite' ? 'liked' : 'boosted'} your post`,
-                author: { handle: n.account?.acct ? `@${n.account.acct}` : '?', displayName: n.account?.display_name, avatar: n.account?.avatar },
-                createdAt: n.created_at,
-                platform: 'mastodon',
-                isRepost: false,
-                raw: n,
-              });
-            }
-          }
-        } catch (e) { swallow('deck.loadColumn', e); }
-      } else if (col.type === 'likes') {
-        // Posts you've liked
-        if (bskyAgent) try {
-          const r = await bskyAgent.api.app.bsky.feed.getActorLikes({ actor: bskyAgent.did ?? '', limit: 50 });
-          posts.push(...r.data.feed.map(p => normalizePost(p, 'bluesky')));
-        } catch (e) { swallow('deck:L807', e); }
-        if (mastoClient) try {
-          const token = mastoClient.getAccessToken();
-          if (token) {
-            const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/favourites?limit=40`, { headers: { Authorization: `Bearer ${token}` } });
-            if (resp.ok) posts.push(...(await resp.json()).map((s: any) => normalizePost(s, 'mastodon')));
-          }
-        } catch (e) { swallow('deck:L814', e); }
-      } else if (col.type === 'followers') {
-        // Recent followers
-        if (bskyAgent) try {
-          const r = await bskyAgent.api.app.bsky.notification.listNotifications({ limit: 50 });
-          for (const n of (r.data.notifications ?? []).filter(n => n.reason === 'follow')) {
-            posts.push({
-              uri: `follower:bsky:${n.uri}`,
-              text: `${n.author.displayName ?? n.author.handle} followed you`,
-              author: { handle: n.author.handle, displayName: n.author.displayName, avatar: n.author.avatar },
-              createdAt: n.indexedAt,
-              platform: 'bluesky',
-              isRepost: false,
-              raw: n,
-            });
-          }
-        } catch (e) { swallow('deck:L830', e); }
-        if (mastoClient) try {
-          const token = mastoClient.getAccessToken();
-          if (token) {
-            const resp = await fetch(`${mastoClient.getInstanceUrl()}/api/v1/notifications?types[]=follow&limit=40`, { headers: { Authorization: `Bearer ${token}` } });
-            if (resp.ok) for (const n of await resp.json()) {
-              posts.push({
-                uri: `follower:masto:${n.id}`,
-                text: `${n.account?.display_name ?? n.account?.acct ?? '?'} followed you`,
-                author: { handle: n.account?.acct ? `@${n.account.acct}` : '?', displayName: n.account?.display_name, avatar: n.account?.avatar },
-                createdAt: n.created_at,
-                platform: 'mastodon',
-                isRepost: false,
-                raw: n,
-              });
-            }
-          }
-        } catch (e) { swallow('deck:L847', e); }
+        } catch (e) { throw e; }
+
       }
-    } catch (e) {
-      swallow(`deck.loadColumn:${col.id}`, e);
-    }
-
-    // Dedup by URI to avoid Svelte each_key_duplicate errors
-    const seen = new Set<string>();
-    const deduped = posts.filter(p => { if (seen.has(p.uri)) return false; seen.add(p.uri); return true; });
-    columnPosts[col.id] = applyMuteFilter(sortPosts(deduped, 'newest'));
-    columnLoading[col.id] = false;
-
-    // Enable streaming for keyword-monitor columns
-    if (col.type === 'keyword-monitor' && col.query) {
-      // Clean up previous stream for this column (e.g. on refresh)
-      const prevCleanup = streamCleanups.get(col.id);
-      if (prevCleanup) prevCleanup();
-
-      const entries = parseKeywords(col.query);
-      const matches = buildKeywordMatcher(entries);
-
-      const handleStreamEvent = (event: StreamEvent) => {
-        if (event.type !== 'new-post') return;
-        try {
-          const normalized = normalizePost(event.payload, event.platform);
-          if (!matches(normalized.text)) return;
-          // Prepend to existing posts, dedup by URI
-          const existing = columnPosts[col.id] ?? [];
-          if (existing.some(p => p.uri === normalized.uri)) return;
-          columnPosts[col.id] = [normalized, ...existing].slice(0, 200);
-          // Fire per-column notification if enabled
-          notifyColumn(col.notify, col.title, normalized.text);
-        } catch (e) { swallow('deck.handleStreamEvent', e); }
-      };
-
-      const cleanups: (() => void)[] = [];
-      // Subscribe to Mastodon public stream (catches federated + local)
-      if (mastoClient) {
-        const token = mastoClient.getAccessToken();
-        if (token) {
-          cleanups.push(streamManager.enableColumn({
-            columnId: `${col.id}-masto`,
-            platform: 'mastodon',
-            instanceUrl: mastoClient.getInstanceUrl(),
-            accessToken: token,
-            streamType: 'public',
-          }, handleStreamEvent));
-        }
-      }
-      // Subscribe to Bluesky Jetstream firehose — unfiltered, keyword filter applied client-side
-      if (bskyClient) {
-        cleanups.push(streamManager.enableColumn({
-          columnId: `${col.id}-bsky`,
-          platform: 'bluesky',
-          firehose: true,
-        }, handleStreamEvent));
-      }
-
-      if (cleanups.length > 0) {
-        streamCleanups.set(col.id, () => cleanups.forEach(fn => fn()));
-      }
-    }
-
-    // Enable streaming for other column types (timeline, mentions, notifications, local, federated, hashtag, list)
-    if (isStreamableColumn(col.type) && !streamCleanups.has(col.id)) {
-      const prevCleanup = streamCleanups.get(col.id);
-      if (prevCleanup) prevCleanup();
-
-      const handleGenericStream = (event: StreamEvent) => {
-        if (event.type !== 'new-post') return;
-        try {
-          const normalized = normalizePost(event.payload, event.platform);
-          const existing = columnPosts[col.id] ?? [];
-          if (existing.some(p => p.uri === normalized.uri)) return;
-          columnPosts[col.id] = [normalized, ...existing].slice(0, 200);
-          notifyColumn(col.notify, col.title, normalized.text);
-        } catch (e) { swallow('deck.handleGenericStream', e); }
-      };
-
-      const cleanups: (() => void)[] = [];
-
-      if (mastoClient) {
-        const token = mastoClient.getAccessToken();
-        if (token) {
-          const { streamType, streamParam } = mastodonStreamFor(col.type, col.query)!;
-
-          cleanups.push(streamManager.enableColumn({
-            columnId: `${col.id}-masto`,
-            platform: 'mastodon',
-            instanceUrl: mastoClient.getInstanceUrl(),
-            accessToken: token,
-            streamType,
-            streamParam,
-          }, handleGenericStream));
-        }
-      }
-
-      // Bluesky: use Jetstream for timeline/user columns (DID-filtered)
-      if (bskyClient && isBlueskyStreamable(col.type)) {
-        cleanups.push(streamManager.enableColumn({
-          columnId: `${col.id}-bsky`,
-          platform: 'bluesky',
-          firehose: true, // Use firehose; client-side filtering happens in the listener
-        }, handleGenericStream));
-      }
-
-      if (cleanups.length > 0) {
-        streamCleanups.set(col.id, () => cleanups.forEach(fn => fn()));
-      }
-    }
+    return posts.map(post => ({ ...post, sourceAccount: selected[0]?.handle, sourceAccountId: selected[0]?.id }));
   }
 
   let showFeedPicker = $state(false);
@@ -988,114 +738,66 @@
     showFeedPicker = false;
     if (!choice.uri) return;
     const id = `feed-${Date.now()}`;
-    columns = [...columns, { id, title: choice.title, type: 'feed', query: choice.uri }];
+    columns = [...columns, { id, title: choice.title, type: choice.kind === 'list' ? 'list' : 'feed', query: choice.uri, platform: 'bluesky' }];
     saveColumns();
     loadColumn(columns[columns.length - 1]);
   }
 
   function addColumn(type: ColumnType) {
-    const id = `${type}-${Date.now()}`;
-    let title = availableColumns.find(c => c.type === type)?.label ?? type;
-    let query: string | undefined;
-
-    if (type === 'search') {
-      query = prompt(i18n.t.deck.searchQuery) ?? undefined;
-      if (!query) return;
-      title = `Search: ${query}`;
-    } else if (type === 'hashtag') {
-      query = prompt(i18n.t.deck.hashtag) ?? undefined;
-      if (!query) return;
-      title = `#${query}`;
-    } else if (type === 'user') {
-      query = prompt(i18n.t.deck.userHandle) ?? undefined;
-      if (!query) return;
-      title = `@${query}`;
-    } else if (type === 'list') {
-      query = prompt(i18n.t.deck.mastodonListId) ?? undefined;
-      if (!query) return;
-      title = `List: ${query}`;
-    } else if (type === 'feed') {
-      // Handed off to the picker, which calls back into addFeedColumn once the
-      // user has chosen. The old prompt() asked for a raw at:// URI, which is
-      // not a thing anyone has: the official app never shows it, so in practice
-      // only someone willing to dig a DID out of an API response could add a
-      // feed column at all.
-      showFeedPicker = true;
-      showAddMenu = false;
-      return;
-    } else if (type === 'tag-group') {
-      const groups = listTagGroups();
-      if (groups.length === 0) {
-        alert(i18n.t.deck.noTagGroups);
-        return;
-      }
-      const name = prompt(`Tag groups: ${groups.map(g => g.name).join(', ')}\nEnter group name:`);
-      if (!name) return;
-      const group = groups.find(g => g.name.toLowerCase() === name.toLowerCase());
-      if (!group) { alert(`Tag group "${name}" not found.`); return; }
-      query = group.tags.join(',');
-      title = `#${group.name}`;
-    } else if (type === 'rss') {
-      const feeds = listFeeds();
-      if (feeds.length === 0) {
-        const url = prompt(i18n.t.deck.rssUrlPrompt);
-        if (!url) return;
-        query = url;
-        title = `RSS: ${new URL(url).hostname}`;
-      } else {
-        const name = prompt(`RSS feeds: ${feeds.map(f => f.title).join(', ')}\nEnter feed name or paste a new URL:`);
-        if (!name) return;
-        const feed = feeds.find(f => f.title.toLowerCase() === name.toLowerCase());
-        if (feed) {
-          query = feed.url;
-          title = `RSS: ${feed.title}`;
-        } else if (name.startsWith('http')) {
-          query = name;
-          title = `RSS: ${new URL(name).hostname}`;
-        } else {
-          alert(`Feed "${name}" not found.`);
-          return;
-        }
-      }
-    } else if (type === 'threads-search') {
-      const input = prompt(i18n.t.deck.threadsQueryPrompt);
-      if (!input) return;
-      query = input;
-      title = `Threads: ${input.length > 20 ? input.slice(0, 20) + '...' : input}`;
-    } else if (type === 'keyword-monitor') {
-      const saved = listKeywordSets();
-      let input: string | undefined;
-      if (saved.length > 0) {
-        input = prompt(`Saved: ${saved.map(s => s.name).join(', ')}\nEnter set name or keywords (comma-separated):`) ?? undefined;
-      } else {
-        input = prompt(i18n.t.deck.keywordsPromptText) ?? undefined;
-      }
-      if (!input) return;
-      // Check if it matches a saved set name
-      const set = saved.find(s => s.name.toLowerCase() === input!.toLowerCase());
-      if (set) {
-        query = set.keywords.map(k => k.isRegex ? `/${k.value}/` : k.value).join(',');
-        title = `Monitor: ${set.name}`;
-      } else {
-        query = input;
-        const keywords = parseKeywords(input);
-        title = `Monitor: ${keywords.slice(0, 3).map(k => k.value).join(', ')}${keywords.length > 3 ? '...' : ''}`;
-      }
-    }
-
-    columns = [...columns, { id, title, type, query }];
-
-    saveColumns();
     showAddMenu = false;
-    loadColumn(columns[columns.length - 1]);
+    if (type === 'feed') { showFeedPicker = true; return; }
+    const next: DeckColumnConfig = { id: crypto.randomUUID(), title: availableColumns.find(column => column.type === type)?.label.replace(/\.\.\.$/, '') ?? type, type };
+    if (requiresQuery(type)) { editingColumn = next; return; }
+    columns = [...columns, next]; saveColumns(); void loadColumn(next);
+  }
+
+  function saveColumnSettings(next: DeckColumnConfig) {
+    const exists = columns.some(column => column.id === next.id);
+    if (exists) clearColumnRuntime(next.id);
+    columns = exists ? columns.map(column => column.id === next.id ? next : column) : [...columns, next];
+    focusedPostIdx = -1;
+    editingColumn = null;
+    saveColumns(); void loadColumn(next);
+  }
+
+  function duplicateColumn(col: DeckColumnConfig) {
+    const next = { ...structuredClone($state.snapshot(col)), id: crypto.randomUUID(), pinned: false };
+    const index = columns.findIndex(column => column.id === col.id);
+    columns = [...columns.slice(0, index + 1), next, ...columns.slice(index + 1)];
+    saveColumns(); void loadColumn(next);
+  }
+
+  function moveColumnBy(id: string, delta: number) {
+    const index = columns.findIndex(column => column.id === id);
+    const target = index + delta;
+    if (columns[index]?.pinned || columns[target]?.pinned) return;
+    columns = moveColumn(columns, index, target);
+    focusedColumnIdx = -1; focusedPostIdx = -1;
+    saveColumns();
+  }
+
+  function toggleColumnPause(col: DeckColumnConfig) {
+    const next = { ...col, paused: !col.paused };
+    columns = columns.map(column => column.id === col.id ? next : column);
+    streamCleanups.get(col.id)?.(); streamCleanups.delete(col.id);
+    const timer = liveRefreshTimers.get(col.id); if (timer) clearTimeout(timer);
+    liveRefreshTimers.delete(col.id);
+    pendingHeadRefresh.delete(col.id);
+    columnRequests.delete(col.id); columnLoading[col.id] = false;
+    saveColumns();
+    if (!next.paused) void loadColumn(next);
+  }
+
+  function updateColumnFilter(col: DeckColumnConfig, query: string) {
+    columns = columns.map(column => column.id === col.id ? { ...column, filters: { ...column.filters, searchTerm: query } } : column);
+    focusedPostIdx = -1; saveColumns();
   }
 
   function removeColumn(id: string) {
+    if (columns.find(col => col.id === id)?.pinned) return;
+    clearColumnRuntime(id);
     columns = columns.filter(c => c.id !== id);
-    delete columnPosts[id];
-    // Clean up any active streams for this column
-    const cleanup = streamCleanups.get(id);
-    if (cleanup) { cleanup(); streamCleanups.delete(id); }
+    focusedColumnIdx = -1; focusedPostIdx = -1;
     saveColumns();
   }
 
@@ -1130,6 +832,9 @@
   }
 
   function handleClear(colId: string) {
+    pendingHeadRefresh.delete(colId);
+    columnRequests.delete(colId); columnLoading[colId] = false;
+    columnUnread[colId] = 0; columnNotifications[colId] = [];
     columnPosts[colId] = [];
     columnNotifGroups[colId] = [];
   }
@@ -1149,7 +854,7 @@
 
   function handleDrop(colId: string, e: DragEvent) {
     e.preventDefault();
-    if (!draggedColumnId || draggedColumnId === colId) return;
+    if (!draggedColumnId || draggedColumnId === colId || columns.find(col => col.id === draggedColumnId)?.pinned || columns.find(col => col.id === colId)?.pinned) return;
     const fromIdx = columns.findIndex(c => c.id === draggedColumnId);
     const toIdx = columns.findIndex(c => c.id === colId);
     if (fromIdx < 0 || toIdx < 0) return;
@@ -1158,54 +863,19 @@
     updated.splice(fromIdx, 1);
     updated.splice(toIdx, 0, moved);
     columns = updated;
+    focusedColumnIdx = -1; focusedPostIdx = -1;
     saveColumns();
     draggedColumnId = null;
   }
 
-  async function handleLike(post: UnifiedPost) {
-    let lastError: unknown;
-    for (const [id, entry] of clientEntries) {
-      const acct = accounts.find(a => a.id === id);
-      if (acct?.platform !== post.platform) continue;
-      try {
-        if (post.platform === 'bluesky') {
-          const raw = post.raw as any;
-          await (entry.client as BlueskyClient).like(raw.post?.uri ?? raw.uri, raw.post?.cid ?? raw.cid);
-        } else {
-          const raw = post.raw as any;
-          await (entry.client as MastodonClient).favourite(raw.id);
-        }
-        return;
-      } catch (e) {
-        lastError = e;
-      }
-    }
-    // Nothing succeeded: tell the caller, so the optimistic update in Post
-    // can be reverted rather than leaving the post looking liked.
-    throw lastError ?? new Error('No connected account can like this post');
+  async function handleLike(post: UnifiedPost, active = true, column?: DeckColumnConfig) {
+    const selected = column ? columnAccounts(column, accounts) : accounts;
+    await performDeckAction(post, 'like', active, clientEntries, selected.map(account => account.id));
   }
 
-  async function handleBoost(post: UnifiedPost) {
-    let lastError: unknown;
-    for (const [id, entry] of clientEntries) {
-      const acct = accounts.find(a => a.id === id);
-      if (acct?.platform !== post.platform) continue;
-      try {
-        if (post.platform === 'bluesky') {
-          const raw = post.raw as any;
-          await (entry.client as BlueskyClient).repost(raw.post?.uri ?? raw.uri, raw.post?.cid ?? raw.cid);
-        } else {
-          const raw = post.raw as any;
-          await (entry.client as MastodonClient).reblog(raw.id);
-        }
-        return;
-      } catch (e) {
-        lastError = e;
-      }
-    }
-    // Nothing succeeded: tell the caller, so the optimistic update in Post
-    // can be reverted rather than leaving the post looking repostd.
-    throw lastError ?? new Error('No connected account can repost this post');
+  async function handleBoost(post: UnifiedPost, active = true, column?: DeckColumnConfig) {
+    const selected = column ? columnAccounts(column, accounts) : accounts;
+    await performDeckAction(post, 'repost', active, clientEntries, selected.map(account => account.id));
   }
 </script>
 
@@ -1217,8 +887,8 @@
     <div class="p-4 border-b border-[var(--color-border)] overflow-y-auto max-h-[70vh]"><StarterWorkspaces connected={accounts.length > 0} onapply={applyStarter} /></div>
   {/if}
   <!-- Deck header -->
-  <div class="flex items-center justify-between px-4 py-2 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex-shrink-0">
-    <div class="flex items-center gap-3">
+  <div class="flex flex-wrap gap-2 items-center justify-between px-4 py-2 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex-shrink-0">
+    <div class="flex flex-wrap items-center gap-3">
       <div class="flex items-center gap-2">
         <Columns3 size={20} />
         <h1 class="text-lg font-bold">{i18n.t.nav.deck}</h1>
@@ -1228,7 +898,7 @@
       <!-- Saved layouts -->
       {#if savedLayoutNames.length > 0}
         <select
-          onchange={(e) => { const v = (e.target as HTMLSelectElement).value; if (v) loadLayoutByName(v); }}
+          onchange={(e) => { const v = (e.target as HTMLSelectElement).value; if (v) { try { loadLayoutByName(v); } catch (error) { swallow('deck.switchWorkspace', error); toast.error(i18n.t.deck.workspaceSaveFailed); } } }}
           class="px-2 py-1 text-[10px] bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-[var(--color-text)]"
         >
           <option value="">{i18n.t.deck.loadLayoutPlaceholder}</option>
@@ -1237,19 +907,8 @@
           {/each}
         </select>
       {/if}
-      <button
-        onclick={() => {
-          const name = prompt(i18n.t.deck.layoutName);
-          if (name) {
-            saveLayout(name, columns);
-            setActiveLayoutName(name);
-            refreshLayoutList();
-          }
-        }}
-        class="px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] rounded"
-      >
-        Save
-      </button>
+      <button onclick={() => showWorkspaces = true} class="px-2 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] rounded">{i18n.t.deck.manageWorkspaces}</button>
+      <button onclick={() => openCompose()} class="flex items-center gap-1 px-2 py-1 text-xs border border-[var(--color-border)] rounded"><Pencil size={12} />{i18n.t.nav.compose}</button>
     </div>
     <div class="relative">
       <button
@@ -1261,7 +920,8 @@
       {#if showAddMenu}
         <div class="absolute right-0 top-full mt-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl z-50 py-1 min-w-[160px]">
           {#each availableColumns.filter(opt => {
-            if (opt.type === 'local' || opt.type === 'federated' || opt.type === 'list') return hasMasto;
+            if (opt.type === 'local' || opt.type === 'federated') return hasMasto;
+            if (opt.type === 'list') return hasMasto || hasBsky;
             if (opt.type === 'feed') return hasBsky;
             if (opt.type === 'threads-search') return hasThreads;
             return true;
@@ -1285,13 +945,6 @@
         <Loader2 size={32} class="text-[var(--color-text-muted)] animate-spin" />
       </DelayedSpinner>
     </div>
-  {:else if accounts.length === 0}
-    <div class="flex-1 flex items-center justify-center">
-      <div class="text-center">
-        <Columns3 size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
-        <p class="text-[var(--color-text-muted)]">{i18n.t.deck.addAccountsIn} <a href="{base}/settings" class="text-[var(--color-primary-text)] underline">{i18n.t.nav.settings}</a> first.</p>
-      </div>
-    </div>
   {:else}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
@@ -1311,16 +964,30 @@
             id={col.id}
             title={col.title}
             type={col.type}
-            posts={columnPosts[col.id] ?? []}
-            notificationGroups={columnNotifGroups[col.id] ?? []}
+            posts={displayedPosts(col)}
+            notificationGroups={displayedNotificationGroups(col)}
             loading={columnLoading[col.id] ?? false}
-            streaming={streamCleanups.has(col.id)}
+            streaming={columnLive[col.id] ?? false}
+            accounts={columnAccounts(col, accounts)}
+            filters={col.filters}
+            errors={columnErrors[col.id] ?? []}
+            hasOlder={columnHasMore[col.id] ?? false}
+            onloadmore={() => loadColumn(col, true)}
+            onsettings={() => editingColumn = col}
+            onduplicate={() => duplicateColumn(col)}
+            onmoveleft={colIdx > 0 && !columns[colIdx - 1]?.pinned ? () => moveColumnBy(col.id, -1) : undefined}
+            onmoveright={colIdx < columns.length - 1 && !columns[colIdx + 1]?.pinned ? () => moveColumnBy(col.id, 1) : undefined}
+            paused={col.paused ?? false}
+            onpause={() => toggleColumnPause(col)}
+            unread={columnUnread[col.id] ?? 0}
+            onmarkread={() => columnUnread[col.id] = 0}
+            onfilterchange={(query) => updateColumnFilter(col, query)}
             width={col.width ?? 380}
             focusedPostIdx={focusedColumnIdx === colIdx ? focusedPostIdx : -1}
             onrefresh={() => loadColumn(col)}
             onremove={() => removeColumn(col.id)}
-            onlike={handleLike}
-            onboost={handleBoost}
+            onlike={['rss', 'bookmarks'].includes(col.type) ? undefined : (post, active) => handleLike(post, active, col)}
+            onboost={['rss', 'bookmarks'].includes(col.type) ? undefined : (post, active) => handleBoost(post, active, col)}
             onreply={handleReply}
             onquote={handleQuote}
             onwidthchange={(w) => handleColumnWidthChange(col.id, w)}
@@ -1334,12 +1001,18 @@
             oncollapsedchange={(c) => handleCollapsedChange(col.id, c)}
             pinned={col.pinned ?? false}
             onpinnedchange={(p) => handlePinnedChange(col.id, p)}
-            onclear={() => handleClear(col.id)}
+            onclear={['drafts', 'scheduled'].includes(col.type) ? undefined : () => handleClear(col.id)}
             ondragstart={(e) => handleDragStart(col.id, e)}
             ondragover={(e) => handleDragOver(col.id, e)}
             ondrop={(e) => handleDrop(col.id, e)}
             ondragend={() => draggedColumnId = null}
+            children={col.type === 'drafts' || col.type === 'scheduled' ? publishingContent : undefined}
           />
+          {#snippet publishingContent()}
+            {#if col.type === 'drafts' || col.type === 'scheduled'}
+              <PublishingColumn type={col.type} accountIds={publishingAccountIds(col)} filterText={col.filters?.searchTerm} paused={col.paused} refreshKey={publishingRefresh[col.id] ?? 0} />
+            {/if}
+          {/snippet}
         </div>
       {/each}
     </div>
@@ -1363,7 +1036,7 @@
     bind:open={composeOpen}
     replyToPost={composeReplyTo}
     quotePost={composeQuotePost}
-    onposted={() => columns.forEach(col => loadColumn(col))}
+    onposted={() => columns.filter(col => !col.paused).forEach(col => loadColumn(col))}
   />
 
 {#if showFeedPicker}
@@ -1374,3 +1047,6 @@
   />
 {/if}
 </div>
+
+{#if editingColumn}<ColumnSettings column={editingColumn} {accounts} clients={clientEntries} onsave={saveColumnSettings} onclose={() => editingColumn = null} />{/if}
+{#if showWorkspaces}<WorkspaceManager {columns} {accounts} onload={loadLayoutByName} onchange={refreshLayoutList} onclose={() => showWorkspaces = false} />{/if}

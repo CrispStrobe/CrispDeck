@@ -32,15 +32,47 @@ describe('protocol delivery contracts', () => {
   });
 
   it('sends a stable Mastodon idempotency key and retains the parent status id', async () => {
-    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: '12', url: 'https://social.example/@writer/12' }) });
+    const fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: '11', url: 'https://social.example/@writer/11' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: '12', url: 'https://social.example/@writer/12' }) });
     vi.stubGlobal('fetch', fetch);
     try {
       const client = { getInstanceUrl: () => 'https://social.example', getAccessToken: () => 'test' } as unknown as MastodonClient;
       const options = { text: 'Part two', deliveryKey: 'job-1-part-2', replyTo: { uri: 'https://social.example/@writer/11', id: '11' } };
       const result = await postToMastodon(client, options);
       expect(result.id).toBe('12');
-      expect(fetch.mock.calls[0][1].headers['Idempotency-Key']).toBe(options.deliveryKey);
-      expect(JSON.parse(fetch.mock.calls[0][1].body).in_reply_to_id).toBe('11');
+      expect(fetch.mock.calls[1][1].headers['Idempotency-Key']).toBe(options.deliveryKey);
+      expect(JSON.parse(fetch.mock.calls[1][1].body).in_reply_to_id).toBe('11');
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('resolves a reply against the destination instance before writing', async () => {
+    const uri = 'https://remote.test/users/author/statuses/77';
+    const fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'old-local-id', uri: 'https://other.test/unrelated' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ statuses: [{ id: 'new-local-id', uri }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'posted', url: 'https://destination.test/@writer/posted' }) });
+    vi.stubGlobal('fetch', fetch);
+    try {
+      const client = { getInstanceUrl: () => 'https://destination.test', getAccessToken: () => 'destination-token' } as unknown as MastodonClient;
+      const result = await postToMastodon(client, { text: 'Reply', replyTo: { uri, id: 'old-local-id' } });
+      expect(result.success).toBe(true);
+      expect(new URL(fetch.mock.calls[1][0]).searchParams.get('q')).toBe(uri);
+      expect(fetch.mock.calls.every(([url, options]) => new URL(url).origin === 'https://destination.test' && options.headers.Authorization === 'Bearer destination-token')).toBe(true);
+      expect(JSON.parse(fetch.mock.calls[2][1].body).in_reply_to_id).toBe('new-local-id');
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('does not upload or publish if the reply URL cannot be resolved', async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ statuses: [] }) });
+    vi.stubGlobal('fetch', fetch);
+    try {
+      const client = { getInstanceUrl: () => 'https://destination.test', getAccessToken: () => 'destination-token' } as unknown as MastodonClient;
+      const result = await postToMastodon(client, { text: 'Reply', replyTo: { uri: 'https://remote.test/@author/77' }, mediaFiles: [new File(['image'], 'photo.png', { type: 'image/png' })] });
+      expect(result).toMatchObject({ success: false, uncertain: false });
+      expect(result.error).toContain('unavailable');
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(fetch.mock.calls[0][1].method).toBeUndefined();
     } finally { vi.unstubAllGlobals(); }
   });
 
