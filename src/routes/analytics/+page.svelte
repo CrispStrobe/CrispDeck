@@ -10,7 +10,7 @@
   import { MastodonClient } from '$lib/api/mastodon';
   import { ThreadsClient } from '$lib/api/threads';
   import { normalizePost, sortPosts } from '$lib/api/unified';
-  import { exportAsJson, exportAsCsv, exportAsMarkdown } from '$lib/utils/export';
+  import { exportAsJson, exportAsCsv, exportAsMarkdown, triggerDownload } from '$lib/utils/export';
   import { analyzePerformance, type PerformanceInsight } from '$lib/performance-insights';
   import { recordSnapshots } from '$lib/engagement-history';
   import { checkMilestones, getRecentMilestones, type ReachedMilestone } from '$lib/milestones';
@@ -154,13 +154,7 @@
       `## Posting Activity by Hour`,
       ...postsByHour.map((count, h) => count > 0 ? `- ${h}:00 — ${count} posts` : '').filter(Boolean),
     ];
-    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `crispdeck-analytics-${new Date().toISOString().split('T')[0]}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
+    triggerDownload(lines.join('\n'), 'text/markdown', `crispdeck-analytics-${new Date().toISOString().split('T')[0]}.md`);
   }
 
   // Filter by date range

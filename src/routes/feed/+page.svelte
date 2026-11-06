@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { buildThreadsFeed, getThreadsSources } from '$lib/threads-feed';
   import { base } from '$app/paths';
   import { onMount, onDestroy } from 'svelte';
   import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal, RefreshCw, ChevronDown, Hash, Users, Search, Pin, PinOff } from '@lucide/svelte';
@@ -383,6 +384,7 @@
    * back to the public author feed only when neither can reach it. `degraded`
    * reports that fallback so the caller can say so exactly once.
    */
+  const threadsFailuresShown = new Set<number>();
   async function fetchAccountPage(
     acct: Account,
     entry: ClientEntry,
@@ -427,7 +429,15 @@
 
     if (acct.platform === 'threads') {
       const threads = entry.client as ThreadsClient;
-      let tp = await threads.getOwnPosts(limit);
+      let tp;
+      if (wantsTimeline) {
+        const result = await buildThreadsFeed(threads, acct.handle, getThreadsSources(acct.handle), limit);
+        tp = result.posts;
+        if (result.failures.length && !threadsFailuresShown.has(acct.id)) {
+          threadsFailuresShown.add(acct.id);
+          toast.warning(`Threads sources unavailable: ${result.failures.join(', ')}. Check Meta permissions and reconnect if needed.`);
+        }
+      } else tp = await threads.getOwnPosts(limit);
       if (opts.resolveReposts) tp = await threads.resolveReposts(tp);
       // Threads has no usable cursor here, so it never paginates.
       return { posts: tp.map(p => tag(normalizePost(p, 'threads'))), cursor: undefined, degraded: false };

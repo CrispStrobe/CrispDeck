@@ -1143,11 +1143,11 @@
           </div>
         {:else}
           <!-- Standard link card -->
-          <a href={hrefOrHash(bskyExternal.uri)} onclick={(e) => openExternalLink(e, bskyExternal.uri, () => toast.error(i18n.t.post.openLinkFailed))} target="_blank" rel="noopener noreferrer" class="mt-2 block border border-[var(--color-border)] rounded-lg overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
+          <a href={hrefOrHash(bskyExternal.uri)} onclick={(e) => openExternalLink(e, bskyExternal.uri, () => toast.error(i18n.t.post.openLinkFailed))} target="_blank" rel="noopener noreferrer" class="link-preview-card mt-2 block border border-[var(--color-border)] rounded-lg overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
             {#if bskyExternal.thumb}
               <div class="link-preview-media"><img decoding="async" loading="lazy" src={bskyExternal.thumb} alt="" class="link-preview-image" /></div>
             {/if}
-            <div class="p-3">
+            <div class="link-preview-copy p-3">
               <p class="text-xs text-[var(--color-text-muted)]">{bskyExternalHost}</p>
               <p class="font-semibold text-sm text-[var(--color-text)]">{bskyExternal.title}</p>
               {#if bskyExternal.description}
@@ -1273,11 +1273,11 @@
 
       <!-- Mastodon link card -->
       {#if mastodonCard}
-        <a href={hrefOrHash(mastodonCard.url)} onclick={(e) => openExternalLink(e, mastodonCard.url, () => toast.error(i18n.t.post.openLinkFailed))} target="_blank" rel="noopener noreferrer" class="mt-2 block border border-[var(--color-border)] rounded-lg overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
+        <a href={hrefOrHash(mastodonCard.url)} onclick={(e) => openExternalLink(e, mastodonCard.url, () => toast.error(i18n.t.post.openLinkFailed))} target="_blank" rel="noopener noreferrer" class="link-preview-card mt-2 block border border-[var(--color-border)] rounded-lg overflow-hidden hover:border-[var(--color-text-muted)] transition-colors">
           {#if mastodonCard.image}
             <div class="link-preview-media"><img decoding="async" loading="lazy" src={mastodonCard.image} alt="" class="link-preview-image" /></div>
           {/if}
-          <div class="p-3">
+          <div class="link-preview-copy p-3">
             <p class="text-xs text-[var(--color-text-muted)]">{mastodonCard.provider_name || mastodonCardHost}</p>
             <p class="font-semibold text-sm text-[var(--color-text)]">{mastodonCard.title}</p>
             {#if mastodonCard.description}
@@ -1576,6 +1576,10 @@
   .post-layout-container { container-type: inline-size; }
   .feed-preview .media-preview-image, .feed-preview .link-preview-image { max-height: min(18rem, 22svh); }
   .feed-preview .media-tile { height: min(22svh, 13rem); }
+  /* Keep the title visible before spending the limited preview height on media. */
+  .feed-preview .link-preview-card { display: flex; flex-direction: column; }
+  .feed-preview .link-preview-copy { order: -1; }
+  .feed-preview .link-preview-image { max-height: max(0px, min(14rem, calc(50svh - 16rem))); }
   @container (min-width: 42rem) {
     :global(html[data-side-media='true']) .post-layout.can-side {
       display: grid;

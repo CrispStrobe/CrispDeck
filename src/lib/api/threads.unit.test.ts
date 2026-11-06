@@ -135,3 +135,17 @@ describe('ThreadsConfig', () => {
     expect(loaded).toEqual(config);
   });
 });
+
+describe('Threads mentions pagination', () => {
+  it('follows Meta after cursors without requiring next URLs', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: [{ id: 'one' }], paging: { cursors: { after: 'next-cursor' } } }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: [{ id: 'two' }] }) });
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const mentions = await new ThreadsClient('token', '123').getAllMentions();
+      expect(mentions.map(p => p.id)).toEqual(['one', 'two']);
+      expect(new URL(fetchMock.mock.calls[1][0]).searchParams.get('after')).toBe('next-cursor');
+    } finally { vi.unstubAllGlobals(); }
+  });
+});

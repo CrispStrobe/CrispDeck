@@ -13,6 +13,7 @@
   import { createPullToRefresh } from '$lib/utils/pull-to-refresh.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
+  import { ThreadsClient } from '$lib/api/threads';
   import type { Account } from '$lib/types';
   import { groupNotifications, type UnifiedNotification, type NotificationGroup } from '$lib/notification-grouping';
   import { getCached, setCache } from '$lib/view-cache';
@@ -114,6 +115,18 @@
             }
           } catch (e) { swallow(`notifications.load:${acct.handle}`, e); failedAccounts++; }
           return notifs;
+        })());
+      } else if (acct.platform === 'threads') {
+        fetchers.push((async () => {
+          try {
+            const mentions = await (entry.client as ThreadsClient).getAllMentions();
+            return mentions.map(n => ({
+              id: `threads-${acct.id}-${n.id}`, platform: 'threads' as const, type: 'mention',
+              createdAt: n.timestamp ?? new Date().toISOString(),
+              author: { handle: `@${n.username ?? 'unknown'}`, displayName: n.username },
+              text: n.text, postUri: n.permalink,
+            }));
+          } catch (e) { swallow(`notifications.load:${acct.handle}`, e); failedAccounts++; return []; }
         })());
       } else if (acct.platform === 'mastodon') {
         fetchers.push((async () => {
