@@ -12,6 +12,7 @@
   import KeyboardShortcuts from '$lib/components/KeyboardShortcuts.svelte';
   import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
   import ToastContainer from '$lib/components/ToastContainer.svelte';
+  import LinkContextMenu from '$lib/components/LinkContextMenu.svelte';
   import ScrollToTop from '$lib/components/ScrollToTop.svelte';
   import AccountSwitcher from '$lib/components/AccountSwitcher.svelte';
   import AppNavigation from '$lib/components/AppNavigation.svelte';
@@ -104,6 +105,8 @@
   let countsInterval: ReturnType<typeof setInterval> | undefined;
 
   onMount(async () => {
+    window.addEventListener('crispdeck:accounts-changed', refreshSidebarAccounts);
+    document.documentElement.dataset.sideMedia = String(localStorage.getItem('crispdeck-side-media') !== 'false');
     // Register service worker for PWA
     if ('serviceWorker' in navigator) {
       // Scope follows the mount point: a worker registered at the origin root
@@ -166,7 +169,15 @@
     document.removeEventListener('visibilitychange', handleVisibility);
     window.removeEventListener('online', handleOnline);
     window.removeEventListener('offline', handleOffline);
+    window.removeEventListener('crispdeck:accounts-changed', refreshSidebarAccounts);
   });
+
+  async function refreshSidebarAccounts() {
+    try {
+      const { listAccounts } = await import('$lib/db');
+      sidebarAccounts = await listAccounts();
+    } catch (e) { swallow('layout.refreshSidebarAccounts', e); }
+  }
 
   async function checkUnreadMessages() {
     try {
@@ -310,10 +321,10 @@
         </div>
       {/if}
       <div class="flex items-center gap-1">
-        <button onclick={toggleTheme} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors" title={theme === 'dark' ? 'OLED mode' : theme === 'oled' ? 'Light mode' : 'Dark mode'}>
+        {#if !collapsed}<button onclick={toggleTheme} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors" title={theme === 'dark' ? 'OLED mode' : theme === 'oled' ? 'Light mode' : 'Dark mode'}>
           {#if theme === 'dark'}<Smartphone size={14} />{:else if theme === 'oled'}<Sun size={14} />{:else}<Moon size={14} />{/if}
-        </button>
-        <button onclick={() => collapsed = !collapsed} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors" title={collapsed ? 'Expand' : 'Collapse'}>
+        </button>{/if}
+        <button onclick={() => collapsed = !collapsed} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors" title={collapsed ? 'Expand' : 'Collapse'} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!collapsed}>
           {#if collapsed}<ChevronsRight size={16} />{:else}<ChevronsLeft size={16} />{/if}
         </button>
       </div>
@@ -400,6 +411,7 @@
   </main>
 
   <ToastContainer />
+  <LinkContextMenu />
   <ScrollToTop />
 
   <!-- Mobile bottom tab bar (compact) -->

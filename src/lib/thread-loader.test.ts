@@ -40,7 +40,7 @@ describe('thread account selection', () => {
   it('reads Bluesky main, ancestors, and replies through the exact OAuth account and stamps all posts', async () => {
     const personal = bskyEntry(bskyAccounts[0]); const work = bskyEntry(bskyAccounts[1]);
     const result = await loadThreadPage(request(`platform=bluesky&account=2&uri=${encodeURIComponent(uri)}`), bskyAccounts, new Map([[1, personal.entry], [2, work.entry]]));
-    expect(work.getPostThread).toHaveBeenCalledWith({ uri, depth: 6, parentHeight: 80 });
+    expect(work.getPostThread).toHaveBeenCalledWith({ uri, depth: 20, parentHeight: 80 });
     expect(personal.getPostThread).not.toHaveBeenCalled();
     expect(work.client.getPostThread).not.toHaveBeenCalled(); expect(work.client.getAgent).not.toHaveBeenCalled();
     for (const post of [result.mainPost!, ...result.ancestors, ...result.replies]) expect(post).toMatchObject({ sourceAccountId: 2, sourceAccount: 'work.bsky.social' });
@@ -72,7 +72,7 @@ describe('thread account selection', () => {
     const getPostThread = vi.fn(async () => ({ post: bskyPost('main') }));
     publicReader.mockReturnValue({ getPostThread });
     const result = await loadThreadPage(request(`uri=${encodeURIComponent(uri)}`), [], new Map());
-    expect(getPostThread).toHaveBeenCalledWith(uri); expect(result.mainPost?.sourceAccountId).toBeUndefined();
+    expect(getPostThread).toHaveBeenCalledWith(uri, 20); expect(result.mainPost?.sourceAccountId).toBeUndefined();
   });
 });
 

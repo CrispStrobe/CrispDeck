@@ -102,6 +102,9 @@ jobs:
       - name: Initialize iOS project
         run: npx tauri ios init
 
+      - name: Populate iOS app icon catalog
+        run: python3 scripts/sync-ios-icons.py
+
       # Inject PrivacyInfo.xcprivacy into the Xcode project target
       - name: Inject PrivacyInfo.xcprivacy
         run: python3 scripts/patch-ios-privacy.py

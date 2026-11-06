@@ -90,3 +90,16 @@ describe('db function signatures', () => {
     expect(typeof db.resolveHandle).toBe('function');
   });
 });
+
+it('announces account changes only after a successful save', async () => {
+  const { addAccount, deleteAccount } = await import('./db');
+  const listener = vi.fn();
+  window.addEventListener('crispdeck:accounts-changed', listener);
+  try {
+    await addAccount({ platform:'mastodon', handle:'@alice@example.org', credentials:'{}' });
+    expect(listener).toHaveBeenCalledOnce();
+    expect((listener.mock.calls[0][0] as CustomEvent).detail).toEqual({membershipChanged:true});
+    await deleteAccount(1);
+    expect(listener).toHaveBeenCalledTimes(2);
+  } finally { window.removeEventListener('crispdeck:accounts-changed', listener); }
+});

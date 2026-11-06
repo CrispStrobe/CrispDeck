@@ -48,6 +48,7 @@
     pinned = false,
     onpinnedchange,
     onclear,
+    onmove: onMove,
     ondragstart: onDragStart,
     ondragover: onDragOver,
     ondrop: onDrop,
@@ -95,6 +96,7 @@
     pinned?: boolean;
     onpinnedchange?: (pinned: boolean) => void;
     onclear?: () => void;
+    onmove?: (direction: -1 | 1) => void;
     ondragstart?: (e: DragEvent) => void;
     ondragover?: (e: DragEvent) => void;
     ondrop?: (e: DragEvent) => void;
@@ -395,11 +397,6 @@
   style="width: {width}px"
   role="region"
   aria-label={title}
-  draggable={!pinned}
-  ondragstart={pinned ? undefined : onDragStart}
-  ondragover={onDragOver}
-  ondrop={onDrop}
-  ondragend={onDragEnd}
 >
   <!-- Color accent bar -->
   {#if color}
@@ -408,7 +405,9 @@
   <!-- Column header -->
   <div class="flex flex-wrap items-center justify-between gap-y-2 px-3 py-2 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex-shrink-0">
     <div class="flex items-center gap-2 w-full min-w-0">
-      <GripVertical size={14} class="text-[var(--color-text-muted)] cursor-grab" />
+      <button type="button" class="drag-handle text-[var(--color-text-muted)] cursor-grab active:cursor-grabbing" draggable={!pinned} ondragstart={pinned ? undefined : onDragStart} ondragend={onDragEnd} onkeydown={(e) => { if (!pinned && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); onMove?.(e.key === 'ArrowLeft' ? -1 : 1); } }} aria-label={i18n.t.deck.moveColumn.replace('{title}', title)} title={i18n.t.deck.moveColumn.replace('{title}', title)}>
+        <GripVertical size={14} />
+      </button>
       <span class="text-sm font-medium truncate">{title}</span>
       {#if paused}<span class="ml-auto text-[10px] text-amber-500">{i18n.t.deck.paused}</span>{/if}
       {#if streaming && !paused}

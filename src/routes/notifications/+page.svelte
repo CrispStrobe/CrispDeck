@@ -37,7 +37,11 @@
   onMount(async () => {
     // Show cached notifications instantly
     const cached = getCached<NotificationGroup[]>('notifications');
-    if (cached) { groups = cached.data; loading = false; }
+    if (cached) {
+      // JSON persistence cannot preserve Sets; reconstruct them from the actors.
+      groups = cached.data.map(group => ({ ...group, platforms: new Set(group.actors.map(actor => actor.platform)) }));
+      loading = false;
+    }
 
     try {
       const result = await initAllClients();
@@ -140,12 +144,16 @@
       }
     }
 
+    // A temporarily unavailable client must not erase previously loaded data.
+    if (accounts.length > 0 && fetchers.length === 0) return;
     const results = await Promise.all(fetchers);
     const all = results.flat();
     // An account that failed contributes nothing, and the list then looks
     // like a quiet account rather than a broken connection.
     if (failedAccounts > 0) {
       toast.warning(i18n.t.common.someAccountsFailed.replace('{count}', String(failedAccounts)));
+      // Keep the visible cached notifications when every account failed.
+      if (failedAccounts === fetchers.length && all.length === 0) return;
     }
 
     // Fetch Mastodon announcements

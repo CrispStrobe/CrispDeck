@@ -10,6 +10,11 @@ import { writeJson, removeKey } from './safe-storage';
 
 const PREFIX = 'crispdeck-vc-';
 const DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes
+const memory = new Map<string, { raw: string; entry: CacheEntry<unknown> }>();
+if (typeof window !== 'undefined') window.addEventListener('storage', (event) => {
+  if (event.key === null) memory.clear();
+  else if (event.key.startsWith(PREFIX)) memory.delete(event.key.slice(PREFIX.length));
+});
 
 export interface CacheEntry<T> {
   data: T;
@@ -22,8 +27,12 @@ export interface CacheEntry<T> {
 export function getCached<T>(key: string): CacheEntry<T> | null {
   try {
     const raw = localStorage.getItem(PREFIX + key);
-    if (!raw) return null;
-    return JSON.parse(raw);
+    if (!raw) { memory.delete(key); return null; }
+    const found = memory.get(key);
+    if (found?.raw === raw) return found.entry as CacheEntry<T>;
+    const entry = JSON.parse(raw) as CacheEntry<T>;
+    memory.set(key, { raw, entry });
+    return entry;
   } catch {
     return null;
   }
@@ -35,7 +44,7 @@ export function getCached<T>(key: string): CacheEntry<T> | null {
 export function setCache<T>(key: string, data: T): void {
   try {
     const entry: CacheEntry<T> = { data, cachedAt: Date.now() };
-    writeJson(PREFIX + key, entry);
+    if (writeJson(PREFIX + key, entry)) memory.set(key, { raw: JSON.stringify(entry), entry });
   } catch {
     // localStorage full or quota exceeded — silently skip
   }
@@ -52,6 +61,7 @@ export function isStale(entry: CacheEntry<any>, ttl = DEFAULT_TTL): boolean {
  * Remove cached data for a view.
  */
 export function clearCache(key: string): void {
+  memory.delete(key);
   removeKey(PREFIX + key);
 }
 
@@ -59,6 +69,7 @@ export function clearCache(key: string): void {
  * Remove all view cache entries.
  */
 export function clearAllCache(): void {
+  memory.clear();
   const keys: string[] = [];
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);

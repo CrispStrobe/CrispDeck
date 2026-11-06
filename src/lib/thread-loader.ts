@@ -76,9 +76,9 @@ export async function loadThreadPage(request: ThreadRequest, accounts: Account[]
         agent = client.getAgent();
       }
       if (!agent.did || selected.account.did && agent.did !== selected.account.did) throw new Error('Reconnect the selected Bluesky account to view this thread.');
-      thread = (await agent.getPostThread({ uri: request.uri, depth: 6, parentHeight: 80 })).data.thread;
+      thread = (await agent.getPostThread({ uri: request.uri, depth: 20, parentHeight: 80 })).data.thread;
     } else {
-      thread = await BlueskyClient.readOnly('_').getPostThread(request.uri);
+      thread = await BlueskyClient.readOnly('_').getPostThread(request.uri, 20);
     }
     if (!thread?.post) throw new Error(thread?.$type === 'app.bsky.feed.defs#blockedPost' ? 'This post is blocked for the selected account.' : 'Post not found.');
     result.mainPost = normalized({ post: thread.post });
@@ -88,7 +88,7 @@ export async function loadThreadPage(request: ThreadRequest, accounts: Account[]
       visited.add(parent.post.uri); result.ancestors.unshift(normalized({ post: parent.post })); parent = parent.parent;
     }
     function collectReplies(node: any, depth: number) {
-      if (depth > 3 || !Array.isArray(node?.replies)) return;
+      if (depth > 20 || !Array.isArray(node?.replies)) return;
       for (const reply of node.replies) {
         if (reply?.post && !visited.has(reply.post.uri)) {
           visited.add(reply.post.uri); result.replies.push(normalized({ post: reply.post })); collectReplies(reply, depth + 1);

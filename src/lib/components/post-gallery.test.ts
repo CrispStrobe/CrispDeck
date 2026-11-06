@@ -30,15 +30,15 @@ describe('Bluesky gallery views', () => {
     const target = render(gallery);
     expect(target.querySelectorAll('img[src^="https://media.example/thumb-"]')).toHaveLength(10);
     target.querySelector<HTMLImageElement>('img[alt="Photo 9"]')!.closest('button')!.click(); flushSync();
-    expect(target.querySelector('[role=dialog] img')?.getAttribute('src')).toBe('https://media.example/full-9.png');
-    expect(target.querySelector('[role=dialog]')?.textContent).toContain('10');
+    expect(document.querySelector('[role=dialog] img')?.getAttribute('src')).toBe('https://media.example/full-9.png');
+    expect(document.querySelector('[role=dialog]')?.textContent).toContain('10');
   });
   it('opens all ten images from the preview of a quoted gallery', () => {
     const target = render({ $type: 'app.bsky.embed.record#view', record: {
       $type: 'app.bsky.embed.record#viewRecord', uri: 'at://did:plc:q/app.bsky.feed.post/2', author: { handle: 'quoted.example' }, value: { text: 'Quoted gallery' }, embeds: [gallery],
     } });
     target.querySelector<HTMLElement>('[aria-label="View quoted post images"]')!.click(); flushSync();
-    expect(target.querySelector('[role=dialog] img')?.getAttribute('src')).toBe('https://media.example/full-0.png');
-    expect(target.querySelector('[role=dialog]')?.textContent).toContain('10');
+    expect(document.querySelector('[role=dialog] img')?.getAttribute('src')).toBe('https://media.example/full-0.png');
+    expect(document.querySelector('[role=dialog]')?.textContent).toContain('10');
   });
 });

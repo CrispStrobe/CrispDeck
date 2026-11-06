@@ -1,6 +1,7 @@
 <script lang="ts">
   import { base } from '$app/paths';
-  import { onDestroy } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
+  import { partitionThreadReplies } from '$lib/thread-continuation';
   import { initAllClients } from '$lib/api/client-factory';
   import { MessageCircle, ArrowLeft, BookOpen, Share2 } from '@lucide/svelte';
   import { afterNavigate, goto } from '$app/navigation';
@@ -24,7 +25,10 @@
 
   async function loadCurrentThread(url: URL) {
     const sequence = ++requestSequence;
-    loading = true; error = ''; ancestors = []; mainPost = null; replies = []; externalUrl = ''; articleMode = false;
+    loading = true; error = ''; articleMode = false;
+    await tick();
+    if (disposed || sequence !== requestSequence) return;
+    ancestors = []; mainPost = null; replies = []; externalUrl = '';
     try {
       const request = parseThreadRequest(url.searchParams);
       platform = request.platform;
@@ -47,12 +51,13 @@
   onDestroy(() => { disposed = true; requestSequence++; });
 
   let articleMode = $state(false);
+  const groupedReplies = $derived(mainPost ? partitionThreadReplies(mainPost, replies) : { continuation: [], replies });
 
   /** Build a single article from the thread author's posts (ancestors + main + their replies) */
   const articlePosts = $derived.by(() => {
     if (!mainPost) return [];
     const authorHandle = mainPost.author.handle;
-    const all = [...ancestors, mainPost, ...replies].filter(
+    const all = [...ancestors, mainPost, ...groupedReplies.continuation].filter(
       p => p.author.handle === authorHandle
     );
     // Deduplicate by URI
@@ -84,7 +89,7 @@
 
 <div class="p-6 max-w-3xl mx-auto">
   <div class="flex items-center justify-between mb-4">
-    <button onclick={() => history.back()} class="flex items-center gap-1 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+    <button onclick={() => goto(`${base}/feed`)} class="flex items-center gap-1 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
       <ArrowLeft size={14} /> {i18n.t.profile.backToFeed}
     </button>
     <div class="flex items-center gap-2">
@@ -205,14 +210,22 @@
       </div>
     {/if}
 
-    <!-- Replies -->
-    {#if replies.length > 0}
+    {#if groupedReplies.continuation.length > 0}
+      <div class="space-y-2 mb-4 border-l-4 border-[var(--color-primary)] rounded-r-lg" aria-label={i18n.t.thread.authorThread}>
+        {#each groupedReplies.continuation as post (post.uri)}
+          <Post {post} />
+        {/each}
+      </div>
+    {/if}
+
+    <!-- Other replies -->
+    {#if groupedReplies.replies.length > 0}
       <div class="border-t border-[var(--color-border)] pt-4">
         <h3 class="text-sm font-semibold text-[var(--color-text-muted)] mb-3 flex items-center gap-2">
-          <MessageCircle size={14} /> {replies.length} {replies.length === 1 ? 'reply' : 'replies'}
+          <MessageCircle size={14} /> {groupedReplies.replies.length} {groupedReplies.replies.length === 1 ? 'reply' : 'replies'}
         </h3>
         <div class="space-y-2 pl-4 border-l-2 border-[var(--color-border)]">
-          {#each replies as post}
+          {#each groupedReplies.replies as post (post.uri)}
             <Post {post} />
           {/each}
         </div>

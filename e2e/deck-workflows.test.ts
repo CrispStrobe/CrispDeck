@@ -96,7 +96,7 @@ test('workspaces export/import safely, retain account identity and stay usable o
   await dialog.getByRole('button', { name: 'Save current columns', exact: true }).click();
   await expect(dialog.getByText('Workspace saved.', { exact: true })).toBeVisible();
   const downloadPromise = page.waitForEvent('download');
-  await dialog.getByRole('button', { name: 'Export workspace', exact: true }).click();
+  await dialog.locator('section').filter({ hasText: 'Monitoring' }).getByRole('button', { name: 'Export workspace', exact: true }).click();
   const download = await downloadPromise;
   const path = await download.path();
   const { readFile } = await import('node:fs/promises');
