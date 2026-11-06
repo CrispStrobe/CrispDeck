@@ -12,12 +12,12 @@ import type { UnifiedPost } from '$lib/types';
 export function applyColumnMuteFilter(posts: UnifiedPost[], muteWords: string[]): UnifiedPost[] {
   if (!muteWords || muteWords.length === 0) return posts;
 
-  const matchers: ((text: string) => boolean)[] = muteWords.map(word => {
+  const matchers: ((text: string) => boolean)[] = muteWords.map(word => word.trim()).filter(Boolean).map(word => {
     const regexMatch = word.match(/^\/(.+)\/([gimsuy]*)$/);
     if (regexMatch) {
       try {
         const regex = new RegExp(regexMatch[1], regexMatch[2] || 'i');
-        return (text: string) => regex.test(text);
+        return (text: string) => { regex.lastIndex = 0; return regex.test(text); };
       } catch {
         return () => false;
       }

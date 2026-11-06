@@ -5,10 +5,13 @@ import type { Agent, BlobRef } from '@atproto/api';
 import { loadAtprotoSdk } from '$lib/api/atproto-sdk';
 import type { BlueskyClient } from '$lib/api/bluesky';
 import type { MastodonClient } from '$lib/api/mastodon';
+import { resolveMastodonReply } from './mastodon-reply';
 import type { ThreadsClient } from '$lib/api/threads';
 import type { Platform } from '$lib/types';
 import { resolveMentionsForPlatform } from './mentions';
 import { isVideoFile } from './media';
+import { validateMediaForPlatform } from './media-policy';
+import { readImageDimensions, type ImageDimensions } from './image-dimensions';
 
 export interface PostResult {
   platform: Platform;
@@ -56,6 +59,8 @@ export async function postToBluesky(
   oauthAgent?: Agent,
 ): Promise<PostResult> {
   try {
+    const mediaError = validateMediaForPlatform('bluesky', options.mediaFiles);
+    if (mediaError) throw new Error(mediaError);
     const agent = oauthAgent ?? client.getAgent();
     const did = agent.did ?? (agent as { session?: { did?: string } }).session?.did;
     if (!did) throw new Error('Reconnect this Bluesky account before publishing.');
@@ -74,7 +79,8 @@ export async function postToBluesky(
 
     // Upload media if present
     if (options.mediaFiles && options.mediaFiles.length > 0) {
-      // Check if any file is a video — video takes priority over images
+      // Validation above permits one video or images; it never drops images
+      // merely because a video was also selected.
       const videoFile = options.mediaFiles.find(f => isVideoFile(f));
 
       if (videoFile) {
@@ -101,13 +107,16 @@ export async function postToBluesky(
           record.embed = videoEmbed;
         }
       } else {
-        // Image upload (existing logic)
-        // uploadBlob hands back a BlobRef instance; the hand-written shape here
-        // described its *serialized* form, which the SDK only produces when it
-        // encodes the record.
+        const useGallery = options.mediaFiles.length > 4;
+        const dimensions: ImageDimensions[] = [];
+        // Check every gallery image before uploading any blobs. Decode one at
+        // a time so ten large photos do not stay resident in memory together.
+        if (useGallery) {
+          for (const file of options.mediaFiles) dimensions.push(await readImageDimensions(file));
+        }
         const images: Array<{ alt: string; image: BlobRef }> = [];
 
-        for (let idx = 0; idx < Math.min(options.mediaFiles.length, 4); idx++) {
+        for (let idx = 0; idx < options.mediaFiles.length; idx++) {
           const file = options.mediaFiles[idx];
           const bytes = new Uint8Array(await file.arrayBuffer());
           const resp = await agent.uploadBlob(bytes, { encoding: file.type });
@@ -117,6 +126,9 @@ export async function postToBluesky(
           });
         }
 
+        const mediaEmbed = useGallery
+          ? { $type: 'app.bsky.embed.gallery', items: images.map((image, index) => ({ $type: 'app.bsky.embed.gallery#image', ...image, aspectRatio: dimensions[index] })) }
+          : { $type: 'app.bsky.embed.images', images };
         if (options.quoteUri && options.quoteCid) {
           // Images + quote: use recordWithMedia embed
           record.embed = {
@@ -125,16 +137,10 @@ export async function postToBluesky(
               $type: 'app.bsky.embed.record',
               record: { uri: options.quoteUri, cid: options.quoteCid },
             },
-            media: {
-              $type: 'app.bsky.embed.images',
-              images,
-            },
+            media: mediaEmbed,
           };
         } else {
-          record.embed = {
-            $type: 'app.bsky.embed.images',
-            images,
-          };
+          record.embed = mediaEmbed;
         }
       }
     } else if (options.quoteUri && options.quoteCid) {
@@ -228,17 +234,20 @@ export async function postToMastodon(
   let writeStarted = false;
   let confirmedRejected = false;
   try {
+    const mediaError = validateMediaForPlatform('mastodon', options.mediaFiles);
+    if (mediaError) throw new Error(mediaError);
     const instanceUrl = client.getInstanceUrl();
     const token = client.getAccessToken();
     const authHeaders: Record<string, string> = token
       ? { Authorization: `Bearer ${token}` }
       : {};
+    const replyId = options.replyTo ? await resolveMastodonReply(client, options.replyTo) : undefined;
 
     // Upload media in parallel (most Mastodon servers handle 4 concurrent uploads)
     const mediaIds: string[] = [];
     if (options.mediaFiles && options.mediaFiles.length > 0) {
       const uploadResults = await Promise.all(
-        options.mediaFiles.slice(0, 4).map(async (file, idx) => {
+        options.mediaFiles.map(async (file, idx) => {
           const formData = new FormData();
           formData.append('file', file);
           if (options.altTexts?.[idx]) formData.append('description', options.altTexts[idx]);
@@ -265,7 +274,7 @@ export async function postToMastodon(
       visibility: options.visibility ?? 'public',
     };
 
-    if (options.replyTo) body.in_reply_to_id = options.replyTo.id ?? options.replyTo.uri.split('/').pop();
+    if (replyId) body.in_reply_to_id = replyId;
 
     if (mediaIds.length > 0) {
       body.media_ids = mediaIds;
@@ -320,16 +329,18 @@ export async function postToThreads(
 ): Promise<PostResult> {
   let publishing = false;
   try {
+    const mediaError = validateMediaForPlatform('threads', options.mediaFiles, options.mediaUrls);
+    if (mediaError) throw new Error(mediaError);
     let containerId: string;
 
     // Check for media URLs (Threads requires publicly accessible HTTPS URLs)
-    const mediaUrls = options.mediaUrls?.filter(u => u.startsWith('https://'));
+    const mediaUrls = options.mediaUrls;
 
     if (mediaUrls && mediaUrls.length > 1) {
       // Carousel (multiple images)
       const childIds: string[] = [];
-      for (const url of mediaUrls.slice(0, 10)) {
-        const isVideo = /\.(mp4|mov)$/i.test(url);
+      for (const url of mediaUrls) {
+        const isVideo = /\.(mp4|mov|webm)(?:[?#]|$)/i.test(url);
         const id = await client.createCarouselItemContainer(isVideo ? 'VIDEO' : 'IMAGE', url);
         await client.waitForContainer(id);
         childIds.push(id);
@@ -338,7 +349,7 @@ export async function postToThreads(
     } else if (mediaUrls && mediaUrls.length === 1) {
       // Single image or video
       const url = mediaUrls[0];
-      const isVideo = /\.(mp4|mov)$/i.test(url);
+      const isVideo = /\.(mp4|mov|webm)(?:[?#]|$)/i.test(url);
       containerId = isVideo
         ? await client.createVideoContainer(url, options.text, options.replyTo?.id)
         : await client.createImageContainer(url, options.text, options.replyTo?.id);
@@ -393,180 +404,63 @@ export async function crosspost(
   return results;
 }
 
-/** Post a thread (reply chain) to Bluesky */
-export async function postThreadToBluesky(
-  client: BlueskyClient,
-  parts: string[],
-  options: Omit<ComposeOptions, 'text'>,
-): Promise<PostResult[]> {
+/** Shared first-part rules keep thread publishing on the validated media path. */
+function threadPartOptions(options: Omit<ComposeOptions, 'text'>, text: string, index: number): ComposeOptions {
+  return {
+    ...options, text,
+    deliveryKey: options.deliveryKey ? `${options.deliveryKey}-${index}` : undefined,
+    recordKey: options.recordKey ? (index === 0 ? options.recordKey : `${options.recordKey}-${index}`) : undefined,
+    mediaFiles: index === 0 ? options.mediaFiles : undefined,
+    mediaUrls: index === 0 ? options.mediaUrls : undefined,
+    quoteUri: index === 0 ? options.quoteUri : undefined,
+    quoteCid: index === 0 ? options.quoteCid : undefined,
+    quoteUrl: index === 0 ? options.quoteUrl : undefined,
+    poll: index === 0 ? options.poll : undefined,
+    threadGate: index === 0 ? options.threadGate : undefined,
+  };
+}
+
+/** Post a thread (reply chain) to Bluesky, retaining all first-post media. */
+export async function postThreadToBluesky(client: BlueskyClient, parts: string[], options: Omit<ComposeOptions, 'text'>): Promise<PostResult[]> {
   const results: PostResult[] = [];
-  let parentUri: string | undefined;
-  let parentCid: string | undefined;
-  let rootUri: string | undefined;
-  let rootCid: string | undefined;
-
-  const agent = client.getAgent();
-
-  for (let i = 0; i < parts.length; i++) {
-    try {
-      const { RichText } = await loadAtprotoSdk();
-      const rt = new RichText({ text: parts[i] });
-      await rt.detectFacets(agent);
-
-      const record: Record<string, unknown> = {
-        $type: 'app.bsky.feed.post',
-        text: rt.text,
-        facets: rt.facets,
-        createdAt: new Date().toISOString(),
-      };
-
-      // First post gets media, rest are text-only
-      if (i === 0 && options.mediaFiles && options.mediaFiles.length > 0) {
-        const images: Array<{
-          alt: string;
-          image: unknown;
-        }> = [];
-        for (let idx = 0; idx < Math.min(options.mediaFiles.length, 4); idx++) {
-          const file = options.mediaFiles[idx];
-          const bytes = new Uint8Array(await file.arrayBuffer());
-          const resp = await agent.uploadBlob(bytes, { encoding: file.type });
-          images.push({ alt: options.altTexts?.[idx] ?? '', image: resp.data.blob });
-        }
-        record.embed = { $type: 'app.bsky.embed.images', images };
-      }
-
-      // Reply chain
-      if (parentUri && parentCid && rootUri && rootCid) {
-        record.reply = {
-          root: { uri: rootUri, cid: rootCid },
-          parent: { uri: parentUri, cid: parentCid },
-        };
-      }
-
-      const resp = await agent.api.com.atproto.repo.createRecord({
-        repo: agent.session!.did,
-        collection: 'app.bsky.feed.post',
-        record,
-      });
-
-      if (i === 0) {
-        rootUri = resp.data.uri;
-        rootCid = resp.data.cid;
-      }
-      parentUri = resp.data.uri;
-      parentCid = resp.data.cid;
-
-      results.push({
-        platform: 'bluesky',
-        success: true,
-        uri: resp.data.uri,
-        cid: resp.data.cid,
-      });
-    } catch (e) {
-      results.push({ platform: 'bluesky', success: false, error: `Part ${i + 1}: ${e}` });
-      break; // Stop the chain on failure
-    }
+  let rootUri = options.replyTo?.rootUri ?? options.replyTo?.uri;
+  let rootCid = options.replyTo?.rootCid ?? options.replyTo?.cid;
+  for (let index = 0; index < parts.length; index++) {
+    const previous = results[index - 1];
+    const part = threadPartOptions(options, parts[index], index);
+    if (previous?.uri && previous.cid) part.replyTo = { uri: previous.uri, cid: previous.cid, rootUri, rootCid, platform: 'bluesky' };
+    const result = await postToBluesky(client, part);
+    results.push(result);
+    if (!result.success) break;
+    rootUri ??= result.uri; rootCid ??= result.cid;
   }
   return results;
 }
 
-/** Post a thread (reply chain) to Mastodon */
-export async function postThreadToMastodon(
-  client: MastodonClient,
-  parts: string[],
-  options: Omit<ComposeOptions, 'text'>,
-): Promise<PostResult[]> {
+/** Post a thread (reply chain) to Mastodon using the same validation as a post. */
+export async function postThreadToMastodon(client: MastodonClient, parts: string[], options: Omit<ComposeOptions, 'text'>): Promise<PostResult[]> {
   const results: PostResult[] = [];
-  let inReplyToId: string | undefined;
-
-  const instanceUrl = client.getInstanceUrl();
-  const token = client.getAccessToken();
-  const authHeaders: Record<string, string> = token
-    ? { Authorization: `Bearer ${token}` }
-    : {};
-
-  for (let i = 0; i < parts.length; i++) {
-    try {
-      const body: Record<string, unknown> = {
-        status: parts[i],
-        visibility: options.visibility ?? 'public',
-      };
-
-      if (inReplyToId) {
-        body.in_reply_to_id = inReplyToId;
-      }
-
-      // First post gets media
-      if (i === 0 && options.mediaFiles && options.mediaFiles.length > 0) {
-        const mediaIds: string[] = [];
-        for (const file of options.mediaFiles.slice(0, 4)) {
-          const formData = new FormData();
-          formData.append('file', file);
-          const mediaResp = await fetch(`${instanceUrl}/api/v2/media`, {
-            method: 'POST',
-            headers: authHeaders,
-            body: formData,
-          });
-          if (!mediaResp.ok) throw new Error(`Media upload failed: ${mediaResp.statusText}`);
-          const mediaData = await mediaResp.json();
-          mediaIds.push(mediaData.id);
-        }
-        body.media_ids = mediaIds;
-      }
-
-      if (i === 0 && options.contentWarning) {
-        body.spoiler_text = options.contentWarning;
-      }
-
-      const resp = await fetch(`${instanceUrl}/api/v1/statuses`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify(body),
-      });
-
-      if (!resp.ok) {
-        const errData = await resp.json().catch(() => ({}));
-        throw new Error(errData.error || `Status creation failed: ${resp.statusText}`);
-      }
-
-      const status = await resp.json();
-      inReplyToId = status.id;
-
-      results.push({
-        platform: 'mastodon',
-        success: true,
-        uri: status.uri || status.url,
-      });
-    } catch (e) {
-      results.push({ platform: 'mastodon', success: false, error: `Part ${i + 1}: ${e}` });
-      break;
-    }
+  for (let index = 0; index < parts.length; index++) {
+    const previous = results[index - 1];
+    const part = threadPartOptions(options, parts[index], index);
+    if (previous?.id) part.replyTo = { uri: previous.uri ?? '', id: previous.id, platform: 'mastodon' };
+    const result = await postToMastodon(client, part);
+    results.push(result);
+    if (!result.success) break;
   }
   return results;
 }
 
-/** Post a thread (reply chain) to Threads */
-export async function postThreadToThreads(
-  client: ThreadsClient,
-  parts: string[],
-): Promise<PostResult[]> {
+/** Post a thread (reply chain) to Threads without dropping the first-post media. */
+export async function postThreadToThreads(client: ThreadsClient, parts: string[], options: Omit<ComposeOptions, 'text'> = {}): Promise<PostResult[]> {
   const results: PostResult[] = [];
-  let parentId: string | undefined;
-
-  for (let i = 0; i < parts.length; i++) {
-    try {
-      const result = await client.publishText(parts[i], parentId);
-      parentId = result.id;
-
-      results.push({
-        platform: 'threads',
-        success: true,
-        uri: `https://www.threads.net/post/${result.id}`,
-      });
-    } catch (e) {
-      results.push({ platform: 'threads', success: false, error: `Part ${i + 1}: ${e}` });
-      break;
-    }
+  for (let index = 0; index < parts.length; index++) {
+    const previous = results[index - 1];
+    const part = threadPartOptions(options, parts[index], index);
+    if (previous?.id) part.replyTo = { uri: previous.uri ?? '', id: previous.id, platform: 'threads' };
+    const result = await postToThreads(client, part);
+    results.push(result);
+    if (!result.success) break;
   }
   return results;
 }
@@ -602,7 +496,7 @@ export async function crosspostThread(
       if (target.platform === 'bluesky') {
         return await postThreadToBluesky(target.client as BlueskyClient, target.resolvedParts, options);
       } else if (target.platform === 'threads') {
-        return await postThreadToThreads(target.client as ThreadsClient, target.resolvedParts);
+        return await postThreadToThreads(target.client as ThreadsClient, target.resolvedParts, options);
       } else {
         return await postThreadToMastodon(target.client as MastodonClient, target.resolvedParts, options);
       }

@@ -20,8 +20,35 @@ interface BookmarkedPost {
   createdAt: string;
   likeCount: number;
   repostCount: number;
+  replyCount?: number;
   bookmarkedAt: string;
   raw: unknown;
+  embeds?: unknown;
+  replyParentUri?: string;
+  isRepost?: boolean;
+  sourceAccount?: string;
+  sourceAccountId?: number;
+  repostAuthor?: UnifiedPost['repostAuthor'];
+  emojis?: UnifiedPost['emojis'];
+  contentWarning?: string;
+}
+
+function announceBookmarkChange() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('crispdeck-bookmarks-changed'));
+}
+
+function bookmarkRecord(post: UnifiedPost, bookmarkedAt = new Date().toISOString()): BookmarkedPost {
+  const record: BookmarkedPost = {
+    uri: post.uri, platform: post.platform, text: post.text,
+    authorHandle: post.author.handle, authorName: post.author.displayName ?? post.author.handle, authorAvatar: post.author.avatar,
+    createdAt: post.createdAt, likeCount: post.likeCount ?? 0, repostCount: post.repostCount ?? 0, replyCount: post.replyCount,
+    bookmarkedAt, raw: post.raw, embeds: post.embeds, replyParentUri: post.replyParentUri,
+    isRepost: post.isRepost, repostAuthor: post.repostAuthor, sourceAccount: post.sourceAccount, sourceAccountId: post.sourceAccountId,
+    emojis: post.emojis, contentWarning: post.contentWarning,
+  };
+  // Feed rows are Svelte state proxies; IndexedDB cannot structured-clone
+  // their nested raw/embeds objects. Platform posts are JSON payloads.
+  return JSON.parse(JSON.stringify(record)) as BookmarkedPost;
 }
 
 function openDB(): Promise<IDBDatabase> {
@@ -50,24 +77,13 @@ function openDB(): Promise<IDBDatabase> {
 export async function addBookmark(post: UnifiedPost): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const record: BookmarkedPost = {
-      uri: post.uri,
-      platform: post.platform,
-      text: post.text,
-      authorHandle: post.author.handle,
-      authorName: post.author.displayName ?? post.author.handle,
-      authorAvatar: post.author.avatar,
-      createdAt: post.createdAt,
-      likeCount: post.likeCount ?? 0,
-      repostCount: post.repostCount ?? 0,
-      bookmarkedAt: new Date().toISOString(),
-      raw: post.raw,
-    };
+    const record = bookmarkRecord(post);
     const txn = db.transaction(STORE, 'readwrite');
     txn.objectStore(STORE).put(record);
     txn.oncomplete = () => {
       // Update in-memory cache
       _bookmarkUriCache?.add(post.uri);
+      announceBookmarkChange();
       resolve();
     };
     txn.onerror = () => reject(txn.error);
@@ -82,6 +98,7 @@ export async function removeBookmark(uri: string): Promise<void> {
     txn.oncomplete = () => {
       // Update in-memory cache
       _bookmarkUriCache?.delete(uri);
+      announceBookmarkChange();
       resolve();
     };
     txn.onerror = () => reject(txn.error);
@@ -141,7 +158,15 @@ export async function listBookmarks(): Promise<UnifiedPost[]> {
       platform: b.platform as Platform,
       likeCount: b.likeCount,
       repostCount: b.repostCount,
-      isRepost: false,
+      replyCount: b.replyCount,
+      isRepost: b.isRepost ?? false,
+      embeds: b.embeds,
+      replyParentUri: b.replyParentUri,
+      sourceAccount: b.sourceAccount,
+      sourceAccountId: b.sourceAccountId,
+      repostAuthor: b.repostAuthor,
+      emojis: b.emojis,
+      contentWarning: b.contentWarning,
       raw: b.raw,
     }));
 }
@@ -164,32 +189,27 @@ export async function getBookmarkCount(): Promise<number> {
 export async function importPlatformBookmarks(posts: UnifiedPost[]): Promise<number> {
   // Single batch fetch of existing URIs
   const existing = await getAllBookmarkedUris();
-  const toImport = posts.filter(p => !existing.has(p.uri));
+  const toImport: UnifiedPost[] = [];
+  for (const post of posts) {
+    if (existing.has(post.uri)) continue;
+    existing.add(post.uri);
+    toImport.push(post);
+  }
   if (toImport.length === 0) return 0;
+  const now = new Date().toISOString();
+  const records = toImport.map(post => bookmarkRecord(post, now));
 
   const db = await openDB();
   await new Promise<void>((resolve, reject) => {
     const txn = db.transaction(STORE, 'readwrite');
     const store = txn.objectStore(STORE);
-    const now = new Date().toISOString();
-    for (const post of toImport) {
-      store.put({
-        uri: post.uri,
-        platform: post.platform,
-        text: post.text,
-        authorHandle: post.author.handle,
-        authorName: post.author.displayName ?? post.author.handle,
-        authorAvatar: post.author.avatar,
-        createdAt: post.createdAt,
-        likeCount: post.likeCount ?? 0,
-        repostCount: post.repostCount ?? 0,
-        bookmarkedAt: now,
-        raw: post.raw,
-      });
-      _bookmarkUriCache?.add(post.uri);
-    }
-    txn.oncomplete = () => resolve();
-    txn.onerror = () => reject(txn.error);
+    for (const record of records) store.put(record);
+    txn.oncomplete = () => {
+      for (const post of toImport) _bookmarkUriCache?.add(post.uri);
+      announceBookmarkChange();
+      resolve();
+    };
+    txn.onabort = txn.onerror = () => reject(txn.error);
   });
   return toImport.length;
 }

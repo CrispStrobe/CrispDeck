@@ -390,3 +390,13 @@ describe('Bluesky posts preserve labels', () => {
     expect(raw.post.labels[0].val).toBe('nudity');
   });
 });
+
+
+describe('Mastodon identities across instances', () => {
+  it('keeps identical local usernames on different servers distinct', () => {
+    const first = normalizePost(makeMastoPost({ account: { acct: 'sharedname', url: 'https://first.test/@sharedname', displayName: 'First' } }) as any, 'mastodon');
+    const second = normalizePost(makeMastoPost({ account: { acct: 'sharedname', url: 'https://second.test/@sharedname', displayName: 'Second' } }) as any, 'mastodon');
+    expect(first.author.handle).toBe('@sharedname@first.test');
+    expect(second.author.handle).toBe('@sharedname@second.test');
+  });
+});

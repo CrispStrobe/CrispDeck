@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### Deck workflows and parity
+
+- Add account-scoped column settings, network-aware search/list loading, real
+  per-account pagination, retained older pages, inline errors and stale-request
+  protection. Column filters, pause/refresh intervals, source indicators,
+  duplication and keyboard position controls persist with each workspace.
+- Add Bookmarks, Drafts and Scheduled columns (23 types total); scheduled queue
+  operations use the existing local scheduler and delivery locks.
+- Add workspace management with rename/duplicate/delete and validated portable
+  import/export. Account identities remap without exporting credentials or
+  accidentally selecting unrelated accounts.
+- Add explicit save/schedule controls to the floating composer, preserving
+  media, reply/quote context, destination options and unfinished work.
+- Support Bluesky galleries with five to ten images and enforce destination
+  media limits before publishing, instead of silently truncating attachments.
+- Keep likes/reposts and direct messages tied to their source accounts, including
+  Bluesky OAuth. Add source-aware undo, native bookmark sync, poll votes,
+  authenticated thread views, and conversation deep links.
+- Freeze remote account identities for delivery retries and resolve Mastodon
+  reply targets on the destination instance before publishing.
+- Scope live updates to the actual column, isolate private Mastodon streams by
+  account, preserve reading position, and clean up subscriptions and stale loads.
+- Refresh open deck, message and thread views when accounts reconnect or change,
+  preserving same-account state and retiring data from removed identities.
+- Translate new controls into all eight interface languages and add behavioral
+  service/component/browser coverage. See [coverage and boundaries](docs/deck-parity.md).
+- Move CI and OS secret-store checks to macOS 15 after GitHub's retirement of
+  the macOS 14 runner image.
+
+
 ## v1.3.1 — 2026-11-05
 
 ### macOS App Store

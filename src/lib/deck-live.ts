@@ -1,0 +1,131 @@
+import { streamManager, type StreamEvent } from './streaming';
+import { mastodonStreamFor } from './deck-streaming';
+import { columnAccounts } from './deck-accounts';
+import { parseKeywords, buildKeywordMatcher } from './keyword-monitor';
+import type { DeckColumnConfig } from './deck-layouts';
+import type { Account } from './types';
+import type { ClientEntry } from './api/client-factory';
+import type { BlueskyClient } from './api/bluesky';
+import type { MastodonClient } from './api/mastodon';
+import { swallow } from './debug-log';
+
+const following = new Map<number, { identity: string; expires: number; value: Promise<Set<string>> }>();
+// Bound setup traffic during an outage. The socket manages its own reconnects
+// once the account's follows/profile lookup has succeeded.
+const SETUP_RETRY_DELAYS = [5_000, 10_000, 20_000, 40_000, 60_000];
+
+async function followedDids(account: Account, entry: ClientEntry): Promise<Set<string>> {
+  const identity = account.did ?? account.handle.toLowerCase().replace(/^@/, '');
+  const cached = following.get(account.id);
+  if (cached?.identity === identity && cached.expires > Date.now()) return cached.value;
+  const value = (async () => {
+    const dids = new Set<string>(account.did ? [account.did] : []);
+    let cursor: string | undefined;
+    const visited = new Set<string>();
+    do {
+      const result = entry.oauthAgent
+        ? (await entry.oauthAgent.api.app.bsky.graph.getFollows({ actor: account.did ?? account.handle, limit: 100, cursor })).data
+        : await (entry.client as BlueskyClient).getFollows(account.did ?? account.handle, cursor);
+      for (const actor of result.follows) dids.add(actor.did);
+      cursor = result.cursor;
+      if (cursor && visited.has(cursor)) break;
+      if (cursor) visited.add(cursor);
+    } while (cursor);
+    return dids;
+  })();
+  const next = { identity, expires: Date.now() + 300_000, value };
+  following.set(account.id, next);
+  try { return await value; } catch (error) {
+    // A retired identity's late rejection must not evict its replacement.
+    if (following.get(account.id) === next) following.delete(account.id);
+    throw error;
+  }
+}
+
+/** Jetstream contains the whole network. It is a refresh signal, never a feed. */
+export function matchesBlueskyColumn(column: DeckColumnConfig, event: StreamEvent, accountDid?: string | null, dids = new Set<string>()): boolean {
+  if (event.type === 'delete') return true;
+  if (event.type !== 'new-post') return false;
+  const payload = event.payload;
+  if (column.type === 'keyword-monitor') return buildKeywordMatcher(parseKeywords(column.query ?? ''))(payload.record?.text ?? '');
+  if (column.type === 'timeline' || column.type === 'user') return dids.has(payload.did);
+  if (column.type === 'mentions' && accountDid) {
+    return payload.record?.reply?.parent?.uri?.startsWith(`at://${accountDid}/`) ||
+      (payload.record?.facets ?? []).some((facet: any) => (facet.features ?? []).some((feature: any) => feature.$type === 'app.bsky.richtext.facet#mention' && feature.did === accountDid));
+  }
+  return false;
+}
+
+export function subscribeDeckColumn(column: DeckColumnConfig, accounts: Account[], clients: Map<number, ClientEntry>, onEvent: (event: StreamEvent, accountId: number) => void, onReady: (ready: boolean) => void): () => void {
+  let disposed = false;
+  const cleanups: (() => void)[] = [];
+  const retryTimers = new Set<ReturnType<typeof setTimeout>>();
+  if (column.paused || column.streaming === false) return () => {};
+  for (const account of columnAccounts(column, accounts)) {
+    const entry = clients.get(account.id);
+    if (!entry || entry.degraded) continue;
+    if (account.platform === 'mastodon') {
+      const spec = column.type === 'keyword-monitor' ? { streamType: 'public' } : mastodonStreamFor(column.type, column.query);
+      if (!spec) continue;
+      const client = entry.client as MastodonClient;
+      const token = client.getAccessToken();
+      if (!token) continue;
+      const matches = column.type === 'keyword-monitor' ? buildKeywordMatcher(parseKeywords(column.query ?? '')) : null;
+      cleanups.push(streamManager.enableColumn({ columnId: `${column.id}:${account.id}`, platform: 'mastodon', instanceUrl: client.getInstanceUrl(), accessToken: token, ...spec }, event => {
+        if (disposed) return;
+        if (event.type === 'delete') { onEvent(event, account.id); return; }
+        if (column.type === 'notifications' || column.type === 'mentions') {
+          if (event.type !== 'notification' || (column.type === 'mentions' && event.payload.type !== 'mention')) return;
+        } else if (event.type === 'notification') return;
+        if (matches && !matches(event.payload.content ?? '')) return;
+        if (column.type === 'user') {
+          const handle = String(event.payload.account?.acct ?? '').toLowerCase().replace(/^@/, '');
+          const query = column.query?.toLowerCase().replace(/^@/, '') ?? '';
+          if (handle !== query && `${handle}@${new URL(client.getInstanceUrl()).hostname}` !== query) return;
+        }
+        onEvent(event, account.id);
+      }));
+      onReady(true);
+    } else if (account.platform === 'bluesky' && ['timeline', 'user', 'mentions', 'keyword-monitor'].includes(column.type)) {
+      const prepare = async () => {
+        let dids = new Set<string>();
+        if (column.type === 'timeline') dids = await followedDids(account, entry);
+        if (column.type === 'user') {
+          const profile = entry.oauthAgent
+            ? (await entry.oauthAgent.api.app.bsky.actor.getProfile({ actor: column.query!.replace(/^@/, '') })).data
+            : await (entry.client as BlueskyClient).getProfile(column.query!.replace(/^@/, ''));
+          dids.add(profile.did);
+        }
+        if (disposed) return;
+        cleanups.push(streamManager.enableColumn({ columnId: `${column.id}:${account.id}`, platform: 'bluesky', firehose: true }, event => {
+          if (!disposed && matchesBlueskyColumn(column, event, account.did, dids)) onEvent(event, account.id);
+        }));
+        onReady(true);
+      };
+      let retryDelayIndex = 0;
+      const attemptSetup = () => {
+        if (disposed) return;
+        void prepare().catch(error => {
+          if (disposed) return;
+          swallow('deck.liveSetup', error);
+          const delay = SETUP_RETRY_DELAYS[retryDelayIndex];
+          retryDelayIndex = Math.min(retryDelayIndex + 1, SETUP_RETRY_DELAYS.length - 1);
+          const timer = setTimeout(() => {
+            retryTimers.delete(timer);
+            if (!disposed) attemptSetup();
+          }, delay);
+          retryTimers.add(timer);
+        });
+      };
+      attemptSetup();
+    }
+  }
+  return () => {
+    if (disposed) return;
+    disposed = true;
+    for (const timer of retryTimers) clearTimeout(timer);
+    retryTimers.clear();
+    for (const cleanup of cleanups) cleanup();
+    onReady(false);
+  };
+}

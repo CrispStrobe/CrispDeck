@@ -48,9 +48,13 @@
   import { addBookmark, removeBookmark, isBookmarked } from '$lib/bookmarks';
   import { listReadingLists, addPostToList, type ReadingList } from '$lib/reading-lists';
   import { createBlueskyBookmark, deleteBlueskyBookmark } from '$lib/api/bluesky-bookmarks';
-  import { initAllClients, getBskyAgent } from '$lib/api/client-factory';
+  import { initAllClients } from '$lib/api/client-factory';
+  import type { BlueskyClient } from '$lib/api/bluesky';
+  import type { MastodonClient } from '$lib/api/mastodon';
+  import { postSourceClient } from '$lib/post-source';
+  import { postReactionSnapshot } from '$lib/post-reactions';
   import { translateText, type TranslationResult } from '$lib/translate';
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, untrack } from 'svelte';
   import { jetstream } from '$lib/jetstream';
   import type { UnifiedPost } from '$lib/types';
   import { sanitizeHtml, injectCustomEmoji } from '$lib/sanitize';
@@ -69,8 +73,8 @@
     compact?: boolean;
     feedPreview?: boolean;
     /** May reject to signal the action failed; the optimistic update is then reverted. */
-    onlike?: (post: UnifiedPost) => void | Promise<void>;
-    onboost?: (post: UnifiedPost) => void | Promise<void>;
+    onlike?: (post: UnifiedPost, active?: boolean) => void | Promise<void>;
+    onboost?: (post: UnifiedPost, active?: boolean) => void | Promise<void>;
     onreply?: (post: UnifiedPost) => void;
     onquote?: (post: UnifiedPost) => void;
     onfollow?: (post: UnifiedPost, following: boolean) => void;
@@ -92,13 +96,75 @@
     return () => observer.disconnect();
   });
 
-  let liked = $state(false);
+  const initialReactions = untrack(() => postReactionSnapshot(post));
+  let liked = $state(initialReactions.liked);
   let likeAnimating = $state(false);
-  let boosted = $state(false);
-  // Optimistic/live offsets applied on top of the server counts below.
+  let likePending = $state(false);
+  let boostPending = $state(false);
+  let boosted = $state(initialReactions.boosted);
+  // Optimistic clicks and live events have separate lifetimes. A replacement
+  // row contains authoritative counts and must not keep adding old offsets.
   let likeDelta = $state(0);
   let boostDelta = $state(0);
+  let liveLikeDelta = $state(0);
+  let liveBoostDelta = $state(0);
+  let previousReactionPost = untrack(() => post);
+  let previousReactions = initialReactions;
+  let likeRevision = 0;
+  let boostRevision = 0;
+  let likeRequest = 0;
+  let boostRequest = 0;
+
+  $effect.pre(() => {
+    const currentPost = post;
+    const current = postReactionSnapshot(currentPost);
+    untrack(() => {
+      const replaced = currentPost !== previousReactionPost;
+      const identityChanged = current.key !== previousReactions.key;
+      const likeCountChanged = current.likeCount !== previousReactions.likeCount;
+      const boostCountChanged = current.boostCount !== previousReactions.boostCount;
+      const likeChanged = replaced || likeCountChanged || current.liked !== previousReactions.liked;
+      const boostChanged = replaced || boostCountChanged || current.boosted !== previousReactions.boosted;
+      if (identityChanged) {
+        // A column can reuse this URI for another account. A response from the
+        // previous identity must not overwrite the new row's controls.
+        likeRequest++; boostRequest++;
+        likePending = false; boostPending = false;
+        likeAnimating = false;
+        liked = current.liked; boosted = current.boosted;
+        likeDelta = 0; boostDelta = 0; liveLikeDelta = 0; liveBoostDelta = 0;
+        likeRevision++; boostRevision++;
+      } else {
+        if (likeChanged) {
+          likeRevision++;
+          if (!likePending) {
+            if (current.scoped) liked = current.liked;
+            likeDelta = 0;
+          } else if (current.scoped && current.liked === liked) {
+            // The service may mutate just the viewer flag before its caller
+            // publishes a complete row. Wait for that row/count acknowledgement.
+            if (replaced || likeCountChanged) likeDelta = 0;
+          }
+          if (replaced || likeCountChanged) liveLikeDelta = 0;
+        }
+        if (boostChanged) {
+          boostRevision++;
+          if (!boostPending) {
+            if (current.scoped) boosted = current.boosted;
+            boostDelta = 0;
+          } else if (current.scoped && current.boosted === boosted) {
+            if (replaced || boostCountChanged) boostDelta = 0;
+          }
+          if (replaced || boostCountChanged) liveBoostDelta = 0;
+        }
+      }
+      previousReactionPost = currentPost;
+      previousReactions = current;
+    });
+  });
   let bookmarked = $state(false);
+  let bookmarkPending = $state(false);
+  let bookmarkLoaded = $state(false);
   let hideEngagement = $state(false);
   let showStats = $state(false);
   let following = $state(false);
@@ -146,12 +212,13 @@
   }
   // Per-URI Jetstream listener — only fires for this post's URI (no broadcast filtering)
   const jetstreamListener = (update: import('$lib/jetstream').CountUpdate) => {
-    if (update.type === 'like') likeDelta += update.delta;
-    if (update.type === 'repost') boostDelta += update.delta;
+    if (update.type === 'like') liveLikeDelta += update.delta;
+    if (update.type === 'repost') liveBoostDelta += update.delta;
   };
 
   onMount(async () => {
     bookmarked = await isBookmarked(post.uri);
+    bookmarkLoaded = true;
     pinned = isPinned(post.uri);
     hideEngagement = _postPrefs.hideEngagement;
     mediaPreviewMode = _postPrefs.mediaPreview;
@@ -284,11 +351,17 @@
       // Try Mastodon server-side translation first (free, private)
       if (post.platform === 'mastodon') {
         const raw = (post.raw ?? {}) as any;
-        const statusId = raw?.id ?? raw?.reblog?.id;
-        const instanceUrl = raw?.uri ? new URL(raw.uri).origin : null;
-        if (statusId && instanceUrl) {
-          try {
-            const resp = await fetch(`${instanceUrl}/api/v1/statuses/${statusId}/translate`, { method: 'POST' });
+        const statusId = raw?.reblog?.id ?? raw?.id;
+        try {
+          const { clients } = await initAllClients();
+          const entry = postSourceClient(post, clients);
+          const client = entry?.client as MastodonClient | undefined;
+          const token = client?.getAccessToken();
+          const instanceUrl = client?.getInstanceUrl();
+          if (statusId && token && instanceUrl) {
+            const resp = await fetch(`${instanceUrl.replace(/\/$/, '')}/api/v1/statuses/${encodeURIComponent(statusId)}/translate`, {
+              method: 'POST', headers: { Authorization: `Bearer ${token}` }, redirect: 'error',
+            });
             if (resp.ok) {
               const data = await resp.json();
               if (data.content) {
@@ -296,8 +369,8 @@
                 return;
               }
             }
-          } catch { /* fall through to client-side */ }
-        }
+          }
+        } catch { /* fall through to the configured client-side translator */ }
       }
       const sourceText = post.platform === 'mastodon' ? mastodonHtml || post.text : post.text;
       translation = await translateText(sourceText);
@@ -368,14 +441,18 @@
   }
 
   let voteError = $state('');
+  let votePending = $state(false);
+  let updatedPoll: any = $state(null);
+  const mastodonPoll = $derived(updatedPoll ?? (post.raw as any)?.reblog?.poll ?? (post.raw as any)?.poll);
   async function votePoll(pollId: string, choiceIndex: number) {
+    if (votePending) return;
+    votePending = true;
     voteError = '';
     try {
       // Get Mastodon client for auth token
-      const { accounts: accts, clients } = await initAllClients();
-      const mastoAcct = accts.find(a => a.platform === 'mastodon');
-      const mastoEntry = mastoAcct ? clients.get(mastoAcct.id) : undefined;
-      const mastoClient = mastoEntry?.client as any;
+      const { clients } = await initAllClients();
+      const mastoEntry = postSourceClient(post, clients);
+      const mastoClient = mastoEntry?.client as MastodonClient | undefined;
       const token = mastoClient?.getAccessToken?.();
       const instanceUrl = mastoClient?.getInstanceUrl?.();
 
@@ -386,8 +463,9 @@
       }
 
       try {
-        const updated = await mastoClient.votePoll(pollId, [choiceIndex]);
-        ((post.raw ?? {}) as any).poll = updated;
+        const updated = await mastoClient!.votePoll(pollId, [choiceIndex]) as any;
+        updatedPoll = { ...updated, votesCount: updated.votesCount ?? updated.votes_count, ownVotes: updated.ownVotes ?? updated.own_votes,
+          options: updated.options.map((option: any) => ({ ...option, votesCount: option.votesCount ?? option.votes_count })) };
         toast.success(i18n.t.post.voteRecorded);
       } catch (err) {
         voteError = String(err instanceof Error ? err.message : err);
@@ -396,6 +474,8 @@
     } catch (e) {
       voteError = String(e);
       toast.error(i18n.t.post.voteFailed);
+    } finally {
+      votePending = false;
     }
   }
 
@@ -421,42 +501,48 @@
   }
 
   async function handleBookmark() {
+    if (bookmarkPending || !bookmarkLoaded) return;
+    bookmarkPending = true;
+    const target = post;
+    const desired = !bookmarked;
     try {
-      if (bookmarked) {
-        await removeBookmark(post.uri);
-      } else {
-        await addBookmark(post);
-      }
-      bookmarked = !bookmarked;
-    } catch (e) {
-      swallow('Post.handleBookmark', e);
-      toast.error(i18n.t.post.bookmarkFailed);
-      return;
-    }
-    // Best-effort write-through to Bluesky's official server-side bookmarks
-    // (app.bsky.bookmark.*) — local bookmark stands even if this fails.
-    if (post.platform === 'bluesky' && post.uri.startsWith('at://')) {
       try {
-        const { clients } = await initAllClients();
-        const agent = getBskyAgent(clients);
-        if (!agent) return;
-        if (bookmarked) {
-          const cid = (post.raw as any)?.post?.cid;
-          if (cid) await createBlueskyBookmark(agent, post.uri, cid);
-        } else {
-          await deleteBlueskyBookmark(agent, post.uri);
-        }
+        if (desired) await addBookmark(target);
+        else await removeBookmark(target.uri);
+        bookmarked = desired;
       } catch (e) {
-        swallow('Post.bookmarkServerSync', e);
-        toast.warning(i18n.t.post.savedLocallyOnly);
+        swallow('Post.handleBookmark', e);
+        toast.error(i18n.t.post.bookmarkFailed);
+        return;
       }
+      // Local bookmarks remain available if native synchronization fails.
+      if (target.platform === 'bluesky' && target.uri.startsWith('at://')) {
+        try {
+          const { clients } = await initAllClients();
+          const entry = postSourceClient(target, clients);
+          if (!entry) throw new Error('The source account is unavailable or ambiguous. Reconnect it before syncing this bookmark.');
+          const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
+          if (desired) {
+            const cid = (target.raw as any)?.post?.cid ?? (target.raw as any)?.cid;
+            if (!cid) throw new Error('Refresh this post before syncing its bookmark.');
+            await createBlueskyBookmark(agent, target.uri, cid);
+          } else {
+            await deleteBlueskyBookmark(agent, target.uri);
+          }
+        } catch (e) {
+          swallow('Post.bookmarkServerSync', e);
+          toast.warning(i18n.t.post.savedLocallyOnly);
+        }
+      }
+    } finally {
+      bookmarkPending = false;
     }
   }
   // Server count + our offset, not a $state seeded from `post`: the feed keys
   // rows by URI, so a refresh reuses this component instance and a seeded copy
   // would stay frozen at whatever the count was when the row first rendered.
-  const localLikeCount = $derived(Math.max(0, (post.likeCount ?? 0) + likeDelta));
-  const localBoostCount = $derived(Math.max(0, (post.repostCount ?? 0) + boostDelta));
+  const localLikeCount = $derived(Math.max(0, (post.likeCount ?? 0) + likeDelta + liveLikeDelta));
+  const localBoostCount = $derived(Math.max(0, (post.repostCount ?? 0) + boostDelta + liveBoostDelta));
 
   /**
    * Like, optimistically — and put it back if the network disagrees.
@@ -468,8 +554,13 @@
    * only trace was a console line the user was never going to see.
    */
   async function handleLike() {
-    if (!onlike) return;
+    if (!onlike || likePending) return;
+    const request = ++likeRequest;
+    const revision = likeRevision;
+    const target = post;
+    likePending = true;
     const previouslyLiked = liked;
+    const previousDelta = likeDelta;
     const applied = !liked ? 1 : -1;
 
     liked = !liked;
@@ -478,20 +569,35 @@
     if (liked) { likeAnimating = true; setTimeout(() => likeAnimating = false, 600); }
 
     try {
-      await onlike(post);
+      await onlike(target, liked);
     } catch (e) {
-      liked = previouslyLiked;
-      likeDelta -= applied;
-      likeAnimating = false;
+      if (request === likeRequest) {
+        if (revision === likeRevision) {
+          liked = previouslyLiked;
+          likeDelta = previousDelta;
+        } else {
+          const current = postReactionSnapshot(post);
+          liked = current.scoped ? current.liked : previouslyLiked;
+          likeDelta = 0;
+        }
+        likeAnimating = false;
+      }
       toast.error(i18n.t.post.likeFailed);
       swallow('Post.handleLike', e);
+    } finally {
+      if (request === likeRequest) likePending = false;
     }
   }
 
   /** Repost, with the same optimistic-then-revert contract as handleLike. */
   async function handleBoost() {
-    if (!onboost) return;
+    if (!onboost || boostPending) return;
+    const request = ++boostRequest;
+    const revision = boostRevision;
+    const target = post;
+    boostPending = true;
     const previouslyBoosted = boosted;
+    const previousDelta = boostDelta;
     const applied = !boosted ? 1 : -1;
 
     boosted = !boosted;
@@ -499,12 +605,22 @@
     haptic('medium');
 
     try {
-      await onboost(post);
+      await onboost(target, boosted);
     } catch (e) {
-      boosted = previouslyBoosted;
-      boostDelta -= applied;
+      if (request === boostRequest) {
+        if (revision === boostRevision) {
+          boosted = previouslyBoosted;
+          boostDelta = previousDelta;
+        } else {
+          const current = postReactionSnapshot(post);
+          boosted = current.scoped ? current.boosted : previouslyBoosted;
+          boostDelta = 0;
+        }
+      }
       toast.error(i18n.t.post.boostFailed);
       swallow('Post.handleBoost', e);
+    } finally {
+      if (request === boostRequest) boostPending = false;
     }
   }
 
@@ -526,15 +642,24 @@
   }
 
   function getThreadUrl(p: UnifiedPost): string {
+    const account = p.sourceAccountId === undefined ? '' : `&account=${p.sourceAccountId}`;
     if (p.platform === 'mastodon') {
       const raw = (p.raw ?? {}) as any;
       const id = raw.reblog?.id ?? raw.id ?? '';
-      return `${base}/thread?id=${id}&platform=mastodon`;
+      return `${base}/thread?id=${encodeURIComponent(id)}&platform=mastodon${account}`;
     }
     if (p.platform === 'threads') {
-      return `${base}/thread?uri=${encodeURIComponent(p.uri)}&platform=threads`;
+      return `${base}/thread?uri=${encodeURIComponent(p.uri)}&platform=threads${account}`;
     }
-    return `${base}/thread?uri=${encodeURIComponent(p.uri)}&platform=bluesky`;
+    return `${base}/thread?uri=${encodeURIComponent(p.uri)}&platform=bluesky${account}`;
+  }
+
+  function getRelatedThreadUrl(uri: string): string {
+    const account = post.sourceAccountId === undefined ? '' : `&account=${post.sourceAccountId}`;
+    // Mastodon feed replies carry an instance-local parent ID. Other sources
+    // can provide a canonical URL, which must be resolved on the same account.
+    const parameter = post.platform === 'mastodon' && /^\d+$/.test(uri) ? 'id' : 'uri';
+    return `${base}/thread?${parameter}=${encodeURIComponent(uri)}&platform=${post.platform}${account}`;
   }
 
   function getPostUrl(p: UnifiedPost): string {
@@ -707,7 +832,7 @@
   const bskyImages = $derived(getBskyImages());
   const bskyExternal = $derived(getBskyExternal());
   const bskyQuote = $derived(getBskyQuote());
-  const quoteImages = $derived(bskyQuote?.embeds?.[0]?.$type === 'app.bsky.embed.images#view' ? bskyQuote.embeds[0].images ?? [] : []);
+  const quoteImages = $derived(embeds.getBskyImages(bskyQuote?.embeds?.[0]));
   const splitQuote = $derived(!hideMedia && quoteImages.length > 0 && bskyImages.length === 0 && !getBskyExternal() && !getBskyVideo());
   const threadsQuote = $derived(getThreadsQuote());
   const bskyVideo = $derived(getBskyVideo());
@@ -844,7 +969,7 @@
   <div class="post-copy">
   {#if feedPreview && replyContext(post)}
     {@const context = replyContext(post)!}
-    <a class="reply-context" href={post.platform === 'mastodon' ? `${base}/thread?id=${encodeURIComponent(context.uri)}&platform=mastodon` : `${base}/thread?uri=${encodeURIComponent(context.uri)}&platform=${post.platform}`}>
+    <a class="reply-context" href={hrefOrHash(getRelatedThreadUrl(context.uri))}>
       <span class="reply-context-label">↪ {context.author ? i18n.t.post.replyingTo.replace('{name}', context.author) : i18n.t.post.replyingToPost}</span>
       {#if context.text}<span class="reply-context-text">{context.text}</span>{/if}
     </a>
@@ -937,7 +1062,7 @@
     <p class="mt-1 pl-13 text-[10px] text-red-400">{translateError}</p>
   {/if}
   {#if splitQuote}
-    <button type="button" class="quote-copy mt-2 ml-13 text-left border border-[var(--color-border)] rounded-lg p-3 bg-[var(--color-bg)] hover:border-[var(--color-text-muted)]" onclick={() => goto(`${base}/thread?uri=${encodeURIComponent(bskyQuote.uri)}&platform=bluesky`)}>
+    <button type="button" class="quote-copy mt-2 ml-13 text-left border border-[var(--color-border)] rounded-lg p-3 bg-[var(--color-bg)] hover:border-[var(--color-text-muted)]" onclick={() => goto(getRelatedThreadUrl(bskyQuote.uri))}>
       <span class="flex items-center gap-2 mb-1">
         {#if bskyQuote.author?.avatar}<img decoding="async" loading="lazy" src={bskyQuote.author.avatar} alt="" class="w-5 h-5 rounded-full" />{/if}
         <span class="text-xs font-medium">{bskyQuote.author?.displayName || bskyQuote.author?.handle}</span>
@@ -1037,7 +1162,7 @@
       {#if bskyQuote && !splitQuote}
         <button
           type="button"
-          onclick={() => goto(`${base}/thread?uri=${encodeURIComponent(bskyQuote.uri)}&platform=bluesky`)}
+          onclick={() => goto(getRelatedThreadUrl(bskyQuote.uri))}
           class="mt-2 w-full text-left border border-[var(--color-border)] rounded-lg p-3 bg-[var(--color-bg)] cursor-pointer hover:border-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] transition-colors"
         >
           <div class="flex items-center gap-2 mb-1">
@@ -1050,11 +1175,12 @@
           <p class="text-sm text-[var(--color-text)] line-clamp-6">{(bskyQuote.value as any)?.text ?? ''}</p>
           {#if bskyQuote.embeds?.[0]}
             {@const qEmbed = bskyQuote.embeds[0]}
-            {#if qEmbed.$type === 'app.bsky.embed.images#view' && qEmbed.images?.[0]}
-              <div onclick={(e: MouseEvent) => { e.stopPropagation(); openLightbox(qEmbed.images.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0); }} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openLightbox(qEmbed.images.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0); } }} class="cursor-pointer" role="button" tabindex="0" aria-label={i18n.t.post.viewQuotedImages}>
-                <div class="link-preview-media mt-2 rounded"><img decoding="async" loading="lazy" src={qEmbed.images[0].thumb} alt={qEmbed.images[0].alt || ''} class="link-preview-image" /></div>
-                {#if qEmbed.images.length > 1}
-                  <p class="mt-1 text-[10px] text-[var(--color-text-muted)]">+{qEmbed.images.length - 1} more</p>
+            {@const embeddedQuoteImages = embeds.getBskyImages(qEmbed)}
+            {#if embeddedQuoteImages.length > 0}
+              <div onclick={(e: MouseEvent) => { e.stopPropagation(); openLightbox(embeddedQuoteImages.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0); }} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openLightbox(embeddedQuoteImages.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0); } }} class="cursor-pointer" role="button" tabindex="0" aria-label={i18n.t.post.viewQuotedImages}>
+                <div class="link-preview-media mt-2 rounded"><img decoding="async" loading="lazy" src={embeddedQuoteImages[0].thumb} alt={embeddedQuoteImages[0].alt || ''} class="link-preview-image" /></div>
+                {#if embeddedQuoteImages.length > 1}
+                  <p class="mt-1 text-[10px] text-[var(--color-text-muted)]">+{embeddedQuoteImages.length - 1} more</p>
                 {/if}
               </div>
             {/if}
@@ -1162,8 +1288,8 @@
       {/if}
 
       <!-- Mastodon poll -->
-      {#if post.platform === 'mastodon' && (post.raw as any)?.poll}
-        {@const poll = (post.raw as any).poll}
+      {#if post.platform === 'mastodon' && mastodonPoll}
+        {@const poll = mastodonPoll}
         {@const hasVoted = poll.voted || poll.ownVotes?.length > 0}
         <div class="mt-2 space-y-1.5">
           {#each poll.options as option, i}
@@ -1181,6 +1307,8 @@
             {:else}
               <button
                 onclick={() => votePoll(poll.id, i)}
+                disabled={votePending}
+                aria-busy={votePending}
                 class="w-full text-left px-3 py-1.5 text-xs rounded-md border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 transition-colors"
               >
                 {option.title}
@@ -1218,7 +1346,8 @@
 
       <button
         onclick={handleBoost}
-        disabled={!onboost}
+        disabled={!onboost || boostPending}
+        aria-busy={boostPending}
         class="flex items-center gap-1.5 transition-all {boosted ? 'text-green-400' : 'text-[var(--color-text-muted)]'} {onboost ? 'hover:text-green-400 hover:scale-110 active:scale-90' : ''}"
         title={i18n.t.post.boost}
         aria-label="{boosted ? 'Undo boost' : 'Boost'} ({localBoostCount} boosts)"
@@ -1241,7 +1370,8 @@
 
       <button
         onclick={handleLike}
-        disabled={!onlike}
+        disabled={!onlike || likePending}
+        aria-busy={likePending}
         class="flex items-center gap-1.5 transition-all relative {liked ? 'text-red-400' : 'text-[var(--color-text-muted)]'} {onlike ? 'hover:text-red-400 hover:scale-110 active:scale-90' : ''}"
         title={i18n.t.post.like}
         aria-label="{liked ? 'Unlike' : 'Like'} ({localLikeCount} likes)"
@@ -1258,6 +1388,8 @@
 
       <button
         onclick={handleBookmark}
+        disabled={bookmarkPending || !bookmarkLoaded}
+        aria-busy={bookmarkPending}
         class="flex items-center gap-1.5 transition-all {bookmarked ? 'text-yellow-400' : 'text-[var(--color-text-muted)]'} hover:text-yellow-400 hover:scale-110 active:scale-90"
         title={bookmarked ? 'Remove bookmark' : 'Bookmark'}
         aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark this post'}

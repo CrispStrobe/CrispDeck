@@ -20,6 +20,9 @@ import { join } from 'node:path';
 /** Not translatable, with the reason. Matched against the exact string. */
 const NOT_TRANSLATABLE = new Map<string, string>([
   ['CrispDeck', 'product name'],
+  ['Bluesky', 'network name'],
+  ['Mastodon', 'network name'],
+  ['Threads', 'network name'],
   ['node scripts/generate-licenses.js', 'shell command'],
   ['--features crispasr-metal', 'cargo build flag'],
   // A language picker shows each language in its own language. Rendering
@@ -54,10 +57,11 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 function stripNonMarkup(src: string): string {
+  const blank = (text: string) => text.replace(/[^\n]/g, ' ');
   return src
-    .replace(/<style[\s\S]*?<\/style>/g, '')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/^\s*\/\/.*$/gm, '');
+    .replace(/<style[\s\S]*?<\/style>/g, blank)
+    .replace(/\/\*[\s\S]*?\*\//g, blank)
+    .replace(/^\s*\/\/.*$/gm, blank);
 }
 
 function isProse(s: string): boolean {
@@ -81,10 +85,15 @@ describe('i18n coverage', () => {
     for (const file of walk('src')) {
       if (SKIP_FILES.includes(file) || file.includes('i18n')) continue;
       const src = stripNonMarkup(readFileSync(file, 'utf8'));
-      for (const pattern of patterns) {
+      // TypeScript generics such as `() => Promise<void>` are not markup.
+      // Keep the full source for prompt/alert/toast checks, and preserve line
+      // positions in the markup-only view for useful error locations.
+      const markup = src.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, block => block.replace(/[^\n]/g, ' '));
+      for (const [index, pattern] of patterns.entries()) {
+        const target = index < 2 ? markup : src;
         pattern.lastIndex = 0;
         let m: RegExpExecArray | null;
-        while ((m = pattern.exec(src))) {
+        while ((m = pattern.exec(target))) {
           const raw = m[1];
           const text = /^['"]/.test(raw) ? raw.slice(1, -1) : raw;
           const t = text.trim();

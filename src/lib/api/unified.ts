@@ -47,7 +47,10 @@ function stripHtmlCached(uri: string, html: string): string {
 // Cached Mastodon handle normalization — avoids URL parsing per-post
 const _handleCache = new Map<string, string>();
 function normalizeMastoHandle(acct: string, accountUrl: string): string {
-  let handle = _handleCache.get(acct);
+  // Local account names are only unique within an instance. Two account-scoped
+  // columns can both return `alice` from different servers.
+  const key = acct.includes('@') ? acct : JSON.stringify([acct, accountUrl]);
+  let handle = _handleCache.get(key);
   if (!handle) {
     if (acct.includes('@')) {
       handle = `@${acct}`;
@@ -58,7 +61,8 @@ function normalizeMastoHandle(acct: string, accountUrl: string): string {
         handle = `@${acct}`;
       }
     }
-    _handleCache.set(acct, handle);
+    _handleCache.set(key, handle);
+    if (_handleCache.size > 2000) _handleCache.delete(_handleCache.keys().next().value!);
   }
   return handle;
 }

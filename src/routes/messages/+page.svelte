@@ -1,295 +1,211 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { swallow } from '$lib/debug-log';
-  import { fetchOk } from '$lib/http';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { MessageSquare, Loader2, Send, ArrowLeft } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
-  import { BlueskyClient } from '$lib/api/bluesky';
-  import { MastodonClient } from '$lib/api/mastodon';
-  import { resumeBlueskyOAuthSession } from '$lib/api/bluesky-oauth';
-  import { Agent } from '@atproto/api';
-  import type { Account, Platform } from '$lib/types';
-  import { formatConversationTime, inferPlatformFromHandle, type Conversation, type Message } from '$lib/messages';
-
+  import type { Account } from '$lib/types';
+  import {
+    formatConversationTime, conversationKey, findLinkedConversation, sortByRecent,
+    loadConversationInbox, loadConversationMessages, sendConversationMessage,
+    createConversation, messageErrorMessage, type Conversation, type Message,
+  } from '$lib/messages';
 
   let accounts: Account[] = $state([]);
   let loading = $state(true);
   let error = $state('');
+  let inboxError = $state('');
   let conversations: Conversation[] = $state([]);
   let selectedConvo: Conversation | null = $state(null);
   let messages: Message[] = $state([]);
   let loadingMessages = $state(false);
   let newMessage = $state('');
   let sending = $state(false);
+  let starting = $state(false);
   let showNewConvo = $state(false);
   let newConvoHandle = $state('');
+  let newConvoAccountId = $state<number | undefined>();
   let messagesContainer: HTMLDivElement | undefined = $state();
+  let clientEntries: Map<number, ClientEntry> = new Map();
+  const drafts = new Map<string, string>();
+  let selectionVersion = 0;
+  let inboxVersion = 0;
+  let hasInitializedAccounts = false;
+  let refreshSelection: { conversation: Conversation; owner: Account | undefined } | undefined;
+  let disposed = false;
+  const chatAccounts = $derived(accounts.filter(account => account.platform === 'bluesky' || account.platform === 'mastodon'));
 
   function scrollToLatest() {
     requestAnimationFrame(() => {
-      if (messagesContainer) messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      if (!disposed && messagesContainer) messagesContainer.scrollTop = messagesContainer.scrollHeight;
     });
   }
-  let bskyDmNote = $state(false);
 
-  let clientEntries: Map<number, ClientEntry> = new Map();
-
-  onMount(async () => {
-    try {
-      const result = await initAllClients();
-      accounts = result.accounts;
-      clientEntries = result.clients;
-      await loadConversations();
-    } catch (e) {
-      error = String(e);
-    } finally {
-      loading = false;
-    }
-  });
-
-  async function loadConversations() {
-    const results = await Promise.allSettled(Array.from(clientEntries).map(async ([id, entry]) => {
-      const acct = accounts.find(a => a.id === id);
-      if (!acct) return [] as Conversation[];
-
-      if (acct.platform === 'bluesky') {
-        // Try OAuth agent first, then app-password agent, then stored OAuth session
-        let agent: any = entry.oauthAgent;
-        if (!agent) {
-          try {
-            const bsky = entry.client as BlueskyClient;
-            agent = bsky.getAgent();
-            if (!agent?.session) agent = null;
-          } catch { agent = null; }
-        }
-        if (!agent) {
-          const oauthSession = await resumeBlueskyOAuthSession();
-          agent = oauthSession?.agent;
-        }
-        if (!agent) { bskyDmNote = true; return []; }
-        const proxyHeaders = { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' };
-        const chatResp = await agent.api.chat.bsky.convo.listConvos(
-          { limit: 50 },
-          { headers: proxyHeaders }
-        );
-        return (chatResp.data.convos ?? []).map((convo: any) => {
-          const other = convo.members?.find((m: any) => m.handle !== acct.handle) ?? convo.members?.[0];
-          const handle = other?.handle ?? '?';
-          const isDeleted = handle === 'missing.invalid' || handle === 'handle.invalid';
-          const isBlocked = convo.muted || false;
-          return {
-            id: convo.id,
-            platform: 'bluesky' as const,
-            participant: {
-              handle: isDeleted ? 'Deleted account' : handle,
-              displayName: isDeleted ? 'Deleted account' : isBlocked ? `${other?.displayName ?? handle} (blocked)` : other?.displayName,
-              avatar: isDeleted ? undefined : other?.avatar,
-            },
-            lastMessage: (convo.lastMessage as any)?.text,
-            lastDate: (convo.lastMessage as any)?.sentAt,
-            unread: (convo.unreadCount ?? 0) > 0,
-          } as Conversation;
-        });
-      } else if (acct.platform === 'mastodon') {
-        const masto = entry.client as MastodonClient;
-        const token = masto.getAccessToken();
-        if (!token) return [];
-        const resp = await fetch(`${masto.getInstanceUrl()}/api/v1/conversations?limit=40`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!resp.ok) { error = (error ? error + '\n' : '') + `Mastodon DMs: ${resp.status} ${resp.statusText}`; return []; }
-        const raw = await resp.json();
-        return raw.map((convo: any) => {
-          const other = convo.accounts?.[0];
-          return {
-            id: convo.id,
-            platform: 'mastodon' as const,
-            participant: {
-              handle: other ? `@${other.acct}` : '?',
-              displayName: other?.display_name,
-              avatar: other?.avatar,
-            },
-            lastMessage: convo.last_status?.content?.replace(/<[^>]*>?/gm, ''),
-            lastDate: convo.last_status?.created_at,
-            unread: convo.unread,
-          } as Conversation;
-        });
-      }
-      return [] as Conversation[];
-    }));
-
-    const all = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
-    for (const r of results) {
-      if (r.status === 'rejected') {
-        error = (error ? error + '\n' : '') + String(r.reason);
-      }
-    }
-    conversations = all.sort((a, b) =>
-      (b.lastDate ? new Date(b.lastDate).getTime() : 0) - (a.lastDate ? new Date(a.lastDate).getTime() : 0)
-    );
+  function accountLabel(conversation: Conversation): string {
+    return accounts.find(account => account.id === conversation.accountId)?.handle ?? 'Disconnected account';
   }
 
-  async function selectConversation(convo: Conversation) {
-    selectedConvo = convo;
-    loadingMessages = true;
-    messages = [];
+  function accountIdentity(account: Account | undefined): string {
+    return JSON.stringify(account ? [account.platform, account.handle, account.did, account.instance_url, account.mastodon_id, account.threads_user_id] : null);
+  }
 
-    try {
-      if (convo.platform === 'bluesky') {
-        const oauthSession = await resumeBlueskyOAuthSession();
-        if (!oauthSession) {
-          messages = [{ id: 'note', text: 'Bluesky DMs require OAuth. Reconnect your account with OAuth in Settings.', sender: { handle: 'system' }, createdAt: new Date().toISOString(), isOurs: false }];
-        } else {
-          try {
-            const proxyHeaders = { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' };
-            const msgResp = await (oauthSession.agent as any).api.chat.bsky.convo.getMessages(
-              { convoId: convo.id, limit: 50 },
-              { headers: proxyHeaders }
-            );
-            messages = (msgResp.data.messages ?? []).map((m: any) => ({
-              id: m.id,
-              text: m.text,
-              sender: { handle: m.sender?.handle ?? '?', displayName: m.sender?.displayName, avatar: m.sender?.avatar },
-              createdAt: m.sentAt,
-              isOurs: m.sender?.did === oauthSession.did,
-            })).reverse();
-          } catch (e) {
-            messages = [{ id: 'error', text: `Failed to load messages: ${e}`, sender: { handle: 'system' }, createdAt: new Date().toISOString(), isOurs: false }];
-          }
-        }
-      } else if (convo.platform === 'mastodon') {
-        // Mastodon: load all direct messages between us and this person
-        for (const [, entry] of clientEntries) {
-          if (entry.platform !== 'mastodon') continue;
-          const masto = entry.client as MastodonClient;
-          const token = masto.getAccessToken();
-          if (!token) break;
-          try {
-            // Search for direct statuses mentioning this user
-            const resp = await fetch(
-              `${masto.getInstanceUrl()}/api/v1/conversations?limit=40`,
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
-            if (resp.ok) {
-              const convos = await resp.json();
-              // Find the matching conversation and load its statuses
-              const match = convos.find((c: any) =>
-                c.accounts?.some((a: any) => `@${a.acct}` === convo.participant.handle || a.acct === convo.participant.handle.replace(/^@/, ''))
-              );
-              if (match?.last_status) {
-                // Get the context (ancestors = earlier messages)
-                const ctxResp = await fetch(
-                  `${masto.getInstanceUrl()}/api/v1/statuses/${match.last_status.id}/context`,
-                  { headers: { Authorization: `Bearer ${token}` } }
-                );
-                if (ctxResp.ok) {
-                  const ctx = await ctxResp.json();
-                  const allStatuses = [...(ctx.ancestors ?? []), match.last_status, ...(ctx.descendants ?? [])];
-                  const myHandle = accounts.find(a => a.platform === 'mastodon')?.handle ?? '';
-                  messages = allStatuses.map((s: any) => ({
-                    id: s.id,
-                    text: s.content?.replace(/<[^>]*>?/gm, '') ?? '',
-                    sender: { handle: `@${s.account.acct}`, displayName: s.account.display_name, avatar: s.account.avatar },
-                    createdAt: s.created_at,
-                    isOurs: `@${s.account.acct}`.includes(myHandle.replace(/^@/, '').split('@')[0]),
-                  }));
-                } else {
-                  // Fallback: just show last message
-                  messages = [{ id: match.last_status.id, text: match.last_status.content?.replace(/<[^>]*>?/gm, '') ?? '', sender: convo.participant, createdAt: match.last_status.created_at, isOurs: false }];
-                }
-              }
-            }
-          } catch (e) {
-            messages = [{ id: 'error', text: `Failed: ${e}`, sender: { handle: 'system' }, createdAt: new Date().toISOString(), isOurs: false }];
-          }
-          break;
-        }
-      }
-    } catch (e) {
-      error = String(e);
-    } finally {
-      loadingMessages = false;
-      scrollToLatest();
+  function draftKey(conversation: Conversation, owner = accounts.find(account => account.id === conversation.accountId)): string {
+    return `${conversationKey(conversation)}:${accountIdentity(owner)}`;
+  }
+
+  onMount(() => {
+    const refreshAccounts = () => { void initialize(); };
+    window.addEventListener('crispdeck:accounts-changed', refreshAccounts);
+    void initialize();
+    return () => {
+      disposed = true; selectionVersion++; inboxVersion++;
+      window.removeEventListener('crispdeck:accounts-changed', refreshAccounts);
+    };
+  });
+
+  async function initialize() {
+    const version = ++inboxVersion;
+    const selection = selectedConvo;
+    if (selection) {
+      const owner = accounts.find(account => account.id === selection.accountId);
+      refreshSelection = { conversation: selection, owner };
+      drafts.set(draftKey(selection, owner), newMessage);
     }
+    const previous = refreshSelection?.conversation;
+    const previousOwner = refreshSelection?.owner;
+    selectionVersion++;
+    loading = true; loadingMessages = false; error = ''; inboxError = '';
+    selectedConvo = null; messages = []; newMessage = ''; conversations = [];
+    accounts = []; clientEntries = new Map();
+    try {
+      const result = await initAllClients();
+      if (disposed || version !== inboxVersion) return;
+      accounts = result.accounts;
+      clientEntries = result.clients;
+      if (!hasInitializedAccounts) newConvoAccountId = chatAccounts.find(account => account.is_primary)?.id ?? chatAccounts[0]?.id;
+      else if (!chatAccounts.some(account => account.id === newConvoAccountId)) newConvoAccountId = undefined;
+      hasInitializedAccounts = true;
+      const inbox = await loadConversationInbox(accounts, clientEntries);
+      if (disposed || version !== inboxVersion) return;
+      conversations = inbox.conversations;
+      inboxError = inbox.errors.map(item => `${accounts.find(account => account.id === item.accountId)?.handle ?? item.accountId}: ${item.message}`).join('\n');
+      const params = new URLSearchParams(window.location.search);
+      if (previous || params.has('conversation')) {
+        const sameOwner = previous && accountIdentity(previousOwner) === accountIdentity(accounts.find(account => account.id === previous.accountId));
+        const linked = previous
+          ? sameOwner ? conversations.find(conversation => conversationKey(conversation) === conversationKey(previous)) : undefined
+          : findLinkedConversation(conversations, params);
+        if (linked) await selectConversation(linked);
+        else error = 'This conversation is not available for the selected account. Refresh your inbox or reconnect that account in Settings.';
+      }
+      if (!disposed && version === inboxVersion) refreshSelection = undefined;
+    } catch (cause) {
+      if (!disposed && version === inboxVersion) error = messageErrorMessage(cause);
+    } finally {
+      if (!disposed && version === inboxVersion) loading = false;
+    }
+  }
+
+  function updateConversation(updated: Conversation) {
+    const key = conversationKey(updated);
+    conversations = sortByRecent(conversations.map(conversation => conversationKey(conversation) === key ? updated : conversation));
+    if (selectedConvo && conversationKey(selectedConvo) === key) selectedConvo = updated;
+  }
+
+  async function selectConversation(conversation: Conversation) {
+    if (selectedConvo) drafts.set(draftKey(selectedConvo), newMessage);
+    const version = ++selectionVersion;
+    selectedConvo = conversation;
+    newMessage = drafts.get(draftKey(conversation)) ?? '';
+    messages = [];
+    loadingMessages = true;
+    error = '';
+    try {
+      const loaded = await loadConversationMessages(conversation, accounts, clientEntries);
+      // A slow response from a previously selected account must never replace
+      // the thread the reader has since selected.
+      if (disposed || version !== selectionVersion) return;
+      messages = loaded;
+      updateConversation({
+        ...conversation, unread: false,
+        ...(conversation.platform === 'mastodon' && loaded.length ? { lastStatusId: loaded[loaded.length - 1].id } : {}),
+      });
+    } catch (cause) {
+      if (!disposed && version === selectionVersion) error = messageErrorMessage(cause, clientEntries.get(conversation.accountId!));
+    } finally {
+      if (!disposed && version === selectionVersion) {
+        loadingMessages = false;
+        scrollToLatest();
+      }
+    }
+  }
+
+  function showConversationList() {
+    if (selectedConvo) drafts.set(draftKey(selectedConvo), newMessage);
+    selectionVersion++;
+    selectedConvo = null;
+    messages = [];
+    newMessage = '';
+    loadingMessages = false;
   }
 
   async function sendMessage() {
-    if (!newMessage.trim() || !selectedConvo) return;
+    if (sending || loading || loadingMessages || !newMessage.trim() || !selectedConvo) return;
+    const conversation = selectedConvo;
+    const key = conversationKey(conversation);
+    const savedDraftKey = draftKey(conversation);
+    const originEntry = clientEntries.get(conversation.accountId!);
+    const originOwner = accounts.find(account => account.id === conversation.accountId);
+    const originLabel = accountLabel(conversation);
+    const version = inboxVersion;
+    const text = newMessage;
+    drafts.set(savedDraftKey, text);
     sending = true;
-    // Only echo the message into the thread once something actually accepted
-    // it. The Mastodon loop below can run to completion without sending —
-    // every client skipped for a missing token — and the message was shown as
-    // sent regardless.
-    let sent = false;
+    error = '';
     try {
-      if (selectedConvo.platform === 'bluesky') {
-        const oauthSession = await resumeBlueskyOAuthSession();
-        if (!oauthSession) throw new Error('Bluesky DMs require OAuth — reconnect your account with OAuth in Settings');
-        const proxyHeaders = { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' };
-        await (oauthSession.agent as any).api.chat.bsky.convo.sendMessage(
-          { convoId: selectedConvo.id, message: { text: newMessage.trim() } },
-          { encoding: 'application/json', headers: proxyHeaders }
-        );
-        sent = true;
-      } else if (selectedConvo.platform === 'mastodon') {
-        // Mastodon: create a status with direct visibility mentioning the user
-        for (const [id, entry] of clientEntries) {
-          const acct = accounts.find(a => a.id === id);
-          if (acct?.platform !== 'mastodon') continue;
-          const masto = entry.client as MastodonClient;
-          const token = masto.getAccessToken();
-          if (!token) continue;
-          // The response used to be dropped, so a 401 or a 422 still appended
-          // the message to the thread and cleared the box: the user believed
-          // they had sent something that never left the device.
-          await fetchOk(`${masto.getInstanceUrl()}/api/v1/statuses`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              status: `${selectedConvo.participant.handle} ${newMessage.trim()}`,
-              visibility: 'direct',
-            }),
-          }, 'send message');
-          sent = true;
-          break;
-        }
+      const sent = await sendConversationMessage(conversation, text, accounts, clientEntries);
+      if (disposed) return;
+      // The receipt belongs to the original remote account even if an account
+      // change occurred while the request was in flight.
+      if (drafts.get(savedDraftKey) === text) drafts.delete(savedDraftKey);
+      if (accountIdentity(originOwner) !== accountIdentity(accounts.find(account => account.id === conversation.accountId))) return;
+      const current = conversations.find(candidate => conversationKey(candidate) === key) ?? conversation;
+      updateConversation({ ...current, lastMessage: sent.text, lastDate: sent.createdAt, unread: false, isNew: false,
+        ...(conversation.platform === 'mastodon' ? { lastStatusId: sent.id } : {}),
+      });
+      if (selectedConvo && conversationKey(selectedConvo) === key) {
+        messages = [...messages.filter(message => message.id !== sent.id), sent];
+        if (newMessage === text) newMessage = '';
+        scrollToLatest();
       }
-
-      if (!sent) throw new Error('No connected account could send this message');
-
-      messages = [...messages, {
-        id: `sent-${Date.now()}`,
-        text: newMessage.trim(),
-        sender: { handle: 'you' },
-        createdAt: new Date().toISOString(),
-        isOurs: true,
-      }];
-      newMessage = '';
-      scrollToLatest();
-    } catch (e) {
-      swallow('messages.sendMessage', e);
-      error = String(e);
+    } catch (cause) {
+      const message = messageErrorMessage(cause, originEntry);
+      swallow('messages.sendMessage', new Error(message));
+      if (!disposed && version === inboxVersion) error = `${originLabel}: ${message}`;
     } finally {
-      sending = false;
+      if (!disposed) sending = false;
     }
   }
 
   async function startNewConversation() {
-    if (!newConvoHandle.trim()) return;
-    const handle = newConvoHandle.trim();
-    // Create a new conversation entry and select it
-    const convo: Conversation = {
-      id: `new-${Date.now()}`,
-      platform: inferPlatformFromHandle(handle),
-      participant: { handle },
-      unread: false,
-    };
-    conversations = [convo, ...conversations];
-    selectedConvo = convo;
-    messages = [];
-    showNewConvo = false;
-    newConvoHandle = '';
+    if (starting || loading || !newConvoHandle.trim() || newConvoAccountId === undefined) return;
+    const version = inboxVersion;
+    const originEntry = clientEntries.get(newConvoAccountId);
+    starting = true;
+    error = '';
+    try {
+      const conversation = await createConversation(newConvoAccountId, newConvoHandle, accounts, clientEntries);
+      if (disposed || version !== inboxVersion) return;
+      const key = conversationKey(conversation);
+      conversations = [conversation, ...conversations.filter(candidate => conversationKey(candidate) !== key)];
+      showNewConvo = false;
+      newConvoHandle = '';
+      await selectConversation(conversation);
+    } catch (cause) {
+      if (!disposed && version === inboxVersion) error = messageErrorMessage(cause, originEntry);
+    } finally {
+      if (!disposed) starting = false;
+    }
   }
 
   const formatTime = (dateStr: string) => formatConversationTime(dateStr);
@@ -303,13 +219,8 @@
     <h1 class="text-xl font-bold">{i18n.t.messages.title}</h1>
   </div>
 
-  {#if error}
-    <div class="mx-4 mt-2 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">{error}</div>
-  {/if}
-  {#if bskyDmNote}
-    <div class="mx-4 mt-2 p-3 bg-blue-900/30 border border-blue-700/30 rounded-lg text-blue-300 text-xs">
-      Bluesky DMs require OAuth login. Reconnect your Bluesky account via OAuth in Settings to enable chat. Mastodon DMs work with any login method.
-    </div>
+  {#if error || inboxError}
+    <div role="alert" class="mx-4 mt-2 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm whitespace-pre-line">{[inboxError, error].filter(Boolean).join('\n')}</div>
   {/if}
 
   {#if loading}
@@ -317,17 +228,26 @@
   {:else}
     <div class="flex-1 flex overflow-hidden">
       <!-- Conversation list -->
-      <div class="w-80 border-r border-[var(--color-border)] overflow-y-auto flex-shrink-0">
+      <div class="w-full md:w-80 border-r border-[var(--color-border)] overflow-y-auto flex-shrink-0 {selectedConvo ? 'hidden md:block' : ''}">
         <!-- New conversation -->
         <div class="p-2 border-b border-[var(--color-border)]">
           {#if showNewConvo}
-            <form onsubmit={(e) => { e.preventDefault(); startNewConversation(); }} class="flex gap-1">
-              <input type="text" bind:value={newConvoHandle} placeholder={i18n.t.messages.userOrHandle} class="flex-1 px-2 py-1 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-[var(--color-text)]" />
-              <button type="submit" class="px-2 py-1 text-xs bg-[var(--color-primary)] text-white rounded">Go</button>
+            <form onsubmit={(e) => { e.preventDefault(); startNewConversation(); }} class="flex flex-col gap-2">
+              <label class="text-xs text-[var(--color-text-muted)]">
+                {i18n.t.settings.tabAccount}
+                <select bind:value={newConvoAccountId} disabled={starting} class="w-full mt-1 px-2 py-1 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-[var(--color-text)]">
+                  <option value={undefined} disabled>{i18n.t.settings.tabAccount}</option>
+                  {#each chatAccounts as account (account.id)}<option value={account.id}>{account.handle} · {account.platform}</option>{/each}
+                </select>
+              </label>
+              <div class="flex gap-1">
+                <input type="text" bind:value={newConvoHandle} aria-label={i18n.t.messages.userOrHandle} disabled={starting} placeholder={i18n.t.messages.userOrHandle} class="flex-1 min-w-0 px-2 py-1 text-xs bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-[var(--color-text)]" />
+                <button type="submit" disabled={starting || !newConvoHandle.trim() || newConvoAccountId === undefined} class="px-2 py-1 text-xs bg-[var(--color-primary)] text-white rounded disabled:opacity-50">{starting ? i18n.t.common.loading : i18n.t.messages.go}</button>
+              </div>
             </form>
           {:else}
-            <button onclick={() => showNewConvo = true} class="w-full px-3 py-1.5 text-xs text-[var(--color-primary-text)] hover:bg-[var(--color-surface-hover)] rounded transition-colors">
-              + New Conversation
+            <button onclick={() => showNewConvo = true} disabled={!chatAccounts.length} class="w-full px-3 py-1.5 text-xs text-[var(--color-primary-text)] hover:bg-[var(--color-surface-hover)] rounded transition-colors disabled:opacity-50">
+              {i18n.t.messages.newConversation}
             </button>
           {/if}
         </div>
@@ -335,10 +255,11 @@
         {#if conversations.length === 0}
           <p class="text-center py-8 text-sm text-[var(--color-text-muted)]">{i18n.t.messages.noConversations}</p>
         {:else}
-          {#each conversations as convo}
+          {#each conversations as convo (conversationKey(convo))}
             <button
               onclick={() => selectConversation(convo)}
-              class="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[var(--color-surface-hover)] transition-colors border-b border-[var(--color-border)] {selectedConvo?.id === convo.id ? 'bg-[var(--color-surface)]' : ''}"
+              aria-pressed={selectedConvo !== null && conversationKey(selectedConvo) === conversationKey(convo)}
+              class="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[var(--color-surface-hover)] transition-colors border-b border-[var(--color-border)] {selectedConvo && conversationKey(selectedConvo) === conversationKey(convo) ? 'bg-[var(--color-surface)]' : ''}"
             >
               {#if convo.participant.avatar}
                 <img loading="lazy" src={convo.participant.avatar} alt="" class="w-10 h-10 rounded-full flex-shrink-0" />
@@ -356,6 +277,7 @@
                 {#if convo.lastMessage}
                   <p class="text-xs text-[var(--color-text-muted)] truncate {convo.unread ? 'font-semibold text-[var(--color-text)]' : ''}">{convo.lastMessage}</p>
                 {/if}
+                <p class="text-[10px] text-[var(--color-text-muted)] truncate">{accountLabel(convo)}</p>
               </div>
             </button>
           {/each}
@@ -363,25 +285,27 @@
       </div>
 
       <!-- Message thread -->
-      <div class="flex-1 flex flex-col">
+      <div class="flex-1 min-w-0 flex-col {selectedConvo ? 'flex' : 'hidden md:flex'}">
         {#if selectedConvo}
           <!-- Header -->
           <div class="flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border)]">
+            <button type="button" onclick={showConversationList} aria-label={i18n.t.onboarding.back} class="md:hidden p-1 text-[var(--color-text-muted)]"><ArrowLeft size={20} /></button>
             {#if selectedConvo.participant.avatar}
               <img loading="lazy" src={selectedConvo.participant.avatar} alt="" class="w-8 h-8 rounded-full" />
             {/if}
             <div>
               <p class="text-sm font-medium">{selectedConvo.participant.displayName || selectedConvo.participant.handle}</p>
               <p class="text-xs text-[var(--color-text-muted)]">{selectedConvo.participant.handle}</p>
+              <p class="text-xs text-[var(--color-text-muted)]">{i18n.t.settings.tabAccount}: {accountLabel(selectedConvo)}</p>
             </div>
           </div>
 
           <!-- Messages -->
-          <div bind:this={messagesContainer} class="flex-1 overflow-y-auto p-4 space-y-3">
+          <div bind:this={messagesContainer} role="log" aria-label={i18n.t.messages.title} aria-live="polite" aria-busy={loadingMessages} class="flex-1 overflow-y-auto p-4 space-y-3">
             {#if loadingMessages}
               <div class="text-center py-4"><Loader2 size={20} class="text-[var(--color-text-muted)] animate-spin mx-auto" /></div>
             {:else}
-              {#each messages as msg}
+              {#each messages as msg (msg.id)}
                 <div class="flex {msg.isOurs ? 'justify-end' : 'justify-start'}">
                   <div class="max-w-[70%] px-3 py-2 rounded-lg text-sm {msg.isOurs ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface)] border border-[var(--color-border)]'}">
                     <p>{msg.text}</p>
@@ -397,10 +321,12 @@
             <input
               type="text"
               bind:value={newMessage}
+              aria-label={i18n.t.messages.typePlaceholder}
+              disabled={sending || loadingMessages}
               placeholder={i18n.t.messages.typePlaceholder}
               class="flex-1 px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]"
             />
-            <button type="submit" disabled={sending || !newMessage.trim()} class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg disabled:opacity-50">
+            <button type="submit" aria-label={i18n.t.messages.sendMessage} disabled={sending || loadingMessages || !newMessage.trim()} class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg disabled:opacity-50">
               {#if sending}<Loader2 size={14} class="animate-spin" />{:else}<Send size={14} />{/if}
             </button>
           </form>

@@ -56,6 +56,14 @@ async function fakeNetworks(page: Page, reject: (sent: Sent, number: number) => 
       attempts.push(sent);
       if (reject(sent, attempts.length)) await route.fulfill({ status: 401, json: { error: 'Session expired. Reconnect this account.' } });
       else await route.fulfill({ json: { id: sent.id, uri: `https://${url.hostname}/users/writer/statuses/${sent.id}`, url: `https://${url.hostname}/@writer/${sent.id}` } });
+    } else if (request.method() === 'GET' && /^\/api\/v1\/statuses\/\d+$/.test(url.pathname)) {
+      const id = url.pathname.split('/').pop();
+      const sent = attempts.find(attempt => attempt.id === id && attempt.account === url.hostname.split('.')[0]);
+      if (!sent) await route.fulfill({ status: 404, json: { error: 'Not found' } });
+      else await route.fulfill({ json: { id, uri: `https://${url.hostname}/users/writer/statuses/${id}`, url: `https://${url.hostname}/@writer/${id}` } });
+    } else if (url.pathname === '/api/v1/accounts/verify_credentials') {
+      const id = url.hostname.split('.')[0];
+      await route.fulfill({ json: { id, acct: `writer${id}`, username: `writer${id}` } });
     } else if (url.pathname === '/api/v2/media') {
       await route.fulfill({ json: { id: 'media1' } });
     } else await route.fulfill({ json: [] });

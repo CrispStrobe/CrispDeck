@@ -93,6 +93,7 @@ export interface UnifiedPost {
   embeds?: unknown;
   raw?: unknown;
   sourceAccount?: string; // handle of account that loaded this post (multi-account feed indicator)
+  sourceAccountId?: number; // local account id used to load and interact with this post
   emojis?: Array<{ shortcode: string; url: string }>; // Mastodon custom emoji
   contentWarning?: string; // Content warning text (Mastodon CW or server filter warn action)
 }

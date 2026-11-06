@@ -25,8 +25,11 @@ test.describe('Deck Page', () => {
 
   test('keyboard shortcut "a" opens add column menu', async ({ page }) => {
     await page.goto('/deck');
-    // Click body to ensure focus is not in an input
-    await page.locator('body').click();
+    // Wait for local restoration and focus a stable, non-input control.
+    // Clicking the body can hit a starter card while the page is hydrating.
+    const addColumn = page.getByRole('button', { name: 'Add Column', exact: true });
+    await expect(addColumn).toBeEnabled();
+    await addColumn.focus();
     await page.keyboard.press('a');
     const menu = page.locator('.absolute.right-0');
     await expect(menu.locator('text=Home Timeline')).toBeVisible({ timeout: 3000 });

@@ -12,7 +12,7 @@ rather than impressions.
 
 For each item: does it work, is it confusing, would you use it?
 
-## Deck column types (20)
+## Deck column types (23)
 
 Add one of each to a deck with real accounts connected.
 
@@ -36,6 +36,9 @@ Add one of each to a deck with real accounts connected.
 - [ ] `activity`
 - [ ] `likes`
 - [ ] `followers`
+- [ ] `bookmarks`
+- [ ] `drafts`
+- [ ] `scheduled`
 
 ## Column management
 

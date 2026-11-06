@@ -9,7 +9,7 @@
  */
 
 export interface StreamEvent {
-  type: 'new-post' | 'delete' | 'update';
+  type: 'new-post' | 'delete' | 'update' | 'notification';
   platform: 'bluesky' | 'mastodon';
   payload: any; // raw post data — caller normalizes via normalizePost
   columnId?: string;
@@ -37,16 +37,21 @@ class MastodonStream {
 
   connect() {
     if (this.ws || !this.enabled) return;
+    if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
 
     try {
       const wsUrl = this.instanceUrl.replace(/^http/, 'ws');
-      this.ws = new WebSocket(
-        `${wsUrl}/api/v1/streaming?access_token=${this.accessToken}&stream=${this.streamType}`,
-      );
+      const [streamName, ...parameters] = this.streamType.split('&');
+      const query = new URLSearchParams(parameters.join('&'));
+      query.set('access_token', this.accessToken);
+      query.set('stream', streamName);
+      const socket = new WebSocket(`${wsUrl}/api/v1/streaming?${query}`);
+      this.ws = socket;
 
-      this.ws.onopen = () => { this.reconnectAttempts = 0; };
+      socket.onopen = () => { if (this.ws === socket) this.reconnectAttempts = 0; };
 
-      this.ws.onmessage = (event) => {
+      socket.onmessage = (event) => {
+        if (this.ws !== socket || !this.enabled) return;
         try {
           const data = JSON.parse(event.data);
           if (data.event === 'update' && data.payload) {
@@ -59,6 +64,9 @@ class MastodonStream {
             for (const listener of this.listeners) {
               listener(streamEvent);
             }
+          } else if (data.event === 'notification' && data.payload) {
+            const payload = typeof data.payload === 'string' ? JSON.parse(data.payload) : data.payload;
+            for (const listener of this.listeners) listener({ type: 'notification', platform: 'mastodon', payload });
           } else if (data.event === 'delete') {
             const streamEvent: StreamEvent = {
               type: 'delete',
@@ -84,17 +92,18 @@ class MastodonStream {
         }
       };
 
-      this.ws.onclose = () => {
+      socket.onclose = () => {
+        if (this.ws !== socket) return;
         this.ws = null;
         if (this.enabled) {
           const delay = Math.min(5000 * Math.pow(2, this.reconnectAttempts), 60000);
           this.reconnectAttempts++;
-          this.reconnectTimer = setTimeout(() => this.connect(), delay);
+          this.reconnectTimer = setTimeout(() => { this.reconnectTimer = null; this.connect(); }, delay);
         }
       };
 
-      this.ws.onerror = () => {
-        this.ws?.close();
+      socket.onerror = () => {
+        if (this.ws === socket) socket.close();
       };
     } catch {
       // WebSocket not available or blocked
@@ -109,8 +118,9 @@ class MastodonStream {
       this.reconnectTimer = null;
     }
     if (this.ws) {
-      this.ws.close();
+      const socket = this.ws;
       this.ws = null;
+      socket.close();
     }
   }
 
@@ -131,6 +141,8 @@ class MastodonStream {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
+
+  hasListeners(): boolean { return this.listeners.size > 0; }
 }
 
 // ── Bluesky Jetstream streaming (new posts) ─────────────────────────────────
@@ -147,6 +159,7 @@ class BlueskyStream {
 
   connect() {
     if (this.ws || !this.enabled) return;
+    if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
 
     try {
       const params = new URLSearchParams({
@@ -156,11 +169,13 @@ class BlueskyStream {
       for (const did of this.watchedDids) {
         params.append('wantedDids', did);
       }
-      this.ws = new WebSocket(`${JETSTREAM_URL}?${params}`);
+      const socket = new WebSocket(`${JETSTREAM_URL}?${params}`);
+      this.ws = socket;
 
-      this.ws.onopen = () => { this.reconnectAttempts = 0; };
+      socket.onopen = () => { if (this.ws === socket) this.reconnectAttempts = 0; };
 
-      this.ws.onmessage = (event) => {
+      socket.onmessage = (event) => {
+        if (this.ws !== socket || !this.enabled) return;
         try {
           const data = JSON.parse(event.data);
           if (!data.commit) return;
@@ -199,17 +214,18 @@ class BlueskyStream {
         }
       };
 
-      this.ws.onclose = () => {
+      socket.onclose = () => {
+        if (this.ws !== socket) return;
         this.ws = null;
         if (this.enabled) {
           const delay = Math.min(5000 * Math.pow(2, this.reconnectAttempts), 60000);
           this.reconnectAttempts++;
-          this.reconnectTimer = setTimeout(() => this.connect(), delay);
+          this.reconnectTimer = setTimeout(() => { this.reconnectTimer = null; this.connect(); }, delay);
         }
       };
 
-      this.ws.onerror = () => {
-        this.ws?.close();
+      socket.onerror = () => {
+        if (this.ws === socket) socket.close();
       };
     } catch {
       // WebSocket not available or blocked
@@ -224,8 +240,9 @@ class BlueskyStream {
       this.reconnectTimer = null;
     }
     if (this.ws) {
-      this.ws.close();
+      const socket = this.ws;
       this.ws = null;
+      socket.close();
     }
   }
 
@@ -259,6 +276,8 @@ class BlueskyStream {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
+
+  hasListeners(): boolean { return this.listeners.size > 0; }
 }
 
 // ── Stream manager (coordinates per-column streams) ─────────────────────────
@@ -279,34 +298,40 @@ class StreamManager {
   private blueskyFirehose: BlueskyStream | null = null; // Separate unfiltered stream for keyword monitoring
   private columnListeners = new Map<string, () => void>(); // cleanup fns
   private visibilityHandler: (() => void) | null = null;
-  private wasConnected = false; // track if we were streaming before hiding
 
   /** Enable streaming for a deck column */
   enableColumn(config: ColumnStreamConfig, listener: StreamListener): () => void {
+    this.disableColumn(config.columnId);
     this.ensureVisibilityHandler();
     const taggedListener: StreamListener = (event) => {
       listener({ ...event, columnId: config.columnId });
     };
 
     if (config.platform === 'mastodon' && config.instanceUrl && config.accessToken) {
-      const streamKey = `${config.instanceUrl}:${config.streamType ?? 'user'}:${config.streamParam ?? ''}`;
+      // Two accounts on the same instance must never share a private user stream.
+      const streamKey = `${config.instanceUrl}:${config.accessToken}:${config.streamType ?? 'user'}:${config.streamParam ?? ''}`;
       let stream = this.mastodonStreams.get(streamKey);
       if (!stream) {
         let streamType = config.streamType ?? 'user';
         if (config.streamParam) {
-          streamType = `${streamType}&${streamType === 'hashtag' ? 'tag' : 'list'}=${config.streamParam}`;
+          streamType = `${streamType}&${streamType === 'hashtag' ? 'tag' : 'list'}=${encodeURIComponent(config.streamParam)}`;
         }
         stream = new MastodonStream(config.instanceUrl, config.accessToken, streamType);
         this.mastodonStreams.set(streamKey, stream);
       }
       const unsub = stream.subscribe(taggedListener);
-      stream.setEnabled(true);
+      stream.setEnabled(typeof document === 'undefined' || !document.hidden);
 
-      this.columnListeners.set(config.columnId, unsub);
-      return () => {
+      let disposed = false;
+      const cleanup = () => {
+        if (disposed) return;
+        disposed = true;
         unsub();
-        this.columnListeners.delete(config.columnId);
+        if (this.columnListeners.get(config.columnId) === cleanup) this.columnListeners.delete(config.columnId);
+        if (!stream.hasListeners()) { stream.disconnect(); this.mastodonStreams.delete(streamKey); }
       };
+      this.columnListeners.set(config.columnId, cleanup);
+      return cleanup;
     }
 
     if (config.platform === 'bluesky') {
@@ -317,26 +342,38 @@ class StreamManager {
           this.blueskyFirehose = new BlueskyStream();
         }
         const unsub = this.blueskyFirehose.subscribe(taggedListener);
-        this.blueskyFirehose.setEnabled(true);
+        const stream = this.blueskyFirehose;
+        stream.setEnabled(typeof document === 'undefined' || !document.hidden);
 
-        this.columnListeners.set(config.columnId, unsub);
-        return () => {
+        let disposed = false;
+        const cleanup = () => {
+          if (disposed) return;
+          disposed = true;
           unsub();
-          this.columnListeners.delete(config.columnId);
+          if (this.columnListeners.get(config.columnId) === cleanup) this.columnListeners.delete(config.columnId);
+          if (!stream.hasListeners()) { stream.disconnect(); if (this.blueskyFirehose === stream) this.blueskyFirehose = null; }
         };
+        this.columnListeners.set(config.columnId, cleanup);
+        return cleanup;
       }
 
       if (!this.blueskyStream) {
         this.blueskyStream = new BlueskyStream();
       }
       const unsub = this.blueskyStream.subscribe(taggedListener);
-      this.blueskyStream.setEnabled(true);
+      const stream = this.blueskyStream;
+      stream.setEnabled(typeof document === 'undefined' || !document.hidden);
 
-      this.columnListeners.set(config.columnId, unsub);
-      return () => {
+      let disposed = false;
+      const cleanup = () => {
+        if (disposed) return;
+        disposed = true;
         unsub();
-        this.columnListeners.delete(config.columnId);
+        if (this.columnListeners.get(config.columnId) === cleanup) this.columnListeners.delete(config.columnId);
+        if (!stream.hasListeners()) { stream.disconnect(); if (this.blueskyStream === stream) this.blueskyStream = null; }
       };
+      this.columnListeners.set(config.columnId, cleanup);
+      return cleanup;
     }
 
     // No-op cleanup for unsupported configs
@@ -375,11 +412,10 @@ class StreamManager {
     this.visibilityHandler = () => {
       if (document.hidden) {
         // Pause all streams to save bandwidth
-        this.wasConnected = this.columnListeners.size > 0;
         for (const [, stream] of this.mastodonStreams) stream.setEnabled(false);
         this.blueskyStream?.setEnabled(false);
         this.blueskyFirehose?.setEnabled(false);
-      } else if (this.wasConnected) {
+      } else {
         // Resume streams when tab becomes visible
         for (const [, stream] of this.mastodonStreams) stream.setEnabled(true);
         this.blueskyStream?.setEnabled(true);

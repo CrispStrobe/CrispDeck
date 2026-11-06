@@ -13,14 +13,15 @@
 /** Images, whether attached directly or alongside a quote. */
 export function getBskyImages(embeds: unknown): any[] {
   if (!embeds) return [];
-  const embed = embeds as any;
-  if (embed.$type === 'app.bsky.embed.images#view' && embed.images) {
+  const input = embeds as any;
+  const embed = input.$type === 'app.bsky.embed.recordWithMedia#view' ? input.media : input;
+  if (!embed) return [];
+  if (embed.$type === 'app.bsky.embed.images#view' && Array.isArray(embed.images)) {
     return embed.images;
   }
-  if (embed.$type === 'app.bsky.embed.recordWithMedia#view' && embed.media) {
-    if (embed.media.$type === 'app.bsky.embed.images#view' && embed.media.images) {
-      return embed.media.images;
-    }
+  if (embed.$type === 'app.bsky.embed.gallery#view' && Array.isArray(embed.items)) {
+    return embed.items.filter((item: any) => item?.$type === 'app.bsky.embed.gallery#viewImage' && typeof item.fullsize === 'string' && typeof item.thumbnail === 'string')
+      .map((item: any) => ({ ...item, thumb: item.thumbnail }));
   }
   return [];
 }

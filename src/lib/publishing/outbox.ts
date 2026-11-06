@@ -12,6 +12,8 @@ import type { ThreadsClient } from '$lib/api/threads';
 import { newRecordKey } from './record-key';
 import { all, read, write, exclusive } from './storage';
 import { restoreFiles, type ComposerSnapshot } from './snapshots';
+import { validateMediaForPlatform } from '$lib/compose/media-policy';
+import { accountDestinationIdentity, identifyAccount, resolveDestinationClient, type IdentifiedDestination } from './destination-identity';
 
 export type PartStatus = 'pending' | 'sending' | 'posted' | 'failed' | 'uncertain';
 export interface DeliveryPart {
@@ -22,10 +24,7 @@ export interface DeliveryPart {
   attemptedAt?: string;
   recordKey?: string;
 }
-export interface Destination {
-  accountId: number;
-  handle: string;
-  platform: Platform;
+export interface Destination extends IdentifiedDestination {
   parts: DeliveryPart[];
 }
 export interface PublishJob {
@@ -64,18 +63,29 @@ export async function createJob(saved: ComposerSnapshot, accounts: Account[], dr
       return account;
     });
     if (!targets.length) throw new Error('Select at least one account to post to.');
+    const files = restoreFiles(saved);
+    for (const account of targets) {
+      const issue = validateMediaForPlatform(account.platform, files, saved.options.mediaUrls);
+      if (issue) throw new Error(`@${account.handle}: ${issue}`);
+    }
+    // Freeze remote identities as well as content. Reconnecting an account may
+    // change its local row ID; a reused handle must never redirect this job.
+    let identityClients: Promise<Map<number, ClientEntry>> | undefined;
     // Freeze mention resolution and splitting before the first network write.
     const destinations = await Promise.all(targets.map(async account => {
       const text = saved.overrides[String(account.id)] ?? saved.text;
-      if (!text.trim() && !saved.media.length) throw new Error(`Add text or media for ${account.handle}.`);
+      const hasRemoteMedia = account.platform === 'threads' && !!saved.options.mediaUrls?.length;
+      if (!text.trim() && !saved.media.length && !hasRemoteMedia) throw new Error(`Add text or media for ${account.handle}.`);
       if (account.platform === 'threads') {
         const urls = saved.options.mediaUrls ?? [];
         if (saved.media.length && !urls.length) throw new Error('Threads needs a public HTTPS media URL. Add it in the composer before publishing.');
         if (urls.some(url => { try { return new URL(url).protocol !== 'https:'; } catch { return true; } })) throw new Error('Threads media URLs must use HTTPS.');
       }
+      const identity = accountDestinationIdentity(account) ?? await identifyAccount(account,
+        (await (identityClients ??= initAllClients().then(result => result.clients))).get(account.id));
       const resolved = await resolveMentionsForPlatform(text, account.platform);
       return {
-        accountId: account.id, handle: account.handle, platform: account.platform,
+        accountId: account.id, handle: account.handle, platform: account.platform, identity,
         parts: splitForPlatform(resolved, account.platform).parts.map(p => ({ text: p.text, status: 'pending' as const, recordKey: account.platform === 'bluesky' ? newRecordKey() : undefined })),
       };
     }));
@@ -103,8 +113,7 @@ export async function deliverJob(id: string, clients?: Map<number, ClientEntry>,
     job.status = 'sending';
     await saveProgress();
     for (const destination of job.destinations) {
-      const handle = (value: string) => value.replace(/^@/, '').toLowerCase();
-      const entry = entries.get(destination.accountId) ?? [...entries.values()].find(e => e.platform === destination.platform && handle(e.handle) === handle(destination.handle));
+      let entry: ClientEntry | undefined;
       for (let index = 0; index < destination.parts.length; index++) {
         const part = destination.parts[index];
         if (part.status === 'posted') continue;
@@ -113,7 +122,15 @@ export async function deliverJob(id: string, clients?: Map<number, ClientEntry>,
         const expired = destination.platform === 'mastodon' && part.attemptedAt && Date.now() - Date.parse(part.attemptedAt) > 3_600_000;
         if ((part.status === 'sending' && destination.platform === 'threads') || expired) part.status = 'uncertain';
         if (part.status === 'uncertain' && !allowUncertain) break;
-        if (!entry || entry.degraded) {
+        if (!entry) {
+          try { entry = await resolveDestinationClient(destination, entries); }
+          catch {
+            part.status = 'failed';
+            part.error = `Reconnect ${destination.handle} in Settings, then retry. The connected account identity could not be verified.`;
+            break;
+          }
+        }
+        if (entry.degraded) {
           part.status = 'failed';
           part.error = `Reconnect ${destination.handle} in Settings, then retry.`;
           break;
