@@ -66,6 +66,12 @@ try {
     assert.match(await replyContext.innerText(), /Replying to Parent author/);
     assert.match(await replyContext.innerText(), /Parent message context/);
     assert.match(await replyContext.getAttribute('href'), /thread\?uri=/);
+    const linkTitle = await cards.nth(5).evaluate(el => {
+      const preview = el.querySelector('.feed-preview').getBoundingClientRect();
+      const title = el.querySelector('.link-preview-copy .font-semibold').getBoundingClientRect();
+      return { titleTop: title.top, titleBottom: title.bottom, previewTop: preview.top, previewBottom: preview.bottom };
+    });
+    assert.ok(linkTitle.titleTop >= linkTitle.previewTop && linkTitle.titleBottom <= linkTitle.previewBottom, 'link title must be fully visible in compact preview');
     await page.evaluate(() => {
       window.isTauri = true;
       window.__openedUrls = [];
