@@ -9,8 +9,13 @@ try {
  await page.goto('http://localhost:4179/deck',{waitUntil:'domcontentloaded'});const handles=page.locator('.drag-handle');await handles.first().waitFor({timeout:20000});
  const order=()=>handles.evaluateAll(es=>es.map(e=>e.getAttribute('aria-label')));
  let initial=await order();assert.equal(initial.length,3);
- const actionRows = await page.locator('.column-actions').evaluateAll(rows => rows.map(row => [...row.children].map(el => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; })));
- for (const rows of actionRows) assert.ok(Math.max(...rows) - Math.min(...rows) <= 3, 'column actions must stay on one row');
+ await page.locator('[role=region]').evaluateAll(regions => regions.forEach(region => { region.style.width = '280px'; }));
+ const actionRows = await page.locator('.column-actions').evaluateAll(rows => rows.map(row => ({right:row.getBoundingClientRect().right, controls:[...row.children].map(el => { const r = el.getBoundingClientRect(); return {center:r.top + r.height / 2,right:r.right}; })})));
+ for (const row of actionRows) {
+   const centers = row.controls.map(control => control.center);
+   assert.ok(Math.max(...centers) - Math.min(...centers) <= 3, 'column actions must stay on one row');
+   assert.ok(row.controls.every(control => control.right <= row.right + 1), 'every action must fit in the narrowest column');
+ }
  const sourceBox=await handles.nth(2).boundingBox();
  const targetBox=await page.getByRole('region',{name:'Timeline'}).boundingBox();
  await page.mouse.move(sourceBox.x+sourceBox.width/2, sourceBox.y+sourceBox.height/2);
