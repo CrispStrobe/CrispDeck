@@ -1,7 +1,7 @@
 <script lang="ts">
   import { getTtsEngine, setTtsEngine, getSttEngine, setSttEngine, getHomeMode, setHomeMode, type SpeechEngine, type HomeMode } from '$lib/settings';
   import { toast } from '$lib/toast.svelte';
-  import { removeKey, writeJson, writeString } from '$lib/safe-storage';
+  import { readString, removeKey, writeJson, writeString } from '$lib/safe-storage';
   import { fetchOk, fetchJson } from '$lib/http';
   import { getCredentialBackend, setCredentialBackend, setMacosKeychain, type CredentialBackendInfo } from '$lib/db';
   import { apiUrl } from '$lib/api-origin';
@@ -49,9 +49,12 @@
   import { listHashtagSets, saveHashtagSet, deleteHashtagSet, type HashtagSet } from '$lib/hashtag-bank';
   import { listTagGroups, saveTagGroup, deleteTagGroup, type TagGroup } from '$lib/tag-groups';
   import { listFeeds, addFeed, removeFeed, importOPML, type RssFeed } from '$lib/rss';
-  import { getThreadsConfig, setThreadsConfig, getThreadsAuthUrl, exchangeCodeForToken, exchangeForLongLivedToken, ThreadsClient, getProxyAuthUrl, isThreadsAvailable } from '$lib/api/threads';
+  import { getThreadsConfig, setThreadsConfig, getThreadsAuthUrl, exchangeCodeForToken, exchangeForLongLivedToken, ThreadsClient, getProxyAuthUrl, isThreadsAvailable, threadsRedirectUri, proxyExchangeToken } from '$lib/api/threads';
   import { listMutedWords, addMutedWord, removeMutedWord, toggleMutedWord, type MutedWord } from '$lib/muted-words';
   import { MastodonClient } from '$lib/api/mastodon';
+  import { isTauri as isNative } from '$lib/platform';
+  import { authorizeInWindow } from '$lib/oauth-window';
+  import { threadsAuthorizationCode } from '$lib/api/threads-authorization';
   import { invalidateFilterCache, isFilterExpired, type MastodonFilter, type FilterContext, type CreateFilterParams } from '$lib/mastodon-filters';
   import { listKeywordSets, saveKeywordSet, removeKeywordSet, createKeywordSet, parseKeywords, type KeywordSet } from '$lib/keyword-monitor';
   import { getAlertSettings, setAlertSettings } from '$lib/notification-alerts';
@@ -162,6 +165,8 @@
     try {
       await setMacosKeychain(value);
       credentialBackend = { ...credentialBackend, macosKeychain: value };
+      window.dispatchEvent(new Event('crispdeck:credential-storage-changed'));
+      invalidateClientCache();
       toast.success(i18n.t.settings.macosKeychain);
     } catch (e) {
       swallow('settings.macosKeychain', e);
@@ -190,6 +195,8 @@
     try {
       await setCredentialBackend(backend);
       credentialBackend = { ...credentialBackend, backend };
+      window.dispatchEvent(new Event('crispdeck:credential-storage-changed'));
+      invalidateClientCache();
     } catch (e) {
       swallow('settings.credentialBackend', e);
       toast.error(i18n.t.settings.credentialStorage);
@@ -274,6 +281,8 @@
 
   let hideEngagement = $state(localStorage.getItem('crispdeck-hide-engagement') === 'true');
   let compactPosts = $state(localStorage.getItem('crispdeck-compact-posts') === 'true');
+  let wallabagUrl = $state(readString('crispdeck-wallabag-url', ''));
+  let sideMedia = $state(localStorage.getItem('crispdeck-side-media') !== 'false');
   let mediaPreview = $state<'lightbox' | 'browser'>((localStorage.getItem('crispdeck-media-preview') as 'lightbox' | 'browser') || 'lightbox');
   let liveCounters = $state(localStorage.getItem('crispdeck-live-counters') === 'true');
   let feedCacheSize = $state(parseInt(localStorage.getItem('crispdeck-feed-cache-size') ?? '200'));
@@ -641,21 +650,23 @@
     // Includes the mount point: on a project-page deployment the app lives
     // under /<repo>/, and an origin-only callback points at a path that
     // does not exist there.
-    const redirectUri = `${window.location.origin}${base}/oauth/threads-callback`;
+    const redirectUri = threadsRedirectUri();
     const state = crypto.randomUUID();
     writeString('crispdeck-threads-oauth-state', state);
 
     try {
       if (threadsAdvanced && threadsClientId.trim() && threadsClientSecret.trim()) {
         // Advanced: use custom app credentials (direct flow)
-        setThreadsConfig({
-          client_id: threadsClientId.trim(),
-          client_secret: threadsClientSecret.trim(),
-          redirect_uri: redirectUri,
-          useProxy: false,
-        });
-
         const authUrl = getThreadsAuthUrl(threadsClientId.trim(), redirectUri, state);
+        if (isNative() && !isMobile()) {
+          const query = await authorizeInWindow(authUrl, redirectUri);
+          const code = threadsAuthorizationCode(query, state);
+          const short = await exchangeCodeForToken(threadsClientId.trim(), threadsClientSecret.trim(), redirectUri, code);
+          const token = await exchangeForLongLivedToken(threadsClientSecret.trim(), short.access_token);
+          await finishThreadsConnection(token.access_token, String(short.user_id ?? token.user_id ?? ''));
+          return;
+        }
+        setThreadsConfig({ client_id: threadsClientId.trim(), client_secret: threadsClientSecret.trim(), redirect_uri: redirectUri, useProxy: false });
         window.location.href = authUrl;
         return;
       }
@@ -668,16 +679,30 @@
         return;
       }
 
-      setThreadsConfig({
-        redirect_uri: redirectUri,
-        useProxy: true,
-      });
-
+      if (isNative() && !isMobile()) {
+        const query = await authorizeInWindow(authUrl, redirectUri);
+        const code = threadsAuthorizationCode(query, state);
+        const result = await proxyExchangeToken(code, redirectUri);
+        await finishThreadsConnection(result.access_token, result.user_id);
+        return;
+      }
+      if (isNative()) throw new Error('Threads sign-in is not yet available in the mobile app.');
+      setThreadsConfig({ redirect_uri: redirectUri, useProxy: true });
       window.location.href = authUrl;
     } catch (e) {
       error = String(e);
+    } finally {
       threadsLoading = false;
     }
+  }
+
+  async function finishThreadsConnection(accessToken: string, userId: string) {
+    const profile = await new ThreadsClient(accessToken, userId).getProfile();
+    await dbAddAccount({ platform: 'threads', handle: `@${profile.username}`, display_name: profile.name || profile.username, avatar_url: profile.threads_profile_picture_url || undefined, credentials: JSON.stringify({ access_token: accessToken, user_id: userId || profile.id, connected_at: new Date().toISOString() }), is_primary: false });
+    removeKey('crispdeck-threads-oauth-state');
+    accounts = await listAccounts();
+    showThreadsForm = false;
+    threadsClientSecret = '';
   }
 
   async function handleThreadsManualToken() {
@@ -1066,7 +1091,7 @@
             <p class="text-xs text-[var(--color-text-muted)]">
               {#if !threadsProxyAvailable}Connect your Threads account using your own Meta Developer App credentials. {:else}Use your own Meta Developer App. {/if}Create one at
               <a href="https://developers.facebook.com" target="_blank" rel="noopener" class="underline">developers.facebook.com</a>
-              with the Threads API product enabled. Add <code class="text-[10px] bg-[var(--color-bg)] px-1 rounded">{typeof window !== 'undefined' ? window.location.origin : ''}{base}/oauth/threads-callback</code> as a redirect URI.
+              with the Threads API product enabled. Add <code class="text-[10px] bg-[var(--color-bg)] px-1 rounded">{typeof window !== 'undefined' ? threadsRedirectUri() : ''}</code> as a redirect URI.
             </p>
             <div>
               <label for="threads-client-id" class="block text-sm text-[var(--color-text-muted)] mb-1">{i18n.t.settings.appId}</label>
@@ -1126,7 +1151,7 @@
             {#if threadsTokenMode}
               <div class="mt-2 space-y-2">
                 <p class="text-[10px] text-[var(--color-text-muted)]">
-                  {i18n.t.settings.generateTokenFrom} <a href="https://developers.facebook.com/apps/{threadsClientId || '...'}/use_cases/" target="_blank" rel="noopener" class="underline">{i18n.t.settings.metaDevPortal}</a>{i18n.t.settings.generateTokenPath}
+                  {i18n.t.settings.generateTokenFrom} <a href="https://developers.facebook.com/apps/" target="_blank" rel="noopener" class="underline">{i18n.t.settings.metaDevPortal}</a>{i18n.t.settings.generateTokenPath}
                 </p>
                 <input
                   type="password"
@@ -1256,7 +1281,23 @@
         />
       </div>
 
+      <div>
+        <label for="wallabag-url" class="text-sm text-[var(--color-text-muted)]">{i18n.t.linkMenu.wallabagInstance}</label>
+        <input id="wallabag-url" type="url" bind:value={wallabagUrl} onchange={() => writeString('crispdeck-wallabag-url', wallabagUrl.trim())} placeholder="https://wallabag.example.com" class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm" />
+        <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.linkMenu.wallabagHint}</p>
+      </div>
+
       <!-- Media preview mode -->
+      <div class="flex items-center justify-between">
+        <div>
+          <label for="side-media" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.sideMedia}</label>
+          <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.sideMediaHint}</p>
+        </div>
+        <input id="side-media" type="checkbox" bind:checked={sideMedia}
+          onchange={() => { writeString('crispdeck-side-media', String(sideMedia)); document.documentElement.dataset.sideMedia = String(sideMedia); }}
+          class="w-4 h-4 accent-[var(--color-primary)]" />
+      </div>
+
       <div class="flex items-center justify-between">
         <div>
           <label for="media-preview" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.mediaPreview}</label>
@@ -2239,12 +2280,22 @@
                 aria-pressed={credentialBackend.backend === 'local'}
                 class="flex-1 px-3 py-2 text-xs rounded-md border transition-colors disabled:opacity-50 {credentialBackend.backend === 'local' ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white' : 'border-[var(--color-border)] text-[var(--color-text-muted)]'}"
               >
-                <span class="block font-medium">{i18n.t.settings.credentialLocal}</span>
+                <span class="block font-medium">{macosChoices.length > 0 ? i18n.t.settings.noKeychain : i18n.t.settings.credentialLocal}</span>
                 <span class="block text-[10px] opacity-80">{i18n.t.settings.credentialLocalHint}</span>
               </button>
             </div>
           {:else}
             <p class="text-[10px] text-[var(--color-text-muted)] mt-2">{i18n.t.settings.credentialNoKeychain}</p>
+          {/if}
+
+          {#if macosChoices.length > 0}
+            <p class="text-[10px] text-[var(--color-text-muted)] mt-2">
+              {#if credentialBackend.backend === 'local'}
+                {i18n.t.settings.oauthLocalStorageHint}
+              {:else}
+                {i18n.t.settings.oauthKeychainStorageHint}
+              {/if}
+            </p>
           {/if}
 
           <!-- Which macOS keychain. Only macOS reports any choices, so every

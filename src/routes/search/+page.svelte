@@ -6,7 +6,7 @@
   import { Search, Loader2, Inbox, HelpCircle, Image, User, Calendar, Bookmark, BookmarkCheck, X } from '@lucide/svelte';
   import { listSavedSearches, saveSearch, deleteSavedSearch, isSaved, type SavedSearch } from '$lib/saved-searches';
   import { i18n } from '$lib/i18n.svelte';
-  import { BlueskyClient } from '$lib/api/bluesky';
+  import { searchBlueskyAccount, type SearchActor } from '$lib/api/bluesky-search';
   import { MastodonClient } from '$lib/api/mastodon';
   import { ThreadsClient } from '$lib/api/threads';
   import { normalizePost } from '$lib/api/unified';
@@ -20,6 +20,8 @@
   let error = $state('');
   let query = $state('');
   let results: UnifiedPost[] = $state([]);
+  let actors: SearchActor[] = $state([]);
+  let searchSequence = 0;
   let hasSearched = $state(false);
 
   let showSearchHelp = $state(false);
@@ -74,9 +76,11 @@
 
   async function handleSearch() {
     if (!query.trim()) return;
+    const sequence = ++searchSequence;
     searching = true;
     error = '';
     results = [];
+    actors = [];
     hasSearched = true;
 
     const resultsByPlatform = new Map<Platform, UnifiedPost[]>();
@@ -87,25 +91,8 @@
       if (!entry) return { platform: acct.platform, posts: [] as UnifiedPost[] };
 
       if (acct.platform === 'bluesky') {
-        const bsky = entry.client as BlueskyClient;
-        const resp = await bsky.searchPosts(q);
-        return { platform: acct.platform, posts: resp.posts.map(post => ({
-          uri: post.uri,
-          text: (post.record as any).text ?? '',
-          author: {
-            handle: post.author.handle,
-            displayName: post.author.displayName,
-            avatar: post.author.avatar,
-          },
-          createdAt: (post.record as any).createdAt ?? post.indexedAt,
-          platform: 'bluesky' as const,
-          replyCount: post.replyCount,
-          repostCount: post.repostCount,
-          likeCount: post.likeCount,
-          isRepost: false,
-          embeds: post.embed,
-          raw: post,
-        })) };
+        const found = await searchBlueskyAccount(entry, q);
+        return { platform: acct.platform, ...found };
       } else if (acct.platform === 'mastodon') {
         const masto = entry.client as MastodonClient;
         const token = masto.getAccessToken();
@@ -122,8 +109,16 @@
       return { platform: acct.platform, posts: [] as UnifiedPost[] };
     }));
 
+    if (sequence !== searchSequence) return;
+    const actorMap = new Map<string, SearchActor>();
+    let failed = 0;
     for (const result of searchResults) {
-      if (result.status === 'fulfilled' && result.value.posts.length > 0) {
+      if (result.status === 'rejected') { failed++; continue; }
+      if ('actors' in result.value) {
+        for (const actor of result.value.actors) actorMap.set(actor.did, actor);
+        if (result.value.postFailed || result.value.actorFailed) failed++;
+      }
+      if (result.value.posts.length > 0) {
         const p = result.value.platform;
         resultsByPlatform.set(p, [...(resultsByPlatform.get(p) ?? []), ...result.value.posts]);
       }
@@ -132,6 +127,8 @@
     // Merge with engagement/recency scoring and URI dedup
     const merged = mergeSearchResults(resultsByPlatform);
     results = merged.posts;
+    actors = [...actorMap.values()];
+    if (failed) error = i18n.t.search.partialFailure;
     searching = false;
   }
 </script>
@@ -262,19 +259,34 @@
       <Loader2 size={32} class="text-[var(--color-text-muted)] animate-spin mx-auto" />
       <p class="text-sm text-[var(--color-text-muted)] mt-2">{i18n.t.search.searching}</p>
     </div>
-  {:else if hasSearched && results.length === 0}
+  {:else if hasSearched && results.length === 0 && actors.length === 0 && !error}
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <Inbox size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />
       <h3 class="text-lg font-medium text-[var(--color-text-muted)] mb-2">{i18n.t.search.noResults}</h3>
       <p class="text-sm text-[var(--color-text-muted)]">{i18n.t.search.noPostsFor.replace('{query}', query)}</p>
     </div>
-  {:else if results.length > 0}
+  {:else if results.length > 0 || actors.length > 0}
+    {#if actors.length > 0}
+      <h2 class="text-sm font-semibold mb-2">{i18n.t.search.people}</h2>
+      <div class="space-y-2 mb-5">
+        {#each actors as actor (actor.did)}
+          <a href="{base}/profile?handle={encodeURIComponent(actor.handle)}&platform=bluesky" class="flex items-center gap-3 p-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg hover:border-[var(--color-primary)]">
+            {#if actor.avatar}<img src={actor.avatar} alt="" class="w-10 h-10 rounded-full" />{:else}<span class="w-10 h-10 rounded-full bg-[var(--color-surface-hover)]"></span>{/if}
+            <span class="min-w-0"><span class="block font-semibold text-sm">{actor.displayName || actor.handle}</span><span class="block text-xs text-[var(--color-text-muted)]">@{actor.handle}</span></span>
+          </a>
+        {/each}
+      </div>
+    {/if}
+    {#if results.length > 0}
     <p class="text-sm text-[var(--color-text-muted)] mb-4">{results.length} results (ranked by engagement + recency)</p>
     <div class="space-y-3">
       {#each results as post (post.uri)}
         <Post {post} />
       {/each}
     </div>
+    {/if}
+  {:else if hasSearched && error}
+    <p class="text-sm text-[var(--color-text-muted)]">{i18n.t.search.retrySearch}</p>
   {:else if accounts.length === 0}
     <div class="text-center py-12 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
       <Search size={48} class="text-[var(--color-text-muted)] mx-auto mb-4" />

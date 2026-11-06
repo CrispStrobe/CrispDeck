@@ -470,6 +470,8 @@ Mobile support uses Tauri 2's iOS/Android targets. The desktop-only plugins
 ```bash
 # Generate the native project first (writes src-tauri/gen/, which is gitignored)
 npx tauri ios init
+python3 scripts/sync-ios-icons.py
+python3 scripts/patch-ios-privacy.py
 npx tauri ios build
 ```
 

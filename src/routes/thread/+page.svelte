@@ -1,6 +1,8 @@
 <script lang="ts">
   import { base } from '$app/paths';
-  import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
+  import { page } from '$app/state';
+  import { tick } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { MessageCircle, Loader2, ArrowLeft, BookOpen, Share2 } from '@lucide/svelte';
   import { goto } from '$app/navigation';
@@ -8,6 +10,7 @@
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
   import { normalizePost } from '$lib/api/unified';
+  import { partitionThreadReplies } from '$lib/thread-continuation';
   import { isThread, extractThreadText, planThreadSync, type ThreadSyncPlan } from '$lib/thread-sync';
   import Post from '$lib/components/Post.svelte';
   import type { UnifiedPost, Account, Platform } from '$lib/types';
@@ -22,46 +25,50 @@
   let accounts: Account[] = $state([]);
   let clientEntries: Map<number, ClientEntry> = new Map();
 
-  onMount(async () => {
-    const params = new URLSearchParams(window.location.search);
+  let requestNumber = 0;
+  let clientsPromise: ReturnType<typeof initAllClients> | undefined;
+
+  // SvelteKit reuses this page when only the query changes. React to the URL
+  // so opening a quoted post or using history loads the selected thread.
+  $effect(() => {
+    const search = page.url.search;
+    if (browser) void loadThread(search);
+  });
+
+  async function loadThread(search: string) {
+    const request = ++requestNumber;
+    const params = new URLSearchParams(search);
     const uri = params.get('uri') ?? '';
-    platform = (params.get('platform') as Platform) ?? 'bluesky';
     const statusId = params.get('id') ?? '';
-
-    // Auto-detect Threads URIs even if platform param is wrong
-    if (uri.includes('threads.com') || uri.startsWith('threads://')) {
-      platform = 'threads';
-    }
-
-    if (!uri && !statusId) {
-      error = 'No post URI specified';
-      loading = false;
-      return;
-    }
-
+    let selectedPlatform = (params.get('platform') as Platform) ?? 'bluesky';
+    if (uri.includes('threads.com') || uri.startsWith('threads://')) selectedPlatform = 'threads';
+    platform = selectedPlatform;
+    loading = true; error = ''; articleMode = false;
+    // Unmount the previous Post before clearing its required props.
+    await tick();
+    if (request !== requestNumber) return;
+    ancestors = []; mainPost = null; replies = [];
+    if (!uri && !statusId) { error = 'No post URI specified'; loading = false; return; }
     try {
-      const result = await initAllClients();
+      clientsPromise ??= initAllClients();
+      const result = await clientsPromise;
+      if (request !== requestNumber) return;
       accounts = result.accounts;
       clientEntries = result.clients;
-
-      if (platform === 'bluesky' && uri) {
-        await loadBskyThread(uri);
-      } else if (platform === 'mastodon' && (statusId || uri)) {
-        await loadMastoThread(statusId || uri);
-      } else if (platform === 'threads' && uri) {
-        // Threads API has no thread view — open permalink directly
-        if (uri.startsWith('https://')) {
-          window.open(uri, '_blank');
-          goto(`${base}/feed`);
-          return;
-        }
+      if (selectedPlatform === 'bluesky' && uri) {
+        await loadBskyThread(uri, request);
+      } else if (selectedPlatform === 'mastodon' && (statusId || uri)) {
+        await loadMastoThread(statusId || uri, request);
+      } else if (selectedPlatform === 'threads' && uri.startsWith('https://')) {
+        window.open(uri, '_blank');
+        await goto(`${base}/feed`);
       }
     } catch (e) {
-      error = String(e);
+      if (request === requestNumber) { error = String(e); clientsPromise = undefined; }
     } finally {
-      loading = false;
+      if (request === requestNumber) loading = false;
     }
-  });
+  }
 
   function getBskyClient(): BlueskyClient | null {
     for (const [id, entry] of clientEntries) {
@@ -70,11 +77,12 @@
     return BlueskyClient.readOnly('_');
   }
 
-  async function loadBskyThread(uri: string) {
+  async function loadBskyThread(uri: string, request: number) {
     const client = getBskyClient();
     if (!client) { error = 'No Bluesky client'; return; }
 
-    const thread = await client.getPostThread(uri);
+    const thread = await client.getPostThread(uri, 20);
+    if (request !== requestNumber) return;
     if (!thread || thread.$type === 'app.bsky.feed.defs#notFoundPost') {
       error = 'Post not found';
       return;
@@ -97,7 +105,7 @@
     // Extract replies
     const replyPosts: UnifiedPost[] = [];
     function collectReplies(node: any, depth: number) {
-      if (!node?.replies || depth > 3) return;
+      if (!node?.replies || depth > 20) return;
       for (const reply of node.replies) {
         if ('post' in reply) {
           replyPosts.push(normalizePost({ post: reply.post, reason: undefined } as any, 'bluesky'));
@@ -109,7 +117,7 @@
     replies = replyPosts;
   }
 
-  async function loadMastoThread(idOrUri: string) {
+  async function loadMastoThread(idOrUri: string, request: number) {
     let mastoClient: MastodonClient | null = null;
     for (const [id, entry] of clientEntries) {
       if (accounts.find(a => a.id === id)?.platform === 'mastodon') { mastoClient = entry.client as MastodonClient; break; }
@@ -123,21 +131,21 @@
       statusId = parts[parts.length - 1];
     }
 
-    const status = await mastoClient.getStatus(statusId);
+    const [status, context] = await Promise.all([mastoClient.getStatus(statusId), mastoClient.getStatusContext(statusId)]);
+    if (request !== requestNumber) return;
     mainPost = normalizePost(status, 'mastodon');
-
-    const context = await mastoClient.getStatusContext(statusId);
     ancestors = context.ancestors.map(s => normalizePost(s, 'mastodon'));
     replies = context.descendants.map(s => normalizePost(s, 'mastodon'));
   }
 
   let articleMode = $state(false);
+  const groupedReplies = $derived(mainPost ? partitionThreadReplies(mainPost, replies) : { continuation: [], replies });
 
   /** Build a single article from the thread author's posts (ancestors + main + their replies) */
   const articlePosts = $derived.by(() => {
     if (!mainPost) return [];
     const authorHandle = mainPost.author.handle;
-    const all = [...ancestors, mainPost, ...replies].filter(
+    const all = [...ancestors, mainPost, ...groupedReplies.continuation].filter(
       p => p.author.handle === authorHandle
     );
     // Deduplicate by URI
@@ -169,7 +177,7 @@
 
 <div class="p-6 max-w-3xl mx-auto">
   <div class="flex items-center justify-between mb-4">
-    <button onclick={() => history.back()} class="flex items-center gap-1 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+    <button onclick={() => goto(`${base}/feed`)} class="flex items-center gap-1 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
       <ArrowLeft size={14} /> {i18n.t.profile.backToFeed}
     </button>
     <div class="flex items-center gap-2">
@@ -286,14 +294,22 @@
       </div>
     {/if}
 
-    <!-- Replies -->
-    {#if replies.length > 0}
+    {#if groupedReplies.continuation.length > 0}
+      <div class="space-y-2 mb-4 border-l-4 border-[var(--color-primary)] rounded-r-lg" aria-label={i18n.t.thread.authorThread}>
+        {#each groupedReplies.continuation as post (post.uri)}
+          <Post {post} />
+        {/each}
+      </div>
+    {/if}
+
+    <!-- Other replies -->
+    {#if groupedReplies.replies.length > 0}
       <div class="border-t border-[var(--color-border)] pt-4">
         <h3 class="text-sm font-semibold text-[var(--color-text-muted)] mb-3 flex items-center gap-2">
-          <MessageCircle size={14} /> {replies.length} {replies.length === 1 ? 'reply' : 'replies'}
+          <MessageCircle size={14} /> {groupedReplies.replies.length} {groupedReplies.replies.length === 1 ? 'reply' : 'replies'}
         </h3>
         <div class="space-y-2 pl-4 border-l-2 border-[var(--color-border)]">
-          {#each replies as post}
+          {#each groupedReplies.replies as post (post.uri)}
             <Post {post} />
           {/each}
         </div>

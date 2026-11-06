@@ -52,6 +52,14 @@ test.describe('Navigation', () => {
     await expect(page).toHaveTitle(/Feed/);
   });
 
+  test('collapsed sidebar can be expanded again', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.goto('/settings');
+    await page.getByRole('button', { name: 'Collapse sidebar' }).click();
+    await page.getByRole('button', { name: 'Expand sidebar' }).click();
+    await expect(page.getByRole('button', { name: 'Collapse sidebar' })).toBeVisible();
+  });
+
   test('shows 404 for unknown routes', async ({ page }) => {
     await page.goto('/this-page-does-not-exist');
     await expect(page.locator('text=404')).toBeVisible();

@@ -7,6 +7,7 @@
   import { goto } from '$app/navigation';
   import { addAccount, listAccounts } from '$lib/db';
   import { getThreadsConfig, exchangeCodeForToken, exchangeForLongLivedToken, proxyExchangeToken, ThreadsClient } from '$lib/api/threads';
+  import { threadsAuthorizationCode } from '$lib/api/threads-authorization';
   import { Loader2, Check, AlertTriangle } from '@lucide/svelte';
 
   let status: 'loading' | 'success' | 'error' = $state('loading');
@@ -15,23 +16,8 @@
   onMount(async () => {
     try {
       const params = new URLSearchParams(window.location.search);
-      const code = params.get('code');
-      const returnedState = params.get('state');
-      const errorParam = params.get('error');
-
-      if (errorParam) {
-        throw new Error(`Threads authorization denied: ${errorParam}`);
-      }
-
-      if (!code) {
-        throw new Error('No authorization code in callback URL');
-      }
-
-      // Verify state
       const savedState = localStorage.getItem('crispdeck-threads-oauth-state');
-      if (savedState && returnedState !== savedState) {
-        throw new Error('OAuth state mismatch. Please try again.');
-      }
+      const code = threadsAuthorizationCode(params.toString(), savedState ?? '');
 
       const config = getThreadsConfig();
       if (!config) {

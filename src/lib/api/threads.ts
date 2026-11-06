@@ -1,4 +1,6 @@
 import { apiUrl } from '$lib/api-origin';
+import { isTauri } from '$lib/platform';
+import { base } from '$app/paths';
 import { writeJson } from '$lib/safe-storage';
 import { swallow } from '$lib/debug-log';
 /**
@@ -680,16 +682,11 @@ export async function proxyRefreshToken(
 /**
  * Check if Threads connection is available (either via proxy or custom credentials).
  */
+export function threadsRedirectUri(): string {
+  if (isTauri()) return 'https://crispdeck.vercel.app/oauth/threads-callback';
+  return `${window.location.origin}${base}/oauth/threads-callback`;
+}
+
 export async function isThreadsAvailable(): Promise<boolean> {
-  const config = getThreadsConfig();
-  if (config?.client_id && config?.client_secret) return true;
-  // Check if proxy is configured
-  try {
-    const resp = await fetch(apiUrl('/api/threads/auth-url?redirect_uri=check&state=check'));
-    if (!resp.ok) return false;
-    const data = await resp.json();
-    return data.configured === true;
-  } catch {
-    return false;
-  }
+  return !!(await getProxyAuthUrl(threadsRedirectUri(), 'availability-check'));
 }

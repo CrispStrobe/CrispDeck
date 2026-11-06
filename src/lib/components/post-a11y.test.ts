@@ -11,7 +11,7 @@
  * user meets a timeline as a list of hundreds of these.
  */
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
 import Post from '$lib/components/Post.svelte';
 import type { UnifiedPost } from '$lib/types';
@@ -108,6 +108,65 @@ describe('images carry alt text', () => {
   });
 });
 
+it('opens a multi-image post in a screen-level gallery and navigates between images', () => {
+  const post = {
+    ...basePost,
+    embeds: {
+      $type: 'app.bsky.embed.images#view',
+      images: [
+        { thumb: 'https://cdn.test/one-thumb.jpg', fullsize: 'https://cdn.test/one.jpg', alt: 'First image' },
+        { thumb: 'https://cdn.test/two-thumb.jpg', fullsize: 'https://cdn.test/two.jpg', alt: 'Second image' },
+      ],
+    },
+  } as unknown as UnifiedPost;
+  const target = render(post);
+  const thumbnail = target.querySelector('img[alt="First image"]') as HTMLImageElement;
+  expect(thumbnail.classList.contains('media-preview-image')).toBe(true);
+  flushSync(() => thumbnail.closest('button')!.click());
+  const dialog = document.body.querySelector('[role="dialog"]')!;
+  expect(dialog.parentElement).toBe(document.body);
+  expect(dialog.querySelector('img')?.getAttribute('src')).toBe('https://cdn.test/one.jpg');
+  flushSync(() => (dialog.querySelector('button[aria-label="Next image"]') as HTMLButtonElement).click());
+  expect(dialog.querySelector('img')?.getAttribute('src')).toBe('https://cdn.test/two.jpg');
+  flushSync(() => (dialog.querySelector('button[aria-label="Close"]') as HTMLButtonElement).click());
+  expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+});
+
+it('keeps four images in one scrollable row and provides scroll controls', () => {
+  const post = {
+    ...basePost,
+    embeds: {
+      $type: 'app.bsky.embed.images#view',
+      images: [1, 2, 3, 4].map((n) => ({ thumb: `https://cdn.test/${n}.jpg`, fullsize: `https://cdn.test/full-${n}.jpg`, alt: `Image ${n}` })),
+    },
+  } as unknown as UnifiedPost;
+  const target = render(post);
+  const strip = target.querySelector('.media-strip') as HTMLElement;
+  expect(strip.querySelectorAll('.media-tile')).toHaveLength(4);
+  const scrollBy = vi.fn();
+  strip.scrollBy = scrollBy;
+  flushSync(() => (target.querySelector('[aria-label="Scroll images right"]') as HTMLButtonElement).click());
+  expect(scrollBy).toHaveBeenCalled();
+});
+
+it('uses fitted image previews for an external link and a quoted photo', () => {
+  const post = {
+    ...basePost,
+    embeds: {
+      $type: 'app.bsky.embed.recordWithMedia#view',
+      media: { $type: 'app.bsky.embed.external#view', external: { uri: 'https://example.com/article', title: 'Article', thumb: 'https://cdn.test/link.jpg' } },
+      record: { record: { $type: 'app.bsky.embed.record#viewRecord', uri: 'at://did:plc:a/app.bsky.feed.post/2', author: { handle: 'alice.test' }, value: { text: 'Quoted post' }, embeds: [{ $type: 'app.bsky.embed.images#view', images: [{ thumb: 'https://cdn.test/quote.jpg', fullsize: 'https://cdn.test/quote-full.jpg', alt: 'Article page' }] }] } },
+    },
+  } as unknown as UnifiedPost;
+  const target = render(post);
+  const linkImage = target.querySelector('img[src="https://cdn.test/link.jpg"]')!;
+  const quoteImage = target.querySelector('img[src="https://cdn.test/quote.jpg"]')!;
+  expect(linkImage.classList.contains('link-preview-image')).toBe(true);
+  expect(quoteImage.classList.contains('link-preview-image')).toBe(true);
+  expect(linkImage.classList.contains('object-cover')).toBe(false);
+  expect(quoteImage.classList.contains('object-cover')).toBe(false);
+});
+
 describe('the post is announced as a unit', () => {
   it('exposes an article role, so a reader can jump post to post', () => {
     // Without it a timeline is one undifferentiated run of text.
@@ -142,5 +201,33 @@ describe('interactive elements are reachable by keyboard', () => {
       .filter((el) => !el.hasAttribute('tabindex') && !el.hasAttribute('role'))
       .map((el) => el.outerHTML.slice(0, 70));
     expect(offenders).toEqual([]);
+  });
+});
+
+describe('feed preview', () => {
+  it('offers an explicit expansion when content exceeds its preview', () => {
+    const originalObserver = globalThis.ResizeObserver;
+    class Observer {
+      observe() {} disconnect() {} unobserve() {}
+    }
+    globalThis.ResizeObserver = Observer as unknown as typeof ResizeObserver;
+    const oldScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollHeight');
+    const oldClient = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight');
+    Object.defineProperty(HTMLElement.prototype, 'scrollHeight', { configurable: true, get: () => 600 });
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => 200 });
+    try {
+      const target = render({ ...basePost, text: 'Long post\n'.repeat(50) } as UnifiedPost, { feedPreview: true });
+      const expand = [...target.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Show full post');
+      expect(expand).toBeDefined();
+      expect(target.querySelector('.feed-preview')).not.toBeNull();
+      expand!.click();
+      flushSync();
+      expect(target.querySelector('.feed-preview')).toBeNull();
+      expect(target.textContent).toContain('Show less');
+    } finally {
+      globalThis.ResizeObserver = originalObserver;
+      if (oldScroll) Object.defineProperty(HTMLElement.prototype, 'scrollHeight', oldScroll);
+      if (oldClient) Object.defineProperty(HTMLElement.prototype, 'clientHeight', oldClient);
+    }
   });
 });

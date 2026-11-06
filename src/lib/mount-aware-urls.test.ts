@@ -37,8 +37,8 @@ describe('URLs into our own app include the mount point', () => {
   });
 
   it('the OAuth callbacks specifically go through base', () => {
-    const settings = readFileSync('src/routes/settings/+page.svelte', 'utf8');
-    expect(settings).toMatch(/\$\{window\.location\.origin\}\$\{base\}\/oauth\/threads-callback/);
+    const threads = readFileSync('src/lib/api/threads.ts', 'utf8');
+    expect(threads).toMatch(/\$\{window\.location\.origin\}\$\{base\}\/oauth\/threads-callback/);
     const db = readFileSync('src/lib/browser-db.ts', 'utf8');
     expect(db).toMatch(/\$\{window\.location\.origin\}\$\{base\}\/oauth\/callback/);
   });

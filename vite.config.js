@@ -9,6 +9,9 @@ import { chunkMap } from './bench/chunk-map-plugin.js';
 const pkg = JSON.parse(readFileSync("./package.json", "utf8"));
 let gitHash = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? '';
 if (!gitHash) try { gitHash = execSync('git rev-parse --short HEAD').toString().trim(); } catch {}
+// Distinguish local device builds made from the same commit with different
+// uncommitted changes, and rotate the service worker cache with the label.
+if (process.env.CRISPDECK_BUILD_LABEL) gitHash = process.env.CRISPDECK_BUILD_LABEL;
 
 /** Inject version into static/sw.js at build time */
 function swVersionPlugin() {

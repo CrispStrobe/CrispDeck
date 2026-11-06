@@ -95,6 +95,7 @@ export default {
       alerts: 'Alarme',
       dms: 'DMs',
     },
+    linkMenu: { title: "Linkaktionen", open: "Link öffnen", copy: "Link kopieren", share: "Link teilen", saveWallabag: "In Wallabag speichern", setupWallabag: "Wallabag einrichten", copied: "Link kopiert", copyFailed: "Link konnte nicht kopiert werden", systemMenuHint: "Umschalt-Rechtsklick für Systemmenü", wallabagInstance: "Wallabag-Serveradresse", wallabagHint: "Verwendet die Wallabag-Anmeldung im Browser zum Speichern." },
     app: {
       keyboardShortcuts: 'Tastenkürzel',
       voiceCommandsHint: 'Sprich diese, während das Mikrofon beim Verfassen aktiv ist. Funktioniert auch auf Deutsch.',
@@ -200,7 +201,7 @@ export default {
       autoSaveRestored: 'Ungesendeter Text aus automatischer Speicherung wiederhergestellt.',
       discard: 'Verwerfen',
     },
-    post: {
+    post: { replyingTo: "Antwort an {name}", replyingToPost: "Antwort auf einen Beitrag", openLinkFailed: "Der Link konnte nicht geöffnet werden.", showFullPost: "Ganzen Beitrag anzeigen", showLessPost: "Weniger anzeigen", playVideo: "Video abspielen", videoPlaybackFailed: "Das Video konnte nicht abgespielt werden.", openVideoPost: "Beitrag öffnen", scrollImagesLeft: "Bilder nach links scrollen", scrollImagesRight: "Bilder nach rechts scrollen",
       reportHint: 'Nutze zum Abschließen der Meldung das Meldewerkzeug der Plattform auf der geöffneten Seite.',
       noReadingLists: 'Noch keine Leselisten',
       engagementBreakdown: 'Interaktionen im Detail',
@@ -249,7 +250,7 @@ export default {
       voted: 'Abgestimmt',
       open: 'Offen',
     },
-    settings: { macosKeychainApply: 'Diesen Schlüsselbund verwenden', macosKeychainSignedOnly: 'Erfordert einen signierten Build; ein unsignierter fällt auf den verschlüsselten Speicher zurück.', macosKeychainPathHint: 'Vollständiger Pfad, z. B. ~/Library/Keychains/Work.keychain-db. CrispDeck speichert das Passwort nie — macOS fragt Sie, wenn er gesperrt ist.', macosKeychainPath: 'Ein Schlüsselbund, den Sie verwalten', macosKeychainDataProtection: 'Passwörter (iCloud-fähig)', macosKeychainLogin: 'Anmelde-Schlüsselbund', macosKeychain: 'macOS-Schlüsselbund', credentialNoKeychain: 'Auf dieser Plattform gibt es noch keinen System-Schlüsselbund; Zugangsdaten werden in der App verschlüsselt.', credentialAppliesToNew: 'Gilt für künftig verbundene Konten; bestehende bleiben, wo sie sind.', credentialLocalHint: 'Mit einem von diesem Rechner abgeleiteten Schlüssel verschlüsselt. Schwächer, aber immer verfügbar.', credentialKeychainHint: 'Das Betriebssystem verwahrt das Geheimnis. Wo verfügbar bevorzugt.', credentialLocal: 'Verschlüsselt in dieser App', credentialKeychain: 'System-Schlüsselbund', oauthWindowMode: 'Anmeldefenster', oauthWindowApp: 'In CrispDeck', oauthWindowAppHint: 'Öffnet sich in einem CrispDeck-Fenster. Abgelaufene Bluesky-Sitzungen erneuern sich automatisch.', oauthWindowBrowser: 'System-Browser', oauthWindowBrowserHint: 'Dein eigener Browser mit gespeicherten Passwörtern. Keine automatische Neuanmeldung.', credentialStorage: 'Zugangsdaten-Speicher',
+    settings: { sideMedia: "Medien neben dem Beitragstext", sideMediaHint: "Bei breiten Beiträgen ein einzelnes Bild oder Video rechts neben dem Text anzeigen.", noKeychain: "Ohne Schlüsselbund", oauthLocalStorageHint: "Bluesky-Sitzungen bleiben ohne Schlüsselbund erhalten. Die lokale Verschlüsselung verwendet Gerätedaten statt eines geheimen Passworts und bietet daher geringeren Schutz. Zuvor im Schlüsselbund gespeicherte Konten müssen erneut verbunden werden.", oauthKeychainStorageHint: "Bluesky-Sitzungen verwenden den ausgewählten Schlüsselbund. Ein Speicherwechsel kann eine erneute Verbindung erfordern; bestehende Sitzungen werden nicht verschoben oder gelöscht.", macosKeychainApply: 'Diesen Schlüsselbund verwenden', macosKeychainSignedOnly: 'Erfordert einen signierten Build; ein unsignierter fällt auf den verschlüsselten Speicher zurück.', macosKeychainPathHint: 'Vollständiger Pfad, z. B. ~/Library/Keychains/Work.keychain-db. CrispDeck speichert das Passwort nie — macOS fragt Sie, wenn er gesperrt ist.', macosKeychainPath: 'Ein Schlüsselbund, den Sie verwalten', macosKeychainDataProtection: 'Passwörter (iCloud-fähig)', macosKeychainLogin: 'Anmelde-Schlüsselbund', macosKeychain: 'macOS-Schlüsselbund', credentialNoKeychain: 'Auf dieser Plattform gibt es noch keinen System-Schlüsselbund; Zugangsdaten werden in der App verschlüsselt.', credentialAppliesToNew: 'Gilt für künftig verbundene Konten; bestehende bleiben, wo sie sind.', credentialLocalHint: 'Mit einem von diesem Rechner abgeleiteten Schlüssel verschlüsselt. Schwächer, aber immer verfügbar.', credentialKeychainHint: 'Das Betriebssystem verwahrt das Geheimnis. Wo verfügbar bevorzugt.', credentialLocal: 'Verschlüsselt in dieser App', credentialKeychain: 'System-Schlüsselbund', oauthWindowMode: 'Anmeldefenster', oauthWindowApp: 'In CrispDeck', oauthWindowAppHint: 'Öffnet sich in einem CrispDeck-Fenster. Abgelaufene Bluesky-Sitzungen erneuern sich automatisch.', oauthWindowBrowser: 'System-Browser', oauthWindowBrowserHint: 'Dein eigener Browser mit gespeicherten Passwörtern. Keine automatische Neuanmeldung.', credentialStorage: 'Zugangsdaten-Speicher',
       twoFactorCode: '2FA-Code (siehe deine E-Mails)',
       densityDesc: 'Passt Abstände, Avatargröße und Innenabstand in der gesamten Oberfläche an',
       displayHeading: 'Darstellung',
@@ -674,7 +675,7 @@ export default {
       typePlaceholder: 'Nachricht eingeben...',
       selectConversation: 'Unterhaltung auswählen',
     },
-    search: {
+    search: { people: "Personen", partialFailure: "Einige Suchergebnisse konnten nicht geladen werden. Bitte erneut versuchen.", retrySearch: "Bitte erneut suchen.",
       requiresScope: 'Erfordert die Berechtigung:',
       addAccountsToSearch: 'Konten zum Suchen hinzufügen, unter',
       opFromUser: '— Beiträge einer Person',
@@ -728,7 +729,7 @@ export default {
       saved: 'Gespeichert {date}',
       calendarView: 'Kalender',
     },
-    deck: { initFailed: 'Das Deck konnte nicht eingerichtet werden',
+    deck: { moveColumn: "Spalte {title} verschieben; Pfeiltasten links oder rechts verwenden", initFailed: 'Das Deck konnte nicht eingerichtet werden',
       loadLayoutPlaceholder: 'Layout laden …',
       liveStreaming: 'Live-Übertragung',
       refreshColumn: 'Spalte aktualisieren',
@@ -825,7 +826,7 @@ export default {
       bothPlatforms: 'Beide',
       totalMatched: 'erkannte Identitäten',
     },
-    thread: {
+    thread: { authorThread: "Beitragsreihe des ursprünglichen Autors",
       postNotFound: 'Beitrag nicht gefunden.',
       readAsArticle: 'Als Artikel lesen',
       parts: 'Teile',
