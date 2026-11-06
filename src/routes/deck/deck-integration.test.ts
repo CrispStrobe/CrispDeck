@@ -247,7 +247,7 @@ describe('deck integration boundaries', () => {
     const handle = (name: string) => region(name).querySelector<HTMLButtonElement>('.drag-handle')!;
     const order = () => JSON.parse(localStorage.getItem('crispdeck-deck-columns')!).map((col: DeckColumnConfig) => col.id);
     expect(region('One').draggable).toBe(false);
-    expect(handle('One').draggable).toBe(true);
+    expect(handle('One').draggable).toBe(false); // Pointer drag avoids WKWebView's native drag interception.
     expect(handle('Pinned').draggable).toBe(false);
     flushSync(() => handle('One').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true })));
     expect(order()).toEqual(['two', 'one', 'pinned']);

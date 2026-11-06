@@ -9,7 +9,12 @@ try {
  await page.goto('http://localhost:4179/deck',{waitUntil:'domcontentloaded'});const handles=page.locator('.drag-handle');await handles.first().waitFor({timeout:20000});
  const order=()=>handles.evaluateAll(es=>es.map(e=>e.getAttribute('aria-label')));
  let initial=await order();assert.equal(initial.length,3);
- await handles.nth(2).dragTo(page.getByRole('region',{name:'Timeline'}));
+ const sourceBox=await handles.nth(2).boundingBox();
+ const targetBox=await page.getByRole('region',{name:'Timeline'}).boundingBox();
+ await page.mouse.move(sourceBox.x+sourceBox.width/2, sourceBox.y+sourceBox.height/2);
+ await page.mouse.down();
+ await page.mouse.move(targetBox.x+targetBox.width/2, targetBox.y+60,{steps:15});
+ await page.mouse.up();
  await page.waitForFunction(()=>JSON.parse(localStorage.getItem('crispdeck-deck-columns')??'[]')[0]?.title==='Mentions');
  assert.match((await order())[0],/Mentions/);
  await page.reload();await page.locator('.drag-handle').first().waitFor({timeout:20000});assert.match((await order())[0],/Mentions/);
