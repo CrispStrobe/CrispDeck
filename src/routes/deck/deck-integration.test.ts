@@ -83,6 +83,8 @@ describe('deck integration boundaries', () => {
     expect(workspaces.disabled).toBe(true);
     expect(button(i18n.t.workflow.starterWorkspaces).disabled).toBe(true);
     expect(button('Add Column').disabled).toBe(true);
+    flushSync(() => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true })));
+    expect(button('Home Timeline')).toBeUndefined();
     flushSync(() => workspaces.click());
     expect(target.querySelector('dialog')).toBeNull();
     expect(listLayouts().map(layout => layout.name)).toEqual(['Existing']);
@@ -91,6 +93,12 @@ describe('deck integration boundaries', () => {
     restore(accounts); await settle();
     expect(workspaces.disabled).toBe(false);
     expect(target.querySelector('[role="region"][aria-label="Saved column"]')).not.toBeNull();
+    expect(button('Home Timeline')).toBeUndefined();
+    const addColumn = button('Add Column');
+    addColumn.focus();
+    flushSync(() => addColumn.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true })));
+    expect(button('Home Timeline')).toBeDefined();
+    flushSync(() => addColumn.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
     flushSync(() => workspaces.click());
     const input = target.querySelector<HTMLInputElement>('#workspace-name')!;
     flushSync(() => { input.value = 'Monitoring'; input.dispatchEvent(new Event('input', { bubbles: true })); });
