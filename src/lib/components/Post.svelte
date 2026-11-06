@@ -654,6 +654,10 @@
     return `${base}/thread?uri=${encodeURIComponent(p.uri)}&platform=bluesky${account}`;
   }
 
+  function threadAccountQuery(): string {
+    return post.sourceAccountId === undefined ? '' : `&account=${post.sourceAccountId}`;
+  }
+
   function getPostUrl(p: UnifiedPost): string {
     if (p.platform === 'mastodon') {
       const raw = (p.raw ?? {}) as any;
@@ -961,7 +965,7 @@
   <div class="post-copy">
   {#if feedPreview && replyContext(post)}
     {@const context = replyContext(post)!}
-    <a class="reply-context" href={post.platform === 'mastodon' ? `${base}/thread?id=${encodeURIComponent(context.uri)}&platform=mastodon` : `${base}/thread?uri=${encodeURIComponent(context.uri)}&platform=${post.platform}`}>
+    <a class="reply-context" href={post.platform === 'mastodon' ? `${base}/thread?id=${encodeURIComponent(context.uri)}&platform=mastodon${threadAccountQuery()}` : `${base}/thread?uri=${encodeURIComponent(context.uri)}&platform=${post.platform}${threadAccountQuery()}`}>
       <span class="reply-context-label">↪ {context.author ? i18n.t.post.replyingTo.replace('{name}', context.author) : i18n.t.post.replyingToPost}</span>
       {#if context.text}<span class="reply-context-text">{context.text}</span>{/if}
     </a>
@@ -1054,7 +1058,7 @@
     <p class="mt-1 pl-13 text-[10px] text-red-400">{translateError}</p>
   {/if}
   {#if splitQuote}
-    <button type="button" class="quote-copy mt-2 ml-13 text-left border border-[var(--color-border)] rounded-lg p-3 bg-[var(--color-bg)] hover:border-[var(--color-text-muted)]" onclick={() => goto(`${base}/thread?uri=${encodeURIComponent(bskyQuote.uri)}&platform=bluesky`)}>
+    <button type="button" class="quote-copy mt-2 ml-13 text-left border border-[var(--color-border)] rounded-lg p-3 bg-[var(--color-bg)] hover:border-[var(--color-text-muted)]" onclick={() => goto(`${base}/thread?uri=${encodeURIComponent(bskyQuote.uri)}&platform=bluesky${threadAccountQuery()}`)}>
       <span class="flex items-center gap-2 mb-1">
         {#if bskyQuote.author?.avatar}<img decoding="async" loading="lazy" src={bskyQuote.author.avatar} alt="" class="w-5 h-5 rounded-full" />{/if}
         <span class="text-xs font-medium">{bskyQuote.author?.displayName || bskyQuote.author?.handle}</span>
@@ -1154,7 +1158,7 @@
       {#if bskyQuote && !splitQuote}
         <button
           type="button"
-          onclick={() => goto(`${base}/thread?uri=${encodeURIComponent(bskyQuote.uri)}&platform=bluesky`)}
+          onclick={() => goto(`${base}/thread?uri=${encodeURIComponent(bskyQuote.uri)}&platform=bluesky${threadAccountQuery()}`)}
           class="mt-2 w-full text-left border border-[var(--color-border)] rounded-lg p-3 bg-[var(--color-bg)] cursor-pointer hover:border-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] transition-colors"
         >
           <div class="flex items-center gap-2 mb-1">

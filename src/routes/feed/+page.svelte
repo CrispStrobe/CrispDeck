@@ -389,7 +389,7 @@
     opts: { limit: number; cursor?: string; resolveReposts?: boolean },
   ): Promise<{ posts: UnifiedPost[]; cursor?: string; degraded: boolean }> {
     const { limit, cursor } = opts;
-    const tag = (p: UnifiedPost) => { p.sourceAccount = acct.handle; return p; };
+    const tag = (p: UnifiedPost) => { p.sourceAccount = acct.handle; p.sourceAccountId = acct.id; return p; };
     const wantsTimeline = feedMode === 'timeline' || feedMode === 'for-you';
 
     // A feed generator or list is Bluesky-only and account-independent: its
