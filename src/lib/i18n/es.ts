@@ -113,7 +113,7 @@ export default {
       translatedFrom: 'Traducido de {lang}',
       sharedVia: 'compartido vía CrispDeck',
     },
-    feed: {
+    feed: { threadsTimelineLimited: "Aquí se muestran tus publicaciones y republicaciones de Threads. La API oficial de Meta no ofrece tu cronología de inicio.", openThreads: "Abrir Threads",
       offlineCached: 'Sin conexión — datos en caché de {time}',
       reconnected: 'De nuevo en línea — actualizando', savedFeedsFailed: 'No se pudieron cargar tus feeds guardados', pinFailed: 'No se pudieron cambiar tus feeds fijados', sortTopEngagement: 'Orden: más interacción', sortMostReposted: 'Orden: más republicadas', sortMostLiked: 'Orden: más me gusta', socialFeed: 'Cronología social', searchInPosts: 'Buscar en publicaciones…', retry: 'Reintentar', minLikes: 'Mín. me gusta', hideReposts: 'Ocultar republicaciones', hideReplies: 'Ocultar respuestas', hideMediaLabel: 'Ocultar medios', hasMedia: 'Con medios', forYouHint: 'Crea primero tu archivo para activar la clasificación personalizada según con quién interactúas más.', forYou: 'Para ti', filterMasto: 'Masto', filterBsky: 'Bsky', buildArchive: 'Crear archivo',
       title: 'Feed', timeline: 'Cronología', switchFeed: 'Cambiar feed', savedNotPinned: 'Guardados', searchFeeds: 'Buscar feeds…', noFeedsFound: 'Ningún feed coincide.', feedSearchFailed: 'La búsqueda de feeds no está disponible.', pinFeed: 'Añadir a mis feeds', unpinFeed: 'Quitar de mis feeds', feeds: 'Feeds', discoverFeeds: 'Descubrir más feeds →', myPosts: 'Mis publicaciones', all: 'Todos',

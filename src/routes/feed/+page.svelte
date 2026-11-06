@@ -1019,6 +1019,13 @@
     </div>
   </div>
 
+  {#if platformFilter === 'threads' && (feedMode === 'timeline' || feedMode === 'for-you')}
+    <div class="mb-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-text-muted)]" role="status">
+      {i18n.t.feed.threadsTimelineLimited}
+      <a href="https://www.threads.net/" target="_blank" rel="noopener noreferrer" class="underline">{i18n.t.feed.openThreads}</a>
+    </div>
+  {/if}
+
   {#if error}
     <div class="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">
       {error}

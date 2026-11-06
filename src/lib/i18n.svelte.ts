@@ -623,7 +623,7 @@ export const translations = {
       noLicenses: 'No licenses.json found. Run node scripts/generate-licenses.js to generate.',
       generated: 'Generated',
     },
-    feed: {
+    feed: { threadsTimelineLimited: "Threads shows your own posts and reposts here. Meta’s official API does not provide your home timeline.", openThreads: "Open Threads",
       offlineCached: 'Offline — showing cached data from {time}',
       reconnected: 'Back online — refreshing', savedFeedsFailed: 'Could not load your saved feeds', pinFailed: 'Could not change your pinned feeds',
       filterBsky: 'Bsky',
