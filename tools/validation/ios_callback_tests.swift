@@ -8,7 +8,9 @@ final class CallbackTests: XCTestCase {
         continueAfterFailure = false
         let app = XCUIApplication(bundleIdentifier: "com.christianstrobele.crispdeck")
         XCTAssertNotEqual(app.state, .notRunning, "The original app must still be running")
-        app.activate()
+        // The app is already running. Opening each URL must itself bring it
+        // to the foreground; an extra activate() can wait indefinitely for
+        // WKWebView idleness and does not exercise the callback mechanism.
         let callbacks = [
             "app.vercel.crispdeck:/oauth/callback?state=ci-native-smoke",
             "app.vercel.crispdeck://oauth/mastodon?state=ci-native-smoke"
