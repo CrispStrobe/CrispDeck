@@ -966,7 +966,7 @@
           {/each}
         </select>
       {/if}
-      <button onclick={() => showWorkspaces = true} class="px-2 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] rounded">{i18n.t.deck.manageWorkspaces}</button>
+      <button disabled={loading} onclick={() => showWorkspaces = true} class="px-2 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] rounded">{i18n.t.deck.manageWorkspaces}</button>
       <button onclick={() => openCompose()} class="flex items-center gap-1 px-2 py-1 text-xs border border-[var(--color-border)] rounded"><Pencil size={12} />{i18n.t.nav.compose}</button>
     </div>
     <div class="relative">
