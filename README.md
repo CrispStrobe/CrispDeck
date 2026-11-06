@@ -503,7 +503,7 @@ only routes the scheme to a built `.app`, so test "System browser" with
 
 ## Stats
 
-- 2,026 frontend unit tests + 92 Playwright browser checks + Rust tests on three operating systems
+- 2,300+ frontend unit and component tests, Playwright browser checks, and Rust tests on three operating systems
 - 31 routes, 23 deck column types
 - 3 networks: Bluesky (OAuth + app password), Mastodon (OAuth), Threads (OAuth with server proxy)
 - 8 UI languages (EN, DE, ES, FR, JA, PT, ZH, AR — all 100%) with RTL support

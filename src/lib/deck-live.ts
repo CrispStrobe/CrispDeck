@@ -10,6 +10,9 @@ import type { MastodonClient } from './api/mastodon';
 import { swallow } from './debug-log';
 
 const following = new Map<number, { expires: number; value: Promise<Set<string>> }>();
+// Bound setup traffic during an outage. The socket manages its own reconnects
+// once the account's follows/profile lookup has succeeded.
+const SETUP_RETRY_DELAYS = [5_000, 10_000, 20_000, 40_000, 60_000];
 
 async function followedDids(account: Account, entry: ClientEntry): Promise<Set<string>> {
   const cached = following.get(account.id);
@@ -50,6 +53,7 @@ export function matchesBlueskyColumn(column: DeckColumnConfig, event: StreamEven
 export function subscribeDeckColumn(column: DeckColumnConfig, accounts: Account[], clients: Map<number, ClientEntry>, onEvent: (event: StreamEvent, accountId: number) => void, onReady: (ready: boolean) => void): () => void {
   let disposed = false;
   const cleanups: (() => void)[] = [];
+  const retryTimers = new Set<ReturnType<typeof setTimeout>>();
   if (column.paused || column.streaming === false) return () => {};
   for (const account of columnAccounts(column, accounts)) {
     const entry = clients.get(account.id);
@@ -92,8 +96,30 @@ export function subscribeDeckColumn(column: DeckColumnConfig, accounts: Account[
         }));
         onReady(true);
       };
-      void prepare().catch(error => swallow('deck.liveSetup', error));
+      let retryDelayIndex = 0;
+      const attemptSetup = () => {
+        if (disposed) return;
+        void prepare().catch(error => {
+          if (disposed) return;
+          swallow('deck.liveSetup', error);
+          const delay = SETUP_RETRY_DELAYS[retryDelayIndex];
+          retryDelayIndex = Math.min(retryDelayIndex + 1, SETUP_RETRY_DELAYS.length - 1);
+          const timer = setTimeout(() => {
+            retryTimers.delete(timer);
+            if (!disposed) attemptSetup();
+          }, delay);
+          retryTimers.add(timer);
+        });
+      };
+      attemptSetup();
     }
   }
-  return () => { disposed = true; for (const cleanup of cleanups) cleanup(); onReady(false); };
+  return () => {
+    if (disposed) return;
+    disposed = true;
+    for (const timer of retryTimers) clearTimeout(timer);
+    retryTimers.clear();
+    for (const cleanup of cleanups) cleanup();
+    onReady(false);
+  };
 }

@@ -9,6 +9,7 @@ import { notifyColumn } from '$lib/column-notify';
 import { i18n } from '$lib/i18n.svelte';
 import type { DeckColumnConfig } from '$lib/deck-layouts';
 import type { Account, UnifiedPost } from '$lib/types';
+import type { ClientEntry } from '$lib/api/client-factory';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/components/Post.svelte', async () => ({ default: (await import('$lib/components/deck/test-fixtures/PostStub.svelte')).default }));
@@ -51,8 +52,9 @@ afterEach(async () => {
 });
 
 async function settle() { for (let index = 0; index < 6; index++) await tick(); }
-async function render(column: Partial<DeckColumnConfig> = {}) {
-  localStorage.setItem('crispdeck-deck-columns', JSON.stringify([{ id: 'column', title: 'Test column', type: 'timeline', ...column }]));
+async function render(column: Partial<DeckColumnConfig> | DeckColumnConfig[] = {}) {
+  const columns = Array.isArray(column) ? column : [{ id: 'column', title: 'Test column', type: 'timeline', ...column }];
+  localStorage.setItem('crispdeck-deck-columns', JSON.stringify(columns));
   const target = document.createElement('div'); document.body.appendChild(target);
   instance = mount(DeckPage, { target }); flushSync(); await settle();
   return target;
@@ -133,5 +135,65 @@ describe('deck integration boundaries', () => {
     flushSync(() => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'o', bubbles: true })));
     expect(click).toHaveBeenCalledOnce();
     expect(link.getAttribute('href')).toBe('/messages?account=1&conversation=private-conversation&platform=bluesky');
+  });
+
+  it('removes a confirmed unlike only from the acting account’s likes columns and retains other rows, counts and older-page cursors', async () => {
+    const otherAccount = { ...accounts[0], id: 3, handle: 'other.bsky', did: 'did:plc:other' };
+    let finishUnlike!: () => void;
+    let finishStale!: (value: LoadedPage) => void;
+    const unlike = vi.fn(() => new Promise<void>(resolve => { finishUnlike = resolve; }));
+    const otherUnlike = vi.fn();
+    const client = (id: number, deleteLike: typeof unlike | typeof otherUnlike) => ({ accountId: id, platform: 'bluesky', client: {}, oauthAgent: { deleteLike } }) as unknown as ClientEntry;
+    vi.mocked(initAllClients).mockResolvedValue({ accounts: [...accounts, otherAccount], clients: new Map([[1, client(1, unlike)], [3, client(3, otherUnlike)]]) });
+    const likedRow = (sourceAccountId: number, uri = 'shared') => row(uri, { sourceAccountId, likeCount: 5, raw: { post: { uri, cid: 'cid', viewer: { like: `at://like/${sourceAccountId}/${uri}` } } } });
+    let mirrorReads = 0;
+    vi.mocked(loadDeckPage).mockImplementation(async (column, _accounts, _clients, cursors) => {
+      if (column.id === 'mirror' && ++mirrorReads === 2) return new Promise(resolve => { finishStale = resolve; });
+      if (column.id === 'likes' && cursors?.['1'] === 'older') return page({ posts: [likedRow(1, 'older-row')], cursors: { '1': 'oldest' }, hasMore: true });
+      if (column.id === 'likes' && cursors?.['1'] === 'oldest') return page({ posts: [likedRow(1, 'oldest-row')] });
+      return page({ posts: [likedRow(column.id === 'other' ? 3 : 1)], cursors: { '1': 'older' }, hasMore: true });
+    });
+    const target = await render([
+      { id: 'likes', title: 'Likes A', type: 'likes', accountIds: [1] },
+      { id: 'mirror', title: 'Likes A mirror', type: 'likes', accountIds: [1] },
+      { id: 'other', title: 'Likes B', type: 'likes', accountIds: [3] },
+      { id: 'home', title: 'Home A', type: 'timeline', accountIds: [1] },
+    ]);
+    const region = (title: string) => target.querySelector<HTMLElement>(`[role="region"][aria-label="${title}"]`)!;
+    const olderButton = () => [...region('Likes A').querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.trim() === i18n.t.deck.loadOlder)!;
+    flushSync(() => olderButton().click()); await settle();
+    await refresh(region('Likes A mirror'));
+    flushSync(() => region('Likes A').querySelector<HTMLButtonElement>('[data-post-uri="shared"] [data-test-like]')!.click());
+    expect(region('Likes A').querySelector('[data-post-uri="shared"]')).not.toBeNull();
+    finishUnlike(); await settle();
+    expect(unlike).toHaveBeenCalledWith('at://like/1/shared');
+    expect(otherUnlike).not.toHaveBeenCalled();
+    expect(region('Likes A').querySelector('[data-post-uri="shared"]')).toBeNull();
+    expect(region('Likes A mirror').querySelector('[data-post-uri="shared"]')).toBeNull();
+    expect(region('Likes B').querySelector('[data-post-uri="shared"]')?.getAttribute('data-liked')).toBe('true');
+    const homeRow = region('Home A').querySelector('[data-post-uri="shared"]')!;
+    expect(homeRow.getAttribute('data-liked')).toBe('false');
+    expect(homeRow.getAttribute('data-like-count')).toBe('4');
+    expect(region('Likes A').querySelector('[data-post-uri="older-row"]')).not.toBeNull();
+    finishStale(page({ posts: [likedRow(1)] })); await settle();
+    expect(region('Likes A mirror').querySelector('[data-post-uri="shared"]')).toBeNull();
+    flushSync(() => olderButton().click()); await settle();
+    expect(loadDeckPage).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'likes' }), expect.anything(), expect.anything(), { '1': 'oldest' });
+    expect(region('Likes A').querySelector('[data-post-uri="older-row"]')).not.toBeNull();
+    expect(region('Likes A').querySelector('[data-post-uri="oldest-row"]')).not.toBeNull();
+  });
+
+  it('leaves a liked row and its count intact when the unlike fails', async () => {
+    const unlike = vi.fn().mockRejectedValue(new Error('Disconnected'));
+    const client = { accountId: 1, platform: 'bluesky', client: {}, oauthAgent: { deleteLike: unlike } } as unknown as ClientEntry;
+    vi.mocked(initAllClients).mockResolvedValue({ accounts, clients: new Map([[1, client]]) });
+    vi.mocked(loadDeckPage).mockResolvedValue(page({ posts: [row('liked', { sourceAccountId: 1, likeCount: 5, raw: { post: { uri: 'liked', cid: 'cid', viewer: { like: 'at://like/1' } } } })] }));
+    const target = await render({ type: 'likes', accountIds: [1] });
+    flushSync(() => target.querySelector<HTMLButtonElement>('[data-test-like]')!.click()); await settle();
+    expect(unlike).toHaveBeenCalledOnce();
+    const article = target.querySelector('[data-post-uri="liked"]')!;
+    expect(article.getAttribute('data-liked')).toBe('true');
+    expect(article.getAttribute('data-like-count')).toBe('5');
+    expect(article.querySelector('[role="alert"]')?.textContent).toContain('Disconnected');
   });
 });

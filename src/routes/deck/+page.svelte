@@ -476,6 +476,11 @@
   const liveRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const pendingHeadRefresh = new Set<string>();
   const deletedUris = new Map<string, Set<string>>();
+  const unlikedAtRequest = new Map<string, number>();
+
+  function likeSourceKey(post: UnifiedPost, accountId = post.sourceAccountId): string {
+    return `${post.platform}:${accountId}:${post.uri}`;
+  }
 
   function displayedPosts(col: DeckColumnConfig): UnifiedPost[] {
     return filterColumnPosts(applyMuteFilter(columnPosts[col.id] ?? []), col.filters, col.muteWords);
@@ -605,7 +610,14 @@
           notifyColumn(current.notify, current.title, arrivals[0].text ?? arrivals[0].author.displayName ?? arrivals[0].author.handle);
         }
       }
-      const incoming = withoutDeletedPosts(sortPosts(posts, 'newest'), deletedUris.get(col.id) ?? new Set());
+      // An older request may finish after a successful unlike. Do not let that
+      // stale snapshot put the removed like back; later requests can reflect
+      // a like made again elsewhere without replacing our older pages.
+      const sourcePosts = col.type === 'likes' ? posts.filter(post => {
+        const removedAt = unlikedAtRequest.get(likeSourceKey(post));
+        return removedAt === undefined || request > removedAt;
+      }) : posts;
+      const incoming = withoutDeletedPosts(sortPosts(sourcePosts, 'newest'), deletedUris.get(col.id) ?? new Set());
       const previous = columnPosts[col.id] ?? [];
       const known = new Set(previous.map(post => post.uri));
       const arrivals = filterColumnPosts(applyMuteFilter(incoming.filter(post => !known.has(post.uri))), current.filters, current.muteWords);
@@ -870,7 +882,50 @@
 
   async function handleLike(post: UnifiedPost, active = true, column?: DeckColumnConfig) {
     const selected = column ? columnAccounts(column, accounts) : accounts;
-    await performDeckAction(post, 'like', active, clientEntries, selected.map(account => account.id));
+    const allowed = selected.map(account => account.id);
+    const candidates = allowed.map(id => clientEntries.get(id)).filter(entry => entry?.platform === post.platform);
+    const sourceId = post.sourceAccountId ?? (candidates.length === 1 ? candidates[0]?.accountId : undefined);
+    const matches = (candidate: UnifiedPost) => candidate.uri === post.uri && candidate.platform === post.platform && candidate.sourceAccountId === sourceId;
+    const wasLiked = new WeakMap<UnifiedPost, boolean>();
+    const liked = (candidate: UnifiedPost) => {
+      const raw = candidate.raw as any;
+      const record = candidate.platform === 'mastodon' ? raw?.reblog ?? raw : raw?.post ?? raw;
+      return !!(candidate.platform === 'mastodon' ? record?.favourited : record?.viewer?.like);
+    };
+    // The action mutates its own raw viewer. Capture these flags before the
+    // await so every same-account copy receives the count adjustment once.
+    for (const rows of Object.values(columnPosts)) for (const candidate of rows) {
+      if (matches(candidate)) wasLiked.set(candidate, liked(candidate));
+    }
+    wasLiked.set(post, liked(post));
+    await performDeckAction(post, 'like', active, clientEntries, allowed);
+    if (disposed || sourceId === undefined) return;
+    if (active) unlikedAtRequest.delete(likeSourceKey(post, sourceId));
+    else unlikedAtRequest.set(likeSourceKey(post, sourceId), requestSequence);
+    const actedRaw = post.raw as any;
+    const actedRecord = actedRaw?.post ?? actedRaw;
+    for (const config of columns) {
+      const rows = columnPosts[config.id] ?? [];
+      if (!rows.some(matches)) continue;
+      columnPosts[config.id] = rows.flatMap(candidate => {
+        if (!matches(candidate)) return [candidate];
+        if (config.type === 'likes' && !active) {
+          if (columns[focusedColumnIdx]?.id === config.id) focusedPostIdx = -1;
+          return [];
+        }
+        const previous = wasLiked.get(candidate) ?? liked(candidate);
+        const likeCount = Math.max(0, (candidate.likeCount ?? 0) + Number(active) - Number(previous));
+        const raw = candidate.raw as any;
+        if (candidate.platform === 'mastodon') {
+          const record = raw?.reblog ?? raw;
+          const updated = { ...record, favourited: active };
+          return [{ ...candidate, likeCount, raw: raw?.reblog ? { ...raw, reblog: updated } : updated }];
+        }
+        const record = raw?.post ?? raw;
+        const updated = { ...record, viewer: { ...record?.viewer, like: actedRecord?.viewer?.like } };
+        return [{ ...candidate, likeCount, raw: raw?.post ? { ...raw, post: updated } : updated }];
+      });
+    }
   }
 
   async function handleBoost(post: UnifiedPost, active = true, column?: DeckColumnConfig) {

@@ -18,7 +18,10 @@
 - Support Bluesky galleries with five to ten images and enforce destination
   media limits before publishing, instead of silently truncating attachments.
 - Keep likes/reposts and direct messages tied to their source accounts, including
-  Bluesky OAuth. Add source-aware undo and conversation deep links.
+  Bluesky OAuth. Add source-aware undo, native bookmark sync, poll votes,
+  authenticated thread views, and conversation deep links.
+- Freeze remote account identities for delivery retries and resolve Mastodon
+  reply targets on the destination instance before publishing.
 - Scope live updates to the actual column, isolate private Mastodon streams by
   account, preserve reading position, and clean up subscriptions and stale loads.
 - Translate new controls into all eight interface languages and add behavioral

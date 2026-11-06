@@ -79,8 +79,8 @@ The Workspaces dialog exposes save/update, switch, rename, duplicate, delete,
 and individual/all-workspace export. Imports validate version, shape, column
 types, identifiers, bounds, and size before a storage mutation. Existing
 workspaces are retained; duplicate imported names receive a distinct name.
-Export contains an allowlist of column settings and stable account identities,
-not credentials or local numeric account IDs. Missing destination accounts are
+Export contains an allowlist of column settings and stable account identities;
+it omits stored account credentials and local numeric account IDs. Missing destination accounts are
 reported and must be selected explicitly on the receiving device.
 
 Storage failures remain errors instead of reporting a successful save. Named
@@ -155,6 +155,8 @@ of the new deck controls and remain available on their existing pages.
   normalization, mention hydration, network search and pagination.
 - `deck-power.test.ts`: filter combinations, live-event scoping, source-account
   interactions, deleted-row handling, stream isolation and cleanup.
+- `deck-live-retry.test.ts`: recovery from failed live setup and cancellation
+  during a retry or pending identity lookup.
 - `deck-workspaces.test.ts` and `WorkspaceManager.test.ts`: validated import,
   identity remapping, failure handling and actual UI actions.
 - `deck-publishing.test.ts` and `PublishingColumn.test.ts`: local queue state,
@@ -163,6 +165,8 @@ of the new deck controls and remain available on their existing pages.
   snapshot preservation and destination media rules.
 - Message service/route tests: inbox and send identity, deep links, draft text,
   and stale asynchronous responses.
+- Thread, bookmark and delivery tests: authenticated account context, native
+  bookmark writes/imports, stable retry identities and instance-local replies.
 - `e2e/deck-workflows.test.ts`: real browser storage and UI with mocked remote
   networks, pagination/refresh, persisted filters, source-account undo,
   workspace export/import, empty selections, and mobile dialog geometry.

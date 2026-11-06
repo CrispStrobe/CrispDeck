@@ -50,6 +50,7 @@
   import type { BlueskyClient } from '$lib/api/bluesky';
   import type { MastodonClient } from '$lib/api/mastodon';
   import { postSourceClient } from '$lib/post-source';
+  import { postReactionSnapshot } from '$lib/post-reactions';
   import { translateText, type TranslationResult } from '$lib/translate';
   import { onMount, onDestroy, untrack } from 'svelte';
   import { jetstream } from '$lib/jetstream';
@@ -75,14 +76,72 @@
     onfollow?: (post: UnifiedPost, following: boolean) => void;
   } = $props();
 
-  let liked = $state(untrack(() => !!(post.sourceAccountId !== undefined && ((post.raw as any)?.post?.viewer?.like || (post.raw as any)?.favourited || (post.raw as any)?.reblog?.favourited))));
+  const initialReactions = untrack(() => postReactionSnapshot(post));
+  let liked = $state(initialReactions.liked);
   let likeAnimating = $state(false);
   let likePending = $state(false);
   let boostPending = $state(false);
-  let boosted = $state(untrack(() => !!(post.sourceAccountId !== undefined && ((post.raw as any)?.post?.viewer?.repost || (post.raw as any)?.reblogged || (post.raw as any)?.reblog?.reblogged))));
-  // Optimistic/live offsets applied on top of the server counts below.
+  let boosted = $state(initialReactions.boosted);
+  // Optimistic clicks and live events have separate lifetimes. A replacement
+  // row contains authoritative counts and must not keep adding old offsets.
   let likeDelta = $state(0);
   let boostDelta = $state(0);
+  let liveLikeDelta = $state(0);
+  let liveBoostDelta = $state(0);
+  let previousReactionPost = untrack(() => post);
+  let previousReactions = initialReactions;
+  let likeRevision = 0;
+  let boostRevision = 0;
+  let likeRequest = 0;
+  let boostRequest = 0;
+
+  $effect.pre(() => {
+    const currentPost = post;
+    const current = postReactionSnapshot(currentPost);
+    untrack(() => {
+      const replaced = currentPost !== previousReactionPost;
+      const identityChanged = current.key !== previousReactions.key;
+      const likeCountChanged = current.likeCount !== previousReactions.likeCount;
+      const boostCountChanged = current.boostCount !== previousReactions.boostCount;
+      const likeChanged = replaced || likeCountChanged || current.liked !== previousReactions.liked;
+      const boostChanged = replaced || boostCountChanged || current.boosted !== previousReactions.boosted;
+      if (identityChanged) {
+        // A column can reuse this URI for another account. A response from the
+        // previous identity must not overwrite the new row's controls.
+        likeRequest++; boostRequest++;
+        likePending = false; boostPending = false;
+        likeAnimating = false;
+        liked = current.liked; boosted = current.boosted;
+        likeDelta = 0; boostDelta = 0; liveLikeDelta = 0; liveBoostDelta = 0;
+        likeRevision++; boostRevision++;
+      } else {
+        if (likeChanged) {
+          likeRevision++;
+          if (!likePending) {
+            if (current.scoped) liked = current.liked;
+            likeDelta = 0;
+          } else if (current.scoped && current.liked === liked) {
+            // The service may mutate just the viewer flag before its caller
+            // publishes a complete row. Wait for that row/count acknowledgement.
+            if (replaced || likeCountChanged) likeDelta = 0;
+          }
+          if (replaced || likeCountChanged) liveLikeDelta = 0;
+        }
+        if (boostChanged) {
+          boostRevision++;
+          if (!boostPending) {
+            if (current.scoped) boosted = current.boosted;
+            boostDelta = 0;
+          } else if (current.scoped && current.boosted === boosted) {
+            if (replaced || boostCountChanged) boostDelta = 0;
+          }
+          if (replaced || boostCountChanged) liveBoostDelta = 0;
+        }
+      }
+      previousReactionPost = currentPost;
+      previousReactions = current;
+    });
+  });
   let bookmarked = $state(false);
   let bookmarkPending = $state(false);
   let bookmarkLoaded = $state(false);
@@ -128,8 +187,8 @@
   }
   // Per-URI Jetstream listener — only fires for this post's URI (no broadcast filtering)
   const jetstreamListener = (update: import('$lib/jetstream').CountUpdate) => {
-    if (update.type === 'like') likeDelta += update.delta;
-    if (update.type === 'repost') boostDelta += update.delta;
+    if (update.type === 'like') liveLikeDelta += update.delta;
+    if (update.type === 'repost') liveBoostDelta += update.delta;
   };
 
   onMount(async () => {
@@ -457,8 +516,8 @@
   // Server count + our offset, not a $state seeded from `post`: the feed keys
   // rows by URI, so a refresh reuses this component instance and a seeded copy
   // would stay frozen at whatever the count was when the row first rendered.
-  const localLikeCount = $derived(Math.max(0, (post.likeCount ?? 0) + likeDelta));
-  const localBoostCount = $derived(Math.max(0, (post.repostCount ?? 0) + boostDelta));
+  const localLikeCount = $derived(Math.max(0, (post.likeCount ?? 0) + likeDelta + liveLikeDelta));
+  const localBoostCount = $derived(Math.max(0, (post.repostCount ?? 0) + boostDelta + liveBoostDelta));
 
   /**
    * Like, optimistically — and put it back if the network disagrees.
@@ -471,8 +530,12 @@
    */
   async function handleLike() {
     if (!onlike || likePending) return;
+    const request = ++likeRequest;
+    const revision = likeRevision;
+    const target = post;
     likePending = true;
     const previouslyLiked = liked;
+    const previousDelta = likeDelta;
     const applied = !liked ? 1 : -1;
 
     liked = !liked;
@@ -481,23 +544,35 @@
     if (liked) { likeAnimating = true; setTimeout(() => likeAnimating = false, 600); }
 
     try {
-      await onlike(post, liked);
+      await onlike(target, liked);
     } catch (e) {
-      liked = previouslyLiked;
-      likeDelta -= applied;
-      likeAnimating = false;
+      if (request === likeRequest) {
+        if (revision === likeRevision) {
+          liked = previouslyLiked;
+          likeDelta = previousDelta;
+        } else {
+          const current = postReactionSnapshot(post);
+          liked = current.scoped ? current.liked : previouslyLiked;
+          likeDelta = 0;
+        }
+        likeAnimating = false;
+      }
       toast.error(i18n.t.post.likeFailed);
       swallow('Post.handleLike', e);
     } finally {
-      likePending = false;
+      if (request === likeRequest) likePending = false;
     }
   }
 
   /** Repost, with the same optimistic-then-revert contract as handleLike. */
   async function handleBoost() {
     if (!onboost || boostPending) return;
+    const request = ++boostRequest;
+    const revision = boostRevision;
+    const target = post;
     boostPending = true;
     const previouslyBoosted = boosted;
+    const previousDelta = boostDelta;
     const applied = !boosted ? 1 : -1;
 
     boosted = !boosted;
@@ -505,14 +580,22 @@
     haptic('medium');
 
     try {
-      await onboost(post, boosted);
+      await onboost(target, boosted);
     } catch (e) {
-      boosted = previouslyBoosted;
-      boostDelta -= applied;
+      if (request === boostRequest) {
+        if (revision === boostRevision) {
+          boosted = previouslyBoosted;
+          boostDelta = previousDelta;
+        } else {
+          const current = postReactionSnapshot(post);
+          boosted = current.scoped ? current.boosted : previouslyBoosted;
+          boostDelta = 0;
+        }
+      }
       toast.error(i18n.t.post.boostFailed);
       swallow('Post.handleBoost', e);
     } finally {
-      boostPending = false;
+      if (request === boostRequest) boostPending = false;
     }
   }
 
