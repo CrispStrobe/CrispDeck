@@ -79,8 +79,13 @@ async function threadsFetch(url: string, init?: RequestInit): Promise<Response> 
   // Native HTTP avoids WKWebView CORS/preflight failures. Browser builds keep
   // normal fetch and its origin protections; native failures are never retried
   // through another transport because a write may already have succeeded.
-  const request = isTauri() ? (await import('@tauri-apps/plugin-http')).fetch : fetch;
-  return request(url, init);
+  if (isTauri()) {
+    const { fetch: nativeFetch } = await import('@tauri-apps/plugin-http');
+    // Graph calls carry tokens in their URL or body. The native plugin needs
+    // its own redirect option; Fetch's redirect mode is not forwarded.
+    return nativeFetch(url, { ...init, redirect: 'error', maxRedirections: 0 });
+  }
+  return fetch(url, { ...init, redirect: 'error' });
 }
 
 /**

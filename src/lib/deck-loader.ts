@@ -496,7 +496,7 @@ async function loadThreadsPage(column: DeckColumnConfig, account: Account, clien
   let data: { data: ThreadsPost[]; paging?: { cursors?: { after?: string } } };
   if (isTauri()) {
     const { fetch: nativeFetch } = await import('@tauri-apps/plugin-http');
-    const response = await nativeFetch(url, { redirect: 'error' });
+    const response = await nativeFetch(url, { redirect: 'error', maxRedirections: 0 });
     if (!response.ok) throw new Error(`Threads request failed (${response.status}).`);
     data = await response.json();
   } else {
