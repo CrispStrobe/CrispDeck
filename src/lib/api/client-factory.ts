@@ -109,7 +109,9 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
         // OAuth accounts: use the already-resumed session if it matches,
         // otherwise restore this account's session directly by DID.
         let oauthAgent: Agent | undefined;
-        const did = acct.did ?? creds.did;
+        const savedDid = acct.did ?? creds.did;
+        const did = typeof savedDid === 'string' && savedDid.startsWith('did:') ? savedDid : undefined;
+        const actor = did ?? acct.handle;
         if (creds.auth_method === 'oauth' && did) {
           if (oauthSession && oauthSession.did === did) {
             oauthAgent = oauthSession.agent;
@@ -128,14 +130,20 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
             accountId: acct.id,
             platform: 'bluesky',
             handle: acct.handle,
-            client: BlueskyClient.readOnly(acct.handle),
+            client: BlueskyClient.readOnly(actor),
             oauthAgent,
           };
         }
         if (creds.app_password) {
-          // App password auth
-          const client = new BlueskyClient(acct.handle, creds.app_password);
+          // Handles can change owners. Re-resolving the saved handle on every
+          // launch could send this account's password to the new owner's PDS.
+          // A legacy entry without a DID must be reconnected explicitly.
+          if (!did) throw new Error(`Reconnect ${acct.handle} in Settings. This saved account has no verified Bluesky identity.`);
+          const client = new BlueskyClient(did, creds.app_password);
           await client.login();
+          if (client.getAgent().session?.did !== did) {
+            throw new Error(`Reconnect ${acct.handle} in Settings. The Bluesky session did not match the saved account identity.`);
+          }
           return {
             accountId: acct.id,
             platform: 'bluesky',
@@ -153,7 +161,7 @@ export async function initAllClients(): Promise<{ accounts: Account[]; clients: 
           accountId: acct.id,
           platform: 'bluesky',
           handle: acct.handle,
-          client: BlueskyClient.readOnly(acct.handle),
+          client: BlueskyClient.readOnly(actor),
           degraded: creds.auth_method === 'oauth',
         };
       } else if (acct.platform === 'threads') {
