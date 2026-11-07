@@ -6,6 +6,9 @@ on:
       source_sha:
         type: string
         required: true
+      ios_validator_sha:
+        type: string
+        default: ''
       platform:
         type: string
         default: both
@@ -83,8 +86,8 @@ jobs:
       # commit and hashes in the receipt; never apply it to coordinated builds.
       - name: Verify release source and select iOS smoke harness
         env:
-          SOURCE_OVERRIDE: ${{ github.event_name == 'workflow_dispatch' && inputs.source_sha || '' }}
-          VALIDATOR_OVERRIDE: ${{ github.event_name == 'workflow_dispatch' && inputs.ios_validator_sha || '' }}
+          SOURCE_OVERRIDE: ${{ inputs.ios_validator_sha && inputs.source_sha || '' }}
+          VALIDATOR_OVERRIDE: ${{ inputs.ios_validator_sha || '' }}
         run: |
           set -euo pipefail
           SOURCE=$(git rev-parse HEAD)
