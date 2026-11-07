@@ -87,13 +87,19 @@ jobs:
           ASC_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
           ASC_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          INPUT_PLATFORM: ${{ inputs.platform }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_INTERNAL_ONLY: ${{ inputs.internal_only }}
+          INPUT_BUILD_ID: ${{ inputs.build_id }}
+          INPUT_TESTERS: ${{ inputs.testers }}
         run: |
           set -euo pipefail
-          args=("${{ inputs.platform }}")
-          [ "${{ inputs.dry_run }}" = "true" ] && args+=(--dry-run)
-          [ "${{ inputs.internal_only }}" = "true" ] && args+=(--internal-only)
-          [ -n "${{ inputs.build_id }}" ] && args+=(--build "${{ inputs.build_id }}")
-          for t in ${{ inputs.testers }}; do args+=(--tester "$t"); done
+          args=("$INPUT_PLATFORM")
+          [ "$INPUT_DRY_RUN" = "true" ] && args+=(--dry-run)
+          [ "$INPUT_INTERNAL_ONLY" = "true" ] && args+=(--internal-only)
+          [ -n "$INPUT_BUILD_ID" ] && args+=(--build "$INPUT_BUILD_ID")
+          read -r -a tester_emails <<< "${INPUT_TESTERS//$'\n'/ }"
+          for tester in "${tester_emails[@]}"; do args+=(--tester "$tester"); done
           python3 tools/asc/testflight.py "${args[@]}"
 
       - name: Remove the key

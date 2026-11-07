@@ -57,10 +57,13 @@ jobs:
       # The Mac App Store provisioning profile is not part of tauri-action's own
       # keychain setup, so install it where Xcode looks before building.
       - name: Install macOS provisioning profile
+        env:
+          MACOS_PROVISIONING_PROFILE: ${{ secrets.MACOS_PROVISIONING_PROFILE }}
         run: |
           set -euo pipefail
+          umask 077
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          echo "${{ secrets.MACOS_PROVISIONING_PROFILE }}" | base64 --decode > /tmp/crispdeck.provisionprofile
+          printf '%s' "$MACOS_PROVISIONING_PROFILE" | base64 --decode > /tmp/crispdeck.provisionprofile
           UUID=$(security cms -D -i /tmp/crispdeck.provisionprofile | plutil -extract UUID raw -)
           cp /tmp/crispdeck.provisionprofile "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.provisionprofile"
           echo "installed profile $UUID"
@@ -69,16 +72,20 @@ jobs:
       # the .app, "3rd Party Mac Developer Installer" signs the .pkg -- so this
       # uses a persistent keychain rather than any ephemeral per-step import.
       - name: Import Apple certificates
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_P12_PASSWORD: ${{ secrets.MACOS_CERT_P12_PASSWORD }}
         run: |
           set -euo pipefail
+          umask 077
           KEYCHAIN=$RUNNER_TEMP/crispdeck-ci.keychain-db
           KEYCHAIN_PASS=$(openssl rand -base64 24)
           security create-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN"
           security set-keychain-settings -lut 21600 "$KEYCHAIN"
           security unlock-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN"
           security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | sed 's/"//g')
-          echo "${{ secrets.MACOS_CERT_P12 }}" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "${{ secrets.MACOS_CERT_P12_PASSWORD }}" \
+          printf '%s' "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$MACOS_CERT_P12_PASSWORD" \
             -T /usr/bin/codesign -T /usr/bin/productbuild -T /usr/bin/productsign -T /usr/bin/security
           security set-key-partition-list -S apple-tool:,apple:,codesign:,productsign: -s -k "$KEYCHAIN_PASS" "$KEYCHAIN"
           rm -f "$RUNNER_TEMP/cert.p12"
@@ -107,6 +114,8 @@ jobs:
       # signed; a plain --entitlements does not, so extract and merge them rather
       # than hardcoding the team id again.
       - name: Embed provisioning profile + re-sign
+        env:
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
         run: |
           set -euo pipefail
           APP=$(find src-tauri/target -path "*/release/bundle/macos/*.app" -maxdepth 6 | head -1)
@@ -134,7 +143,7 @@ jobs:
 
           codesign --force --deep --strict --timestamp --options runtime \
             --entitlements /tmp/merged-entitlements.plist \
-            --sign "${{ secrets.MACOS_SIGNING_IDENTITY }}" "$APP"
+            --sign "$MACOS_SIGNING_IDENTITY" "$APP"
           codesign --verify --deep --strict --verbose=2 "$APP"
 
           # The sandbox entitlement is the whole reason this build can go to the
@@ -160,11 +169,13 @@ jobs:
       # "3rd Party Mac Developer Installer" identity; Apple Distribution covers
       # only the .app itself.
       - name: Build signed .pkg
+        env:
+          MACOS_TEAM_ID: ${{ secrets.MACOS_TEAM_ID }}
         run: |
           set -euo pipefail
           PKG=$(dirname "$APP_PATH")/${{ env.PRODUCT_NAME }}.pkg
           productbuild --component "$APP_PATH" /Applications \
-            --sign "3rd Party Mac Developer Installer: Christian Ströbele (${{ secrets.MACOS_TEAM_ID }})" \
+            --sign "3rd Party Mac Developer Installer: Christian Ströbele ($MACOS_TEAM_ID)" \
             "$PKG"
           echo "PKG_PATH=$PKG" >> "$GITHUB_ENV"
 
@@ -180,19 +191,25 @@ jobs:
 
       - name: Validate + upload to App Store Connect
         if: ${{ github.event_name == 'push' || inputs.dry_run == false }}
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          APPSTORE_APP_ID: ${{ vars.APPSTORE_APP_ID }}
         run: |
           set -euo pipefail
+          umask 077
           # This repo's APPLE_API_KEY_P8 holds the RAW .p8 contents, not base64
           # (see mobile.yml, which writes it with printf). Feeding it through
           # `base64 --decode` yields garbage and altool fails with the very
           # unhelpful "The file couldn't be opened because it isn't in the
           # correct format. (259)" -- which names no file, so it reads like a
           # problem with the .pkg rather than the key.
-          mkdir -p ~/.appstoreconnect/private_keys
-          printf '%s' "${{ secrets.APPLE_API_KEY_P8 }}" \
-            > ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
-          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
-          head -1 ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8 \
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          key_path="$HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          printf '%s' "$APPLE_API_KEY_P8" > "$key_path"
+          chmod 600 "$key_path"
+          head -1 "$key_path" \
             | grep -q "BEGIN PRIVATE KEY" \
             || { echo "::error::APPLE_API_KEY_P8 is not a PEM private key"; exit 1; }
 
@@ -204,18 +221,18 @@ jobs:
           # has a macOS appStoreVersion.
           xcrun altool --validate-app -f "$PKG_PATH" \
             --type macos \
-            --apple-id ${{ vars.APPSTORE_APP_ID }} \
+            --apple-id "$APPSTORE_APP_ID" \
             --bundle-id ${{ env.BUNDLE_ID }} \
             --bundle-version "${{ github.run_number }}" \
             --bundle-short-version-string "$VERSION" \
-            --api-key ${{ secrets.APPLE_API_KEY_ID }} \
-            --api-issuer ${{ secrets.APPLE_API_ISSUER_ID }}
+            --api-key "$ASC_KEY_ID" \
+            --api-issuer "$ASC_ISSUER_ID"
 
           xcrun altool --upload-package "$PKG_PATH" \
             --type macos \
-            --apple-id ${{ vars.APPSTORE_APP_ID }} \
+            --apple-id "$APPSTORE_APP_ID" \
             --bundle-id ${{ env.BUNDLE_ID }} \
             --bundle-version "${{ github.run_number }}" \
             --bundle-short-version-string "$VERSION" \
-            --api-key ${{ secrets.APPLE_API_KEY_ID }} \
-            --api-issuer ${{ secrets.APPLE_API_ISSUER_ID }}
+            --api-key "$ASC_KEY_ID" \
+            --api-issuer "$ASC_ISSUER_ID"
