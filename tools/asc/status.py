@@ -172,7 +172,7 @@ def main() -> int:
 
     # App-level things, shared by both platforms.
     print("\n── app level ─────────────────────────────────────")
-    infos = paged(f"/v1/apps/{app}/appInfos")
+    infos = paged(f"/v1/apps/{app}/appInfos?include=primaryCategory")
     for ai in infos:
         st = ai["attributes"].get("appStoreState") or ai["attributes"].get("state")
         editable = st in EDITABLE
