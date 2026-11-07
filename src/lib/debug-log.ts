@@ -20,7 +20,7 @@ function redactSecrets(message: string): string {
   return message
     .replace(/\b(Bearer\s+)[A-Za-z0-9._~+\/-]+=*/gi, '$1[REDACTED]')
     .replace(/([?&#](?:access_token|refresh_token|id_token|client_secret|api_key|apikey|code|state|password)=)[^&#\s]*/gi, '$1[REDACTED]')
-    .replace(/("(?:access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|api[_-]?key|openaiApiKey|libreTranslateApiKey|app[_-]?password|password)"\s*:\s*")(?:\\.|[^"\\])*(")/gi, '$1[REDACTED]$2');
+    .replace(/("(?:access[_-]?(?:token|jwt)|refresh[_-]?(?:token|jwt)|id[_-]?(?:token|jwt)|client[_-]?secret|api[_-]?key|openaiApiKey|libreTranslateApiKey|app[_-]?password|password|token|authorization)"\s*:\s*")(?:\\.|[^"\\])*(")/gi, '$1[REDACTED]$2');
 }
 
 function formatLogValue(value: unknown): string {

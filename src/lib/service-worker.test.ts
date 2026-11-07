@@ -11,6 +11,8 @@ function worker(scope = 'https://app.example/') {
     match: vi.fn(async (request: string | Request) => store.get(key(request))),
     put: vi.fn(async (request: string | Request, response: Response) => { store.set(key(request), response); }),
     addAll: vi.fn(async () => undefined),
+    keys: vi.fn(async () => [] as { url: string }[]),
+    delete: vi.fn(async (_request: { url: string }) => true),
   };
   const caches = { open: vi.fn(async () => cache), keys: vi.fn(async () => [] as string[]), delete: vi.fn(async () => true) };
   const clients = { claim: vi.fn(async () => undefined), matchAll: vi.fn(async () => [] as any[]), openWindow: vi.fn(async () => undefined) };
@@ -49,6 +51,19 @@ describe('service worker security and offline lifetime', () => {
     expect(await w.dispatch('fetch', { request: w.request(url, 'navigate') })).toBeUndefined();
     expect(w.fetch).not.toHaveBeenCalled();
     expect(w.caches.open).not.toHaveBeenCalled();
+  });
+
+  it('purges legacy callback secrets while preserving other mounts and assets', async () => {
+    const w = worker('https://app.example/CrispDeck/');
+    const ours = { url: 'https://app.example/CrispDeck/oauth/callback?code=secret&state=secret' };
+    const other = { url: 'https://app.example/Other/oauth/callback?code=other' };
+    const asset = { url: 'https://app.example/CrispDeck/favicon.png' };
+    w.caches.keys.mockResolvedValue(['crispdeck-vold', 'unrelated-cache']);
+    w.cache.keys.mockResolvedValue([ours, other, asset]);
+    await w.dispatch('activate');
+    expect(w.cache.delete).toHaveBeenCalledExactlyOnceWith(ours);
+    expect(w.caches.open).toHaveBeenCalledExactlyOnceWith('crispdeck-vold');
+    expect(w.caches.delete).not.toHaveBeenCalled();
   });
 
   it('skips authenticated and outside-scope requests', async () => {

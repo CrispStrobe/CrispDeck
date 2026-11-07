@@ -6,6 +6,7 @@ afterEach(() => { vi.restoreAllMocks(); clearLogs(); });
 describe('downloadable diagnostic privacy', () => {
   it('redacts credential fields, authorization and OAuth callback parameters', () => {
     addLog('error', JSON.stringify({ access_token: 'access-secret', app_password: 'app-secret', openaiApiKey: 'provider-secret' }));
+    addLog('error', JSON.stringify({ session: { accessJwt: 'access-jwt-secret', refreshJwt: 'refresh-jwt-secret' }, token: 'service-secret' }));
     addLog('warn', 'request failed: Bearer bearer-secret https://app.example/oauth/callback?code=oauth-secret&state=state-secret');
     const output = JSON.stringify(getLogs());
     expect(output).not.toContain('-secret');

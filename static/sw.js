@@ -32,6 +32,18 @@ self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
     await Promise.all(keys.filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME).map((key) => caches.delete(key)));
+    // Older releases cached callback navigations under a shared legacy name.
+    // Purge this installation's callback URLs (including codes/state) without
+    // removing another app's assets or another CrispDeck mount's callbacks.
+    for (const key of keys.filter((name) => name.startsWith('crispdeck-v'))) {
+      const legacy = await caches.open(key);
+      for (const request of await legacy.keys()) {
+        const url = new URL(request.url);
+        if (inScope(url) && /^oauth(?:\/|$)/.test(url.pathname.slice(APP_ROOT.pathname.length))) {
+          await legacy.delete(request);
+        }
+      }
+    }
     await self.clients.claim();
   })());
 });
