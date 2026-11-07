@@ -2,7 +2,7 @@
   import { buildThreadsFeed, getThreadsSources } from '$lib/threads-feed';
   import { base } from '$app/paths';
   import { onMount, onDestroy, tick } from 'svelte';
-  import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal, RefreshCw, ChevronDown, Hash, Users, Search, Pin, PinOff } from '@lucide/svelte';
+  import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal, RefreshCw, ChevronDown, Hash, Users, Search, Pin, PinOff, Info } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { toast } from '$lib/toast.svelte';
   import { swallow } from '$lib/debug-log';
@@ -47,6 +47,7 @@
   let hideMedia = $state(false);
   let feedMode: FeedMode = $state('timeline');
   let platformFilter: 'all' | Platform = $state('all');
+  let showThreadsInfo = $state(false);
   let showFilters = $state(false);
   const connectedPlatforms = $derived(new Set(accounts.map(a => a.platform)));
   const multiPlatform = $derived(connectedPlatforms.size > 1);
@@ -1035,6 +1036,27 @@
               onclick={() => platformFilter = 'threads'}
               class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1 {platformFilter === 'threads' ? 'bg-[var(--color-threads)] text-white' : 'text-[var(--color-text-muted)]'}"
             ><span class="w-1.5 h-1.5 rounded-full bg-[var(--color-threads)]"></span> {i18n.t.common.threads}</button>
+            <div class="relative">
+              <button onclick={() => showThreadsInfo = !showThreadsInfo} aria-label="Threads feed information" aria-expanded={showThreadsInfo} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)]"><Info size={15} /></button>
+              {#if showThreadsInfo}
+                <div class="absolute right-0 top-full z-30 mt-1 w-72 max-w-[80vw] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-xs text-[var(--color-text-muted)] shadow-lg" role="note">
+                  {i18n.t.feed.threadsTimelineLimited}
+                  <a href="https://www.threads.net/" target="_blank" rel="noopener noreferrer" class="underline">{i18n.t.feed.openThreads}</a>
+                </div>
+              {/if}
+            </div>
+          {/if}
+        </div>
+      {/if}
+
+      {#if !multiPlatform && connectedPlatforms.has('threads')}
+        <div class="relative">
+          <button onclick={() => showThreadsInfo = !showThreadsInfo} aria-label="Threads feed information" aria-expanded={showThreadsInfo} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)]"><Info size={15} /></button>
+          {#if showThreadsInfo}
+            <div class="absolute right-0 top-full z-30 mt-1 w-72 max-w-[80vw] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-xs text-[var(--color-text-muted)] shadow-lg" role="note">
+              {i18n.t.feed.threadsTimelineLimited}
+              <a href="https://www.threads.net/" target="_blank" rel="noopener noreferrer" class="underline">{i18n.t.feed.openThreads}</a>
+            </div>
           {/if}
         </div>
       {/if}
@@ -1056,13 +1078,6 @@
       </button>
     </div>
   </div>
-
-  {#if platformFilter === 'threads' && (feedMode === 'timeline' || feedMode === 'for-you')}
-    <div class="mb-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-text-muted)]" role="status">
-      {i18n.t.feed.threadsTimelineLimited}
-      <a href="https://www.threads.net/" target="_blank" rel="noopener noreferrer" class="underline">{i18n.t.feed.openThreads}</a>
-    </div>
-  {/if}
 
   {#if error}
     <div class="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">

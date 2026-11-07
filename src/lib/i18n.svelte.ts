@@ -626,7 +626,7 @@ export const translations = {
       noLicenses: 'No licenses.json found. Run node scripts/generate-licenses.js to generate.',
       generated: 'Generated',
     },
-    feed: { threadsTimelineLimited: "Threads shows your own posts and reposts here. Meta’s official API does not provide your home timeline.", openThreads: "Open Threads",
+    feed: { threadsTimelineLimited: "Meta’s official API does not provide your Threads home timeline. CrispDeck can also show mentions and posts from configured profiles or keywords, subject to Meta’s permissions.", openThreads: "Open Threads",
       offlineCached: 'Offline — showing cached data from {time}',
       reconnected: 'Back online — refreshing', savedFeedsFailed: 'Could not load your saved feeds', pinFailed: 'Could not change your pinned feeds',
       filterBsky: 'Bsky',
