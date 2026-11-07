@@ -156,9 +156,13 @@ test('a scheduled draft publishes from another route and never repeats after a p
   await page.locator('textarea').first().fill('Scheduled across routes');
   await page.getByRole('button', { name: 'Schedule', exact: true }).click();
   await expect(page.getByText(/Keep CrispDeck open/)).toBeVisible();
-  const future = new Date(Date.now() + 3_600_000);
-  await page.locator('input[type=date]').fill(future.toISOString().slice(0, 10));
-  await page.locator('input[type=time]').fill(future.toISOString().slice(11, 16));
+  const future = await page.evaluate(() => {
+    const d = new Date(Date.now() + 3_600_000);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return { date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, time: `${pad(d.getHours())}:${pad(d.getMinutes())}` };
+  });
+  await page.locator('input[type=date]').fill(future.date);
+  await page.locator('input[type=time]').fill(future.time);
   await page.getByRole('button', { name: 'Schedule Post', exact: true }).click();
   await expect(page.locator('textarea').first()).toHaveValue('');
   // Advance the durable job's due time, then wake the app on a different route.
