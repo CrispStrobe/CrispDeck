@@ -68,7 +68,14 @@ jobs:
       - run: npm run check
       - run: npm test -- --maxWorkers=2
       - run: npx svelte-kit sync
-      - run: npx vite build
+      - name: Build production bundle
+        env:
+          BENCH_CHUNK_MAP: '1'
+        run: npx vite build
+      - name: Enforce production bundle budget
+        run: |
+          node bench/bundle-size.mjs build > bundle-size.json
+          node bench/check-budget.mjs bundle-size.json bench/bundle-budget.json
       - run: bash scripts/ci-apt.sh
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test --reporter=list
@@ -79,6 +86,8 @@ jobs:
           path: |
             playwright-results/
             playwright-report/
+            bundle-size.json
+            chunk-map.client.json
           retention-days: 7
           if-no-files-found: ignore
 
