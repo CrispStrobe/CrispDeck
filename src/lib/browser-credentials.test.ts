@@ -40,4 +40,28 @@ describe('browser credential durability', () => {
     const reloaded = await import('./browser-db');
     expect(await reloaded.getDecryptedCredentials(saved.id)).toBe(account.credentials);
   });
+
+  it('derives one key for concurrent credential writes', async () => {
+    const derive = vi.spyOn(crypto.subtle, 'deriveKey');
+    const db = await import('./browser-db');
+    const encrypted = await Promise.all(Array.from({ length: 5 }, (_, index) => db.encrypt(`secret-${index}`)));
+    expect(derive).toHaveBeenCalledTimes(1);
+    expect(await Promise.all(encrypted.map(value => db.decrypt(value)))).toEqual(['secret-0', 'secret-1', 'secret-2', 'secret-3', 'secret-4']);
+  });
+
+  it('does not save with a stale memory key after browser key material is cleared', async () => {
+    const db = await import('./browser-db');
+    await db.encrypt('old-session');
+    localStorage.removeItem('crispdeck-key');
+    localStorage.removeItem('crispdeck-salt-v2');
+    const encrypted = await db.encrypt('new-session');
+    vi.resetModules();
+    expect(await (await import('./browser-db')).decrypt(encrypted)).toBe('new-session');
+  });
+
+  it('handles a large credential document without overflowing the argument stack', async () => {
+    const db = await import('./browser-db');
+    const document = JSON.stringify({ token: 'a'.repeat(256_000), name: 'Zoë 日本語' });
+    expect(await db.decrypt(await db.encrypt(document))).toBe(document);
+  });
 });

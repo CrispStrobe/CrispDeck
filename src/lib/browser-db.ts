@@ -22,16 +22,22 @@ const DB_NAME = 'crispdeck';
 const DB_VERSION = 1;
 
 let _dbInstance: IDBDatabase | null = null;
+let _dbOpening: Promise<IDBDatabase> | null = null;
 
 function openDB(): Promise<IDBDatabase> {
   if (_dbInstance) return Promise.resolve(_dbInstance);
-  return new Promise((resolve, reject) => {
+  if (_dbOpening) return _dbOpening;
+  const opening = new Promise<IDBDatabase>((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onerror = () => reject(req.error);
     req.onsuccess = () => {
-      _dbInstance = req.result;
-      _dbInstance.onclose = () => { _dbInstance = null; };
-      resolve(_dbInstance);
+      const db = req.result;
+      _dbInstance = db;
+      const release = () => { if (_dbInstance === db) _dbInstance = null; };
+      db.onclose = release;
+      // Another tab (or the cache purge) must be able to upgrade/delete it.
+      db.onversionchange = () => { db.close(); release(); };
+      resolve(db);
     };
     req.onupgradeneeded = () => {
       const db = req.result;
@@ -63,6 +69,10 @@ function openDB(): Promise<IDBDatabase> {
       }
     };
   });
+  _dbOpening = opening;
+  const settled = () => { if (_dbOpening === opening) _dbOpening = null; };
+  void opening.then(settled, settled);
+  return opening;
 }
 
 function tx<T>(storeName: string, mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
@@ -128,9 +138,9 @@ function getSeed(): string {
   return seed;
 }
 
-async function deriveKey(salt: Uint8Array, iterations: number): Promise<CryptoKey> {
+async function deriveKey(salt: Uint8Array, iterations: number, seed = getSeed()): Promise<CryptoKey> {
   const enc = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(getSeed()), 'PBKDF2', false, ['deriveKey']);
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(seed), 'PBKDF2', false, ['deriveKey']);
   return crypto.subtle.deriveKey(
     { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
     keyMaterial,
@@ -140,9 +150,8 @@ async function deriveKey(salt: Uint8Array, iterations: number): Promise<CryptoKe
   );
 }
 
-let _cachedCryptoKey: CryptoKey | null = null;
+let _cachedCryptoKey: { seed: string; salt: string; key: Promise<CryptoKey> } | null = null;
 async function getCryptoKey(): Promise<CryptoKey> {
-  if (_cachedCryptoKey) return _cachedCryptoKey;
   // New key: per-device random salt + 600k iterations (OWASP 2024).
   let saltB64 = localStorage.getItem(CRYPTO_SALT_NAME);
   if (!saltB64) {
@@ -152,9 +161,19 @@ async function getCryptoKey(): Promise<CryptoKey> {
       throw new Error('Could not save the credential encryption salt. Free browser storage and try connecting again.');
     }
   }
+  const seed = getSeed();
+  if (_cachedCryptoKey?.seed === seed && _cachedCryptoKey.salt === saltB64) return _cachedCryptoKey.key;
   const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
-  _cachedCryptoKey = await deriveKey(salt, 600000);
-  return _cachedCryptoKey;
+  // Starting several account clients at once must share this expensive KDF.
+  // Compare persisted material on each use so clearing/changing storage never
+  // causes new credentials to be saved with an old, memory-only key.
+  const pending = { seed, salt: saltB64, key: deriveKey(salt, 600000, seed) };
+  _cachedCryptoKey = pending;
+  try { return await pending.key; }
+  catch (error) {
+    if (_cachedCryptoKey === pending) _cachedCryptoKey = null;
+    throw error;
+  }
 }
 
 /** Legacy key for migrating existing data (static salt, 100k iterations) */
@@ -172,7 +191,11 @@ export async function encrypt(plaintext: string): Promise<string> {
   const packed = new Uint8Array(iv.length + ct.byteLength);
   packed.set(iv);
   packed.set(new Uint8Array(ct), iv.length);
-  return btoa(String.fromCharCode(...packed));
+  const chunks: string[] = [];
+  for (let start = 0; start < packed.length; start += 0x8000) {
+    chunks.push(String.fromCharCode(...packed.subarray(start, start + 0x8000)));
+  }
+  return btoa(chunks.join(''));
 }
 
 export async function decrypt(encoded: string): Promise<string> {
