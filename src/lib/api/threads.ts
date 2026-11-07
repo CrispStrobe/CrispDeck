@@ -74,6 +74,15 @@ const THREADS_AUTH_URL = 'https://threads.net/oauth/authorize';
 const THREADS_TOKEN_URL = 'https://graph.threads.net/oauth/access_token';
 const THREADS_API_BASE = 'https://graph.threads.net/v1.0';
 
+/** Graph requests need the same transport for reads, writes and OAuth. */
+async function threadsFetch(url: string, init?: RequestInit): Promise<Response> {
+  // Native HTTP avoids WKWebView CORS/preflight failures. Browser builds keep
+  // normal fetch and its origin protections; native failures are never retried
+  // through another transport because a write may already have succeeded.
+  const request = isTauri() ? (await import('@tauri-apps/plugin-http')).fetch : fetch;
+  return request(url, init);
+}
+
 /**
  * Build the OAuth authorization URL.
  * The user is redirected here to grant access.
@@ -98,7 +107,7 @@ export async function exchangeCodeForToken(
   redirectUri: string,
   code: string,
 ): Promise<ThreadsTokenResponse> {
-  const resp = await fetch(THREADS_TOKEN_URL, {
+  const resp = await threadsFetch(THREADS_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -137,7 +146,7 @@ export async function exchangeForLongLivedToken(
     access_token: shortLivedToken,
   });
 
-  const resp = await fetch(`${THREADS_API_BASE}/access_token?${params.toString()}`);
+  const resp = await threadsFetch(`${THREADS_API_BASE}/access_token?${params.toString()}`);
 
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
@@ -156,7 +165,7 @@ export async function refreshLongLivedToken(token: string): Promise<ThreadsToken
     access_token: token,
   });
 
-  const resp = await fetch(`${THREADS_API_BASE}/access_token?${params.toString()}`);
+  const resp = await threadsFetch(`${THREADS_API_BASE}/access_token?${params.toString()}`);
 
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
@@ -194,10 +203,7 @@ export class ThreadsClient {
       }
     }
 
-    // Native HTTP avoids WKWebView CORS/preflight failures for the Graph API.
-    // Web builds retain normal browser fetch and its origin protections.
-    const request = isTauri() ? (await import('@tauri-apps/plugin-http')).fetch : fetch;
-    const resp = await request(url.toString());
+    const resp = await threadsFetch(url.toString());
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
       throw new Error(err.error?.message || `Threads API error: ${resp.statusText}`);
@@ -206,7 +212,7 @@ export class ThreadsClient {
   }
 
   private async apiPost<T>(endpoint: string, body: Record<string, string>): Promise<T> {
-    const resp = await fetch(`${THREADS_API_BASE}${endpoint}`, {
+    const resp = await threadsFetch(`${THREADS_API_BASE}${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ access_token: this.accessToken, ...body }),
@@ -352,7 +358,7 @@ export class ThreadsClient {
         } catch {
           // profile_posts may fail (needs Advanced Access) — try oEmbed for preview
           try {
-            const oembedResp = await fetch(`https://graph.threads.net/v1.0/oembed?url=${encodeURIComponent(data.original_url)}`);
+            const oembedResp = await threadsFetch(`https://graph.threads.net/v1.0/oembed?url=${encodeURIComponent(data.original_url)}`);
             if (oembedResp.ok) {
               const oembed = await oembedResp.json();
               // Extract text from the embed HTML if possible
@@ -583,7 +589,7 @@ export class ThreadsClient {
   /** Unlike a Threads post */
   async unlike(mediaId: string): Promise<void> {
     // Threads API: DELETE /{user-id}/likes with media_id param
-    const resp = await fetch(`${THREADS_API_BASE}/${this.userId}/likes`, {
+    const resp = await threadsFetch(`${THREADS_API_BASE}/${this.userId}/likes`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ access_token: this.accessToken, media_id: mediaId }),
