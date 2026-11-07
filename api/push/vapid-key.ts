@@ -1,19 +1,12 @@
 import { corsFor, preflight } from '../_lib/cors.js';
 /**
- * Returns the VAPID public key from environment variables.
- * Clients use this to subscribe to web push notifications.
+ * Background delivery is a stub; configured keys do not make it available.
+ * Keep this unavailable until there is a working, privacy-preserving sender.
  */
 export function GET(request: Request) {
-  const key = process.env.VAPID_PUBLIC_KEY;
-  if (!key) {
-    return new Response(JSON.stringify({ error: 'Not configured' }), {
-      status: 404,
-      headers: corsFor(request, 'GET, OPTIONS'),
-    });
-  }
-  return new Response(JSON.stringify({ key }), {
-    status: 200,
-    headers: corsFor(request, 'GET, OPTIONS'),
+  return new Response(JSON.stringify({ error: 'Background web push is not available', configured: false }), {
+    status: 501,
+    headers: { ...corsFor(request, 'GET, OPTIONS'), 'Cache-Control': 'no-store' },
   });
 }
 

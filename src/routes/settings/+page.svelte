@@ -2377,14 +2377,19 @@
         </div>
         {#if webPushSubscribed}
           <div class="flex items-center gap-2">
-            <span class="text-xs text-green-400 px-2 py-1 bg-green-900/20 rounded">{i18n.t.settings.webPushActive}</span>
+            <span class="text-xs text-[var(--color-text-muted)] px-2 py-1 bg-[var(--color-surface)] rounded">{vapidKeyAvailable ? i18n.t.settings.webPushActive : i18n.t.settings.webPushNotConfigured}</span>
             <button
               onclick={async () => {
                 webPushLoading = true;
                 webPushError = '';
                 try {
-                  await unsubscribeWebPush();
-                  await fetchOk(apiUrl('/api/push/subscribe'), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: 'default' }) }, 'unsubscribe from push');
+                  const subscription = await getPushSubscription();
+                  if (subscription) {
+                    // Clean up with proof of possession before throwing away
+                    // the browser keys needed to retry a failed deletion.
+                    await fetchOk(apiUrl('/api/push/subscribe'), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: 'default', subscription }) }, 'unsubscribe from push');
+                  }
+                  if (!await unsubscribeWebPush()) throw new Error('The browser could not remove the push subscription');
                   webPushSubscribed = false;
                 } catch (e) { webPushError = String(e); }
                 webPushLoading = false;
@@ -2406,7 +2411,12 @@
                 const { key } = await fetchJson<{ key: string }>(apiUrl('/api/push/vapid-key'), undefined, 'fetch VAPID key');
                 const sub = await subscribeWebPush(key);
                 if (sub) {
-                  await fetchOk(apiUrl('/api/push/subscribe'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub, userId: 'default' }) }, 'subscribe to push');
+                  try {
+                    await fetchOk(apiUrl('/api/push/subscribe'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub, userId: 'default' }) }, 'subscribe to push');
+                  } catch (e) {
+                    await unsubscribeWebPush().catch((cleanupError) => swallow('settings.pushCleanup', cleanupError));
+                    throw e;
+                  }
                   webPushSubscribed = true;
                 }
               } catch (e) { webPushError = String(e); }
