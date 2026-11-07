@@ -15,6 +15,32 @@ const MAX_ENTRIES = 200;
 const entries: LogEntry[] = [];
 let installed = false;
 
+/** Keep credentials out of downloadable diagnostics, before truncating them. */
+function redactSecrets(message: string): string {
+  return message
+    .replace(/\b(Bearer\s+)[A-Za-z0-9._~+\/-]+=*/gi, '$1[REDACTED]')
+    .replace(/([?&#](?:access_token|refresh_token|id_token|client_secret|api_key|apikey|code|state|password)=)[^&#\s]*/gi, '$1[REDACTED]')
+    .replace(/("(?:access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|api[_-]?key|openaiApiKey|libreTranslateApiKey|app[_-]?password|password)"\s*:\s*")(?:\\.|[^"\\])*(")/gi, '$1[REDACTED]$2');
+}
+
+function formatLogValue(value: unknown): string {
+  try {
+    if (value instanceof Error) return `${value.name}: ${value.message}`;
+    if (value === null || typeof value !== 'object') return String(value);
+    const seen = new WeakSet<object>();
+    return JSON.stringify(value, (_key, item: unknown) => {
+      if (typeof item === 'bigint') return String(item);
+      if (item !== null && typeof item === 'object') {
+        if (seen.has(item)) return '[Circular]';
+        seen.add(item);
+      }
+      return item;
+    }) ?? String(value);
+  } catch {
+    return '[Unserializable log value]';
+  }
+}
+
 /**
  * Record a non-fatal error that the caller is deliberately swallowing.
  *
@@ -51,9 +77,9 @@ export function swallow(context: string, error: unknown): void {
 export function addLog(level: LogEntry['level'], message: string, source?: string): void {
   entries.push({
     level,
-    message: message.slice(0, 500), // cap message length
+    message: redactSecrets(message).slice(0, 500), // cap message length after redaction
     timestamp: new Date().toISOString(),
-    source,
+    source: source === undefined ? undefined : redactSecrets(source).slice(0, 200),
   });
   if (entries.length > MAX_ENTRIES) {
     entries.splice(0, entries.length - MAX_ENTRIES);
@@ -100,22 +126,14 @@ export function installLogInterceptors(): void {
   const origWarn = console.warn;
   const origInfo = console.info;
 
-  const fmt = (a: any) => typeof a === 'object' ? JSON.stringify(a, null, 0) : String(a);
-
-  console.error = (...args: any[]) => {
-    addLog('error', args.map(fmt).join(' '));
-    origError.apply(console, args);
+  const intercept = (level: LogEntry['level'], original: (...args: unknown[]) => void) => (...args: unknown[]) => {
+    try { addLog(level, args.map(formatLogValue).join(' ')); }
+    catch { /* Diagnostics must never turn a handled error into an app failure. */ }
+    original.apply(console, args);
   };
-
-  console.warn = (...args: any[]) => {
-    addLog('warn', args.map(fmt).join(' '));
-    origWarn.apply(console, args);
-  };
-
-  console.info = (...args: any[]) => {
-    addLog('info', args.map(fmt).join(' '));
-    origInfo.apply(console, args);
-  };
+  console.error = intercept('error', origError);
+  console.warn = intercept('warn', origWarn);
+  console.info = intercept('info', origInfo);
 
   // Capture unhandled errors
   if (typeof window !== 'undefined') {
