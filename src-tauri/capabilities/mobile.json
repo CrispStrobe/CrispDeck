@@ -8,22 +8,16 @@
     "opener:default",
     "deep-link:default",
     "http:default",
-    "dialog:default",
+    "dialog:allow-save",
     "store:default",
-    "fs:default",
+    "fs:allow-write-text-file",
     "notification:default",
-    "fs:read-all",
-    "fs:write-all",
     {
       "identifier": "http:allow-fetch",
       "allow": [
         { "url": "http://*" },
         { "url": "https://*" }
       ]
-    },
-    {
-      "identifier": "fs:scope",
-      "allow": [{ "path": "$HOME/**" }, { "path": "/**" }]
     }
   ]
 }
