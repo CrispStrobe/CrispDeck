@@ -9,9 +9,10 @@
 --
 -- SQLite cannot alter a CHECK constraint in place, so this is the documented
 -- 12-step table rebuild: create the replacement, copy the rows, drop the old
--- one, rename. Foreign keys are off during a migration script run by
--- execute_batch inside the implicit transaction, and no other table
--- references accounts by id, so no reference needs fixing up.
+-- one, rename. The migration runner disables foreign-key enforcement before
+-- opening its explicit transaction, then checks references before committing.
+-- Otherwise DROP TABLE would delete cached follows and null identity links
+-- which still reference the accounts copied into the replacement table.
 
 CREATE TABLE accounts_new (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
