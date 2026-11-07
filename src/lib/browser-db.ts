@@ -121,7 +121,9 @@ function getSeed(): string {
   let seed = localStorage.getItem(CRYPTO_KEY_NAME);
   if (!seed) {
     seed = crypto.randomUUID();
-    writeString(CRYPTO_KEY_NAME, seed);
+    if (!writeString(CRYPTO_KEY_NAME, seed)) {
+      throw new Error('Could not save the credential encryption key. Allow browser storage and try connecting again.');
+    }
   }
   return seed;
 }
@@ -146,7 +148,9 @@ async function getCryptoKey(): Promise<CryptoKey> {
   if (!saltB64) {
     const saltBytes = crypto.getRandomValues(new Uint8Array(32));
     saltB64 = btoa(String.fromCharCode(...saltBytes));
-    writeString(CRYPTO_SALT_NAME, saltB64);
+    if (!writeString(CRYPTO_SALT_NAME, saltB64)) {
+      throw new Error('Could not save the credential encryption salt. Free browser storage and try connecting again.');
+    }
   }
   const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
   _cachedCryptoKey = await deriveKey(salt, 600000);
