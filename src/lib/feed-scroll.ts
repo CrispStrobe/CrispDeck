@@ -85,6 +85,7 @@ export function restoreAnchor(
   container: HTMLElement,
   anchor: ScrollAnchor | null,
   attempts = 10,
+  isCurrent: () => boolean = () => true,
 ): void {
   if (!anchor) return;
   let n = 0;
@@ -100,6 +101,7 @@ export function restoreAnchor(
   };
 
   const step = () => {
+    if (!isCurrent()) return;
     const el = find();
     if (!el) {
       // The post has not rendered yet — it may still be arriving. Keep

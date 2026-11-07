@@ -1,5 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { pickAnchor, anchorDelta, type MeasuredItem, type ScrollAnchor } from './feed-scroll';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import { pickAnchor, anchorDelta, restoreAnchor, type MeasuredItem, type ScrollAnchor } from './feed-scroll';
+
+afterEach(() => vi.unstubAllGlobals());
 
 const items: MeasuredItem[] = [
   { key: 'a', top: 0, height: 200 },
@@ -76,6 +78,26 @@ describe('anchorDelta', () => {
 });
 
 describe('save then restore', () => {
+  it('stops queued restoration frames when the view is no longer current', () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { frames.push(callback); return frames.length; });
+    const container = document.createElement('div');
+    const row = document.createElement('div'); row.dataset.feedKey = 'reading'; container.append(row);
+    container.getBoundingClientRect = () => ({ top: 60 } as DOMRect);
+    let rowTop = 400;
+    row.getBoundingClientRect = () => ({ top: 60 + rowTop - container.scrollTop } as DOMRect);
+    let current = true;
+    restoreAnchor(container, { key: 'reading', offset: 25 }, 10, () => current);
+    frames.shift()!(0);
+    expect(container.scrollTop).toBe(425);
+    // A new view resets scrolling while the previous restoration still has
+    // a second layout pass queued. It must not move the new view's scrollbar.
+    current = false; rowTop = 700; container.scrollTop = 0;
+    frames.shift()!(0);
+    expect(container.scrollTop).toBe(0);
+    expect(frames).toHaveLength(0);
+  });
+
   it('asks for no correction when the feed comes back unchanged', () => {
     for (const scrollTop of [0, 120, 350, 500, 640]) {
       const anchor = pickAnchor(items, scrollTop)!;

@@ -36,10 +36,12 @@
   import { watchConnection, cachedDataBanner } from '$lib/offline-status';
   import { performDeckAction } from '$lib/deck-actions';
   import { postContextParams } from '$lib/compose/context';
+  import { readString } from '$lib/safe-storage';
 
   // 'custom' delegates to a Bluesky feed generator or list; which ones are on
   // offer comes from the account's own pinned feeds, see $lib/bluesky-feeds.
   type FeedMode = 'timeline' | 'my-posts' | 'for-you' | 'custom';
+  type FeedView = { mode: FeedMode; choice: FeedChoice | null };
 
   let accounts: Account[] = $state([]);
   let posts: UnifiedPost[] = $state([]);
@@ -93,6 +95,30 @@
   let identityPairs: Set<string> = $state(new Set());
   let affinityMap: Map<string, number> = $state(new Map());
   let affinityPromise: Promise<void> | null = null;
+  let disposed = false;
+  let requestSequence = 0;
+  let accountSequence = 0;
+  let newerSequence = 0;
+  let restoreSequence = 0;
+
+  function currentView(): FeedView { return { mode: feedMode, choice: customFeed }; }
+  function currentRequest(request: number): boolean { return !disposed && request === requestSequence; }
+  function beginRequest(): number {
+    newerSequence++; restoreSequence++;
+    loadingMore = false;
+    return ++requestSequence;
+  }
+
+  function accountScope(list: Account[]): string {
+    return JSON.stringify([...list].sort((a, b) => a.id - b.id).map(account => [
+      account.id, account.platform, account.did, account.instance_url,
+      account.mastodon_id, account.threads_user_id, account.handle,
+    ]));
+  }
+
+  function feedCacheKey(list: Account[], view: FeedView): string {
+    return `feed:v2:${accountScope(list)}:${JSON.stringify([view.mode, view.choice?.kind, view.choice?.uri])}`;
+  }
 
   /**
    * Read interaction history for the For You ranking, once.
@@ -128,22 +154,14 @@
 
   const multiAccount = $derived(accounts.length > 1);
 
-  // $derived.by rather than $derived, for the same reason as `sorted` below:
-  // the plain form inlines into the component body, where TS still has
-  // feedMode narrowed to its initializer and calls the 'custom' branch dead.
-  /** Identifies the current view for caching and for its saved reading position. */
-  const viewKey = $derived.by(() =>
-    feedMode === 'custom' && customFeed ? customFeed.key : (feedMode as string)
-  );
   const currentFeedLabel = $derived.by(() =>
     feedMode === 'custom' && customFeed ? customFeed.title : null
   );
 
-  // Reading position. `feed:v3:` resets positions saved by the old clipped-card layout.
-  // `feed:v2:` rather than `feed:` was used because the stored shape
-  // changed meaning: scrollY used to be a container offset and is now an
-  // offset within the anchored post, so old entries must not be replayed.
-  const posKey = $derived('feed:v3:' + viewKey);
+  // Cache and position keys include immutable account identities as well as
+  // the view. Old global caches must not reveal a removed account's private feed.
+  const cacheKey = $derived(feedCacheKey(accounts, currentView()));
+  const posKey = $derived('position:' + cacheKey);
   let scrollRaf = 0;
 
   function scrollContainer(): HTMLElement | null {
@@ -155,25 +173,38 @@
     return el && el.scrollTop > 0 ? pickAnchor(measureItems(el), el.scrollTop) : null;
   }
 
-  async function preserveReadingPosition(anchor: ScrollAnchor | null) {
-    if (!anchor) return;
+  async function preserveReadingPosition(anchor: ScrollAnchor | null, request = requestSequence) {
+    if (!anchor || !currentRequest(request)) return;
+    const restoring = ++restoreSequence;
     const index = sorted.findIndex(post => post.uri === anchor.key);
     if (index >= renderLimit) renderLimit = Math.ceil((index + 1) / RENDER_PAGE) * RENDER_PAGE;
     await tick();
+    if (!currentRequest(request) || restoring !== restoreSequence) return;
     const el = scrollContainer();
-    if (el) restoreAnchor(el, anchor);
+    if (el) restoreAnchor(el, anchor, 10, () => currentRequest(request) && restoring === restoreSequence);
   }
 
   /** Remember which post is under the fold, coalesced to one measure per frame. */
   function onFeedScroll() {
     if (scrollRaf) return;
+    const request = requestSequence;
+    const key = posKey;
     scrollRaf = requestAnimationFrame(() => {
       scrollRaf = 0;
+      if (!currentRequest(request)) return;
       const el = scrollContainer();
       if (!el) return;
       const anchor = pickAnchor(measureItems(el), el.scrollTop);
-      if (anchor) saveReadPosition(posKey, anchor.key, anchor.offset);
+      if (anchor) saveReadPosition(key, anchor.key, anchor.offset);
     });
+  }
+
+  function rememberPosition() {
+    const el = scrollContainer();
+    const anchor = el ? pickAnchor(measureItems(el), el.scrollTop) : null;
+    if (anchor) saveReadPosition(posKey, anchor.key, anchor.offset);
+    if (scrollRaf) cancelAnimationFrame(scrollRaf);
+    scrollRaf = 0;
   }
 
   function savedAnchor(): ScrollAnchor | null {
@@ -189,38 +220,41 @@
    * Raise the cap far enough to include it first — a reader returning to a
    * position deep in the feed has already paid for those rows once.
    */
-  function restorePosition() {
-    const el = scrollContainer();
-    if (!el) return;
-    const anchor = savedAnchor();
-    if (anchor) {
-      // Index into the ungrouped list: a row's key is the URI of its first
-      // post either way, so this finds the right position without needing
-      // detection to have run over the whole feed.
-      const idx = sorted.findIndex((post) => post.uri === anchor.key);
-      if (idx >= renderLimit) {
-        renderLimit = Math.ceil((idx + 1) / RENDER_PAGE) * RENDER_PAGE + RENDER_PAGE;
-      }
-    }
-    restoreAnchor(el, anchor);
+  function restorePosition(request = requestSequence) {
+    return preserveReadingPosition(savedAnchor(), request);
   }
 
-  onMount(async () => {
-    const warm = peekCachedClients();
-    const cached = getCached<UnifiedPost[]>('feed-' + viewKey);
-    if (warm?.accounts.length && cached) {
+  async function initializeFeed(refreshAccounts = false) {
+    const initialization = ++accountSequence;
+    const request = beginRequest();
+    const isCurrent = () => !disposed && initialization === accountSequence;
+    if (refreshAccounts) {
+      posts = []; progress = 0; accounts = []; clientEntries = new Map();
+      cursors = {}; savedFeeds = []; mastodonFilters = []; identityPairs = new Set();
+      offlineBanner = ''; newPostsAvailable = 0; initialLoading = true;
+    }
+    const warm = refreshAccounts ? null : peekCachedClients();
+    if (warm?.accounts.length) {
       accounts = warm.accounts;
       clientEntries = warm.clients;
-      posts = cached.data;
-      initialLoading = false;
-      requestAnimationFrame(restorePosition);
+      const cached = getCached<UnifiedPost[]>(cacheKey);
+      if (cached) {
+        posts = cached.data; progress = posts.length;
+        initialLoading = false;
+        void restorePosition(request);
+      }
     }
     try {
       let result = await initAllClients();
+      if (!isCurrent()) return;
       // If cache returned 0 accounts but DB might have some, force re-init
       if (result.accounts.length === 0) {
         invalidateClientCache();
         result = await initAllClients();
+        if (!isCurrent()) return;
+      }
+      if (accountScope(accounts) !== accountScope(result.accounts)) {
+        posts = []; progress = 0; cursors = {}; mastodonFilters = [];
       }
       accounts = result.accounts;
       clientEntries = result.clients;
@@ -236,53 +270,68 @@
           if (cached) {
             mastodonFilters = cached;
           } else {
-            masto.getFilters().then(f => { mastodonFilters = f; setCachedFilters(masto.getInstanceUrl(), f); }).catch(() => {});
+            void masto.getFilters().then(f => {
+              if (!isCurrent()) return;
+              mastodonFilters = f; setCachedFilters(masto.getInstanceUrl(), f);
+            }).catch(() => {});
           }
           break; // Only need to fetch once per unique instance for now
         }
       }
       // Load confirmed identities for crosspost dedup + affinity for "For You"
-      void listIdentities({ confirmed_only: true }).then(ids => { identityPairs = buildIdentityPairs(ids); }).catch(() => {});
+      void listIdentities({ confirmed_only: true }).then(ids => { if (isCurrent()) identityPairs = buildIdentityPairs(ids); }).catch(() => {});
       // Affinity is loaded when For You is first opened, not here. It reads
       // 1,500 records out of IndexedDB and is used by nothing else — the feed
       // always starts in timeline mode, so on most loads that work was thrown
       // away, on the path between opening the app and seeing a post.
-      loadAffinity();
       // Start Jetstream if enabled
       if (localStorage.getItem('crispdeck-live-counters') === 'true') {
         jetstream.setEnabled(true);
       }
-      loadPinnedFeeds();
+      void loadPinnedFeeds();
       // Show cached feed instantly while fresh data loads, and put the reader
       // straight back where they were — this is the path taken when they open
       // a post and come back, so it has to land before the network does.
-      if (cached && !warm) {
+      const cached = getCached<UnifiedPost[]>(cacheKey);
+      if (cached) {
         posts = cached.data;
+        progress = posts.length;
         initialLoading = false;
-        requestAnimationFrame(restorePosition);
+        void restorePosition();
       }
       if (accounts.length > 0) {
         // Returning from a thread within half a minute: the cache is the same
         // data the network would return, so skip the round trip entirely and
         // leave the restored position undisturbed.
-        const justLeft = cached && !isStale(cached, 30_000) && savedAnchor() !== null;
+        const justLeft = !refreshAccounts && cached && !isStale(cached, 30_000) && savedAnchor() !== null;
         if (!justLeft) {
-          await loadFeed();
+          const pending = loadFeed();
+          // The load starts a new request generation. Restore cached content
+          // under that generation while the network is still pending.
+          void restorePosition();
+          const loaded = await pending;
           // Re-anchor: fresh posts may have arrived above the one being read.
-          restorePosition();
+          if (loaded !== undefined) await restorePosition(loaded);
         }
       }
-      scrollContainer()?.addEventListener('scroll', onFeedScroll, { passive: true });
     } catch (e) {
-      error = String(e);
+      if (isCurrent()) error = String(e);
     } finally {
-      initialLoading = false;
+      if (isCurrent()) initialLoading = false;
     }
+  }
 
-    // Poll for new posts every 60 seconds, skip when tab is hidden.
-    // NB: Svelte ignores the return value of an *async* onMount callback, so
-    // the teardown lives in onDestroy — returning a cleanup here would leak a
-    // fresh interval on every visit to this page.
+  function onAccountsChanged() {
+    rememberPosition();
+    void initializeFeed(true);
+  }
+
+  onMount(() => {
+    void initializeFeed();
+    scrollContainer()?.addEventListener('scroll', onFeedScroll, { passive: true });
+    window.addEventListener('crispdeck:accounts-changed', onAccountsChanged);
+    // Register lifetime resources synchronously, so teardown also covers a
+    // page left before its asynchronous account initialization finishes.
     pollInterval = setInterval(() => {
       if (!document.hidden) checkForNewPosts();
     }, 60000);
@@ -301,6 +350,8 @@
   });
 
   onDestroy(() => {
+    disposed = true; requestSequence++; accountSequence++; newerSequence++; restoreSequence++;
+    clearTimeout(searchTimer);
     stopWatchingConnection?.();
     stopWatchingConnection = undefined;
     observer?.disconnect();
@@ -308,6 +359,7 @@
     pollInterval = undefined;
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('crispdeck:accounts-changed', onAccountsChanged);
     }
     const main = scrollContainer();
     main?.removeEventListener('scroll', onFeedScroll);
@@ -327,11 +379,14 @@
    * switcher the user may never open would be noise.
    */
   async function loadPinnedFeeds() {
+    const initialization = accountSequence;
     const agent = blueskyAgent();
     if (!agent) return;
     try {
-      savedFeeds = await listSavedFeeds(agent);
+      const saved = await listSavedFeeds(agent);
+      if (!disposed && initialization === accountSequence) savedFeeds = saved;
     } catch (e) {
+      if (disposed || initialization !== accountSequence) return;
       swallow('feed.loadPinnedFeeds', e);
       toast.error(i18n.t.feed.savedFeedsFailed);
     }
@@ -407,20 +462,21 @@
     acct: Account,
     entry: ClientEntry,
     opts: { limit: number; cursor?: string; resolveReposts?: boolean },
+    view: FeedView,
   ): Promise<{ posts: UnifiedPost[]; cursor?: string; degraded: boolean }> {
     const { limit, cursor } = opts;
     const tag = (p: UnifiedPost) => { p.sourceAccount = acct.handle; p.sourceAccountId = acct.id; return p; };
-    const wantsTimeline = feedMode === 'timeline' || feedMode === 'for-you';
+    const wantsTimeline = view.mode === 'timeline' || view.mode === 'for-you';
 
     // A feed generator or list is Bluesky-only and account-independent: its
     // ranking happens on the generator's server, so there is nothing to merge
     // from Mastodon or Threads and no fallback worth attempting.
-    if (feedMode === 'custom' && customFeed?.uri) {
+    if (view.mode === 'custom' && view.choice?.uri) {
       if (acct.platform !== 'bluesky') return { posts: [], cursor: undefined, degraded: false };
       const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
-      const res = customFeed.kind === 'list'
-        ? await agent.api.app.bsky.feed.getListFeed({ list: customFeed.uri, limit, cursor })
-        : await agent.api.app.bsky.feed.getFeed({ feed: customFeed.uri, limit, cursor });
+      const res = view.choice.kind === 'list'
+        ? await agent.api.app.bsky.feed.getListFeed({ list: view.choice.uri, limit, cursor })
+        : await agent.api.app.bsky.feed.getFeed({ feed: view.choice.uri, limit, cursor });
       return {
         posts: res.data.feed.map(p => tag(normalizePost(p, 'bluesky'))),
         cursor: res.data.cursor,
@@ -473,11 +529,11 @@
   }
 
   /** Fetch the newest slice of every account's feed and keep what postdates `sinceMs`. */
-  async function fetchNewerPosts(sinceMs: number, limit: number): Promise<UnifiedPost[]> {
+  async function fetchNewerPosts(sinceMs: number, limit: number, view: FeedView): Promise<UnifiedPost[]> {
     const results = await Promise.allSettled(accounts.map(async (acct) => {
       const entry = clientEntries.get(acct.id);
       if (!entry) return [] as UnifiedPost[];
-      const page = await fetchAccountPage(acct, entry, { limit });
+      const page = await fetchAccountPage(acct, entry, { limit }, view);
       return page.posts.filter(p => isNewerThan(p.createdAt, sinceMs));
     }));
     const fresh = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
@@ -493,39 +549,49 @@
   }
 
   async function checkForNewPosts() {
-    if (posts.length === 0 || loading) return;
+    if (disposed || posts.length === 0 || loading) return;
+    const request = requestSequence;
+    const newer = ++newerSequence;
     const newestMs = toTime(posts[0]?.createdAt);
     if (!newestMs) return;
 
-    const fresh = await fetchNewerPosts(newestMs, 20);
+    const fresh = await fetchNewerPosts(newestMs, 20, currentView());
+    if (!currentRequest(request) || newer !== newerSequence) return;
     if (newPostsAvailable !== fresh.length) {
       const anchor = readingAnchor();
       newPostsAvailable = fresh.length; // Replace, don't accumulate
-      await preserveReadingPosition(anchor);
+      await preserveReadingPosition(anchor, request);
     }
 
     // Send push notification if page is not visible and we have new posts
     if (fresh.length > 0 && document.hidden) {
       const perm = await getPermission();
-      if (perm === 'granted') {
+      if (perm === 'granted' && currentRequest(request) && newer === newerSequence) {
         notifyNewPosts(fresh.length);
       }
     }
   }
 
   async function loadNewPosts() {
+    if (disposed || loading) return;
+    const request = requestSequence;
+    const newer = ++newerSequence;
+    const view = currentView();
     // Prepend new posts instead of reloading everything
     const bannerAnchor = readingAnchor();
     newPostsAvailable = 0;
-    await preserveReadingPosition(bannerAnchor);
+    await preserveReadingPosition(bannerAnchor, request);
+    if (!currentRequest(request) || newer !== newerSequence) return;
     const newestMs = toTime(posts[0]?.createdAt);
     if (!newestMs) return;
-    const unique = await fetchNewerPosts(newestMs, 50);
+    const unique = await fetchNewerPosts(newestMs, 50, view);
+    if (!currentRequest(request) || newer !== newerSequence) return;
     if (unique.length > 0) {
       const anchor = readingAnchor();
       posts = sortPosts([...unique, ...posts], 'newest');
       progress = posts.length;
-      await preserveReadingPosition(anchor);
+      cachePosts(cacheKey);
+      await preserveReadingPosition(anchor, request);
     }
   }
 
@@ -545,7 +611,18 @@
     observer.observe(scrollSentinel);
   });
 
-  async function loadFeed() {
+  function cachePosts(key: string) {
+    const configured = Number.parseInt(readString('crispdeck-feed-cache-size', '200'));
+    const size = Number.isFinite(configured) && configured > 0 ? configured : 200;
+    const plain = $state.snapshot(posts);
+    setCache(key, plain.slice(0, size));
+    // IndexedDB cannot structured-clone Svelte's reactive proxies.
+    void cacheFeed(key, plain).catch(error => swallow('feed.cache', error));
+  }
+
+  async function loadFeed(request = beginRequest()): Promise<number | undefined> {
+    if (!currentRequest(request)) return;
+    const view = currentView();
     loading = true;
     // Clear stale banners — this load decides what, if anything, is wrong now.
     // Leaving them set meant one flaky refresh pinned "Timeline unavailable"
@@ -554,83 +631,97 @@
     // A transient OAuth restore failure leaves Bluesky accounts read-only for
     // the rest of the page's life, which silently downgrades the timeline to
     // "your posts only". Give the session a chance to come back first.
-    const recovered = await retryDegradedClients(clientEntries);
-    if (recovered) {
-      accounts = recovered.accounts;
-      clientEntries = recovered.clients;
-    }
-    // Don't clear posts — keep cached content visible while fresh data loads
-    cursors = {};
-    const allPosts: UnifiedPost[] = [];
-    const degradedHandles: string[] = [];
-
-    const feedResults = await Promise.allSettled(accounts.map(async (acct) => {
-      const entry = clientEntries.get(acct.id);
-      if (!entry) throw new Error(`Unable to access the connected account ${acct.handle}. Reconnect it in Settings.`);
-      try {
-        return { acct, ...(await fetchAccountPage(acct, entry, { limit: 50, resolveReposts: true })) };
-      } catch (e) {
-        // Name the account — "Failed to load feed" alone is useless with several connected.
-        throw new Error(`Failed to load feed for @${acct.handle.replace(/^@+/, "")}: ${e instanceof Error ? e.message : String(e)}`);
+    try {
+      const recovered = await retryDegradedClients(clientEntries);
+      if (!currentRequest(request)) return;
+      if (recovered) {
+        if (accountScope(accounts) !== accountScope(recovered.accounts)) { posts = []; progress = 0; }
+        accounts = recovered.accounts;
+        clientEntries = recovered.clients;
       }
-    }));
+      const key = feedCacheKey(accounts, view);
+      // Don't clear posts — keep this view's cached content visible while loading.
+      cursors = {};
+      const allPosts: UnifiedPost[] = [];
+      const degradedHandles: string[] = [];
+      const feedResults = await Promise.allSettled(accounts.map(async (acct) => {
+        const entry = clientEntries.get(acct.id);
+        if (!entry) throw new Error(`Unable to access the connected account ${acct.handle}. Reconnect it in Settings.`);
+        try {
+          return { acct, ...(await fetchAccountPage(acct, entry, { limit: 50, resolveReposts: true }, view)) };
+        } catch (e) {
+          throw new Error(`Failed to load feed for @${acct.handle.replace(/^@+/, "")}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }));
+      if (!currentRequest(request)) return;
 
-    for (const result of feedResults) {
-      if (result.status === 'fulfilled') {
-        allPosts.push(...result.value.posts);
-        if (result.value.cursor) cursors[result.value.acct.id] = result.value.cursor;
-        if (result.value.degraded) degradedHandles.push(result.value.acct.handle);
-      } else {
-        swallow('feed.loadAccount', result.reason);
-        error = (error ? error + '\n' : '') + String(result.reason);
+      for (const result of feedResults) {
+        if (result.status === 'fulfilled') {
+          allPosts.push(...result.value.posts);
+          if (result.value.cursor) cursors[result.value.acct.id] = result.value.cursor;
+          if (result.value.degraded) degradedHandles.push(result.value.acct.handle);
+        } else {
+          swallow('feed.loadAccount', result.reason);
+          error = (error ? error + '\n' : '') + String(result.reason);
+        }
+      }
+      if (degradedHandles.length > 0) {
+        const who = degradedHandles.map(h => '@' + h).join(', ');
+        error = (error ? error + '\n' : '')
+          + `Timeline unavailable for ${who} — showing your posts only. `
+          + 'Your session may have expired; try reconnecting in Settings.';
+      }
+
+      // An empty successful response is authoritative. Only network failures
+      // justify replaying an offline snapshot, and only for this account/view.
+      if (allPosts.length > 0 || feedResults.every(result => result.status === 'fulfilled')) {
+        const anchor = readingAnchor();
+        const freshUris = new Set<string>();
+        const fresh = allPosts.filter(post => {
+          if (freshUris.has(post.uri)) return false;
+          freshUris.add(post.uri); return true;
+        });
+        posts = sortPosts(anchor && fresh.length ? [...fresh, ...posts.filter(post => !freshUris.has(post.uri))] : fresh, 'newest');
+        progress = posts.length;
+        cachePosts(key);
+        offlineBanner = '';
+        await preserveReadingPosition(anchor, request);
+      } else if (posts.length === 0 && accounts.length > 0) {
+        const cached = await loadCachedFeed(key);
+        if (!currentRequest(request)) return;
+        if (cached && cached.posts.length > 0) {
+          posts = cached.posts; progress = posts.length;
+          offlineBanner = cachedDataBanner(true, cached.cachedAt, i18n.t.feed.offlineCached, formatCachedTime);
+        }
+      }
+    } catch (e) {
+      if (currentRequest(request)) error = String(e);
+    } finally {
+      if (currentRequest(request)) {
+        const bannerAnchor = readingAnchor();
+        newPostsAvailable = 0;
+        loading = false;
+        await preserveReadingPosition(bannerAnchor, request);
       }
     }
-
-    if (degradedHandles.length > 0) {
-      const who = degradedHandles.map(h => '@' + h).join(', ');
-      error = (error ? error + '\n' : '')
-        + `Timeline unavailable for ${who} — showing your posts only. `
-        + 'Your session may have expired; try reconnecting in Settings.';
-    }
-
-    // Only replace if we got fresh data; keep cached posts on network failure
-    if (allPosts.length > 0) {
-      const anchor = readingAnchor();
-      // Keep older loaded pages when refreshing while someone is reading.
-      const freshUris = new Set(allPosts.map(post => post.uri));
-      posts = sortPosts(anchor ? [...allPosts, ...posts.filter(post => !freshUris.has(post.uri))] : allPosts, 'newest');
-      progress = posts.length;
-      const cacheSize = parseInt(localStorage.getItem('crispdeck-feed-cache-size') ?? '200');
-      setCache('feed-' + viewKey, posts.slice(0, cacheSize));
-      // Persist to IndexedDB for offline PWA access
-      cacheFeed('feed', posts);
-      offlineBanner = '';
-      await preserveReadingPosition(anchor);
-    } else if (posts.length === 0) {
-      // Network failed and no SWR cache — try offline IndexedDB cache
-      const cached = await loadCachedFeed('feed');
-      if (cached && cached.posts.length > 0) {
-        posts = cached.posts;
-        offlineBanner = cachedDataBanner(true, cached.cachedAt, i18n.t.feed.offlineCached, formatCachedTime);
-      }
-    }
-    const bannerAnchor = readingAnchor();
-    newPostsAvailable = 0;
-    loading = false;
-    await preserveReadingPosition(bannerAnchor);
+    return currentRequest(request) ? request : undefined;
   }
 
   async function loadMore() {
-    if (loadingMore || !hasMoreContent) return;
+    if (disposed || loading || loadingMore || !hasMoreContent) return;
+    const request = requestSequence;
+    const view = currentView();
+    const key = cacheKey;
     loadingMore = true;
 
     const moreResults = await Promise.allSettled(accounts.map(async (acct) => {
       const cursor = cursors[acct.id];
       const entry = clientEntries.get(acct.id);
       if (!cursor || !entry) return { posts: [] as UnifiedPost[], acct, cursor: undefined as string | undefined };
-      const page = await fetchAccountPage(acct, entry, { limit: 50, cursor, resolveReposts: true });
+      const page = await fetchAccountPage(acct, entry, { limit: 50, cursor, resolveReposts: true }, view);
       return { posts: page.posts, acct, cursor: page.cursor };
     }));
+    if (!currentRequest(request)) return;
 
     const newPosts: UnifiedPost[] = [];
     for (const result of moreResults) {
@@ -646,20 +737,22 @@
       // Append older posts at the end — no re-sort needed since pagination
       // goes backward. Deduplicate by URI to avoid dupes across accounts.
       const existingUris = new Set(posts.map(p => p.uri));
-      const unique = sortPosts(newPosts.filter(p => !existingUris.has(p.uri)), 'newest');
+      const unique = sortPosts(newPosts.filter(p => {
+        if (existingUris.has(p.uri)) return false;
+        existingUris.add(p.uri); return true;
+      }), 'newest');
       posts = [...posts, ...unique];
       progress = posts.length;
+      cachePosts(key);
     }
     loadingMore = false;
   }
 
   async function switchMode(mode: FeedMode) {
     if (mode === feedMode && mode !== 'custom') return;
+    rememberPosition();
     feedMode = mode;
     if (mode !== 'custom') customFeed = null;
-    // Ranked mode needs the affinity map to rank anything; every other mode
-    // never touches it.
-    if (mode === 'for-you') await loadAffinity();
     await enterView();
   }
 
@@ -667,6 +760,7 @@
     showFeedMenu = false;
     if (choice.kind === 'timeline') return switchMode('timeline');
     if (feedMode === 'custom' && customFeed?.key === choice.key) return;
+    rememberPosition();
     customFeed = choice;
     feedMode = 'custom';
     await enterView();
@@ -678,19 +772,25 @@
    * were in each rather than dumping you at the top of both.
    */
   async function enterView() {
+    const request = beginRequest();
+    const mode = feedMode;
     posts = [];
+    progress = 0; cursors = {}; offlineBanner = ''; error = ''; loading = true;
     renderLimit = RENDER_PAGE;
     newPostsAvailable = 0;
-    const cached = getCached<UnifiedPost[]>('feed-' + viewKey);
+    const cached = getCached<UnifiedPost[]>(cacheKey);
     if (cached) {
-      posts = cached.data;
-      restorePosition();
+      posts = cached.data; progress = posts.length;
+      void restorePosition(request);
     } else {
       const el = scrollContainer();
       if (el) el.scrollTop = 0;
     }
-    await loadFeed();
-    restorePosition();
+    // Invalidate the prior view before waiting for archive data.
+    if (mode === 'for-you') await loadAffinity();
+    if (!currentRequest(request)) return;
+    await loadFeed(request);
+    if (currentRequest(request)) await restorePosition(request);
   }
 
   function handleLike(post: UnifiedPost, active = true) {
@@ -744,21 +844,9 @@
   let renderLimit = $state(RENDER_PAGE);
   /**
    * Crosspost detection runs over the rows being rendered, not the whole feed.
-   *
-   * It compares every Bluesky post against every Mastodon one with
-   * Jaro-Winkler, so the work is the product of the two counts: on a 400-post
-   * timeline that is 35,511 full string comparisons and about seven seconds of
-   * blocked main thread. Over the ~30 rows actually on screen it is a few
-   * hundred comparisons.
-   *
-   * There is no cheap way to skip a pair. A character-count ceiling on
-   * Jaro-Winkler is exact and was tried; it rejected none of those 35,511
-   * pairs, because two unrelated English sentences share most of their
-   * characters. The number of comparisons is the thing to cut, not their cost.
-   *
-   * The reader cannot see a grouping for a post that is not displayed, so
-   * detecting over the rendered slice shows them the same thing. As the cap
-   * lifts, detection re-runs over the larger slice and later pairs group then.
+   * The detector uses an index of shared word sequences to avoid comparing
+   * unrelated text. Keeping the input to the visible slice also bounds the
+   * normalization and grouping work before a reader scrolls farther.
    */
   const visibleFeed = $derived(
     detectCrossposts(
