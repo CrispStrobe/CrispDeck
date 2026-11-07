@@ -6,6 +6,9 @@ on:
       source_sha:
         type: string
         required: true
+      ios_validator_sha:
+        type: string
+        default: ''
       platform:
         type: string
         default: both
@@ -83,8 +86,8 @@ jobs:
       # commit and hashes in the receipt; never apply it to coordinated builds.
       - name: Verify release source and select iOS smoke harness
         env:
-          SOURCE_OVERRIDE: ${{ github.event_name == 'workflow_dispatch' && inputs.source_sha || '' }}
-          VALIDATOR_OVERRIDE: ${{ github.event_name == 'workflow_dispatch' && inputs.ios_validator_sha || '' }}
+          SOURCE_OVERRIDE: ${{ inputs.ios_validator_sha && inputs.source_sha || '' }}
+          VALIDATOR_OVERRIDE: ${{ inputs.ios_validator_sha || '' }}
         run: |
           set -euo pipefail
           SOURCE=$(git rev-parse HEAD)
@@ -128,9 +131,10 @@ jobs:
 
       - run: npm ci
 
-      # Generate all platform icons (desktop + iOS AppIcon.appiconset) from 1024px source
-      - name: Generate app icons
-        run: npx tauri icon static/icon-1024.png
+      # Tauri's generator emits RGBA PNGs even when fully opaque. Apple rejects
+      # alpha-bearing iOS icons, so validate the committed opaque RGB set.
+      - name: Validate iOS app icons
+        run: python3 scripts/sync-ios-icons.py --validate-only
 
       # Generates the Xcode project in src-tauri/gen/apple/
       # Versionless customizations live in src-tauri/Info.ios.plist. Generated

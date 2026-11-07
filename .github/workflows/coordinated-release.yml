@@ -264,7 +264,7 @@ jobs:
           mkdir -p ~/.appstoreconnect/private_keys
           printf '%s' "$APPLE_API_KEY_P8" > "$HOME/.appstoreconnect/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8"
           IPA="release-assets/CrispDeck_${VERSION}_ios-appstore.ipa"
-          xcrun altool --validate-app -f "$IPA" --type ios --apiKey "$APPLE_API_KEY_ID" --apiIssuer "$APPLE_API_ISSUER_ID"
+          xcrun altool --validate-app -f "$IPA" --type ios --apple-id 6789569440 --bundle-id com.christianstrobele.crispdeck --bundle-version "$IOS_BUILD" --bundle-short-version-string "$VERSION" --apiKey "$APPLE_API_KEY_ID" --apiIssuer "$APPLE_API_ISSUER_ID"
           xcrun altool --upload-package "$IPA" --type ios --apple-id 6789569440 --bundle-id com.christianstrobele.crispdeck --bundle-version "$IOS_BUILD" --bundle-short-version-string "$VERSION" --apiKey "$APPLE_API_KEY_ID" --apiIssuer "$APPLE_API_ISSUER_ID"
           echo 'Apple accepted the upload; TestFlight processing, beta review and App Store review remain separate.' >> "$GITHUB_STEP_SUMMARY"
 

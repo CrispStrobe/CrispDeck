@@ -96,6 +96,12 @@ Google Play publication uses the separate internal-track workflow.
 Heavy compilation and emulators run in GitHub Actions. Local checks are Python
 release guards and workflow syntax; inspect load/memory before broader work.
 
+iOS builds use the committed opaque RGB icons in `src-tauri/icons/ios`.
+When changing `static/icon-1024.png`, install Pillow in a development Python
+environment and run `python3 scripts/generate-ios-icons.py`; commit the generated
+icons and source hash. CI checks the hash and rejects alpha-bearing iOS PNGs
+before building.
+
 iOS builders require `IOS_DIST_P12`, `IOS_DIST_P12_PASSWORD`, `APPLE_TEAM_ID`
 and `IOS_APPSTORE_PROFILE_BASE64` (base64 of the signed App Store provisioning
 profile). The profile is installed in both Xcode profile directories. Manual
