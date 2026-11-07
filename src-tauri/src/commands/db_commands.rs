@@ -78,12 +78,9 @@ fn add_account_impl(
     // platform has one; otherwise the local encrypted blob. `stored` is what
     // goes in the column either way — a reference or the blob itself.
     let preferred = preferred_backend(conn);
-    let (stored, used) =
+    let (stored, _) =
         secret_store::store(preferred, secrets, platform, handle, credentials)
             .map_err(|e| e.to_string())?;
-    if preferred == secret_store::Backend::Keychain && used == secret_store::Backend::Local {
-        log::warn!("no OS secret store available; {handle} was saved with the local blob");
-    }
 
     let account = accounts::insert(
         conn,
@@ -309,8 +306,8 @@ fn backend_info(conn: &rusqlite::Connection) -> serde_json::Value {
         "macosKeychain": crate::db::get_setting(conn, MAC_KEYCHAIN_KEY, "login"),
         // The data protection keychain needs a keychain-access-groups
         // entitlement, so an unsigned build cannot use it. CI proved that:
-        // "A required entitlement isn't present." Offering it there would be
-        // offering a switch that silently falls back to the weaker store.
+        // "A required entitlement isn't present." A refused write is surfaced
+        // to the user; it never downgrades to the local credential store.
         "macosKeychainChoices": mac_keychain_choices(),
     })
 }
@@ -319,7 +316,7 @@ fn backend_info(conn: &rusqlite::Connection) -> serde_json::Value {
 fn mac_keychain_choices() -> Vec<&'static str> {
     if cfg!(target_os = "macos") {
         // data-protection is listed; whether it works depends on signing, and
-        // store() reports the backend it really used so the UI can say so.
+        // store() reports a signing/keychain error without a local fallback.
         vec!["login", "data-protection", "path"]
     } else {
         vec![]
@@ -823,15 +820,20 @@ mod tests {
     }
 
     #[test]
-    fn a_secret_store_that_will_not_write_falls_back_rather_than_losing_the_account() {
+    fn a_failed_keychain_write_does_not_create_a_local_account_or_credential_blob() {
         let conn = test_db();
         crate::db::set_setting(&conn, CREDENTIAL_BACKEND_KEY, "keychain").unwrap();
         let store = FakeStore { fail_writes: true, ..Default::default() };
 
-        let account = add(&conn, &store, "@me@x.social", "the-token").unwrap();
+        let error = add(&conn, &store, "@me@x.social", "the-token").unwrap_err();
+        assert!(error.contains("system keychain"));
+        assert!(!error.contains("the-token"));
+        assert!(accounts::list(&conn).unwrap().is_empty());
+        assert_eq!(store.len(), 0);
 
-        let column = accounts::get_credentials_enc(&conn, account.id).unwrap();
-        assert!(!secret_store::is_keychain_ref(&column), "should have fallen back to the blob");
+        // The user can deliberately choose local storage and retry.
+        crate::db::set_setting(&conn, CREDENTIAL_BACKEND_KEY, "local").unwrap();
+        let account = add(&conn, &store, "@me@x.social", "the-token").unwrap();
         assert_eq!(get_credentials_impl(&conn, &store, account.id).unwrap(), "the-token");
     }
 
