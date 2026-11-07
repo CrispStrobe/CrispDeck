@@ -67,11 +67,15 @@ async function executeAction(post: UnifiedPost, action: 'like' | 'repost', activ
     if (!raw?.id) throw new Error('The post could not be resolved for this account. Refresh the feed.');
     const client = entry.client as ThreadsClient;
     if (action === 'like') {
-      await (active ? client.like(raw.id) : client.unlike(raw.id));
+      if (previous?.active !== active) await (active ? client.like(raw.id) : client.unlike(raw.id));
       raw.favourited = active;
       return { active };
     }
     if (!active) throw new Error('Undoing a Threads repost is not available in CrispDeck.');
+    if (previous?.active) {
+      raw.reblogged = true;
+      return previous;
+    }
     const response = await client.repost(raw.id);
     raw.reblogged = true;
     return { active: true, uri: response.id };
