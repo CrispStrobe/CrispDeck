@@ -20,6 +20,7 @@ describe('Threads native transport', () => {
     const url = new URL(mock.fetch.mock.calls[0][0]);
     expect(url.pathname).toBe('/v1.0/123/threads');
     expect(url.searchParams.get('access_token')).toBe('test-token');
+    expect(mock.fetch.mock.calls[0][1]).toMatchObject({ redirect: 'error', maxRedirections: 0 });
   });
 
   it('uses native HTTP for the whole create, poll, publish flow', async () => {
@@ -35,6 +36,7 @@ describe('Threads native transport', () => {
     expect(init.body.get('text')).toBe('Hello');
     expect(init.body.get('access_token')).toBe('test-token');
     expect(mock.fetch.mock.calls[2][1].body.get('creation_id')).toBe('container');
+    expect(mock.fetch.mock.calls.every(([, options]) => options.maxRedirections === 0)).toBe(true);
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -60,6 +62,7 @@ describe('Threads native transport', () => {
     expect(refreshUrl.pathname).toBe('/refresh_access_token');
     expect(refreshUrl.searchParams.get('grant_type')).toBe('th_refresh_token');
     expect(refreshUrl.searchParams.get('access_token')).toBe('long');
+    expect(mock.fetch.mock.calls.every(([, options]) => options.redirect === 'error' && options.maxRedirections === 0)).toBe(true);
     expect(fetch).not.toHaveBeenCalled();
   });
 });

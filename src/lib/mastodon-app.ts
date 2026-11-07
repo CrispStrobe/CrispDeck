@@ -56,6 +56,7 @@ async function appStillValid(instance: string, app: MastodonApp): Promise<boolea
   try {
     await fetchOk(`${instance}/oauth/token`, {
       method: 'POST',
+      redirect: 'error',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         client_id: app.client_id,
@@ -81,6 +82,7 @@ export async function ensureMastodonApp(instance: string, redirectUri: string): 
 
   const resp = await fetchOk(`${instance}/api/v1/apps`, {
     method: 'POST',
+    redirect: 'error',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       client_name: 'CrispDeck',
@@ -124,6 +126,7 @@ export async function exchangeMastodonCode(params: {
   const instance = params.instance_url.replace(/\/$/, '');
   const resp = await fetchOk(`${instance}/oauth/token`, {
     method: 'POST',
+    redirect: 'error',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       client_id: params.client_id,
@@ -155,6 +158,7 @@ export async function revokeMastodonToken(
   if (!creds.access_token || !creds.client_id) return;
   await fetchOk(`${instanceUrl.replace(/\/$/, '')}/oauth/revoke`, {
     method: 'POST',
+    redirect: 'error',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       client_id: creds.client_id,

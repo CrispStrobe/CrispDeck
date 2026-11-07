@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   ensureMastodonApp,
+  exchangeMastodonCode,
   mastodonAuthorizeUrl,
   revokeMastodonToken,
   MASTODON_SCOPES,
@@ -50,6 +51,7 @@ describe('ensureMastodonApp', () => {
     expect(calls.filter((c) => c.path === '/api/v1/apps')).toHaveLength(1);
     // The check uses the client_credentials grant, not a user token.
     expect(calls.find((c) => c.path === '/oauth/token')?.body.grant_type).toBe('client_credentials');
+    expect(vi.mocked(fetch).mock.calls.every(([, options]) => options?.redirect === 'error')).toBe(true);
   });
 
   it('registers again when the instance no longer recognises the saved app', async () => {
@@ -129,11 +131,21 @@ describe('revokeMastodonToken', () => {
     const calls = fakeFetch({ '/oauth/revoke': { status: 200, body: {} } });
     await revokeMastodonToken(`${INSTANCE}/`, { access_token: 't', client_id: 'c', client_secret: 's' });
     expect(calls).toEqual([{ path: '/oauth/revoke', body: { client_id: 'c', client_secret: 's', token: 't' } }]);
+    expect(vi.mocked(fetch).mock.calls[0][1]?.redirect).toBe('error');
   });
 
   it('does nothing without a token', async () => {
     const calls = fakeFetch({});
     await revokeMastodonToken(INSTANCE, {});
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe('exchangeMastodonCode', () => {
+  it('does not forward the authorization code or client secret through redirects', async () => {
+    fakeFetch({ '/oauth/token': { status: 307, body: {} } });
+    await expect(exchangeMastodonCode({ instance_url: INSTANCE, client_id: 'client', client_secret: 'secret', code: 'code', redirect_uri: REDIRECT })).rejects.toThrow('307');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fetch).mock.calls[0][1]?.redirect).toBe('error');
   });
 });

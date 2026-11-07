@@ -5,6 +5,10 @@ import type { DeckColumnConfig } from './deck-layouts';
 import type { ClientEntry } from './api/client-factory';
 import { loadDeckPage, supportsDeckLoader, supportsDeckPagination } from './deck-loader';
 
+const native = vi.hoisted(() => ({ enabled: false, fetch: vi.fn() }));
+vi.mock('$lib/platform', () => ({ isTauri: () => native.enabled }));
+vi.mock('@tauri-apps/plugin-http', () => ({ fetch: native.fetch }));
+
 function account(id: number, platform: Platform = 'bluesky', overrides: Partial<Account> = {}): Account {
   return {
     id, platform,
@@ -93,6 +97,8 @@ function response(data: unknown, link?: string, statusCode = 200) {
 const fetchMock = vi.fn<typeof fetch>();
 
 beforeEach(() => {
+  native.enabled = false;
+  native.fetch.mockReset();
   fetchMock.mockReset();
   fetchMock.mockRejectedValue(new Error('Unexpected network request'));
   vi.stubGlobal('fetch', fetchMock);
@@ -405,6 +411,16 @@ describe('Mastodon wire normalization and secure pagination', () => {
 });
 
 describe('cross-network search and Threads cursors', () => {
+  it('prevents native Threads redirects from forwarding a query token', async () => {
+    native.enabled = true;
+    native.fetch.mockResolvedValueOnce(response({ data: [{ id: '1', text: 'Saved token stays on Graph' }] }));
+    const acct = account(3, 'threads');
+    const result = await loadDeckPage(column('my-posts'), [acct], new Map([[3, networkEntry(acct)]]));
+    expect(result.posts).toHaveLength(1);
+    expect(native.fetch.mock.calls[0][1]).toMatchObject({ redirect: 'error', maxRedirections: 0 });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('searches every eligible account and preserves distinct pagination mechanisms', async () => {
     const bsky = account(1), masto = account(2, 'mastodon'), threads = account(3, 'threads');
     const fixture = bskyFixture(bsky);
