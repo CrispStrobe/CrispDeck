@@ -10,7 +10,6 @@
     "opener:default",
     "deep-link:default",
     "http:default",
-    "store:default",
     "notification:default",
     {
       "identifier": "http:allow-fetch",

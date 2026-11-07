@@ -29,6 +29,11 @@ class NativeFileCapabilitiesTests(unittest.TestCase):
                                      permission.get('identifier', '').startswith('fs:')
                                      for permission in permissions),
                                  'File paths must be granted by the save dialog, not a static scope')
+                self.assertFalse(any((permission if isinstance(permission, str) else
+                                      permission.get('identifier', '')).startswith('store:')
+                                     for permission in permissions),
+                                 'The unused store plugin accepts arbitrary JSON file paths; '
+                                 'do not bypass filesystem scopes through its commands')
 
 
 class NativeContentSecurityPolicyTests(unittest.TestCase):

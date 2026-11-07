@@ -9,7 +9,6 @@
     "deep-link:default",
     "http:default",
     "dialog:allow-save",
-    "store:default",
     "fs:allow-write-text-file",
     "notification:default",
     {
