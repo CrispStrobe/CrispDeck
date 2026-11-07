@@ -8,6 +8,8 @@
   import { loadThreadPage, parseThreadRequest, threadErrorMessage } from '$lib/thread-loader';
   import { partitionThreadReplies } from '$lib/thread-continuation';
   import { threadRows } from '$lib/thread-tree';
+  import { performDeckAction } from '$lib/deck-actions';
+  import type { ClientEntry } from '$lib/api/client-factory';
   import { isThread, extractThreadText } from '$lib/thread-sync';
   import Post from '$lib/components/Post.svelte';
   import type { UnifiedPost, Account, Platform } from '$lib/types';
@@ -20,6 +22,7 @@
   let platform: Platform = $state('bluesky');
 
   let accounts: Account[] = $state([]);
+  let clients: Map<number, ClientEntry> = new Map();
   let externalUrl = $state('');
   let requestSequence = 0;
   let disposed = false;
@@ -40,6 +43,7 @@
       const result = await initAllClients();
       if (disposed || sequence !== requestSequence) return;
       accounts = result.accounts;
+      clients = result.clients;
       const thread = await loadThreadPage(request, result.accounts, result.clients);
       if (disposed || sequence !== requestSequence) return;
       mainPost = thread.mainPost; ancestors = thread.ancestors; replies = thread.replies; externalUrl = thread.externalUrl ?? '';
@@ -93,6 +97,18 @@
     const text = extractThreadText(articlePosts);
     // Navigate to compose with the thread text pre-filled
     goto(`${base}/compose?text=${encodeURIComponent(text)}`);
+  }
+
+  function react(post: UnifiedPost, action: 'like' | 'repost', active = true) {
+    return performDeckAction(post, action, active, clients, accounts.map(account => account.id));
+  }
+  function reply(post: UnifiedPost) {
+    const params = new URLSearchParams({ replyTo: post.uri, author: post.author.handle, platform: post.platform });
+    void goto(`${base}/compose?${params}`);
+  }
+  function quote(post: UnifiedPost) {
+    const params = new URLSearchParams({ quoteUri: post.uri, quoteCid: (post.raw as any)?.post?.cid ?? '', quoteAuthor: post.author.handle, quoteText: post.text.substring(0, 100), platform: post.platform });
+    void goto(`${base}/compose?${params}`);
   }
 </script>
 
@@ -207,7 +223,7 @@
         {#each rows as row (row.post.uri)}
           <div class="mb-2 {row.selected ? 'border-l-4 border-[var(--color-primary)] rounded-r-lg' : ''}"
             style:margin-left="{row.depth * 16}px" style:min-width="min(22rem, 100%)" data-thread-depth={row.depth}>
-            <Post post={row.post} />
+            <Post post={row.post} onlike={(post, active) => react(post, 'like', active)} onboost={(post, active) => react(post, 'repost', active)} onreply={reply} onquote={quote} />
           </div>
         {/each}
       </div>
