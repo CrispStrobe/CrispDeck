@@ -6,7 +6,7 @@
  * TTL determines when cached data is considered stale (still shown, but triggers refresh).
  */
 
-import { writeJson, removeKey } from './safe-storage';
+import { writeString, removeKey } from './safe-storage';
 
 const PREFIX = 'crispdeck-vc-';
 const DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes
@@ -31,6 +31,11 @@ export function getCached<T>(key: string): CacheEntry<T> | null {
     const found = memory.get(key);
     if (found?.raw === raw) return found.entry as CacheEntry<T>;
     const entry = JSON.parse(raw) as CacheEntry<T>;
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry) ||
+        !Object.hasOwn(entry, 'data') || typeof entry.cachedAt !== 'number' || !Number.isFinite(entry.cachedAt)) {
+      memory.delete(key);
+      return null;
+    }
     memory.set(key, { raw, entry });
     return entry;
   } catch {
@@ -44,7 +49,10 @@ export function getCached<T>(key: string): CacheEntry<T> | null {
 export function setCache<T>(key: string, data: T): void {
   try {
     const entry: CacheEntry<T> = { data, cachedAt: Date.now() };
-    if (writeJson(PREFIX + key, entry)) memory.set(key, { raw: JSON.stringify(entry), entry });
+    // Feeds include large raw provider responses. Serialize once for both
+    // persistent storage and the in-memory comparison.
+    const raw = JSON.stringify(entry);
+    if (writeString(PREFIX + key, raw)) memory.set(key, { raw, entry });
   } catch {
     // localStorage full or quota exceeded — silently skip
   }
@@ -70,12 +78,16 @@ export function clearCache(key: string): void {
  */
 export function clearAllCache(): void {
   memory.clear();
-  const keys: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
-    if (k?.startsWith(PREFIX)) keys.push(k);
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith(PREFIX)) keys.push(k);
+    }
+    for (const k of keys) removeKey(k);
+  } catch {
+    // A blocked cache must not break account switching; memory is cleared.
   }
-  for (const k of keys) removeKey(k);
 }
 
 /**
