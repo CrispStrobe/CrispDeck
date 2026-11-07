@@ -33,6 +33,7 @@
   import { toTime, isNewerThan } from '$lib/post-time';
   import { cacheFeed, loadCachedFeed, formatCachedTime, isOffline } from '$lib/offline-cache';
   import { watchConnection, cachedDataBanner } from '$lib/offline-status';
+  import { performDeckAction } from '$lib/deck-actions';
 
   // 'custom' delegates to a Bluesky feed generator or list; which ones are on
   // offer comes from the account's own pinned feeds, see $lib/bluesky-feeds.
@@ -690,56 +691,12 @@
     restorePosition();
   }
 
-  async function handleLike(post: UnifiedPost) {
-    let lastError: unknown;
-    for (const [, entry] of clientEntries) {
-      if (entry.platform !== post.platform) continue;
-      try {
-        if (post.platform === 'bluesky') {
-          const raw = post.raw as any;
-          if (entry.oauthAgent) {
-            await entry.oauthAgent.like(raw.post.uri, raw.post.cid);
-          } else {
-            await (entry.client as BlueskyClient).like(raw.post.uri, raw.post.cid);
-          }
-        } else if (post.platform === 'threads') {
-          await (entry.client as ThreadsClient).like((post.raw as any).id);
-        } else {
-          await (entry.client as MastodonClient).favourite((post.raw as any).id);
-        }
-        return;
-      } catch (e) {
-        lastError = e;
-      }
-    }
-    // Nothing succeeded: tell the caller, so the optimistic update in Post
-    // can be reverted rather than leaving the post looking liked.
-    throw lastError ?? new Error('No connected account can like this post');
+  function handleLike(post: UnifiedPost, active = true) {
+    return performDeckAction(post, 'like', active, clientEntries, accounts.map(account => account.id));
   }
 
-  async function handleBoost(post: UnifiedPost) {
-    let lastError: unknown;
-    for (const [, entry] of clientEntries) {
-      if (entry.platform !== post.platform) continue;
-      try {
-        if (post.platform === 'bluesky') {
-          const raw = post.raw as any;
-          if (entry.oauthAgent) {
-            await entry.oauthAgent.repost(raw.post.uri, raw.post.cid);
-          } else {
-            await (entry.client as BlueskyClient).repost(raw.post.uri, raw.post.cid);
-          }
-        } else if (post.platform === 'threads') {
-          await (entry.client as ThreadsClient).repost((post.raw as any).id);
-        } else {
-          await (entry.client as MastodonClient).reblog((post.raw as any).id);
-        }
-        return;
-      } catch (e) {
-        lastError = e;
-      }
-    }
-    throw lastError ?? new Error('No connected account can repost this post');
+  function handleBoost(post: UnifiedPost, active = true) {
+    return performDeckAction(post, 'repost', active, clientEntries, accounts.map(account => account.id));
   }
 
   function handleReply(post: UnifiedPost) {
