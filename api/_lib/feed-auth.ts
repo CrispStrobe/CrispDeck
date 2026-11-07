@@ -31,7 +31,7 @@ export async function authorizeFeedMutation(request: Request, userDid: string, l
     // Service tokens are separate from account access/refresh tokens. Only the
     // repo signing key is accepted; unrelated keys in a DID doc cannot mutate feeds.
     if (header.typ !== 'JWT' || !['ES256K', 'ES256'].includes(header.alg) ||
-        (header.kid !== undefined && header.kid !== '#atproto') ||
+        (header.kid !== undefined && header.kid !== '#atproto' && header.kid !== `${payload.iss}#atproto`) ||
         (header.crit !== undefined && (!Array.isArray(header.crit) || header.crit.length !== 0))) throw new Error();
 
     const now = Math.floor(Date.now() / 1000);
@@ -52,7 +52,8 @@ export async function authorizeFeedMutation(request: Request, userDid: string, l
     const signingKey = getDidKeyFromMultibase({ type: method.type, publicKeyMultibase: method.publicKeyMultibase });
     if (!signingKey) throw new Error();
     if (!await verifySignature(signingKey, Buffer.from(`${encodedHeader}.${encodedPayload}`),
-      Buffer.from(encodedSignature, 'base64url'), { jwtAlg: header.alg })) throw new Error();
+      // JWS permits either ECDSA S form; match @atproto/xrpc-server's verifier.
+      Buffer.from(encodedSignature, 'base64url'), { jwtAlg: header.alg, allowMalleableSig: true })) throw new Error();
   } catch {
     // Neither the token nor a DID resolver exception belongs in a response/log.
     throw new HttpError(401, 'A valid feed-owner service token is required');

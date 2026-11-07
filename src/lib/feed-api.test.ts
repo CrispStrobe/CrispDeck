@@ -112,6 +112,19 @@ describe('feed mutation authentication', () => {
     expect(JSON.parse(blob.put.mock.calls[0][1])).toMatchObject(definition);
   });
 
+  it.each([
+    ['ES256K', 'fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141'],
+    ['ES256', 'ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551'],
+  ])('accepts valid high-S JWS signatures from %s implementations', async (algorithm, order) => {
+    const key = algorithm === 'ES256' ? await P256Keypair.create() : signer;
+    resolveDocument.mockResolvedValue(didDocument(ALICE, key));
+    const [header, payload, signature] = (await token({}, { kid: `${ALICE}#atproto` }, key)).split('.');
+    const bytes = Buffer.from(signature, 'base64url');
+    const oppositeS = BigInt(`0x${order}`) - BigInt(`0x${bytes.subarray(32).toString('hex')}`);
+    Buffer.from(oppositeS.toString(16).padStart(64, '0'), 'hex').copy(bytes, 32);
+    expect((await publish(request(definition, `${header}.${payload}.${bytes.toString('base64url')}`))).status).toBe(200);
+  });
+
   it.each(['did:web:localhost', 'did:web:127.0.0.1', 'did:web:169.254.169.254', 'did:web:localhost%3A8080'])('keeps the real resolver private-network protections for %s', async (did) => {
     resolveDocument.mockRestore();
     expect((await publish(request({ ...definition, userDid: did }, await token({ iss: did })))).status).toBe(401);
