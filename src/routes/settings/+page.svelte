@@ -712,13 +712,8 @@
     error = '';
     try {
       const token = threadsManualToken.trim();
-      // Get user profile to find userId
-      const meResp = await fetch(`https://graph.threads.net/v1.0/me?fields=id,username,name,threads_profile_picture_url&access_token=${token}`);
-      if (!meResp.ok) {
-        const err = await meResp.json().catch(() => ({}));
-        throw new Error(err.error?.message || 'Invalid token — could not fetch profile');
-      }
-      const profile = await meResp.json();
+      // Use the same native-safe Graph transport as OAuth connections.
+      const profile = await new ThreadsClient(token, 'me').getProfile();
       const userId = profile.id;
 
       // Store the account
@@ -2384,13 +2379,13 @@
                 webPushError = '';
                 try {
                   const subscription = await getPushSubscription();
-                  if (subscription) {
-                    // Clean up with proof of possession before throwing away
-                    // the browser keys needed to retry a failed deletion.
-                    await fetchOk(apiUrl('/api/push/subscribe'), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: 'default', subscription }) }, 'unsubscribe from push');
-                  }
+                  // Revoke locally even if legacy server storage is offline.
+                  // Capture proof first so this request can still clean it up.
                   if (!await unsubscribeWebPush()) throw new Error('The browser could not remove the push subscription');
                   webPushSubscribed = false;
+                  if (subscription) {
+                    await fetchOk(apiUrl('/api/push/subscribe'), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: 'default', subscription }) }, 'unsubscribe from push');
+                  }
                 } catch (e) { webPushError = String(e); }
                 webPushLoading = false;
               }}
