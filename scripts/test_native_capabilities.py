@@ -5,6 +5,7 @@ import unittest
 
 
 CAPABILITIES = Path(__file__).resolve().parents[1] / 'src-tauri' / 'capabilities'
+CONFIG = CAPABILITIES.parent / 'tauri.conf.json'
 
 
 class NativeFileCapabilitiesTests(unittest.TestCase):
@@ -28,6 +29,32 @@ class NativeFileCapabilitiesTests(unittest.TestCase):
                                      permission.get('identifier', '').startswith('fs:')
                                      for permission in permissions),
                                  'File paths must be granted by the save dialog, not a static scope')
+
+
+class NativeContentSecurityPolicyTests(unittest.TestCase):
+    def test_production_rejects_untrusted_scripts_and_active_documents(self):
+        policy = json.loads(CONFIG.read_text())['app']['security']['csp']
+        # Tauri hashes/nonces bundled scripts at compile time. Neither an
+        # injected inline script nor a remote script needs permission here.
+        self.assertIsInstance(policy, dict)
+        self.assertEqual(policy['default-src'].split(), ["'self'"])
+        self.assertEqual(policy['script-src'].split(), ["'self'"])
+        for directive in ('frame-src', 'object-src', 'form-action'):
+            self.assertEqual(policy[directive], "'none'")
+        self.assertEqual(policy['base-uri'], "'self'")
+
+    def test_media_workers_federation_and_native_ipc_remain_available(self):
+        security = json.loads(CONFIG.read_text())['app']['security']
+        for name in ('csp', 'devCsp'):
+            with self.subTest(policy=name):
+                policy = security[name]
+                self.assertIn('blob:', policy['worker-src'].split(), 'HLS uses a blob worker')
+                self.assertIn('ipc:', policy['connect-src'].split())
+                for source in ('http:', 'https:', 'wss:'):
+                    self.assertIn(source, policy['connect-src'].split(),
+                                  'Federated servers and user-configured BYOK endpoints must work')
+                for source in ('blob:', 'https:'):
+                    self.assertIn(source, policy['media-src'].split())
 
 
 if __name__ == '__main__':
