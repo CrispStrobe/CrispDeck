@@ -121,6 +121,9 @@ jobs:
           APP=$(find src-tauri/target -path "*/release/bundle/macos/*.app" -maxdepth 6 | head -1)
           [ -n "$APP" ] || { echo "::error::no .app produced"; exit 1; }
           cp /tmp/crispdeck.provisionprofile "$APP/Contents/embedded.provisionprofile"
+          # The profile is staged under a restrictive umask, but Apple requires
+          # every file in the installed app to be readable by ordinary users.
+          chmod 644 "$APP/Contents/embedded.provisionprofile"
 
           # Tauri writes CFBundleVersion from tauri.conf.json, so it equals the
           # marketing version and never changes within one. App Store Connect
