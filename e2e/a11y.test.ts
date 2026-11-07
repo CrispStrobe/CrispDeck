@@ -29,11 +29,19 @@ test.describe('Accessibility', () => {
     // Click body first to ensure focus is not in an input
     await page.locator('body').click();
     await page.keyboard.press('?');
-    await expect(page.locator('div[role="dialog"]')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('text=Keyboard Shortcuts')).toBeVisible();
+    const dialog = page.getByRole('dialog', { name: 'Keyboard shortcuts', exact: true });
+    await expect(dialog).toBeVisible({ timeout: 10000 });
+    // Wait for the help itself, not just the lazy-import loading dialog.
+    await expect(dialog.getByText('Go to Home/Dashboard', { exact: true })).toBeVisible();
     // Close with Escape
     await page.keyboard.press('Escape');
-    await expect(page.locator('div[role="dialog"]')).not.toBeVisible();
+    await expect(dialog).not.toBeVisible();
+    // The cached component reopens and its bound Close action still updates
+    // the shell's state after the first lazy load.
+    await page.keyboard.press('?');
+    await expect(dialog.getByText('Go to Home/Dashboard', { exact: true })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(dialog).not.toBeVisible();
   });
 
   test('theme toggle cycles themes', async ({ page }) => {

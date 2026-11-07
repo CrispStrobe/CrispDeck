@@ -9,7 +9,6 @@
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { Home, Rss, Columns3, Camera, PenSquare, Bell, MessageSquare, Bookmark, Users, Search, List, Shield, TrendingUp, Archive, BarChart3, Settings, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon, Smartphone } from '@lucide/svelte';
-  import KeyboardShortcuts from '$lib/components/KeyboardShortcuts.svelte';
   import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
   import ToastContainer from '$lib/components/ToastContainer.svelte';
   import { isTauri } from '@tauri-apps/api/core';
@@ -64,6 +63,7 @@
     void syncSystemBars(theme);
   }
   let showShortcuts = $state(false);
+  function focusShortcutsFallback(button: HTMLButtonElement) { button.focus(); }
   let offline = $state(false);
   let pendingG = $state(false);
   let _postElsCache: NodeListOf<Element> | null = null;
@@ -325,7 +325,25 @@
 </script>
 
 <svelte:window onkeydown={handleGlobalKeydown} />
-<KeyboardShortcuts bind:show={showShortcuts} />
+{#snippet shortcutsFallback(failed: boolean)}
+  <div data-native-webview-overlay role="dialog" aria-modal="true" aria-label={i18n.t.app.keyboardShortcutsLabel} class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
+    <div class="w-full max-w-sm space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl">
+      <h2 class="text-lg font-bold">{i18n.t.app.keyboardShortcuts}</h2>
+      <p role={failed ? 'alert' : 'status'} class="text-sm text-[var(--color-text-muted)]">{failed ? i18n.t.common.somethingWentWrong : i18n.t.common.loading}</p>
+      <button type="button" use:focusShortcutsFallback onclick={() => showShortcuts = false} onkeydown={(event) => { if (event.key === 'Tab') event.preventDefault(); }} class="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-sm">{i18n.t.common.close}</button>
+    </div>
+  </div>
+{/snippet}
+{#if showShortcuts}
+  <!-- Import only on first use; closing while it loads cannot reopen the modal. -->
+  {#await import('$lib/components/KeyboardShortcuts.svelte')}
+    {@render shortcutsFallback(false)}
+  {:then { default: KeyboardShortcuts }}
+    <KeyboardShortcuts bind:show={showShortcuts} />
+  {:catch}
+    {@render shortcutsFallback(true)}
+  {/await}
+{/if}
 
 <a href="#main-content" class="skip-to-content">{i18n.t.app.skipToContent}</a>
 
