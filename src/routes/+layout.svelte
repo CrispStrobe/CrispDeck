@@ -8,7 +8,7 @@
   import '../app.css';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import { Home, Rss, Columns3, PenSquare, Bell, MessageSquare, Bookmark, Users, Search, List, Shield, TrendingUp, Archive, BarChart3, Settings, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon, Smartphone } from '@lucide/svelte';
+  import { Home, Rss, Columns3, Camera, PenSquare, Bell, MessageSquare, Bookmark, Users, Search, List, Shield, TrendingUp, Archive, BarChart3, Settings, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon, Smartphone } from '@lucide/svelte';
   import KeyboardShortcuts from '$lib/components/KeyboardShortcuts.svelte';
   import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
   import ToastContainer from '$lib/components/ToastContainer.svelte';
@@ -277,6 +277,7 @@
     { href: '/', icon: Home, label: i18n.t.nav.dashboard },
     { href: '/feed', icon: Rss, label: i18n.t.nav.feed },
     { href: '/deck', icon: Columns3, label: i18n.t.nav.deck },
+    { href: '/instagram', icon: Camera, label: i18n.t.instagram.title },
     { href: '/compose', icon: PenSquare, label: i18n.t.nav.compose },
     { href: '/drafts', icon: PenSquare, label: i18n.t.nav.drafts },
     { href: '/calendar', icon: BarChart3, label: i18n.t.nav.calendar },
@@ -397,7 +398,7 @@
 
   <!-- Mobile slide-out menu -->
   {#if mobileMenuOpen}
-    <div class="md:hidden fixed inset-0 z-40 flex {mobileMenuClosing ? 'mobile-menu-backdrop-out' : 'mobile-menu-backdrop'}">
+    <div data-native-webview-overlay class="md:hidden fixed inset-0 z-40 flex {mobileMenuClosing ? 'mobile-menu-backdrop-out' : 'mobile-menu-backdrop'}">
       <div id="mobile-navigation" class="mobile-menu-panel w-64 bg-[var(--color-surface)] border-r border-[var(--color-border)] pt-14 overflow-y-auto {mobileMenuClosing ? 'mobile-menu-slide-out' : 'mobile-menu-slide'}">
         <a href="{base}/compose" onclick={closeMobileMenu} class="block mx-3 mt-3 px-4 py-2.5 text-center rounded-lg bg-[var(--color-primary)] text-white">{i18n.t.nav.compose}</a>
         <AppNavigation items={visibleNavItems} simple={simpleMode} path={routePath(page.url?.pathname ?? '/')} onnavigate={closeMobileMenu} />

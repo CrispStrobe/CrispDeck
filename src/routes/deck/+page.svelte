@@ -19,7 +19,7 @@
   import { base } from '$app/paths';
   import { onMount, onDestroy } from 'svelte';
   import { initAllClients, invalidateClientCache, type ClientEntry } from '$lib/api/client-factory';
-  import { Columns3, Plus, Loader2, Pencil } from '@lucide/svelte';
+  import { Camera, Columns3, Plus, Loader2, Pencil } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import StarterWorkspaces from '$lib/components/StarterWorkspaces.svelte';
   import { STARTER_WORKSPACES, type WorkspaceId } from '$lib/starter-workspaces';
@@ -1092,6 +1092,7 @@
       {/if}
       <button disabled={!deckReady} onclick={() => showWorkspaces = true} class="px-2 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] rounded disabled:opacity-50">{i18n.t.deck.manageWorkspaces}</button>
       <button onclick={() => openCompose()} class="flex items-center gap-1 px-2 py-1 text-xs border border-[var(--color-border)] rounded"><Pencil size={12} />{i18n.t.nav.compose}</button>
+      <a href="{base}/instagram" class="flex items-center gap-1 px-2 py-1 text-xs border border-[var(--color-border)] rounded"><Camera size={12} />{i18n.t.instagram.title}</a>
     </div>
     <div class="relative">
       <button
