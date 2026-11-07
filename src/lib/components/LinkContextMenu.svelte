@@ -4,7 +4,7 @@
   import { base } from '$app/paths';
   import { i18n } from '$lib/i18n.svelte';
   import { toast } from '$lib/toast.svelte';
-  import { wallabagBookmarklet } from '$lib/wallabag';
+  import { saveToWallabag } from '$lib/wallabag';
   let menu = $state<{ url: string; x: number; y: number } | null>(null);
   let menuElement: HTMLDivElement | undefined = $state();
   let wallabag = $state('');
@@ -55,10 +55,13 @@
     const url = menu.url; menu = null;
     try { await navigator.share({url}); } catch { /* User may dismiss the share sheet. */ }
   }
-  function save() {
+  async function save() {
     if (!menu) return;
-    const url = wallabagBookmarklet(wallabag, menu.url);
-    if (url) void open(url); else { menu = null; location.href = `${base}/settings#wallabag-url`; }
+    const url = menu.url;
+    menu = null;
+    if (!wallabag) { location.href = `${base}/settings?tab=appearance#wallabag-url`; return; }
+    try { await saveToWallabag(wallabag, url); toast.success(i18n.t.linkMenu.wallabagSaved); }
+    catch (e) { toast.error(e instanceof Error ? e.message : i18n.t.linkMenu.wallabagFailed); }
   }
 </script>
 {#if menu}

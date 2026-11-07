@@ -159,7 +159,7 @@ async function getLegacyCryptoKey(): Promise<CryptoKey> {
   return deriveKey(enc.encode('crispdeck-salt'), 100000);
 }
 
-async function encrypt(plaintext: string): Promise<string> {
+export async function encrypt(plaintext: string): Promise<string> {
   const key = await getCryptoKey();
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const enc = new TextEncoder();
@@ -171,7 +171,7 @@ async function encrypt(plaintext: string): Promise<string> {
   return btoa(String.fromCharCode(...packed));
 }
 
-async function decrypt(encoded: string): Promise<string> {
+export async function decrypt(encoded: string): Promise<string> {
   const packed = Uint8Array.from(atob(encoded), c => c.charCodeAt(0));
   const iv = packed.slice(0, 12);
   const ct = packed.slice(12);

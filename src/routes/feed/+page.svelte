@@ -1,8 +1,8 @@
 <script lang="ts">
   import { buildThreadsFeed, getThreadsSources } from '$lib/threads-feed';
   import { base } from '$app/paths';
-  import { onMount, onDestroy } from 'svelte';
-  import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal, RefreshCw, ChevronDown, Hash, Users, Search, Pin, PinOff } from '@lucide/svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
+  import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal, RefreshCw, ChevronDown, Hash, Users, Search, Pin, PinOff, Info } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { toast } from '$lib/toast.svelte';
   import { swallow } from '$lib/debug-log';
@@ -47,6 +47,7 @@
   let hideMedia = $state(false);
   let feedMode: FeedMode = $state('timeline');
   let platformFilter: 'all' | Platform = $state('all');
+  let showThreadsInfo = $state(false);
   let showFilters = $state(false);
   const connectedPlatforms = $derived(new Set(accounts.map(a => a.platform)));
   const multiPlatform = $derived(connectedPlatforms.size > 1);
@@ -144,6 +145,20 @@
 
   function scrollContainer(): HTMLElement | null {
     return document.getElementById('main-content');
+  }
+
+  function readingAnchor(): ScrollAnchor | null {
+    const el = scrollContainer();
+    return el && el.scrollTop > 0 ? pickAnchor(measureItems(el), el.scrollTop) : null;
+  }
+
+  async function preserveReadingPosition(anchor: ScrollAnchor | null) {
+    if (!anchor) return;
+    const index = sorted.findIndex(post => post.uri === anchor.key);
+    if (index >= renderLimit) renderLimit = Math.ceil((index + 1) / RENDER_PAGE) * RENDER_PAGE;
+    await tick();
+    const el = scrollContainer();
+    if (el) restoreAnchor(el, anchor);
   }
 
   /** Remember which post is under the fold, coalesced to one measure per frame. */
@@ -480,7 +495,11 @@
     if (!newestMs) return;
 
     const fresh = await fetchNewerPosts(newestMs, 20);
-    newPostsAvailable = fresh.length; // Replace, don't accumulate
+    if (newPostsAvailable !== fresh.length) {
+      const anchor = readingAnchor();
+      newPostsAvailable = fresh.length; // Replace, don't accumulate
+      await preserveReadingPosition(anchor);
+    }
 
     // Send push notification if page is not visible and we have new posts
     if (fresh.length > 0 && document.hidden) {
@@ -493,13 +512,17 @@
 
   async function loadNewPosts() {
     // Prepend new posts instead of reloading everything
+    const bannerAnchor = readingAnchor();
     newPostsAvailable = 0;
+    await preserveReadingPosition(bannerAnchor);
     const newestMs = toTime(posts[0]?.createdAt);
     if (!newestMs) return;
     const unique = await fetchNewerPosts(newestMs, 50);
     if (unique.length > 0) {
+      const anchor = readingAnchor();
       posts = sortPosts([...unique, ...posts], 'newest');
       progress = posts.length;
+      await preserveReadingPosition(anchor);
     }
   }
 
@@ -569,13 +592,17 @@
 
     // Only replace if we got fresh data; keep cached posts on network failure
     if (allPosts.length > 0) {
-      posts = sortPosts(allPosts, 'newest');
+      const anchor = readingAnchor();
+      // Keep older loaded pages when refreshing while someone is reading.
+      const freshUris = new Set(allPosts.map(post => post.uri));
+      posts = sortPosts(anchor ? [...allPosts, ...posts.filter(post => !freshUris.has(post.uri))] : allPosts, 'newest');
       progress = posts.length;
       const cacheSize = parseInt(localStorage.getItem('crispdeck-feed-cache-size') ?? '200');
       setCache('feed-' + viewKey, posts.slice(0, cacheSize));
       // Persist to IndexedDB for offline PWA access
       cacheFeed('feed', posts);
       offlineBanner = '';
+      await preserveReadingPosition(anchor);
     } else if (posts.length === 0) {
       // Network failed and no SWR cache — try offline IndexedDB cache
       const cached = await loadCachedFeed('feed');
@@ -584,8 +611,10 @@
         offlineBanner = cachedDataBanner(true, cached.cachedAt, i18n.t.feed.offlineCached, formatCachedTime);
       }
     }
+    const bannerAnchor = readingAnchor();
     newPostsAvailable = 0;
     loading = false;
+    await preserveReadingPosition(bannerAnchor);
   }
 
   async function loadMore() {
@@ -1007,6 +1036,27 @@
               onclick={() => platformFilter = 'threads'}
               class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1 {platformFilter === 'threads' ? 'bg-[var(--color-threads)] text-white' : 'text-[var(--color-text-muted)]'}"
             ><span class="w-1.5 h-1.5 rounded-full bg-[var(--color-threads)]"></span> {i18n.t.common.threads}</button>
+            <div class="relative">
+              <button onclick={() => showThreadsInfo = !showThreadsInfo} aria-label={i18n.t.feed.threadsInfoLabel} aria-expanded={showThreadsInfo} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)]"><Info size={15} /></button>
+              {#if showThreadsInfo}
+                <div class="absolute right-0 top-full z-30 mt-1 w-72 max-w-[80vw] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-xs text-[var(--color-text-muted)] shadow-lg" role="note">
+                  {i18n.t.feed.threadsTimelineLimited}
+                  <a href="https://www.threads.net/" target="_blank" rel="noopener noreferrer" class="underline">{i18n.t.feed.openThreads}</a>
+                </div>
+              {/if}
+            </div>
+          {/if}
+        </div>
+      {/if}
+
+      {#if !multiPlatform && connectedPlatforms.has('threads')}
+        <div class="relative">
+          <button onclick={() => showThreadsInfo = !showThreadsInfo} aria-label={i18n.t.feed.threadsInfoLabel} aria-expanded={showThreadsInfo} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)]"><Info size={15} /></button>
+          {#if showThreadsInfo}
+            <div class="absolute right-0 top-full z-30 mt-1 w-72 max-w-[80vw] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-xs text-[var(--color-text-muted)] shadow-lg" role="note">
+              {i18n.t.feed.threadsTimelineLimited}
+              <a href="https://www.threads.net/" target="_blank" rel="noopener noreferrer" class="underline">{i18n.t.feed.openThreads}</a>
+            </div>
           {/if}
         </div>
       {/if}
@@ -1028,13 +1078,6 @@
       </button>
     </div>
   </div>
-
-  {#if platformFilter === 'threads' && (feedMode === 'timeline' || feedMode === 'for-you')}
-    <div class="mb-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-text-muted)]" role="status">
-      {i18n.t.feed.threadsTimelineLimited}
-      <a href="https://www.threads.net/" target="_blank" rel="noopener noreferrer" class="underline">{i18n.t.feed.openThreads}</a>
-    </div>
-  {/if}
 
   {#if error}
     <div class="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">

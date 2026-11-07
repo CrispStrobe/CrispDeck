@@ -32,10 +32,12 @@ describe('settings export/import', () => {
 
     it('excludes credential keys', () => {
       localStorage.setItem('crispdeck-encrypt-seed', 'secret');
+      localStorage.setItem('crispdeck-wallabag-session', 'encrypted-token');
       localStorage.setItem('crispdeck-theme', 'dark');
 
       const data = exportSettings();
       expect(data.settings['crispdeck-encrypt-seed']).toBeUndefined();
+      expect(data.settings['crispdeck-wallabag-session']).toBeUndefined();
       expect(data.settings['crispdeck-theme']).toBe('dark');
     });
 
@@ -97,6 +99,7 @@ describe('settings export/import', () => {
         exported_at: '2026-01-01',
         settings: {
           'crispdeck-encrypt-seed': 'stolen-secret',
+          'crispdeck-wallabag-session': 'stolen-token',
           'crispdeck-theme': 'dark',
         },
       };
@@ -104,6 +107,7 @@ describe('settings export/import', () => {
       const count = importSettings(data);
       expect(count).toBe(1);
       expect(localStorage.getItem('crispdeck-encrypt-seed')).toBeNull();
+      expect(localStorage.getItem('crispdeck-wallabag-session')).toBeNull();
     });
   });
 

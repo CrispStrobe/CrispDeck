@@ -20,6 +20,7 @@ const EXCLUDE_PATTERNS = [
 /** Keys that contain encrypted credentials — never export */
 const CREDENTIAL_KEYS = [
   'crispdeck-encrypt-seed',
+  'crispdeck-wallabag-session',
 ];
 
 function shouldExport(key: string): boolean {
