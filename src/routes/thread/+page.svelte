@@ -2,11 +2,12 @@
   import { base } from '$app/paths';
   import { onDestroy, onMount, tick } from 'svelte';
   import { initAllClients } from '$lib/api/client-factory';
-  import { MessageCircle, ArrowLeft, BookOpen, Share2 } from '@lucide/svelte';
+  import { ArrowLeft, BookOpen, Share2 } from '@lucide/svelte';
   import { afterNavigate, goto } from '$app/navigation';
   import { i18n } from '$lib/i18n.svelte';
   import { loadThreadPage, parseThreadRequest, threadErrorMessage } from '$lib/thread-loader';
   import { partitionThreadReplies } from '$lib/thread-continuation';
+  import { threadRows } from '$lib/thread-tree';
   import { isThread, extractThreadText } from '$lib/thread-sync';
   import Post from '$lib/components/Post.svelte';
   import type { UnifiedPost, Account, Platform } from '$lib/types';
@@ -61,6 +62,7 @@
 
   let articleMode = $state(false);
   const groupedReplies = $derived(mainPost ? partitionThreadReplies(mainPost, replies) : { continuation: [], replies });
+  const rows = $derived(mainPost ? threadRows(ancestors, mainPost, replies) : []);
 
   /** Build a single article from the thread author's posts (ancestors + main + their replies) */
   const articlePosts = $derived.by(() => {
@@ -200,44 +202,14 @@
       </div>
     </article>
   {:else}
-    <!-- Ancestors (parent chain) -->
-    {#if ancestors.length > 0}
-      <div class="space-y-0 mb-2">
-        {#each ancestors as post, i}
-          <div class="relative pl-6 {i < ancestors.length - 1 ? 'pb-0' : ''}">
-            <div class="absolute left-8 top-12 bottom-0 w-0.5 bg-[var(--color-border)]"></div>
-            <Post {post} />
+    {#if mainPost}
+      <div class="overflow-x-auto" aria-label="Discussion thread">
+        {#each rows as row (row.post.uri)}
+          <div class="mb-2 {row.selected ? 'border-l-4 border-[var(--color-primary)] rounded-r-lg' : ''}"
+            style:margin-left="{row.depth * 16}px" style:min-width="min(22rem, 100%)" data-thread-depth={row.depth}>
+            <Post post={row.post} />
           </div>
         {/each}
-      </div>
-    {/if}
-
-    <!-- Main post (highlighted) -->
-    {#if mainPost}
-      <div class="border-l-4 border-[var(--color-primary)] rounded-r-lg mb-4">
-        <Post post={mainPost} />
-      </div>
-    {/if}
-
-    {#if groupedReplies.continuation.length > 0}
-      <div class="space-y-2 mb-4 border-l-4 border-[var(--color-primary)] rounded-r-lg" aria-label={i18n.t.thread.authorThread}>
-        {#each groupedReplies.continuation as post (post.uri)}
-          <Post {post} />
-        {/each}
-      </div>
-    {/if}
-
-    <!-- Other replies -->
-    {#if groupedReplies.replies.length > 0}
-      <div class="border-t border-[var(--color-border)] pt-4">
-        <h3 class="text-sm font-semibold text-[var(--color-text-muted)] mb-3 flex items-center gap-2">
-          <MessageCircle size={14} /> {groupedReplies.replies.length} {groupedReplies.replies.length === 1 ? 'reply' : 'replies'}
-        </h3>
-        <div class="space-y-2 pl-4 border-l-2 border-[var(--color-border)]">
-          {#each groupedReplies.replies as post (post.uri)}
-            <Post {post} />
-          {/each}
-        </div>
       </div>
     {/if}
 

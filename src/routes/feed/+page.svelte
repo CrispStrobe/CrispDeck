@@ -1,7 +1,7 @@
 <script lang="ts">
   import { buildThreadsFeed, getThreadsSources } from '$lib/threads-feed';
   import { base } from '$app/paths';
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal, RefreshCw, ChevronDown, Hash, Users, Search, Pin, PinOff } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { toast } from '$lib/toast.svelte';
@@ -144,6 +144,20 @@
 
   function scrollContainer(): HTMLElement | null {
     return document.getElementById('main-content');
+  }
+
+  function readingAnchor(): ScrollAnchor | null {
+    const el = scrollContainer();
+    return el && el.scrollTop > 0 ? pickAnchor(measureItems(el), el.scrollTop) : null;
+  }
+
+  async function preserveReadingPosition(anchor: ScrollAnchor | null) {
+    if (!anchor) return;
+    const index = sorted.findIndex(post => post.uri === anchor.key);
+    if (index >= renderLimit) renderLimit = Math.ceil((index + 1) / RENDER_PAGE) * RENDER_PAGE;
+    await tick();
+    const el = scrollContainer();
+    if (el) restoreAnchor(el, anchor);
   }
 
   /** Remember which post is under the fold, coalesced to one measure per frame. */
@@ -480,7 +494,11 @@
     if (!newestMs) return;
 
     const fresh = await fetchNewerPosts(newestMs, 20);
-    newPostsAvailable = fresh.length; // Replace, don't accumulate
+    if (newPostsAvailable !== fresh.length) {
+      const anchor = readingAnchor();
+      newPostsAvailable = fresh.length; // Replace, don't accumulate
+      await preserveReadingPosition(anchor);
+    }
 
     // Send push notification if page is not visible and we have new posts
     if (fresh.length > 0 && document.hidden) {
@@ -493,13 +511,17 @@
 
   async function loadNewPosts() {
     // Prepend new posts instead of reloading everything
+    const bannerAnchor = readingAnchor();
     newPostsAvailable = 0;
+    await preserveReadingPosition(bannerAnchor);
     const newestMs = toTime(posts[0]?.createdAt);
     if (!newestMs) return;
     const unique = await fetchNewerPosts(newestMs, 50);
     if (unique.length > 0) {
+      const anchor = readingAnchor();
       posts = sortPosts([...unique, ...posts], 'newest');
       progress = posts.length;
+      await preserveReadingPosition(anchor);
     }
   }
 
@@ -569,13 +591,17 @@
 
     // Only replace if we got fresh data; keep cached posts on network failure
     if (allPosts.length > 0) {
-      posts = sortPosts(allPosts, 'newest');
+      const anchor = readingAnchor();
+      // Keep older loaded pages when refreshing while someone is reading.
+      const freshUris = new Set(allPosts.map(post => post.uri));
+      posts = sortPosts(anchor ? [...allPosts, ...posts.filter(post => !freshUris.has(post.uri))] : allPosts, 'newest');
       progress = posts.length;
       const cacheSize = parseInt(localStorage.getItem('crispdeck-feed-cache-size') ?? '200');
       setCache('feed-' + viewKey, posts.slice(0, cacheSize));
       // Persist to IndexedDB for offline PWA access
       cacheFeed('feed', posts);
       offlineBanner = '';
+      await preserveReadingPosition(anchor);
     } else if (posts.length === 0) {
       // Network failed and no SWR cache — try offline IndexedDB cache
       const cached = await loadCachedFeed('feed');
@@ -584,8 +610,10 @@
         offlineBanner = cachedDataBanner(true, cached.cachedAt, i18n.t.feed.offlineCached, formatCachedTime);
       }
     }
+    const bannerAnchor = readingAnchor();
     newPostsAvailable = 0;
     loading = false;
+    await preserveReadingPosition(bannerAnchor);
   }
 
   async function loadMore() {

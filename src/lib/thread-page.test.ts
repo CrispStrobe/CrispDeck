@@ -71,7 +71,7 @@ describe('scoped thread page navigation', () => {
     expect(personal.getPostThread).toHaveBeenCalledOnce(); expect(work.getPostThread).not.toHaveBeenCalled();
   });
 
-  it('keeps author continuations distinct from other replies and includes them in article mode', async () => {
+  it('renders replies beneath their parent and keeps author continuations in article mode', async () => {
     const loaded = response('Root article');
     const thread: any = loaded.data.thread;
     const child = (id: string, text: string, author: string, parent: string) => ({ post: {
@@ -86,9 +86,14 @@ describe('scoped thread page navigation', () => {
     personal.getPostThread.mockResolvedValueOnce(loaded);
     const target = render();
     await vi.waitFor(() => { flushSync(); expect(target.textContent).toContain('Third article section'); });
-    const continuation = target.querySelector('[aria-label="Original author’s thread"]');
-    expect(continuation?.textContent).toContain('Second article section');
-    expect(continuation?.textContent).not.toContain('A visitor question');
+    const rows = [...target.querySelectorAll<HTMLElement>('[data-thread-depth]')];
+    expect(rows.map(row => [row.textContent?.trim(), row.dataset.threadDepth])).toEqual([
+      [expect.stringContaining('Root article'), '0'],
+      [expect.stringContaining('Second article section'), '1'],
+      [expect.stringContaining('Third article section'), '2'],
+      [expect.stringContaining('A visitor question'), '1'],
+      [expect.stringContaining('Answer outside the article'), '2'],
+    ]);
     const articleToggle = [...target.querySelectorAll('button')].find(button => button.textContent?.includes('Read as article'));
     expect(articleToggle).toBeDefined();
     articleToggle!.click(); flushSync();
