@@ -205,3 +205,18 @@ describe('concurrent deck actions', () => {
     expect((row.raw as any).post.viewer).toEqual({ like: 'like', repost: 'repost' });
   });
 });
+
+describe('Threads source-account actions', () => {
+  it('likes, unlikes and reposts through the account that supplied the post', async () => {
+    const client = { like: vi.fn().mockResolvedValue(undefined), unlike: vi.fn().mockResolvedValue(undefined), repost: vi.fn().mockResolvedValue({ id: 'repost-id' }) };
+    const other = { like: vi.fn() };
+    const clients = new Map<number, ClientEntry>([[1, { accountId: 1, platform: 'threads', client } as unknown as ClientEntry], [2, { accountId: 2, platform: 'threads', client: other } as unknown as ClientEntry]]);
+    const item = post('threads://42', { platform: 'threads', sourceAccountId: 1, raw: { id: '42' } });
+    await performDeckAction(item, 'like', true, clients, [1, 2]);
+    await performDeckAction(item, 'like', false, clients, [1, 2]);
+    await performDeckAction(item, 'repost', true, clients, [1, 2]);
+    await expect(performDeckAction(item, 'repost', false, clients, [1, 2])).rejects.toThrow('Undoing a Threads repost');
+    expect(client.like).toHaveBeenCalledWith('42'); expect(client.unlike).toHaveBeenCalledWith('42');
+    expect(client.repost).toHaveBeenCalledWith('42'); expect(other.like).not.toHaveBeenCalled();
+  });
+});
