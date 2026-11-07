@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -14,6 +15,26 @@ def gh(*args):
 
 def json_gh(*args):
     return json.loads(gh(*args))
+
+
+def verify_partial_checksums(root, checksum_file):
+    """Ensure earlier public checksum lists describe this exact verified set."""
+    lines = checksum_file.read_text().splitlines()
+    if not lines:
+        raise ValueError('Partial checksum list is empty')
+    seen = set()
+    for line in lines:
+        match = re.fullmatch(r'([0-9a-f]{64})  ([^/\\]+)', line)
+        if not match or match.group(2) in seen:
+            raise ValueError('Invalid partial checksum list')
+        checksum, name = match.groups()
+        seen.add(name)
+        path = root / name
+        if not path.is_file() or path.is_symlink():
+            raise ValueError('Partial checksum refers to an unexpected file')
+        with path.open('rb') as file:
+            if hashlib.file_digest(file, 'sha256').hexdigest() != checksum:
+                raise ValueError('Partial checksum differs from verified package')
 
 
 def publish(root, version, commit, allow_unsigned_windows=False):
@@ -39,7 +60,19 @@ def publish(root, version, commit, allow_unsigned_windows=False):
         release = {'assets': []}
     existing = {asset['name']: asset for asset in release['assets']}
     local = {path.name: path for path in root.iterdir() if path.is_file()}
-    if set(existing) - set(local): raise ValueError('Draft contains unexpected assets; refusing a mixed release')
+    extras = set(existing) - set(local)
+    if extras - {'SHA256SUMS.partial', 'SHA256SUMS.android'}:
+        raise ValueError('Draft contains unexpected assets; refusing a mixed release')
+    if extras:
+        with tempfile.TemporaryDirectory() as temp:
+            for name in sorted(extras):
+                gh('release', 'download', tag, '--pattern', name, '--dir', temp)
+                path = Path(temp) / name
+                with path.open('rb') as file:
+                    digest = 'sha256:' + hashlib.file_digest(file, 'sha256').hexdigest()
+                if existing[name].get('digest') != digest or existing[name].get('size') != path.stat().st_size:
+                    raise ValueError('Existing partial checksum asset differs from GitHub metadata')
+                verify_partial_checksums(root, path)
     for name, path in sorted(local.items()):
         with path.open('rb') as file: digest = 'sha256:' + hashlib.file_digest(file, 'sha256').hexdigest()
         if name in existing:
@@ -48,9 +81,10 @@ def publish(root, version, commit, allow_unsigned_windows=False):
         else:
             gh('release', 'upload', tag, str(path))
     uploaded = json_gh('release', 'view', tag, '--json', 'isDraft,isPrerelease,assets')
-    if not (uploaded['isDraft'] or uploaded.get('isPrerelease', False)) or {item['name'] for item in uploaded['assets']} != set(local):
+    if not (uploaded['isDraft'] or uploaded.get('isPrerelease', False)) or {item['name'] for item in uploaded['assets']} != set(local) | extras:
         raise ValueError('Release visibility or asset inventory changed during assembly')
     for asset in uploaded['assets']:
+        if asset['name'] in extras: continue
         with local[asset['name']].open('rb') as file:
             expected = 'sha256:' + hashlib.file_digest(file, 'sha256').hexdigest()
         if asset.get('digest') != expected: raise ValueError('Uploaded asset hash differs: ' + asset['name'])

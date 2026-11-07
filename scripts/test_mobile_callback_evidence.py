@@ -2,6 +2,8 @@ import importlib.util
 import json
 from pathlib import Path
 import unittest
+import tempfile
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('mobile_smoke',
     Path(__file__).resolve().parents[1] / 'tools/validation/mobile_smoke.py')
@@ -18,6 +20,24 @@ class CallbackEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'did not reach'):
             smoke.require_callback_delivery(smoke.ios_log_messages(header + other + actual), 2)
         smoke.require_callback_delivery(smoke.ios_log_messages(header + other + actual * 2), 2)
+
+    def test_receipts_must_come_from_the_running_process(self):
+        own = json.dumps({'subsystem': smoke.BUNDLE, 'eventMessage': smoke.CALLBACK_DELIVERED, 'processID': 42})
+        stale = json.dumps({'subsystem': smoke.BUNDLE, 'eventMessage': smoke.CALLBACK_DELIVERED, 'processID': 99})
+        self.assertEqual(smoke.ios_log_messages(stale + '\n' + own, 42), smoke.CALLBACK_DELIVERED)
+        with self.assertRaisesRegex(RuntimeError, 'did not reach'):
+            smoke.require_callback_delivery(smoke.ios_log_messages(stale + '\n' + own, 42), 2)
+
+    def test_persisted_log_fallback_filters_to_the_running_process(self):
+        from types import SimpleNamespace
+        own = json.dumps({'subsystem': smoke.BUNDLE, 'eventMessage': smoke.STARTUP_DELIVERED, 'processID': 42})
+        stale = json.dumps({'subsystem': smoke.BUNDLE, 'eventMessage': smoke.CALLBACK_DELIVERED, 'processID': 99})
+        with tempfile.TemporaryDirectory() as tmp, patch.object(smoke.subprocess, 'run', return_value=SimpleNamespace(stdout=own + '\n' + stale)) as command:
+            result = smoke.ios_persisted_log('simulator', 42, 'subsystem predicate', Path(tmp))
+            self.assertEqual(result, smoke.STARTUP_DELIVERED)
+            self.assertIn('--process', command.call_args.args[0])
+            self.assertIn('42', command.call_args.args[0])
+            self.assertTrue((Path(tmp) / 'native-log-show.ndjson').is_file())
 
     def test_process_start_or_successful_url_open_is_not_delivery(self):
         for log in ['', 'CrispDeck v1.3.0 started', 'Open in CrispDeck?']:
