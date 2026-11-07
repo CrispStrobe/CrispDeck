@@ -9,6 +9,7 @@
   import { partitionThreadReplies } from '$lib/thread-continuation';
   import { threadRows } from '$lib/thread-tree';
   import { performDeckAction } from '$lib/deck-actions';
+  import { postContextParams } from '$lib/compose/context';
   import type { ClientEntry } from '$lib/api/client-factory';
   import { isThread, extractThreadText } from '$lib/thread-sync';
   import Post from '$lib/components/Post.svelte';
@@ -103,12 +104,10 @@
     return performDeckAction(post, action, active, clients, accounts.map(account => account.id));
   }
   function reply(post: UnifiedPost) {
-    const params = new URLSearchParams({ replyTo: post.uri, author: post.author.handle, platform: post.platform });
-    void goto(`${base}/compose?${params}`);
+    void goto(`${base}/compose?${postContextParams(post, 'reply')}`);
   }
   function quote(post: UnifiedPost) {
-    const params = new URLSearchParams({ quoteUri: post.uri, quoteCid: (post.raw as any)?.post?.cid ?? '', quoteAuthor: post.author.handle, quoteText: post.text.substring(0, 100), platform: post.platform });
-    void goto(`${base}/compose?${params}`);
+    void goto(`${base}/compose?${postContextParams(post, 'quote')}`);
   }
 </script>
 

@@ -8,6 +8,7 @@ vi.mock('$lib/api/client-factory', () => ({ initAllClients: mocks.initAllClients
 vi.mock('$app/navigation', () => ({ goto: vi.fn(), afterNavigate: (callback: typeof mocks.navigate) => { mocks.navigate = callback; } }));
 vi.mock('$lib/bookmarks', () => ({ isBookmarked: async () => false, addBookmark: vi.fn(), removeBookmark: vi.fn() }));
 import ThreadPage from '../routes/thread/+page.svelte';
+import { goto } from '$app/navigation';
 
 const uri = 'at://did:plc:author/app.bsky.feed.post/main';
 const accounts = [
@@ -27,6 +28,7 @@ let personal: ReturnType<typeof fixture>;
 let work: ReturnType<typeof fixture>;
 let app: ReturnType<typeof createClassComponent> | undefined;
 beforeEach(() => {
+  vi.mocked(goto).mockClear();
   mocks.initAllClients.mockReset(); mocks.navigate = undefined;
   personal = fixture(accounts[0]); work = fixture(accounts[1]);
   mocks.initAllClients.mockResolvedValue({ accounts, clients: new Map([[1, personal.entry], [2, work.entry]]) });
@@ -42,6 +44,16 @@ function render(accountId = 1) {
 }
 
 describe('scoped thread page navigation', () => {
+  it('preserves the selected account when replying or quoting from a thread', async () => {
+    const target = render(2);
+    await vi.waitFor(() => { flushSync(); expect(target.textContent).toContain('Thread for work.bsky.social'); });
+    target.querySelector<HTMLButtonElement>('button[aria-label^="Reply ("]')!.click();
+    let params = new URL(String(vi.mocked(goto).mock.calls[0][0]), 'https://crispdeck.example').searchParams;
+    expect(params.get('account')).toBe('2'); expect(params.get('replyCid')).toBe('cid');
+    target.querySelector<HTMLButtonElement>('button[title="Quote"]')!.click();
+    params = new URL(String(vi.mocked(goto).mock.calls[1][0]), 'https://crispdeck.example').searchParams;
+    expect(params.get('account')).toBe('2'); expect(params.get('quoteCid')).toBe('cid');
+  });
   it('likes and unlikes a reply with the account that loaded the thread', async () => {
     const loaded = response('Root');
     const childUri = 'at://did:plc:other/app.bsky.feed.post/child';

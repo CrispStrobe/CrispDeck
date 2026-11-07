@@ -1,6 +1,7 @@
 <script lang="ts">
   import { buildThreadsFeed, getThreadsSources } from '$lib/threads-feed';
   import { base } from '$app/paths';
+  import { goto } from '$app/navigation';
   import { onMount, onDestroy, tick } from 'svelte';
   import { Rss, Loader2, Inbox, EyeOff, User, Globe, SlidersHorizontal, RefreshCw, ChevronDown, Hash, Users, Search, Pin, PinOff, Info } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
@@ -34,6 +35,7 @@
   import { cacheFeed, loadCachedFeed, formatCachedTime, isOffline } from '$lib/offline-cache';
   import { watchConnection, cachedDataBanner } from '$lib/offline-status';
   import { performDeckAction } from '$lib/deck-actions';
+  import { postContextParams } from '$lib/compose/context';
 
   // 'custom' delegates to a Bluesky feed generator or list; which ones are on
   // offer comes from the account's own pinned feeds, see $lib/bluesky-feeds.
@@ -700,17 +702,11 @@
   }
 
   function handleReply(post: UnifiedPost) {
-    const replyTo = encodeURIComponent(post.uri);
-    const author = encodeURIComponent(post.author.handle);
-    window.location.href = `${base}/compose?replyTo=${replyTo}&author=${author}&platform=${post.platform}`;
+    void goto(`${base}/compose?${postContextParams(post, 'reply')}`);
   }
 
   function handleQuote(post: UnifiedPost) {
-    const quoteUri = encodeURIComponent(post.uri);
-    const quoteCid = encodeURIComponent((post.raw as any)?.post?.cid ?? '');
-    const author = encodeURIComponent(post.author.handle);
-    const text = encodeURIComponent(post.text.substring(0, 100));
-    window.location.href = `${base}/compose?quoteUri=${quoteUri}&quoteCid=${quoteCid}&quoteAuthor=${author}&quoteText=${text}&platform=${post.platform}`;
+    void goto(`${base}/compose?${postContextParams(post, 'quote')}`);
   }
 
   function handleFilterChange(newFilters: Partial<Filters>) {

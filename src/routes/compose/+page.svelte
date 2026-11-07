@@ -19,7 +19,7 @@
   import { graphemeLength, type ThreadGate } from '$lib/compose/adapter';
   import { validateMediaFile, createPreviewUrl, revokePreviewUrl, isVideoFile } from '$lib/compose/media';
   import { mediaAttachmentLimit, parseMediaUrls, validateMediaForPlatform } from '$lib/compose/media-policy';
-  import { hasDraftContent } from '$lib/compose/context';
+  import { composeContextFromParams, hasDraftContent } from '$lib/compose/context';
   import { tryVoiceCommand, looksLikeCommand } from '$lib/voice-commands';
   import { runAIAction, isAIConfigured, type AIAction } from '$lib/compose/ai';
   import { computeBestHour, formatHour, type PostingTimeInsight } from '$lib/posting-times';
@@ -265,22 +265,19 @@
         }
       }
 
-      // Reply context
-      replyTo = params.get('replyTo') ?? replyTo;
-      replyAuthor = params.get('author') ?? replyAuthor;
-      replyPlatform = params.get('platform') ?? replyPlatform;
-      if (replyAuthor && !text) {
-        text = `@${replyAuthor} `;
+      // A post action has an account identity of its own. Saved drafts and
+      // ordinary compose visits keep their explicit/default destinations.
+      const context = composeContextFromParams(params, accounts);
+      if (context) {
+        selectedAccountIds = context.accountIds;
+        replyDetails = context.options.replyTo;
+        replyTo = replyDetails?.uri ?? ''; replyPlatform = replyDetails?.platform ?? '';
+        replyAuthor = context.display.replyAuthor;
+        quoteUri = context.options.quoteUri ?? ''; quoteCid = context.options.quoteCid ?? '';
+        quoteUrl = context.options.quoteUrl ?? '';
+        quoteAuthor = context.display.quoteAuthor; quoteText = context.display.quoteText;
+        if (replyAuthor && !text) text = `@${replyAuthor} `;
       }
-
-      // Quote context
-      const requestedQuoteUri = params.get('quoteUri');
-      if (requestedQuoteUri !== null && requestedQuoteUri !== quoteUri) quoteUrl = '';
-      quoteUri = requestedQuoteUri ?? quoteUri;
-      quoteCid = params.get('quoteCid') ?? quoteCid;
-      quoteUrl = params.get('quoteUrl') ?? quoteUrl;
-      quoteAuthor = params.get('quoteAuthor') ?? quoteAuthor;
-      quoteText = params.get('quoteText') ?? quoteText;
 
       // Handle shared content from PWA share_target
       const sharedText = params.get('text') ?? '';

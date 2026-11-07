@@ -25,7 +25,7 @@ vi.mock('$lib/publishing/snapshots', async importOriginal => {
 });
 
 import ComposePage from './+page.svelte';
-import { snapshot, loadSnapshot, deleteSnapshot } from '$lib/publishing/snapshots';
+import { snapshot, saveSnapshot, loadSnapshot, deleteSnapshot } from '$lib/publishing/snapshots';
 import { persistDraft, draftSnapshot, removeDraft } from '$lib/publishing/drafts';
 import { listDrafts } from '$lib/db';
 
@@ -83,6 +83,65 @@ beforeEach(async () => {
 afterEach(leave);
 
 describe('full composer durable content', () => {
+  it('keeps a reply on its source account and persists parent/root metadata from navigation', async () => {
+    const work = { id: 4, platform: 'bluesky', handle: 'work.bsky.social' } as Account;
+    boundaries.initAllClients.mockResolvedValue({ accounts: [...accounts, work], clients: new Map() });
+    const replyTo = { uri: 'at://did:plc:alice/app.bsky.feed.post/parent', cid: 'parent-cid',
+      rootUri: 'at://did:plc:alice/app.bsky.feed.post/root', rootCid: 'root-cid', platform: 'bluesky' };
+    const params = new URLSearchParams({ replyTo: replyTo.uri, replyCid: replyTo.cid, replyRootUri: replyTo.rootUri,
+      replyRootCid: replyTo.rootCid, platform: 'bluesky', author: 'alice.bsky.social', account: '4' });
+    window.history.replaceState({}, '', `/compose?${params}`);
+    const target = await render();
+    input(target, 'textarea[rows="8"]', 'A reply from work');
+    await saveDraft(target);
+    const saved = await draftSnapshot((await listDrafts())[0]);
+    expect(saved.accountIds).toEqual([4]);
+    expect(saved.options.replyTo).toEqual(replyTo);
+  });
+
+  it.each(['99', 'invalid', '0', '2'])('requires an explicit choice when the requested Bluesky account %s is unavailable', async account => {
+    window.history.replaceState({}, '', `/compose?${new URLSearchParams({ replyTo: 'at://did:plc:alice/app.bsky.feed.post/parent', platform: 'bluesky', account })}`);
+    const target = await render();
+    input(target, 'textarea[rows="8"]', 'Do not pick another account');
+    await leave();
+    expect((await loadSnapshot('autosave'))?.accountIds).toEqual([]);
+  });
+
+  it('requires an account choice for an older reply link when two matching accounts exist', async () => {
+    boundaries.initAllClients.mockResolvedValue({ accounts: [...accounts, { id: 4, platform: 'bluesky', handle: 'work.bsky.social' }], clients: new Map() });
+    window.history.replaceState({}, '', `/compose?${new URLSearchParams({ replyTo: 'at://did:plc:alice/app.bsky.feed.post/parent', platform: 'bluesky' })}`);
+    const target = await render(); input(target, 'textarea[rows="8"]', 'Choose an identity');
+    await leave();
+    expect((await loadSnapshot('autosave'))?.accountIds).toEqual([]);
+  });
+
+  it('selects only the sole matching platform for an older context link', async () => {
+    window.history.replaceState({}, '', `/compose?${new URLSearchParams({ replyTo: 'https://remote.example/@alice/123', platform: 'mastodon', replyId: '987' })}`);
+    const target = await render(); input(target, 'textarea[rows="8"]', 'Mastodon reply');
+    await leave();
+    expect(await loadSnapshot('autosave')).toMatchObject({ accountIds: [2], options: { replyTo: { id: '987', platform: 'mastodon' } } });
+  });
+
+  it('treats an older Mastodon quote URI as a web quote without generating a Bluesky link', async () => {
+    const quoteUrl = 'https://remote.example/@alice/456';
+    window.history.replaceState({}, '', `/compose?${new URLSearchParams({ quoteUri: quoteUrl, quoteAuthor: 'alice@remote.example', platform: 'mastodon', account: '2' })}`);
+    const target = await render(); input(target, 'textarea[rows="8"]', 'My response');
+    await leave();
+    const saved = await loadSnapshot('autosave');
+    expect(saved?.accountIds).toEqual([2]);
+    expect(saved?.options.quoteUrl).toBe(quoteUrl);
+    expect(saved?.options.quoteUri).toBeUndefined();
+  });
+
+  it('preserves deliberately selected destinations when reopening an autosaved reply', async () => {
+    const saved = snapshot('autosave', 'An intentionally crossposted reply', [2, 3], {}, {
+      replyTo: { uri: 'at://did:plc:alice/app.bsky.feed.post/parent', platform: 'bluesky', cid: 'parent-cid' },
+    });
+    await saveSnapshot(saved);
+    await render(); await leave();
+    expect((await loadSnapshot('autosave'))?.accountIds).toEqual([2, 3]);
+  });
+
   it('autosaves and restores Threads URLs when shared text and local media are empty', async () => {
     const target = await render();
     const urls = ['https://media.example/one.png', 'https://media.example/two.png'];

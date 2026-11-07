@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   cacheFeed: vi.fn(), loadCachedFeed: vi.fn(), watchConnection: vi.fn(),
   getReadPosition: vi.fn(), saveReadPosition: vi.fn(),
   listSavedFeeds: vi.fn(), searchFeedGenerators: vi.fn(),
+  goto: vi.fn(),
   toast: { error: vi.fn(), warning: vi.fn() },
 }));
 vi.mock('$lib/api/client-factory', () => ({
@@ -29,6 +30,7 @@ vi.mock('$lib/offline-status', () => ({ watchConnection: mocks.watchConnection, 
 vi.mock('$lib/read-position', () => ({ getReadPosition: mocks.getReadPosition, saveReadPosition: mocks.saveReadPosition, flushReadPositions: vi.fn() }));
 vi.mock('$lib/bookmarks', () => ({ isBookmarked: async () => false, addBookmark: vi.fn(), removeBookmark: vi.fn() }));
 vi.mock('$lib/toast.svelte', () => ({ toast: mocks.toast }));
+vi.mock('$app/navigation', () => ({ goto: mocks.goto }));
 import FeedPage from '../routes/feed/+page.svelte';
 
 const accounts = [
@@ -85,6 +87,17 @@ async function ready(target: HTMLElement, text: string) {
 }
 
 describe('feed reactions use the source account', () => {
+  it('carries the source account and reply/quote metadata into the full composer', async () => {
+    const row = post('Reply as work');
+    work.getTimeline.mockResolvedValue({ data: { feed: [row], cursor: undefined } });
+    const target = render(); await ready(target, 'Reply as work');
+    target.querySelector<HTMLButtonElement>('button[aria-label^="Reply ("]')!.click();
+    let params = new URL(mocks.goto.mock.calls[0][0], 'https://crispdeck.example').searchParams;
+    expect(params.get('account')).toBe('2'); expect(params.get('replyCid')).toBe(row.post.cid);
+    target.querySelector<HTMLButtonElement>('button[title="Quote"]')!.click();
+    params = new URL(mocks.goto.mock.calls[1][0], 'https://crispdeck.example').searchParams;
+    expect(params.get('account')).toBe('2'); expect(params.get('quoteCid')).toBe(row.post.cid);
+  });
   it('likes and unlikes with the account that supplied the row', async () => {
     const row = post('Work-only post');
     work.getTimeline.mockResolvedValue({ data: { feed: [row], cursor: undefined } });
