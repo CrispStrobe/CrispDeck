@@ -1,7 +1,5 @@
 <script lang="ts">
   import { swallow } from '$lib/debug-log';
-  import { readJson, writeJson } from '$lib/safe-storage';
-  import { sanitizeHtml } from '$lib/sanitize';
   import { toast } from '$lib/toast.svelte';
   import { base } from '$app/paths';
   import { onMount, onDestroy } from 'svelte';
@@ -25,10 +23,6 @@
   let loading = $state(true);
   let error = $state('');
   let refreshing = $state(false);
-  let announcements: Array<{ id: string; content: string; publishedAt: string }> = $state([]);
-  const dismissedAnnouncementIds = new Set<string>(
-    readJson<string[]>('crispdeck-dismissed-announcements', [], Array.isArray)
-  );
   let expandedGroups: Set<string> = $state(new Set());
   let offlineBanner = $state('');
   let stopWatchingConnection: (() => void) | undefined;
@@ -169,17 +163,6 @@
       if (failedAccounts === fetchers.length && all.length === 0) return;
     }
 
-    // Fetch Mastodon announcements
-    for (const [, entry] of clientEntries) {
-      if (entry.platform !== 'mastodon') continue;
-      const masto = entry.client as MastodonClient;
-      try {
-        const anns = await masto.getAnnouncements();
-        announcements = anns
-          .filter((a: any) => !dismissedAnnouncementIds.has(a.id))
-          .map((a: any) => ({ id: a.id, content: a.content, publishedAt: a.published_at ?? a.created_at }));
-      } catch (e) { swallow('notifications.loadNotifications', e); }
-    }
     groups = groupNotifications(all);
     setCache('notifications', groups);
   }
@@ -211,17 +194,6 @@
   }
 
   const ptr = createPullToRefresh(async () => { await loadNotifications(); });
-
-  function dismissAnnouncement(id: string) {
-    dismissedAnnouncementIds.add(id);
-    writeJson('crispdeck-dismissed-announcements', [...dismissedAnnouncementIds]);
-    announcements = announcements.filter(a => a.id !== id);
-    // Also dismiss on server
-    for (const [, entry] of clientEntries) {
-      if (entry.platform !== 'mastodon') continue;
-      (entry.client as MastodonClient).dismissAnnouncement(id).catch(() => {});
-    }
-  }
 
   function toggleGroup(groupId: string) {
     const next = new Set(expandedGroups);
@@ -296,18 +268,6 @@
       <RefreshCw size={20} class="text-[var(--color-primary-text)] {ptr.state.pullRefreshing ? 'animate-spin' : ''}" style="opacity: {ptr.state.pullDistance / 60}; transform: rotate({ptr.state.pullDistance * 3}deg)" />
     </div>
   {/if}
-
-  <!-- Instance announcements -->
-  {#each announcements as ann (ann.id)}
-    <div class="mb-4 p-3 bg-[var(--color-mastodon)]/10 border border-[var(--color-mastodon)]/30 rounded-lg">
-      <div class="flex items-start justify-between gap-2">
-        <!-- Announcement HTML is written by the instance admin. Every other
-             {@html} in this app is sanitized; this one was missed. -->
-        <div class="text-sm text-[var(--color-text)]">{@html sanitizeHtml(ann.content)}</div>
-        <button onclick={() => dismissAnnouncement(ann.id)} class="text-[var(--color-text-muted)] hover:text-[var(--color-text)] flex-shrink-0 text-xs">{i18n.t.common.dismiss}</button>
-      </div>
-    </div>
-  {/each}
 
   <div class="flex items-center justify-between mb-6">
     <div class="flex items-center gap-2">
