@@ -1,6 +1,8 @@
 import { isTauri, invoke } from '@tauri-apps/api/core';
 import { getCredentialBackend } from '$lib/db';
 import { removeKey, writeString } from '$lib/safe-storage';
+import { normalizeWallabagServer, WallabagError, WALLABAG_CONNECTION_CHANGED } from '$lib/wallabag-common';
+export { normalizeWallabagServer, WALLABAG_CONNECTION_CHANGED } from '$lib/wallabag-common';
 
 /** Wallabag's bookmarklet uses the browser's own sign-in session. */
 export function wallabagBookmarklet(instance: string, link: string): string | null {
@@ -44,8 +46,6 @@ export interface WallabagEntriesPage { items: WallabagEntry[]; page: number; pag
 export type WallabagEntryFilter = 'unread' | 'archived' | 'starred' | 'all';
 export interface WallabagEntriesOptions { filter?: WallabagEntryFilter; page?: number; perPage?: number }
 
-/** Invalidate any reader availability/content; this never signals readiness. */
-export const WALLABAG_CONNECTION_CHANGED = 'crispdeck:wallabag-connection-changed';
 type Store = { kind: 'browser' } | { kind: 'native'; args: { backend: string; keychain: string } };
 interface SavedSession { store: Store; session: Session; generation: number }
 interface Token { access_token: string; refresh_token: string; expires_in: number }
@@ -59,9 +59,6 @@ let sessionQueue: Promise<unknown> = Promise.resolve();
 let nativeTransport: Promise<typeof import('@tauri-apps/plugin-http')> | undefined;
 const requests = new Set<AbortController>();
 
-class WallabagError extends Error {
-  constructor(message: string, readonly authenticationFailed = false) { super(message); }
-}
 const connectionChanged = () => new WallabagError('The Wallabag connection changed. Try again.');
 
 function notifyConnectionChanged(): void {
@@ -84,20 +81,6 @@ function withSessionLock<T>(action: () => Promise<T>): Promise<T> {
   const pending = sessionQueue.then(run, run);
   sessionQueue = pending.catch(() => undefined);
   return pending;
-}
-
-export function normalizeWallabagServer(value: string): string {
-  try {
-    const trimmed = value.trim();
-    if (trimmed.length > 2048 || /[\u0000-\u001f\u007f]/.test(trimmed)) throw new Error();
-    const url = new URL(trimmed);
-    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error();
-    if (url.protocol !== 'https:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) throw new WallabagError('Wallabag requires HTTPS');
-    return url.href.replace(/\/+$/, '');
-  } catch (error) {
-    if (error instanceof WallabagError) throw error;
-    throw new WallabagError('Invalid Wallabag server URL');
-  }
 }
 
 function nonemptyString(value: unknown): value is string {

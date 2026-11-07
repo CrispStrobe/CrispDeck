@@ -54,6 +54,7 @@ const ROUTES = [
   '/starterpacks',
   '/thread',
   '/trending',
+  '/wallabag',
 ] as const;
 
 /** Errors a page throws that are not the page's fault. */

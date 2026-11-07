@@ -22,7 +22,7 @@ beforeEach(async () => {
   vi.resetModules();
   vi.clearAllMocks();
   localStorage.clear();
-  api.validate.mockResolvedValue(false);
+  api.validate.mockReset().mockResolvedValue(false);
   availability = await import('./wallabag-availability');
 });
 
@@ -64,7 +64,7 @@ describe('Wallabag reader availability', () => {
     api.validate.mockReturnValue(probe.promise);
     const one = availability.refreshWallabagAvailability();
     const two = availability.refreshWallabagAvailability();
-    expect(api.validate).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(api.validate).toHaveBeenCalledTimes(1));
     probe.resolve(true);
     expect(await Promise.all([one, two])).toEqual([true, true]);
   });

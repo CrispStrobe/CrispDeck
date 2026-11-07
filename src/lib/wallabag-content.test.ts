@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { sanitizeWallabagHtml, wallabagArticleUrl } from './wallabag-content';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { loadWallabagSanitizer, sanitizeWallabagHtml, wallabagArticleUrl } from './wallabag-content';
 
 const source = 'https://news.example/section/story';
 function documentFor(content: string, sourceUrl = source) {
@@ -25,6 +25,8 @@ describe('Wallabag article URLs', () => {
 });
 
 describe('Wallabag article content', () => {
+  beforeAll(async () => { await loadWallabagSanitizer(); });
+
   it('preserves article formatting, images and tables on the first call', () => {
     const doc = documentFor('<h2>Heading</h2><p>Text <strong>emphasis</strong></p><figure><img src="/photo.jpg" alt="A photo"><figcaption>Caption</figcaption></figure><table><tr><th>Heading</th><td>Value</td></tr></table>');
     expect(doc.querySelector('h2')?.textContent).toBe('Heading');

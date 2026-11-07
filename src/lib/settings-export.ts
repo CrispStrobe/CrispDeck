@@ -4,7 +4,7 @@
  */
 
 import { writeString } from './safe-storage';
-import { normalizeWallabagServer } from './wallabag';
+import { normalizeWallabagServer } from './wallabag-common';
 
 export interface SettingsExport {
   version: number;

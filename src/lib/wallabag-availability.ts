@@ -1,6 +1,6 @@
 import { writable } from 'svelte/store';
 import { readString } from '$lib/safe-storage';
-import { normalizeWallabagServer, validateWallabagConnection, WALLABAG_CONNECTION_CHANGED } from '$lib/wallabag';
+import { normalizeWallabagServer, WALLABAG_CONNECTION_CHANGED } from '$lib/wallabag-common';
 
 export interface WallabagAvailability {
   status: 'hidden' | 'checking' | 'ready';
@@ -50,7 +50,13 @@ export function refreshWallabagAvailability(): Promise<boolean> {
   if (current.status !== 'ready') publish({ status: 'checking', server, revision });
   const promise = (async () => {
     let working = false;
-    try { working = await validateWallabagConnection(server); }
+    try {
+      // Most users do not have Wallabag configured. Keep its credential and
+      // API client code out of the application's initial navigation bundle.
+      const { validateWallabagConnection } = await import('$lib/wallabag');
+      if (revision !== current.revision || configuredServer() !== server) return false;
+      working = await validateWallabagConnection(server);
+    }
     catch { /* Credential errors are never copied to logs or persisted state. */ }
     if (revision !== current.revision || configuredServer() !== server) return false;
     if (working) publish({ status: 'ready', server, revision });

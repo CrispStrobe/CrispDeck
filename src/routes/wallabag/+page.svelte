@@ -6,7 +6,7 @@
   import { i18n } from '$lib/i18n.svelte';
   import { toast } from '$lib/toast.svelte';
   import { openExternalLink } from '$lib/external-link';
-  import { sanitizeWallabagHtml as sanitizeHtml, wallabagArticleUrl } from '$lib/wallabag-content';
+  import { loadWallabagSanitizer, sanitizeWallabagHtml as sanitizeHtml, wallabagArticleUrl } from '$lib/wallabag-content';
   import { wallabagAvailability, refreshWallabagAvailability } from '$lib/wallabag-availability';
   import { getWallabagEntry, listWallabagEntries, updateWallabagEntry, type WallabagEntry, type WallabagEntryFilter } from '$lib/wallabag';
 
@@ -102,7 +102,10 @@
     selectedId = id; selected = null;
     loadingArticle = true; articleError = false; actionError = false;
     try {
-      const entry = await getWallabagEntry(connection.server, id);
+      // Never expose the article until the lazily downloaded sanitizer is
+      // ready. Both failures remain retryable, and the connection guard below
+      // also covers switching accounts while the sanitizer is loading.
+      const [entry] = await Promise.all([getWallabagEntry(connection.server, id), loadWallabagSanitizer()]);
       if (request !== articleRequest || !sameConnection(connection.server, connection.revision)) return;
       selected = entry;
       loadingArticle = false;

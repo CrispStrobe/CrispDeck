@@ -1,4 +1,15 @@
-import DOMPurify from 'dompurify';
+let DOMPurify: typeof import('dompurify').default | undefined;
+let sanitizerLoad: Promise<void> | undefined;
+
+/** Keep the sanitizer off the route's static download path, and await it. */
+export function loadWallabagSanitizer(): Promise<void> {
+  return sanitizerLoad ??= import('dompurify').then(module => {
+    DOMPurify = module.default;
+  }).catch(error => {
+    sanitizerLoad = undefined;
+    throw error;
+  });
+}
 
 /** Article URLs must never be resolved against CrispDeck's own origin. */
 export function wallabagArticleUrl(input: unknown, articleUrl?: string): string | null {
@@ -14,10 +25,12 @@ export function wallabagArticleUrl(input: unknown, articleUrl?: string): string 
 
 /**
  * Wallabag content is captured from arbitrary websites, not trusted app HTML.
- * This reader-only module loads DOMPurify before it can render anything. There
- * is no temporary regex fallback or unsanitized first frame.
+ * The reader must await loadWallabagSanitizer before setting an article. There
+ * is no temporary regex fallback or unsanitized first frame: callers that miss
+ * this precondition fail closed.
  */
 export function sanitizeWallabagHtml(content: string, sourceUrl: string): string {
+  if (!DOMPurify) throw new Error('The article sanitizer is not ready');
   const fragment = DOMPurify.sanitize(content, {
     ALLOWED_TAGS: [
       'a', 'p', 'br', 'span', 'em', 'strong', 'b', 'i', 'del', 's', 'small', 'sub', 'sup',
