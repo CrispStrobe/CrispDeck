@@ -10,5 +10,6 @@ describe('Wallabag link action', () => {
     expect(wallabagBookmarklet('javascript:alert(1)','https://example.org')).toBeNull();
     expect(wallabagBookmarklet('https://user:secret@example.org','https://example.org')).toBeNull();
     expect(wallabagBookmarklet('https://example.org','javascript:alert(1)')).toBeNull();
+    expect(wallabagBookmarklet('https://example.org','https://user:secret@article.example')).toBeNull();
   });
 });
