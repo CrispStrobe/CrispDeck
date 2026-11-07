@@ -3,7 +3,6 @@
   import { syncSystemBars } from '$lib/system-bars';
   import { readJson, readString, writeJson, writeString } from '$lib/safe-storage';
   import { isNavItemActive } from '$lib/nav-active';
-  import { wallabagAvailability, startWallabagAvailability } from '$lib/wallabag-availability';
   import { base } from '$app/paths';
   import { routePath } from '$lib/routes';
   import '../app.css';
@@ -31,7 +30,22 @@
   import { onMount, onDestroy } from 'svelte';
   import { startScheduler } from '$lib/publishing/scheduler';
   onMount(startScheduler);
-  onMount(startWallabagAvailability);
+  let wallabagReady = $state(false);
+  onMount(() => {
+    let active = true;
+    let stop: (() => void) | undefined;
+    let unsubscribe: (() => void) | undefined;
+    // Keep the optional reader's connection watcher off the startup path.
+    // Navigation stays hidden until the loaded watcher verifies saved access.
+    void import('$lib/wallabag-availability').then(module => {
+      if (!active) return;
+      unsubscribe = module.wallabagAvailability.subscribe(connection => {
+        wallabagReady = connection.status === 'ready';
+      });
+      stop = module.startWallabagAvailability();
+    }).catch(error => swallow('layout.wallabag', error));
+    return () => { active = false; unsubscribe?.(); stop?.(); };
+  });
   let NativeLinkMenu = $state<typeof import('$lib/components/LinkContextMenu.svelte').default>();
   onMount(() => {
     let active = true;
@@ -287,7 +301,7 @@
     { href: '/messages', icon: MessageSquare, label: i18n.t.nav.messages, badge: () => unreadMessages > 0 ? unreadMessages : 0 },
     { href: '/search', icon: Search, label: i18n.t.nav.search },
     { href: '/bookmarks', icon: Bookmark, label: i18n.t.nav.bookmarks, badge: () => bookmarkCount > 0 ? bookmarkCount : 0 },
-    ...($wallabagAvailability.status === 'ready' ? [{ href: '/wallabag', icon: BookOpen, label: i18n.t.nav.wallabag }] : []),
+    ...(wallabagReady ? [{ href: '/wallabag', icon: BookOpen, label: i18n.t.nav.wallabag }] : []),
     { href: '/lists', icon: List, label: 'Lists & Feeds' },
     { href: '/trending', icon: TrendingUp, label: 'Discover' },
     { href: '/identities', icon: Users, label: i18n.t.nav.identities },
