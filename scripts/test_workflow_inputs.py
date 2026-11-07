@@ -63,6 +63,13 @@ class WorkflowInputTests(unittest.TestCase):
         )
         self.assertEqual(arguments, ['tools/asc/testflight.py', 'macos', '--dry-run', '--internal-only'])
 
+    def test_testflight_whitespace_only_testers_are_ignored(self):
+        arguments = self.run_testflight_step(
+            INPUT_PLATFORM='ios', INPUT_DRY_RUN='false', INPUT_INTERNAL_ONLY='false',
+            INPUT_BUILD_ID='', INPUT_TESTERS='  \n\t  ',
+        )
+        self.assertEqual(arguments, ['tools/asc/testflight.py', 'ios'])
+
     def run_testflight_step(self, **inputs):
         scripts = dict(run_blocks(WORKFLOWS / 'testflight.yml'))
         script = scripts['Distribute']

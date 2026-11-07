@@ -14,8 +14,9 @@ const account = { platform: 'mastodon', handle: '@test@example.com', credentials
 
 describe('browser credential durability', () => {
   it.each(['crispdeck-key', 'crispdeck-salt-v2'])('refuses an account when %s cannot be persisted', async failedKey => {
-    const setItem = Storage.prototype.setItem;
-    const storage = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key, value) {
+    const prototype = Object.getPrototypeOf(localStorage) as Storage;
+    const setItem = prototype.setItem;
+    const storage = vi.spyOn(prototype, 'setItem').mockImplementation(function (this: Storage, key, value) {
       if (key === failedKey) throw new DOMException('Storage full', 'QuotaExceededError');
       setItem.call(this, key, value);
     });

@@ -25,6 +25,7 @@ const CREDENTIAL_KEYS = [
   'crispdeck-crypto-v2',
   'crispdeck-mastodon-apps',
   'crispdeck-threads-config',
+  'crispdeck-wallabag-session',
 ];
 
 // Export provider preferences, but never their API keys. Use an allowlist so

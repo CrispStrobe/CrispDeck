@@ -31,7 +31,7 @@ describe('settings export/import', () => {
     });
 
     it('excludes credential keys', () => {
-      const secrets = ['crispdeck-encrypt-seed', 'crispdeck-key', 'crispdeck-salt-v2', 'crispdeck-crypto-v2', 'crispdeck-mastodon-apps', 'crispdeck-threads-config'];
+      const secrets = ['crispdeck-encrypt-seed', 'crispdeck-key', 'crispdeck-salt-v2', 'crispdeck-crypto-v2', 'crispdeck-mastodon-apps', 'crispdeck-threads-config', 'crispdeck-wallabag-session'];
       for (const key of secrets) localStorage.setItem(key, 'secret');
       localStorage.setItem('crispdeck-theme', 'dark');
 
@@ -144,6 +144,7 @@ describe('settings export/import', () => {
         exported_at: '2026-01-01',
         settings: {
           'crispdeck-encrypt-seed': 'stolen-secret',
+          'crispdeck-wallabag-session': 'stolen-token',
           'crispdeck-theme': 'dark',
         },
       };
@@ -151,6 +152,7 @@ describe('settings export/import', () => {
       const count = importSettings(data);
       expect(count).toBe(1);
       expect(localStorage.getItem('crispdeck-encrypt-seed')).toBeNull();
+      expect(localStorage.getItem('crispdeck-wallabag-session')).toBeNull();
     });
   });
 

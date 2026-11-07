@@ -283,6 +283,28 @@
   let hideEngagement = $state(localStorage.getItem('crispdeck-hide-engagement') === 'true');
   let compactPosts = $state(localStorage.getItem('crispdeck-compact-posts') === 'true');
   let wallabagUrl = $state(readString('crispdeck-wallabag-url', ''));
+  let wallabagClientId = $state('');
+  let wallabagClientSecret = $state('');
+  let wallabagUsername = $state('');
+  let wallabagPassword = $state('');
+  let wallabagBusy = $state(false);
+  async function connectWallabagAccount() {
+    wallabagBusy = true;
+    try {
+      const { connectWallabag } = await import('$lib/wallabag');
+      await connectWallabag({ server: wallabagUrl, clientId: wallabagClientId, clientSecret: wallabagClientSecret, username: wallabagUsername, password: wallabagPassword });
+      writeString('crispdeck-wallabag-url', wallabagUrl.trim());
+      wallabagPassword = ''; wallabagClientSecret = '';
+      toast.success(i18n.t.linkMenu.wallabagConnected);
+    } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
+    finally { wallabagBusy = false; }
+  }
+  async function disconnectWallabagAccount() {
+    wallabagBusy = true;
+    try { const { disconnectWallabag } = await import('$lib/wallabag'); await disconnectWallabag(); toast.success(i18n.t.linkMenu.wallabagDisconnected); }
+    catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
+    finally { wallabagBusy = false; }
+  }
   let sideMedia = $state(localStorage.getItem('crispdeck-side-media') !== 'false');
   let mediaPreview = $state<'lightbox' | 'browser'>((localStorage.getItem('crispdeck-media-preview') as 'lightbox' | 'browser') || 'lightbox');
   let liveCounters = $state(localStorage.getItem('crispdeck-live-counters') === 'true');
@@ -1282,6 +1304,16 @@
         <label for="wallabag-url" class="text-sm text-[var(--color-text-muted)]">{i18n.t.linkMenu.wallabagInstance}</label>
         <input id="wallabag-url" type="url" bind:value={wallabagUrl} onchange={() => writeString('crispdeck-wallabag-url', wallabagUrl.trim())} placeholder="https://wallabag.example.com" class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm" />
         <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.linkMenu.wallabagHint}</p>
+        <div class="grid gap-2 mt-2 sm:grid-cols-2">
+          <label class="text-xs">{i18n.t.linkMenu.wallabagClientId}<input type="text" autocomplete="off" bind:value={wallabagClientId} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
+          <label class="text-xs">{i18n.t.linkMenu.wallabagClientSecret}<input type="password" autocomplete="off" bind:value={wallabagClientSecret} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
+          <label class="text-xs">{i18n.t.linkMenu.wallabagUsername}<input type="text" autocomplete="username" bind:value={wallabagUsername} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
+          <label class="text-xs">{i18n.t.linkMenu.wallabagPassword}<input type="password" autocomplete="current-password" bind:value={wallabagPassword} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
+        </div>
+        <div class="flex gap-2 mt-2">
+          <button disabled={wallabagBusy} onclick={connectWallabagAccount} class="px-3 py-2 rounded-md bg-[var(--color-primary)] text-white text-xs">{i18n.t.linkMenu.wallabagConnect}</button>
+          <button disabled={wallabagBusy} onclick={disconnectWallabagAccount} class="px-3 py-2 rounded-md border border-[var(--color-border)] text-xs">{i18n.t.linkMenu.wallabagDisconnect}</button>
+        </div>
       </div>
 
       <!-- Media preview mode -->

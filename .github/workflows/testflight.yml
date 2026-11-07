@@ -98,8 +98,10 @@ jobs:
           [ "$INPUT_DRY_RUN" = "true" ] && args+=(--dry-run)
           [ "$INPUT_INTERNAL_ONLY" = "true" ] && args+=(--internal-only)
           [ -n "$INPUT_BUILD_ID" ] && args+=(--build "$INPUT_BUILD_ID")
-          read -r -a tester_emails <<< "${INPUT_TESTERS//$'\n'/ }"
-          for tester in "${tester_emails[@]}"; do args+=(--tester "$tester"); done
+          if [[ "$INPUT_TESTERS" =~ [^[:space:]] ]]; then
+            read -r -a tester_emails <<< "${INPUT_TESTERS//$'\n'/ }"
+            for tester in "${tester_emails[@]}"; do args+=(--tester "$tester"); done
+          fi
           python3 tools/asc/testflight.py "${args[@]}"
 
       - name: Remove the key

@@ -19,7 +19,9 @@ function response(text: string) {
 }
 function fixture(account: Account) {
   const getPostThread = vi.fn(async () => response(`Thread for ${account.handle}`));
-  return { getPostThread, entry: { accountId: account.id, platform: 'bluesky', handle: account.handle, client: {}, oauthAgent: { did: account.did, getPostThread } } as unknown as ClientEntry };
+  const like = vi.fn(async () => ({ uri: 'at://did:plc:personal/app.bsky.feed.like/1' }));
+  const deleteLike = vi.fn(async () => {});
+  return { getPostThread, like, deleteLike, entry: { accountId: account.id, platform: 'bluesky', handle: account.handle, client: {}, oauthAgent: { did: account.did, getPostThread, like, deleteLike } } as unknown as ClientEntry };
 }
 let personal: ReturnType<typeof fixture>;
 let work: ReturnType<typeof fixture>;
@@ -40,6 +42,23 @@ function render(accountId = 1) {
 }
 
 describe('scoped thread page navigation', () => {
+  it('likes and unlikes a reply with the account that loaded the thread', async () => {
+    const loaded = response('Root');
+    const childUri = 'at://did:plc:other/app.bsky.feed.post/child';
+    (loaded.data.thread as any).replies = [{ post: { uri: childUri, cid: 'child-cid', author: { handle: 'other.bsky.social' }, record: { text: 'A reply', createdAt: '2026-01-01T00:00:00Z', reply: { parent: { uri, cid: 'cid' }, root: { uri, cid: 'cid' } } } } }];
+    personal.getPostThread.mockResolvedValueOnce(loaded);
+    const target = render();
+    await vi.waitFor(() => { flushSync(); expect(target.textContent).toContain('A reply'); });
+    const row = [...target.querySelectorAll<HTMLElement>('[data-thread-depth]')].find(el => el.textContent?.includes('A reply'))!;
+    const button = row.querySelector<HTMLButtonElement>('button[aria-label^="Like ("]')!;
+    expect(button.disabled).toBe(false);
+    button.click();
+    await vi.waitFor(() => expect(personal.like).toHaveBeenCalledWith(childUri, 'child-cid'));
+    await vi.waitFor(() => { flushSync(); expect(button.disabled).toBe(false); });
+    button.click();
+    await vi.waitFor(() => expect(personal.deleteLike).toHaveBeenCalledWith('at://did:plc:personal/app.bsky.feed.like/1'));
+    expect(work.like).not.toHaveBeenCalled();
+  });
   it('reloads a reused route when only the selected account changes', async () => {
     const target = render();
     await vi.waitFor(() => { flushSync(); expect(target.textContent).toContain('Thread for personal.bsky.social'); });
@@ -71,7 +90,7 @@ describe('scoped thread page navigation', () => {
     expect(personal.getPostThread).toHaveBeenCalledOnce(); expect(work.getPostThread).not.toHaveBeenCalled();
   });
 
-  it('keeps author continuations distinct from other replies and includes them in article mode', async () => {
+  it('renders replies beneath their parent and keeps author continuations in article mode', async () => {
     const loaded = response('Root article');
     const thread: any = loaded.data.thread;
     const child = (id: string, text: string, author: string, parent: string) => ({ post: {
@@ -86,9 +105,14 @@ describe('scoped thread page navigation', () => {
     personal.getPostThread.mockResolvedValueOnce(loaded);
     const target = render();
     await vi.waitFor(() => { flushSync(); expect(target.textContent).toContain('Third article section'); });
-    const continuation = target.querySelector('[aria-label="Original author’s thread"]');
-    expect(continuation?.textContent).toContain('Second article section');
-    expect(continuation?.textContent).not.toContain('A visitor question');
+    const rows = [...target.querySelectorAll<HTMLElement>('[data-thread-depth]')];
+    expect(rows.map(row => [row.textContent?.trim(), row.dataset.threadDepth])).toEqual([
+      [expect.stringContaining('Root article'), '0'],
+      [expect.stringContaining('Second article section'), '1'],
+      [expect.stringContaining('Third article section'), '2'],
+      [expect.stringContaining('A visitor question'), '1'],
+      [expect.stringContaining('Answer outside the article'), '2'],
+    ]);
     const articleToggle = [...target.querySelectorAll('button')].find(button => button.textContent?.includes('Read as article'));
     expect(articleToggle).toBeDefined();
     articleToggle!.click(); flushSync();
