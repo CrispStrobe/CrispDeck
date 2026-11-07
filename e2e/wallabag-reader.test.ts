@@ -238,3 +238,14 @@ test('shows the saved connection after restarting without asking for credentials
   await expect(settings.getByLabel('Password', { exact: true })).toHaveCount(0);
   await openReader(page);
 });
+
+test('article actions share the top row at desktop width', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await wallabagServer(page); await connect(page); await openReader(page);
+  await page.locator('[data-wallabag-entry="1"]').click();
+  const toolbar = page.getByRole('group', { name: 'Article actions' });
+  await expect(toolbar.getByRole('button', { name: 'Mark as read' })).toBeVisible();
+  const controls = await toolbar.locator('button, a').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().top));
+  expect(controls.length).toBe(4);
+  expect(Math.max(...controls) - Math.min(...controls)).toBeLessThan(3);
+});

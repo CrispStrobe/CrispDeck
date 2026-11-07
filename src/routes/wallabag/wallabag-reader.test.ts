@@ -81,6 +81,17 @@ async function expectEntries(target: HTMLElement, ids: number[]) {
 }
 
 describe('Wallabag reader controls', () => {
+  it('places the back, reading, favorite and original controls together before the article title', async () => {
+    const target = render(); await expectEntries(target, [1, 2]);
+    select(target, 1); await expectArticle(target, 'Article 1');
+    const toolbar = target.querySelector('.article-actions')!;
+    expect(toolbar.textContent).toContain('Back to articles');
+    expect(toolbar.textContent).toContain('Mark as read');
+    expect(toolbar.textContent).toContain('Star article');
+    expect(toolbar.textContent).toContain('Open original');
+    expect(toolbar.compareDocumentPosition(target.querySelector('article h2')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('shows previews by default and respects the saved thumbnail setting', async () => {
     mocks.list.mockResolvedValue(page([entry(1, { preview_picture: 'https://news.example/picture.jpg' })]));
     const target = render(); await expectEntries(target, [1]);
