@@ -326,7 +326,8 @@ describe('publishFeedGenerator', () => {
     feed.description = 'Svelte posts';
 
     const putRecord = vi.fn().mockResolvedValue({});
-    const mockAgent = { api: { com: { atproto: { repo: { putRecord } } } } };
+    const getServiceAuth = vi.fn().mockResolvedValue({ data: { token: 'publish-service-token' } });
+    const mockAgent = { api: { com: { atproto: { repo: { putRecord }, server: { getServiceAuth } } } } };
 
     // Mock fetch for the server publish call
     const originalFetch = globalThis.fetch;
@@ -342,6 +343,10 @@ describe('publishFeedGenerator', () => {
       expect(globalThis.fetch).toHaveBeenCalledOnce();
       const fetchCall = (globalThis.fetch as any).mock.calls[0];
       expect(fetchCall[0]).toContain('/api/feed/publish');
+      expect(fetchCall[1].headers.Authorization).toBe('Bearer publish-service-token');
+      expect(getServiceAuth).toHaveBeenCalledWith({
+        aud: `${GENERATOR_DID}#bsky_fg`, lxm: 'app.vercel.crispdeck.feed.publish', exp: expect.any(Number),
+      });
       const body = JSON.parse(fetchCall[1].body);
       expect(body.query).toBe('svelte');
       expect(body.userDid).toBe('did:plc:abc123');
@@ -364,7 +369,9 @@ describe('publishFeedGenerator', () => {
     const feed = createFeedDefinition('Fail Feed');
     feed.rules = [createRule('keyword', 'test')];
 
-    const mockAgent = { api: { com: { atproto: { repo: { putRecord: vi.fn() } } } } };
+    const mockAgent = { api: { com: { atproto: { repo: { putRecord: vi.fn() }, server: {
+      getServiceAuth: vi.fn().mockResolvedValue({ data: { token: 'service-token' } }),
+    } } } } };
 
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn().mockResolvedValue({
@@ -384,9 +391,10 @@ describe('publishFeedGenerator', () => {
 // ── unpublishFeedGenerator ──────────────────────────────────────────────────
 
 describe('unpublishFeedGenerator', () => {
-  it('calls server unpublish then deleteRecord', async () => {
+  it('deletes the PDS record before removing the owner-scoped server definition', async () => {
     const deleteRecord = vi.fn().mockResolvedValue({});
-    const mockAgent = { api: { com: { atproto: { repo: { deleteRecord } } } } };
+    const getServiceAuth = vi.fn().mockResolvedValue({ data: { token: 'delete-service-token' } });
+    const mockAgent = { api: { com: { atproto: { repo: { deleteRecord }, server: { getServiceAuth } } } } };
 
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
@@ -398,6 +406,12 @@ describe('unpublishFeedGenerator', () => {
       expect(globalThis.fetch).toHaveBeenCalledOnce();
       const fetchCall = (globalThis.fetch as any).mock.calls[0];
       expect(fetchCall[0]).toContain('/api/feed/unpublish');
+      expect(fetchCall[1].headers.Authorization).toBe('Bearer delete-service-token');
+      expect(JSON.parse(fetchCall[1].body)).toEqual({ userDid: 'did:plc:abc123', rkey: 'some-rkey' });
+      expect(getServiceAuth).toHaveBeenCalledWith({
+        aud: `${GENERATOR_DID}#bsky_fg`, lxm: 'app.vercel.crispdeck.feed.unpublish', exp: expect.any(Number),
+      });
+      expect(deleteRecord.mock.invocationCallOrder[0]).toBeLessThan(getServiceAuth.mock.invocationCallOrder[0]);
 
       // Should have called deleteRecord
       expect(deleteRecord).toHaveBeenCalledWith({
