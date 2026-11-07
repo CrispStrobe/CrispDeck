@@ -4,9 +4,11 @@
   import { ImageIcon, MessageSquareOff, Heart, Repeat, SlidersHorizontal, ChevronDown } from '@lucide/svelte';
   import type { Filters } from '$lib/types';
 
-  let { filters, onchange, startOpen = false }: {
+  let { filters, onchange, onSaveDefault, onReset, startOpen = false }: {
     filters: Filters;
     onchange: (newFilters: Partial<Filters>) => void;
+    onSaveDefault: () => void;
+    onReset: () => void;
     startOpen?: boolean;
   } = $props();
 
@@ -28,7 +30,7 @@
   >
     <span class="flex items-center gap-2">
       <SlidersHorizontal size={14} />
-      Filters & Sort
+      {i18n.t.settings.filterSortTitle}
       {#if hasActiveFilters}
         <span class="w-2 h-2 rounded-full bg-[var(--color-primary)]"></span>
       {/if}
@@ -52,8 +54,8 @@
           onchange={(e) => onchange({ sortBy: (e.target as HTMLSelectElement).value as Filters['sortBy'] })}
           class="w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]"
         >
-          <option value="newest">Sort: Newest</option>
-          <option value="oldest">Sort: Oldest</option>
+          <option value="newest">{i18n.t.settings.filterSortNewest}</option>
+          <option value="oldest">{i18n.t.settings.filterSortOldest}</option>
           <option value="likes">{i18n.t.feed.sortMostLiked}</option>
           <option value="reposts">{i18n.t.feed.sortMostReposted}</option>
           <option value="engagement">{i18n.t.feed.sortTopEngagement}</option>
@@ -90,6 +92,10 @@
           <Repeat size={14} />
           <span>{i18n.t.feed.hideReposts}</span>
         </label>
+      </div>
+      <div class="mt-3 flex gap-3 flex-wrap text-sm">
+        <button type="button" class="text-[var(--color-primary-text)]" onclick={onSaveDefault}>{i18n.t.settings.filterSaveDefault}</button>
+        <button type="button" class="text-[var(--color-text-muted)]" onclick={onReset}>{i18n.t.settings.filterReset}</button>
       </div>
     </div>
   {/if}

@@ -96,7 +96,7 @@
       await client.saveToWallabag(server, url);
       toast.success(i18n.t.linkMenu.wallabagSaved);
     }
-    catch (e) { toast.error(e instanceof Error ? e.message : i18n.t.linkMenu.wallabagFailed); }
+    catch (e) { toast.error(e instanceof Error && e.message === 'Connect Wallabag in Settings first' ? i18n.t.settings.wallabagConnectFirst : e instanceof Error ? e.message : i18n.t.linkMenu.wallabagFailed); }
   }
 </script>
 {#if menu}

@@ -292,7 +292,7 @@
     { href: '/analytics', icon: BarChart3, label: i18n.t.nav.analytics },
     { href: '/moderation', icon: Shield, label: i18n.t.nav.moderation },
     { href: '/settings', icon: Settings, label: i18n.t.nav.settings },
-    { href: '/about', icon: Info, label: 'About' },
+    { href: '/about', icon: Info, label: i18n.t.nav.about },
   ]);
 
   // Filtered nav items (respects simple mode / custom hidden items)

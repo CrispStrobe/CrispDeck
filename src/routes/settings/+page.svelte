@@ -827,14 +827,14 @@
     <div class="flex items-center justify-between mb-3">
       <h2 class="text-lg font-semibold flex items-center gap-2">
         <div class="w-3 h-3 rounded-full bg-[var(--color-bluesky)]"></div>
-        Bluesky Accounts
+        {i18n.t.settings.blueskyAccounts}
       </h2>
       <button
         onclick={() => showBskyForm = !showBskyForm}
         class="flex items-center gap-1 px-3 py-1.5 text-sm bg-[var(--color-bluesky-strong)] hover:opacity-90 rounded-md transition-opacity"
       >
         <Plus size={14} />
-        Add
+        {i18n.t.settings.add}
       </button>
     </div>
 
@@ -980,14 +980,14 @@
     <div class="flex items-center justify-between mb-3">
       <h2 class="text-lg font-semibold flex items-center gap-2">
         <div class="w-3 h-3 rounded-full bg-[var(--color-mastodon)]"></div>
-        Mastodon Accounts
+        {i18n.t.settings.mastodonAccounts}
       </h2>
       <button
         onclick={() => showMastoForm = !showMastoForm}
         class="flex items-center gap-1 px-3 py-1.5 text-sm bg-[var(--color-mastodon-strong)] hover:opacity-90 rounded-md transition-opacity"
       >
         <Plus size={14} />
-        Add
+        {i18n.t.settings.add}
       </button>
     </div>
 
@@ -1080,14 +1080,14 @@
     <div class="flex items-center justify-between mb-3">
       <h2 class="text-lg font-semibold flex items-center gap-2">
         <div class="w-3 h-3 rounded-full bg-[var(--color-threads,#000)]"></div>
-        Threads Accounts
+        {i18n.t.settings.threadsAccounts}
       </h2>
       <button
         onclick={() => showThreadsForm = !showThreadsForm}
         class="flex items-center gap-1 px-3 py-1.5 text-sm bg-[var(--color-threads,#000)] hover:opacity-90 rounded-md transition-opacity"
       >
         <Plus size={14} />
-        Add
+        {i18n.t.settings.add}
       </button>
     </div>
 
@@ -1497,7 +1497,7 @@
                 <div class="flex items-center gap-2">
                   <span class="text-sm font-medium truncate">{filter.title}</span>
                   <span class="text-[9px] px-1 py-0.5 rounded {filter.filter_action === 'hide' ? 'bg-red-900/30 text-red-400' : 'bg-yellow-900/30 text-yellow-400'}">
-                    {filter.filter_action}
+                    {filter.filter_action === 'hide' ? i18n.t.settings.serverFilterActionHide : i18n.t.settings.serverFilterActionWarn}
                   </span>
                   {#if isFilterExpired(filter)}
                     <span class="text-[9px] px-1 py-0.5 bg-gray-800 text-gray-400 rounded">{i18n.t.settings.serverFilterExpired}</span>
@@ -1505,10 +1505,10 @@
                 </div>
                 <div class="flex gap-1 mt-0.5 flex-wrap">
                   {#each filter.context as ctx}
-                    <span class="text-[9px] px-1 py-0.5 bg-[var(--color-surface)] text-[var(--color-text-muted)] rounded">{ctx}</span>
+                    <span class="text-[9px] px-1 py-0.5 bg-[var(--color-surface)] text-[var(--color-text-muted)] rounded">{({ home: i18n.t.settings.serverFilterContextHome, notifications: i18n.t.settings.serverFilterContextNotifications, thread: i18n.t.settings.serverFilterContextThread, public: i18n.t.settings.serverFilterContextPublic, account: i18n.t.settings.serverFilterContextAccount } as Record<string, string>)[ctx] ?? ctx}</span>
                   {/each}
                   <span class="text-[9px] text-[var(--color-text-muted)]">
-                    {i18n.t.settings.serverFilterKeywordCount.replace('{count}', String(filter.keywords.length))}
+                    {(filter.keywords.length === 1 ? i18n.t.settings.serverFilterKeywordOne : i18n.t.settings.serverFilterKeywordCount).replace('{count}', String(filter.keywords.length))}
                   </span>
                   {#if filter.expires_at}
                     <span class="text-[9px] text-[var(--color-text-muted)]">
