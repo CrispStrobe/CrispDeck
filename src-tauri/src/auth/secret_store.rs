@@ -414,8 +414,41 @@ mod tests {
     mod mac_setting {
         use super::*;
 
+        // These tests temporarily change the same process setting that the
+        // real-store CI legs select. Serialize the overrides and restore the
+        // original value even on a panic, so the later tests use the requested
+        // user-managed or data-protection keychain instead of always "login".
+        #[cfg(target_os = "macos")]
+        static KEYCHAIN_ENV_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+        #[cfg(target_os = "macos")]
+        struct RestoreKeychainEnv {
+            previous: Option<std::ffi::OsString>,
+            _lock: std::sync::MutexGuard<'static, ()>,
+        }
+
+        #[cfg(target_os = "macos")]
+        impl RestoreKeychainEnv {
+            fn new() -> Self {
+                let lock = KEYCHAIN_ENV_TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+                Self { previous: std::env::var_os(MAC_KEYCHAIN_ENV), _lock: lock }
+            }
+        }
+
+        #[cfg(target_os = "macos")]
+        impl Drop for RestoreKeychainEnv {
+            fn drop(&mut self) {
+                match &self.previous {
+                    Some(value) => std::env::set_var(MAC_KEYCHAIN_ENV, value),
+                    None => std::env::remove_var(MAC_KEYCHAIN_ENV),
+                }
+            }
+        }
+
         #[test]
         fn applying_a_choice_is_harmless_off_macos_and_takes_effect_on_it() {
+            #[cfg(target_os = "macos")]
+            let _restore = RestoreKeychainEnv::new();
             set_mac_keychain_choice("login");
 
             #[cfg(target_os = "macos")]
@@ -425,6 +458,7 @@ mod tests {
         #[cfg(target_os = "macos")]
         #[test]
         fn a_path_survives_being_stored_and_applied() {
+            let _restore = RestoreKeychainEnv::new();
             let path = "/Users/someone/Library/Keychains/Work.keychain-db";
             set_mac_keychain_choice(path);
             assert_eq!(std::env::var(MAC_KEYCHAIN_ENV).unwrap(), path);
@@ -433,6 +467,7 @@ mod tests {
         #[cfg(target_os = "macos")]
         #[test]
         fn a_stray_value_in_the_database_cannot_become_an_unintended_path() {
+            let _restore = RestoreKeychainEnv::new();
             // Normalised through parse/as_str, so junk lands on the login
             // keychain rather than being opened as a file name.
             set_mac_keychain_choice("../../etc/passwd");

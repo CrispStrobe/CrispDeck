@@ -669,6 +669,7 @@ mod tests {
     struct FakeStore {
         entries: RefCell<HashMap<String, String>>,
         fail_writes: bool,
+        fail_deletes: bool,
     }
 
     impl FakeStore {
@@ -693,6 +694,9 @@ mod tests {
                 .ok_or_else(|| anyhow::anyhow!("not found"))
         }
         fn delete(&self, key: &str) -> anyhow::Result<()> {
+            if self.fail_deletes {
+                anyhow::bail!("secret store refused deletion");
+            }
             self.entries.borrow_mut().remove(key);
             Ok(())
         }
@@ -748,6 +752,24 @@ mod tests {
         assert!(oauth_session_set_impl(&conn, &store, "did:plc:example", "secret").is_err());
         assert_eq!(crate::db::get_setting(&conn, &format!("{}/keychain/login", oauth_marker_key("did:plc:example").unwrap()), ""), "");
         assert!(oauth_marker_key("not-a-did").is_err());
+    }
+
+    #[test]
+    fn failed_wallabag_deletion_preserves_the_marker_and_can_be_retried() {
+        let conn = test_db();
+        crate::db::set_setting(&conn, CREDENTIAL_BACKEND_KEY, "keychain").unwrap();
+        let mut store = FakeStore::default();
+        oauth_session_set_impl(&conn, &store, WALLABAG_SESSION, "wallabag-token").unwrap();
+        store.fail_deletes = true;
+
+        assert!(oauth_session_delete_impl(&conn, &store, WALLABAG_SESSION).is_err());
+        assert_eq!(oauth_session_get_impl(&conn, &store, WALLABAG_SESSION).unwrap().as_deref(), Some("wallabag-token"));
+        assert_eq!(store.len(), 1);
+
+        store.fail_deletes = false;
+        oauth_session_delete_impl(&conn, &store, WALLABAG_SESSION).unwrap();
+        assert_eq!(oauth_session_get_impl(&conn, &store, WALLABAG_SESSION).unwrap(), None);
+        assert_eq!(store.len(), 0);
     }
 
     #[test]
