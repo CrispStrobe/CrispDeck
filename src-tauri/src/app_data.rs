@@ -42,10 +42,12 @@ mod tests {
 
     #[test]
     fn filesystem_failures_are_reported_before_opening_the_database() {
-        let path = std::env::temp_dir().join(format!("crispdeck-app-data-file-{}", rand::random::<u64>()));
+        let parent = std::env::temp_dir().join(format!("crispdeck-app-data-file-{}", rand::random::<u64>()));
+        std::fs::create_dir_all(&parent).unwrap();
+        let path = parent.join("not-a-directory");
         std::fs::write(&path, b"not a directory").unwrap();
         assert!(prepare_directory(&path).is_err());
         assert_eq!(std::fs::read(&path).unwrap(), b"not a directory");
-        std::fs::remove_file(path).unwrap();
+        std::fs::remove_dir_all(parent).unwrap();
     }
 }

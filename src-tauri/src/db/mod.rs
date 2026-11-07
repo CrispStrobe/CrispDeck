@@ -178,6 +178,9 @@ mod tests {
     #[test]
     fn fresh_database_and_version_records_are_created_together() {
         let conn = Connection::open_in_memory().unwrap();
+        // SQLite builds differ in their default; explicitly cover a caller
+        // that had enforcement disabled before requesting a migration.
+        conn.pragma_update(None, "foreign_keys", false).unwrap();
         apply_migrations(&conn).unwrap();
         let count: i64 = conn.query_row("SELECT COUNT(*) FROM _migrations", [], |row| row.get(0)).unwrap();
         assert_eq!(count as usize, MIGRATIONS.len());
