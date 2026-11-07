@@ -359,11 +359,20 @@ pub fn macos_keychain_set(state: State<'_, AppState>, keychain: String) -> Resul
     // the user had no reason to connect to a setting they changed earlier.
     let keychain = expand_mac_keychain_path(&keychain)?;
     validate_mac_keychain(&keychain)?;
-    {
-        let conn = state.db.lock().map_err(|e| e.to_string())?;
-        crate::db::set_setting(&conn, MAC_KEYCHAIN_KEY, &keychain).map_err(|e| e.to_string())?;
-    }
-    secret_store::set_mac_keychain_choice(&keychain);
+    set_mac_keychain_impl(&state, &keychain, secret_store::set_mac_keychain_choice)
+}
+
+fn set_mac_keychain_impl(
+    state: &AppState,
+    keychain: &str,
+    apply_choice: impl FnOnce(&str),
+) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    crate::db::set_setting(&conn, MAC_KEYCHAIN_KEY, keychain).map_err(|e| e.to_string())?;
+    // Credential commands hold this same lock while checking the selection
+    // and accessing the OS store. Keep it until both selections agree, or a
+    // concurrent save could write to the previous keychain under a new marker.
+    apply_choice(keychain);
     Ok(())
 }
 
@@ -770,6 +779,34 @@ mod tests {
         let expanded = expand_mac_keychain_path("~/Library/Keychains/Work.keychain-db").unwrap();
         assert_eq!(expanded, std::path::PathBuf::from(std::env::var_os("HOME").unwrap()).join("Library/Keychains/Work.keychain-db").to_string_lossy());
         assert_eq!(expand_mac_keychain_path("login").unwrap(), "login");
+    }
+
+    #[test]
+    fn keychain_selection_stays_locked_until_the_os_store_is_updated() {
+        let state = AppState { db: std::sync::Mutex::new(test_db()) };
+        let mut applied = false;
+        set_mac_keychain_impl(&state, "data-protection", |choice| {
+            assert_eq!(choice, "data-protection");
+            assert!(matches!(state.db.try_lock(), Err(std::sync::TryLockError::WouldBlock)),
+                "credential operations must not observe the new marker with the old OS store");
+            applied = true;
+        }).unwrap();
+        assert!(applied);
+        let conn = state.db.lock().unwrap();
+        assert_eq!(crate::db::get_setting(&conn, MAC_KEYCHAIN_KEY, "login"), "data-protection");
+    }
+
+    #[test]
+    fn a_failed_keychain_preference_write_leaves_the_os_selection_unchanged() {
+        let conn = test_db();
+        conn.execute_batch("CREATE TRIGGER reject_keychain_preference BEFORE INSERT ON app_settings
+            WHEN NEW.key = 'macos_keychain' BEGIN SELECT RAISE(FAIL, 'read-only preference'); END;").unwrap();
+        let state = AppState { db: std::sync::Mutex::new(conn) };
+        let mut applied = false;
+        assert!(set_mac_keychain_impl(&state, "data-protection", |_| applied = true).is_err());
+        assert!(!applied);
+        let conn = state.db.lock().unwrap();
+        assert_eq!(crate::db::get_setting(&conn, MAC_KEYCHAIN_KEY, "login"), "login");
     }
 
     #[test]
