@@ -1,13 +1,15 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { exportAsJson, exportAsCsv, exportAsMarkdown } from './export';
 import type { UnifiedPost } from '$lib/types';
 
 // Mock DOM APIs
 let downloadedContent = '';
 let downloadedFilename = '';
+const OriginalBlob = global.Blob;
+afterEach(() => vi.restoreAllMocks());
 
 beforeEach(() => {
   downloadedContent = '';
@@ -28,10 +30,11 @@ beforeEach(() => {
   vi.spyOn(document.body, 'removeChild').mockImplementation(() => null as any);
 
   // Capture the Blob content
-  const originalBlob = global.Blob;
-  vi.spyOn(global, 'Blob').mockImplementation((parts, options) => {
-    downloadedContent = parts?.join('') ?? '';
-    return new originalBlob(parts, options);
+  vi.spyOn(global, 'Blob').mockImplementation(class extends OriginalBlob {
+    constructor(parts?: BlobPart[], options?: BlobPropertyBag) {
+      super(parts, options);
+      downloadedContent = parts?.join('') ?? '';
+    }
   });
 });
 
@@ -111,6 +114,18 @@ describe('exportAsCsv', () => {
     exportAsCsv(posts, 'test');
     const lines = downloadedContent.split('\n').filter(l => l.trim());
     expect(lines).toHaveLength(4); // 1 header + 3 rows
+  });
+
+  it.each(['=1+1', '+1+1', '-1+1', '@SUM(1)', '  =1+1', '\t=1+1', '\r=1+1', '\n=1+1'])('neutralizes spreadsheet formulas in remote text: %s', text => {
+    exportAsCsv([makePost({ text })], 'test');
+    expect(downloadedContent).toContain(`'${text}`);
+  });
+
+  it('escapes every remote string column, including handles and URLs', () => {
+    exportAsCsv([makePost({ uri: 'https://example.com/post,a', author: { handle: '=1+1', displayName: 'Alice' }, text: 'hello\rworld' })], 'test');
+    expect(downloadedContent).toContain('"https://example.com/post,a"');
+    expect(downloadedContent).toContain(",bluesky,'=1+1,");
+    expect(downloadedContent).toContain('"hello\rworld"');
   });
 });
 

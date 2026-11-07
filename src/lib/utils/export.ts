@@ -43,17 +43,20 @@ export function exportAsCsv(posts: UnifiedPost[], handle: string) {
   const headers = ['uri', 'platform', 'author_handle', 'text', 'likes', 'reposts', 'replies', 'createdAt', 'is_repost'];
   const escape = (field: unknown): string => {
     if (field === undefined || field === null) return '';
-    const str = String(field);
-    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    let str = String(field);
+    // CSV quoting does not stop spreadsheet formula execution. Remote post
+    // text, handles and URLs must be treated as text when opened in Excel/Calc.
+    if (typeof field === 'string' && (/^\s*[=+\-@]/u.test(str) || /^[\t\r\n]/.test(str))) str = `'${str}`;
+    if (/[",\r\n]/.test(str)) {
       return `"${str.replace(/"/g, '""')}"`;
     }
     return str;
   };
   const rows = posts.map(p => [
-    p.uri, p.platform, p.author.handle, escape(p.text),
+    p.uri, p.platform, p.author.handle, p.text,
     p.likeCount ?? 0, p.repostCount ?? 0, p.replyCount ?? 0,
     p.createdAt, p.isRepost,
-  ].join(','));
+  ].map(escape).join(','));
   triggerDownload([headers.join(','), ...rows].join('\n'), 'text/csv;charset=utf-8;', `posts-${handle}-${Date.now()}.csv`);
 }
 
