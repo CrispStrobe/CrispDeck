@@ -13,10 +13,12 @@ export function wallabagBookmarklet(instance: string, link: string): string | nu
 
 import { isTauri, invoke } from '@tauri-apps/api/core';
 import { getCredentialBackend } from '$lib/db';
+import { readString, removeKey, writeString } from '$lib/safe-storage';
 
 interface Session { server: string; clientId: string; clientSecret: string; accessToken: string; refreshToken: string; expiresAt: number }
 export interface WallabagCredentials { server: string; clientId: string; clientSecret: string; username: string; password: string }
 const browserKey = 'crispdeck-wallabag-session';
+let cachedSession: { store: string; value: Session } | null = null;
 
 function serverUrl(value: string): string {
   const url = new URL(value.trim());
@@ -30,22 +32,38 @@ async function storageArgs() {
 }
 async function readSession(): Promise<Session | null> {
   if (isTauri()) {
-    const raw = await invoke<string | null>('wallabag_session_get', await storageArgs());
-    return raw ? JSON.parse(raw) as Session : null;
+    const args = await storageArgs();
+    const store = JSON.stringify(args);
+    if (cachedSession?.store === store) return cachedSession.value;
+    const raw = await invoke<string | null>('wallabag_session_get', args);
+    const value = raw ? JSON.parse(raw) as Session : null;
+    cachedSession = value ? { store, value } : null;
+    return value;
   }
-  const encrypted = localStorage.getItem(browserKey);
+  if (cachedSession?.store === 'browser') return cachedSession.value;
+  const encrypted = readString(browserKey);
   if (!encrypted) return null;
   const { decrypt } = await import('$lib/browser-db');
-  return JSON.parse(await decrypt(encrypted)) as Session;
+  const value = JSON.parse(await decrypt(encrypted)) as Session;
+  cachedSession = { store: 'browser', value };
+  return value;
 }
 async function writeSession(session: Session): Promise<void> {
-  if (isTauri()) return invoke('wallabag_session_set', { ...(await storageArgs()), value: JSON.stringify(session) });
+  if (isTauri()) {
+    const args = await storageArgs();
+    await invoke('wallabag_session_set', { ...args, value: JSON.stringify(session) });
+    cachedSession = { store: JSON.stringify(args), value: session };
+    return;
+  }
   const { encrypt } = await import('$lib/browser-db');
-  localStorage.setItem(browserKey, await encrypt(JSON.stringify(session)));
+  if (!writeString(browserKey, await encrypt(JSON.stringify(session)))) throw new Error('Could not save Wallabag credentials');
+  cachedSession = { store: 'browser', value: session };
 }
 export async function disconnectWallabag(): Promise<void> {
+  cachedSession = null;
   if (isTauri()) return invoke('wallabag_session_delete', await storageArgs());
-  localStorage.removeItem(browserKey);
+  removeKey(browserKey);
+  if (readString(browserKey)) throw new Error('Could not remove Wallabag credentials');
 }
 async function request(url: string, init: RequestInit): Promise<Response> {
   const requestFetch = isTauri() ? (await import('@tauri-apps/plugin-http')).fetch : fetch;
