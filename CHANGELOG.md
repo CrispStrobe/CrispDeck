@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.3.2 — 2026-11-07
+
+Includes the improvements and fixes from the 1.3.1 prerelease.
+
+- Fix the iOS App Store icon by using opaque RGB assets and validating the full icon catalog before building.
+- Improve iOS callback smoke verification and Mac App Store package validation.
+
 ## v1.3.1 — 2026-11-06
 
 ### Deck workflows and parity

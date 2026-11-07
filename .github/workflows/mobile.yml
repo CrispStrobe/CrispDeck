@@ -128,9 +128,10 @@ jobs:
 
       - run: npm ci
 
-      # Generate all platform icons (desktop + iOS AppIcon.appiconset) from 1024px source
-      - name: Generate app icons
-        run: npx tauri icon static/icon-1024.png
+      # Tauri's generator emits RGBA PNGs even when fully opaque. Apple rejects
+      # alpha-bearing iOS icons, so validate the committed opaque RGB set.
+      - name: Validate iOS app icons
+        run: python3 scripts/sync-ios-icons.py --validate-only
 
       # Generates the Xcode project in src-tauri/gen/apple/
       # Versionless customizations live in src-tauri/Info.ios.plist. Generated
