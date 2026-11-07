@@ -184,7 +184,7 @@ export async function disconnectWallabag(): Promise<void> {
 }
 
 /** Keep the deadline active until the response body is consumed or discarded. */
-async function request<T>(url: string, init: RequestInit, consume: (response: Response) => Promise<T> | T): Promise<T> {
+async function request<T>(url: string, init: RequestInit, consume: (response: Response, signal: AbortSignal) => Promise<T> | T): Promise<T> {
   const controller = new AbortController();
   let timedOut = false;
   const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, requestTimeoutMs);
@@ -203,7 +203,7 @@ async function request<T>(url: string, init: RequestInit, consume: (response: Re
       response = await fetch(url, options);
     }
     if (controller.signal.aborted) throw new Error();
-    const result = await consume(response);
+    const result = await consume(response, controller.signal);
     if (controller.signal.aborted) throw new Error();
     return result;
   } catch (error) {
@@ -220,10 +220,15 @@ async function request<T>(url: string, init: RequestInit, consume: (response: Re
   }
 }
 
-async function boundedJson(response: Response, maxBytes: number, message: string): Promise<unknown> {
+async function boundedJson(response: Response, maxBytes: number, message: string, signal: AbortSignal): Promise<unknown> {
   if (Number(response.headers.get('Content-Length')) > maxBytes) throw new WallabagError(message);
   const reader = response.body?.getReader();
   if (!reader) throw new WallabagError(message);
+  // Cancel a body that stalls after its headers arrive, including transports
+  // whose fetch AbortSignal stops only the initial network request.
+  const cancel = () => { void reader.cancel().catch(() => {}); };
+  signal.addEventListener('abort', cancel, { once: true });
+  if (signal.aborted) cancel();
   const chunks: Uint8Array[] = [];
   let size = 0;
   try {
@@ -235,6 +240,7 @@ async function boundedJson(response: Response, maxBytes: number, message: string
       chunks.push(value);
     }
   } finally {
+    signal.removeEventListener('abort', cancel);
     reader.releaseLock();
   }
   try {
@@ -253,9 +259,9 @@ function record(value: unknown): value is Record<string, unknown> {
 }
 
 async function token(server: string, fields: Record<string, string>): Promise<Token> {
-  return request(`${server}/oauth/v2/token`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) }, async response => {
+  return request(`${server}/oauth/v2/token`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) }, async (response, signal) => {
     if (!response.ok) throw new WallabagError(`Wallabag authentication failed (${response.status})`, [400, 401, 403].includes(response.status));
-    const value = await boundedJson(response, maxSessionBytes, 'Wallabag returned an invalid token');
+    const value = await boundedJson(response, maxSessionBytes, 'Wallabag returned an invalid token', signal);
     if (!record(value)) throw new WallabagError('Wallabag returned an invalid token');
     const expiresIn = typeof value?.expires_in === 'number' || (typeof value?.expires_in === 'string' && /^\d+$/.test(value.expires_in)) ? Number(value.expires_in) : NaN;
     if (!bearerToken(value?.access_token) || !nonemptyString(value?.refresh_token) ||
@@ -341,7 +347,7 @@ async function assertSavedSessionCurrent(saved: SavedSession): Promise<void> {
   });
 }
 
-async function authenticatedRequest<T>(server: string, path: string, init: RequestInit, consume: (response: Response) => Promise<T> | T, message: string): Promise<T> {
+async function authenticatedRequest<T>(server: string, path: string, init: RequestInit, consume: (response: Response, signal: AbortSignal) => Promise<T> | T, message: string): Promise<T> {
   let saved: SavedSession | undefined;
   try {
     saved = await savedSession(server);
@@ -351,7 +357,7 @@ async function authenticatedRequest<T>(server: string, path: string, init: Reque
       return request(`${value.session.server}${path}`, {
         ...init,
         headers: { ...init.headers, Authorization: `Bearer ${value.session.accessToken}` },
-      }, async response => ({ status: response.status, ...(response.ok ? { data: await consume(response) } : {}) }));
+      }, async (response, signal) => ({ status: response.status, ...(response.ok ? { data: await consume(response, signal) } : {}) }));
     };
     let result = await send(saved);
     if (result.status === 401) {
@@ -448,8 +454,8 @@ export async function listWallabagEntries(server: string, options: WallabagEntri
   if (filter === 'unread') query.set('archive', '0');
   if (filter === 'archived') query.set('archive', '1');
   if (filter === 'starred') query.set('starred', '1');
-  return authenticatedRequest(server, `/api/entries.json?${query}`, { method: 'GET' }, async response =>
-    parseEntriesPage(await boundedJson(response, maxArticleBytes, 'Wallabag returned an invalid article list')), 'Wallabag could not load articles');
+  return authenticatedRequest(server, `/api/entries.json?${query}`, { method: 'GET' }, async (response, signal) =>
+    parseEntriesPage(await boundedJson(response, maxArticleBytes, 'Wallabag returned an invalid article list', signal)), 'Wallabag could not load articles');
 }
 
 /** A saved token alone is insufficient: the server must accept a reader request. */
@@ -464,8 +470,8 @@ export async function validateWallabagConnection(server: string): Promise<boolea
 
 export async function getWallabagEntry(server: string, id: number): Promise<WallabagEntry> {
   if (!positiveInteger(id)) throw new WallabagError('Invalid Wallabag article ID');
-  return authenticatedRequest(server, `/api/entries/${id}.json`, { method: 'GET' }, async response => {
-    const entry = parseEntry(await boundedJson(response, maxArticleBytes, 'Wallabag returned an invalid article'));
+  return authenticatedRequest(server, `/api/entries/${id}.json`, { method: 'GET' }, async (response, signal) => {
+    const entry = parseEntry(await boundedJson(response, maxArticleBytes, 'Wallabag returned an invalid article', signal));
     if (entry.id !== id) throw new WallabagError('Wallabag returned an invalid article');
     return entry;
   }, 'Wallabag could not load the article');
@@ -483,8 +489,8 @@ export async function updateWallabagEntry(server: string, id: number, changes: {
   };
   return authenticatedRequest(server, `/api/entries/${id}.json`, {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-  }, async response => {
-    const entry = parseEntry(await boundedJson(response, maxArticleBytes, 'Wallabag returned an invalid article'));
+  }, async (response, signal) => {
+    const entry = parseEntry(await boundedJson(response, maxArticleBytes, 'Wallabag returned an invalid article', signal));
     if (entry.id !== id) throw new WallabagError('Wallabag returned an invalid article');
     return entry;
   }, 'Wallabag could not update the article');

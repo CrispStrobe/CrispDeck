@@ -228,6 +228,21 @@ describe('reader response validation and account lifecycle', () => {
     await expect(api.getWallabagEntry(server, 42)).rejects.toThrow('invalid article');
   });
 
+  it('cancels an article body that stalls after the headers, keeping the deadline active', async () => {
+    vi.useFakeTimers();
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) { controller.enqueue(new TextEncoder().encode('{"id":42,')); },
+      cancel,
+    });
+    mocks.fetch.mockResolvedValueOnce(new Response(body));
+    const result = expect(api.getWallabagEntry(server, 42)).rejects.toThrow('request timed out');
+    await vi.waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(30_000);
+    await result;
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
   it('does not echo a malformed article body in a JSON error', async () => {
     mocks.fetch.mockResolvedValueOnce(new Response('{"private-test-sentinel"'));
     const error = await api.getWallabagEntry(server, 42).catch(error => error);

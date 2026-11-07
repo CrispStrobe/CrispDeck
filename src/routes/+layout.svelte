@@ -3,12 +3,13 @@
   import { syncSystemBars } from '$lib/system-bars';
   import { readJson, readString, writeJson, writeString } from '$lib/safe-storage';
   import { isNavItemActive } from '$lib/nav-active';
+  import { wallabagAvailability, startWallabagAvailability } from '$lib/wallabag-availability';
   import { base } from '$app/paths';
   import { routePath } from '$lib/routes';
   import '../app.css';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import { Home, Rss, Columns3, PenSquare, Bell, MessageSquare, Bookmark, Users, Search, List, Shield, TrendingUp, Archive, BarChart3, Settings, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon, Smartphone } from '@lucide/svelte';
+  import { Home, Rss, Columns3, PenSquare, Bell, MessageSquare, Bookmark, BookOpen, Users, Search, List, Shield, TrendingUp, Archive, BarChart3, Settings, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon, Smartphone } from '@lucide/svelte';
   import KeyboardShortcuts from '$lib/components/KeyboardShortcuts.svelte';
   import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
   import ToastContainer from '$lib/components/ToastContainer.svelte';
@@ -30,6 +31,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { startScheduler } from '$lib/publishing/scheduler';
   onMount(startScheduler);
+  onMount(startWallabagAvailability);
   let NativeLinkMenu = $state<typeof import('$lib/components/LinkContextMenu.svelte').default>();
   onMount(() => {
     let active = true;
@@ -285,6 +287,7 @@
     { href: '/messages', icon: MessageSquare, label: i18n.t.nav.messages, badge: () => unreadMessages > 0 ? unreadMessages : 0 },
     { href: '/search', icon: Search, label: i18n.t.nav.search },
     { href: '/bookmarks', icon: Bookmark, label: i18n.t.nav.bookmarks, badge: () => bookmarkCount > 0 ? bookmarkCount : 0 },
+    ...($wallabagAvailability.status === 'ready' ? [{ href: '/wallabag', icon: BookOpen, label: i18n.t.nav.wallabag }] : []),
     { href: '/lists', icon: List, label: 'Lists & Feeds' },
     { href: '/trending', icon: TrendingUp, label: 'Discover' },
     { href: '/identities', icon: Users, label: i18n.t.nav.identities },
