@@ -11,7 +11,8 @@
   import { crosspostThread, type PostResult } from '$lib/compose/adapter';
   import { splitForPlatform } from '$lib/compose/thread';
   import type { Draft, Account, Platform } from '$lib/types';
-  import { publishDraft, persistDraft, draftSnapshot, removeDraft, SCHEDULER_CHANGE } from '$lib/publishing/drafts';
+  import { publishDraft, SCHEDULER_CHANGE } from '$lib/publishing/drafts';
+  import { deletePublishingDraft, schedulePublishingDraft } from '$lib/deck-publishing';
   import { listJobs, type PublishJob } from '$lib/publishing/outbox';
   import { buildScheduledAt } from '$lib/quick-schedule';
   import DeliveryStatus from '$lib/components/DeliveryStatus.svelte';
@@ -90,8 +91,7 @@ function parseTargetAccounts(value: unknown): number[] {
 
   async function handleDelete(id: number) {
     try {
-      const draft = drafts.find(d => d.id === id);
-      if (draft) await removeDraft(draft);
+      await deletePublishingDraft(id);
       await refreshDrafts();
     } catch (e) {
       error = String(e);
@@ -104,7 +104,7 @@ function parseTargetAccounts(value: unknown): number[] {
     const draft = drafts.find(d => d.id === draftId);
     if (!draft) return;
     try {
-      await persistDraft(await draftSnapshot(draft), scheduledAt, draftId);
+      await schedulePublishingDraft(draftId, scheduledAt);
       await refreshDrafts();
       schedulingDraftId = null; scheduleDate = ''; scheduleTime = '';
     } catch (e) { error = String(e); }

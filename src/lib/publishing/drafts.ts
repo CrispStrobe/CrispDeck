@@ -65,12 +65,16 @@ export async function removeDraft(draft: Draft) {
 export async function publishDraft(draft: Draft, allowUncertain = false): Promise<PublishJob> {
   const job = await exclusive(`draft-${draft.id}`, async () => {
     const existing = await getJob(`draft-${draft.id}`);
+    // Views and the scheduler may retain rows across an edit or deletion in
+    // another window. Never prepare delivery from that stale copy.
+    const current = (await listDrafts()).find(saved => saved.id === draft.id);
     // A successful delivery with a failed local cleanup must never resend.
-    if (existing && isComplete(existing)) { await removeDraft(draft); return existing; }
+    if (existing && isComplete(existing)) { if (current) await removeDraft(current); return existing; }
+    if (!current) throw new Error('This draft is no longer available. Refresh the draft list before publishing.');
     const { accounts, clients } = await initAllClients();
-    const pending = existing ?? await createJob(await draftSnapshot(draft), accounts, draft.id);
+    const pending = existing ?? await createJob(await draftSnapshot(current), accounts, current.id);
     const delivered = await deliverJob(pending.id, clients, allowUncertain);
-    if (isComplete(delivered)) await removeDraft(draft);
+    if (isComplete(delivered)) await removeDraft(current);
     return delivered;
   });
   if (job) return job;

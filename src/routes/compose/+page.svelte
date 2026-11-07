@@ -28,6 +28,7 @@
   import type { Account, Platform } from '$lib/types';
   import { snapshot, saveSnapshot, loadSnapshot, deleteSnapshot, restoreFiles, type ComposerSnapshot, type StoredOptions } from '$lib/publishing/snapshots';
   import { persistDraft, draftSnapshot, removeDraft } from '$lib/publishing/drafts';
+  import { deletePublishingDraft } from '$lib/deck-publishing';
   import { createJob, deliverJob, getJob, isComplete, type PublishJob } from '$lib/publishing/outbox';
   import DeliveryStatus from '$lib/components/DeliveryStatus.svelte';
   import DestinationPreviews from '$lib/components/DestinationPreviews.svelte';
@@ -417,6 +418,17 @@
     finally { posting = false; }
   }
 
+  async function handleDiscardDraft() {
+    if (editingDraftId === null || posting) return;
+    posting = true;
+    try {
+      await deletePublishingDraft(editingDraftId);
+      editingDraftId = null;
+      pendingJob = null;
+    } catch (e) { error = String(e); }
+    finally { posting = false; }
+  }
+
   async function handleSaveDraft() {
     if (!hasContent || posting) return;
     posting = true;
@@ -672,7 +684,7 @@
         {#if editingDraftId}
           <div class="p-2 bg-yellow-950/30 border border-yellow-700/30 rounded-lg text-xs text-yellow-300 flex items-center justify-between">
             <span>Editing draft #{editingDraftId}</span>
-            <button onclick={async () => { const draft = (await listDrafts()).find(d => d.id === editingDraftId); if (draft) await removeDraft(draft); editingDraftId = null; }} class="text-yellow-400 hover:text-yellow-200 underline">{i18n.t.compose.discardDraft}</button>
+            <button onclick={handleDiscardDraft} disabled={posting} class="text-yellow-400 hover:text-yellow-200 underline">{i18n.t.compose.discardDraft}</button>
           </div>
         {/if}
 
