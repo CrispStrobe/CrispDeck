@@ -2,11 +2,15 @@
   import { base } from '$app/paths';
   import { onDestroy, onMount, tick } from 'svelte';
   import { initAllClients } from '$lib/api/client-factory';
-  import { MessageCircle, ArrowLeft, BookOpen, Share2 } from '@lucide/svelte';
+  import { ArrowLeft, BookOpen, Share2 } from '@lucide/svelte';
   import { afterNavigate, goto } from '$app/navigation';
   import { i18n } from '$lib/i18n.svelte';
   import { loadThreadPage, parseThreadRequest, threadErrorMessage } from '$lib/thread-loader';
   import { partitionThreadReplies } from '$lib/thread-continuation';
+  import { sameThreadAuthor, threadRows } from '$lib/thread-tree';
+  import { performDeckAction } from '$lib/deck-actions';
+  import { postContextParams } from '$lib/compose/context';
+  import type { ClientEntry } from '$lib/api/client-factory';
   import { isThread, extractThreadText } from '$lib/thread-sync';
   import Post from '$lib/components/Post.svelte';
   import type { UnifiedPost, Account, Platform } from '$lib/types';
@@ -19,6 +23,7 @@
   let platform: Platform = $state('bluesky');
 
   let accounts: Account[] = $state([]);
+  let clients: Map<number, ClientEntry> = new Map();
   let externalUrl = $state('');
   let requestSequence = 0;
   let disposed = false;
@@ -39,6 +44,7 @@
       const result = await initAllClients();
       if (disposed || sequence !== requestSequence) return;
       accounts = result.accounts;
+      clients = result.clients;
       const thread = await loadThreadPage(request, result.accounts, result.clients);
       if (disposed || sequence !== requestSequence) return;
       mainPost = thread.mainPost; ancestors = thread.ancestors; replies = thread.replies; externalUrl = thread.externalUrl ?? '';
@@ -61,21 +67,28 @@
 
   let articleMode = $state(false);
   const groupedReplies = $derived(mainPost ? partitionThreadReplies(mainPost, replies) : { continuation: [], replies });
+  const rows = $derived(mainPost ? threadRows(ancestors, mainPost, replies) : []);
 
-  /** Build a single article from the thread author's posts (ancestors + main + their replies) */
+  /** An article follows a contiguous self-thread, never jumps over another author. */
   const articlePosts = $derived.by(() => {
     if (!mainPost) return [];
-    const authorHandle = mainPost.author.handle;
-    const all = [...ancestors, mainPost, ...groupedReplies.continuation].filter(
-      p => p.author.handle === authorHandle
-    );
-    // Deduplicate by URI
-    const seen = new Set<string>();
-    return all.filter(p => {
-      if (seen.has(p.uri)) return false;
-      seen.add(p.uri);
-      return true;
+    const prior: UnifiedPost[] = [];
+    const seen = new Set<string>([mainPost.uri]);
+    let child = mainPost;
+    for (let i = ancestors.length - 1; i >= 0; i--) {
+      const parent = ancestors[i];
+      if (seen.has(parent.uri)) continue;
+      if (!sameThreadAuthor(mainPost, parent)) break;
+      const raw = parent.raw as { id?: string; reblog?: { id?: string } } | undefined;
+      const id = raw?.reblog?.id ?? raw?.id;
+      if (child.replyParentUri && child.replyParentUri !== parent.uri && child.replyParentUri !== id) break;
+      prior.push(parent); seen.add(parent.uri); child = parent;
+    }
+    const continuation = groupedReplies.continuation.filter(post => {
+      if (seen.has(post.uri)) return false;
+      seen.add(post.uri); return true;
     });
+    return [...prior.reverse(), mainPost, ...continuation];
   });
 
   const articleText = $derived(articlePosts.map(p => p.text).join('\n\n'));
@@ -91,6 +104,16 @@
     const text = extractThreadText(articlePosts);
     // Navigate to compose with the thread text pre-filled
     goto(`${base}/compose?text=${encodeURIComponent(text)}`);
+  }
+
+  function react(post: UnifiedPost, action: 'like' | 'repost', active = true) {
+    return performDeckAction(post, action, active, clients, accounts.map(account => account.id));
+  }
+  function reply(post: UnifiedPost) {
+    void goto(`${base}/compose?${postContextParams(post, 'reply')}`);
+  }
+  function quote(post: UnifiedPost) {
+    void goto(`${base}/compose?${postContextParams(post, 'quote')}`);
   }
 </script>
 
@@ -200,44 +223,14 @@
       </div>
     </article>
   {:else}
-    <!-- Ancestors (parent chain) -->
-    {#if ancestors.length > 0}
-      <div class="space-y-0 mb-2">
-        {#each ancestors as post, i}
-          <div class="relative pl-6 {i < ancestors.length - 1 ? 'pb-0' : ''}">
-            <div class="absolute left-8 top-12 bottom-0 w-0.5 bg-[var(--color-border)]"></div>
-            <Post {post} />
+    {#if mainPost}
+      <div class="overflow-x-auto" aria-label={i18n.t.thread.discussionLabel}>
+        {#each rows as row (row.post.uri)}
+          <div class="mb-2 {row.selected ? 'border-l-4 border-[var(--color-primary)] rounded-r-lg' : ''}"
+            style:margin-left="{row.depth * 16}px" style:min-width="min(22rem, 100%)" data-thread-depth={row.depth}>
+            <Post post={row.post} onlike={(post, active) => react(post, 'like', active)} onboost={(post, active) => react(post, 'repost', active)} onreply={reply} onquote={quote} />
           </div>
         {/each}
-      </div>
-    {/if}
-
-    <!-- Main post (highlighted) -->
-    {#if mainPost}
-      <div class="border-l-4 border-[var(--color-primary)] rounded-r-lg mb-4">
-        <Post post={mainPost} />
-      </div>
-    {/if}
-
-    {#if groupedReplies.continuation.length > 0}
-      <div class="space-y-2 mb-4 border-l-4 border-[var(--color-primary)] rounded-r-lg" aria-label={i18n.t.thread.authorThread}>
-        {#each groupedReplies.continuation as post (post.uri)}
-          <Post {post} />
-        {/each}
-      </div>
-    {/if}
-
-    <!-- Other replies -->
-    {#if groupedReplies.replies.length > 0}
-      <div class="border-t border-[var(--color-border)] pt-4">
-        <h3 class="text-sm font-semibold text-[var(--color-text-muted)] mb-3 flex items-center gap-2">
-          <MessageCircle size={14} /> {groupedReplies.replies.length} {groupedReplies.replies.length === 1 ? 'reply' : 'replies'}
-        </h3>
-        <div class="space-y-2 pl-4 border-l-2 border-[var(--color-border)]">
-          {#each groupedReplies.replies as post (post.uri)}
-            <Post {post} />
-          {/each}
-        </div>
       </div>
     {/if}
 

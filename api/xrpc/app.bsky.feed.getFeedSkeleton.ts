@@ -1,4 +1,6 @@
 import { safeError } from '../_lib/cors.js';
+import { isAccountDid } from '../_lib/feed-auth.js';
+import { isFeedRkey, readOwnedFeed } from '../_lib/feed-storage.js';
 /**
  * Vercel serverless function: Bluesky Feed Generator — getFeedSkeleton
  *
@@ -14,32 +16,26 @@ import { safeError } from '../_lib/cors.js';
 
 const BSKY_PUBLIC_API = 'https://public.api.bsky.app';
 
-// Simple in-memory cache: rkey → { query, expiry }
+// Full feed URI → { query, expiry }. A record key alone is not an identity.
 const queryCache = new Map<string, { query: string; expiry: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_LIMIT = 256;
 
-async function getQueryForRkey(rkey: string): Promise<string | null> {
-  const cached = queryCache.get(rkey);
+async function getQueryForFeed(userDid: string, rkey: string): Promise<string | null> {
+  const key = `${userDid}/${rkey}`;
+  const cached = queryCache.get(key);
   if (cached && cached.expiry > Date.now()) {
     return cached.query;
   }
 
   try {
-    const { list } = await import('@vercel/blob');
-    const blobs = await list({ prefix: `feeds/${rkey}.json` });
-    if (blobs.blobs.length === 0) return null;
-
-    const resp = await fetch(blobs.blobs[0].url);
-    if (!resp.ok) return null;
-
-    const feedDef = await resp.json();
-    const query = feedDef.query;
-
-    if (query) {
-      queryCache.set(rkey, { query, expiry: Date.now() + CACHE_TTL });
-    }
-
-    return query || null;
+    const feedDef = await readOwnedFeed(userDid, rkey);
+    const query = feedDef?.query;
+    if (typeof query !== 'string' || !query.trim() || query.length > 8192) return null;
+    queryCache.delete(key);
+    if (queryCache.size >= CACHE_LIMIT) queryCache.delete(queryCache.keys().next().value!);
+    queryCache.set(key, { query, expiry: Date.now() + CACHE_TTL });
+    return query;
   } catch {
     return null;
   }
@@ -63,7 +59,7 @@ const corsHeaders = {
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const feedUri = url.searchParams.get('feed');
-  const limit = Math.min(Number(url.searchParams.get('limit')) || 30, 100);
+  const limit = url.searchParams.has('limit') ? Number(url.searchParams.get('limit')) : 30;
   const cursor = url.searchParams.get('cursor');
 
   if (!feedUri) {
@@ -71,12 +67,15 @@ export async function GET(request: Request) {
   }
 
   const match = feedUri.match(/^at:\/\/([^/]+)\/app\.bsky\.feed\.generator\/(.+)$/);
-  if (!match) {
+  if (!match || !isAccountDid(match[1]) || !isFeedRkey(match[2])) {
     return new Response(JSON.stringify({ error: 'Invalid feed URI' }), { status: 400, headers: corsHeaders });
+  }
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100 || (cursor && cursor.length > 2048)) {
+    return new Response(JSON.stringify({ error: 'Invalid limit or cursor' }), { status: 400, headers: corsHeaders });
   }
 
   const rkey = match[2];
-  const query = await getQueryForRkey(rkey);
+  const query = await getQueryForFeed(match[1], rkey);
   if (!query) {
     return new Response(JSON.stringify({ error: 'Feed not found', rkey }), { status: 404, headers: corsHeaders });
   }
@@ -89,7 +88,8 @@ export async function GET(request: Request) {
     if (cursor) params.set('cursor', cursor);
 
     const resp = await fetch(
-      `${BSKY_PUBLIC_API}/xrpc/app.bsky.feed.searchPosts?${params.toString()}`
+      `${BSKY_PUBLIC_API}/xrpc/app.bsky.feed.searchPosts?${params.toString()}`,
+      { redirect: 'error', signal: AbortSignal.timeout(10_000) },
     );
 
     if (!resp.ok) {

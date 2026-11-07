@@ -1,55 +1,52 @@
-import { corsFor, preflight } from '../_lib/cors.js';
+import { corsFor, preflight, safeError } from '../_lib/cors.js';
+import { HttpError, readJsonObject } from '../_lib/request.js';
 /**
- * Store / remove web push subscriptions.
- * Uses Vercel Blob for persistence (requires BLOB_READ_WRITE_TOKEN env var).
+ * Background delivery is not implemented. Do not collect subscription secrets
+ * (particularly into public blobs) for a service that cannot send notifications.
+ * DELETE only removes legacy storage when the caller proves possession of the
+ * exact browser subscription, instead of trusting an arbitrary userId.
  */
 
-export async function POST(request: Request) {
-  const body = await request.json();
-  const { subscription, userId } = body;
-
-  if (!subscription?.endpoint) {
-    return new Response(JSON.stringify({ error: 'Invalid subscription' }), {
-      status: 400,
-      headers: corsFor(request, 'POST, DELETE, OPTIONS'),
-    });
-  }
-
-  // Dynamic import — @vercel/blob is only available in Vercel runtime
-  try {
-    const { put } = await import('@vercel/blob');
-    const key = `push-subscriptions/${encodeURIComponent(userId || 'anonymous')}.json`;
-    await put(key, JSON.stringify(subscription), {
-      access: 'public',
-      addRandomSuffix: false,
-    });
-  } catch (err: any) {
-    // If Vercel Blob is not configured, log and return success anyway
-    // (subscription was received, just not persisted)
-    console.warn('Blob storage not available:', err?.message);
-  }
-
-  return new Response(JSON.stringify({ ok: true }), {
-    status: 200,
-    headers: corsFor(request, 'POST, DELETE, OPTIONS'),
+export function POST(request: Request) {
+  return new Response(JSON.stringify({ error: 'Background web push is not available. Notifications work while CrispDeck is open.' }), {
+    status: 501,
+    headers: { ...corsFor(request, 'POST, DELETE, OPTIONS'), 'Cache-Control': 'no-store' },
   });
 }
 
 export async function DELETE(request: Request) {
-  const { userId } = await request.json();
-  const key = `push-subscriptions/${encodeURIComponent(userId || 'anonymous')}.json`;
-
   try {
-    const { del } = await import('@vercel/blob');
-    await del(key);
-  } catch {
-    // Blob not configured — no-op
+    const { userId = 'anonymous', subscription } = await readJsonObject(request);
+    if (typeof userId !== 'string' || !/^[a-zA-Z0-9._:@-]{1,256}$/.test(userId) || !isSubscription(subscription)) {
+      throw new HttpError(400, 'The current browser subscription is required');
+    }
+    const key = `push-subscriptions/${encodeURIComponent(userId)}.json`;
+    const { del, get } = await import('@vercel/blob');
+    const blob = await get(key, { access: 'public', abortSignal: AbortSignal.timeout(5_000) });
+    if (blob?.statusCode === 200) {
+      const stored = await readJsonObject(new Response(blob.stream));
+      if (!isSubscription(stored) || stored.endpoint !== subscription.endpoint ||
+          stored.keys.auth !== subscription.keys.auth || stored.keys.p256dh !== subscription.keys.p256dh) {
+        throw new HttpError(403, 'The stored subscription belongs to a different browser');
+      }
+      await del(key);
+    }
+    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: corsFor(request, 'POST, DELETE, OPTIONS') });
+  } catch (e) {
+    return new Response(JSON.stringify({ error: e instanceof HttpError ? e.message : safeError('Removing the push subscription', e) }), {
+      status: e instanceof HttpError ? e.status : 500,
+      headers: { ...corsFor(request, 'POST, DELETE, OPTIONS'), 'Cache-Control': 'no-store' },
+    });
   }
+}
 
-  return new Response(JSON.stringify({ ok: true }), {
-    status: 200,
-    headers: corsFor(request, 'POST, DELETE, OPTIONS'),
-  });
+type Subscription = { endpoint: string; keys: { p256dh: string; auth: string } };
+function isSubscription(value: unknown): value is Subscription {
+  if (!value || typeof value !== 'object') return false;
+  const sub = value as Partial<Subscription>;
+  return typeof sub.endpoint === 'string' && sub.endpoint.startsWith('https://') && sub.endpoint.length <= 4096 &&
+    typeof sub.keys?.auth === 'string' && sub.keys.auth.length > 0 && sub.keys.auth.length <= 256 &&
+    typeof sub.keys.p256dh === 'string' && sub.keys.p256dh.length > 0 && sub.keys.p256dh.length <= 256;
 }
 
 export function OPTIONS(request: Request) {

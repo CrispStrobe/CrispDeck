@@ -22,7 +22,7 @@ let dbPromise: Promise<IDBDatabase> | null = null;
 
 function openDB(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
-  dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
+  const opening: Promise<IDBDatabase> = new Promise<IDBDatabase>((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
@@ -30,31 +30,41 @@ function openDB(): Promise<IDBDatabase> {
         db.createObjectStore(STORE_NAME, { keyPath: 'key' });
       }
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      const db = req.result;
+      const release = () => { if (dbPromise === opening) dbPromise = null; };
+      db.onclose = release;
+      db.onversionchange = () => { db.close(); release(); };
+      resolve(db);
+    };
     req.onerror = () => reject(req.error);
   }).catch((e) => {
     // Drop the cached promise so a later call can retry. Without this one
     // transient failure to open the database disabled the offline cache for the
     // rest of the session: every subsequent call awaited the same rejection.
-    dbPromise = null;
+    if (dbPromise === opening) dbPromise = null;
     throw e;
   });
-  return dbPromise;
+  dbPromise = opening;
+  return opening;
 }
 
 /** Cache feed data for offline use. Call after every successful feed load. */
 export async function cacheFeed(key: string, posts: UnifiedPost[]): Promise<void> {
   try {
     const db = await openDB();
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
     // Only cache the first 100 posts to keep IndexedDB size reasonable
     const entry: CachedFeed = {
       key,
       posts: posts.slice(0, 100),
       cachedAt: new Date().toISOString(),
     };
-    store.put(entry);
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.oncomplete = () => resolve();
+      tx.onabort = tx.onerror = () => reject(tx.error ?? new Error('Offline cache write aborted'));
+      tx.objectStore(STORE_NAME).put(entry);
+    });
   } catch {
     // IndexedDB unavailable — silently skip (this IS an acceptable silent catch)
   }
@@ -68,8 +78,13 @@ export async function loadCachedFeed(key: string): Promise<CachedFeed | null> {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const store = tx.objectStore(STORE_NAME);
       const req = store.get(key);
-      req.onsuccess = () => resolve(req.result ?? null);
-      req.onerror = () => resolve(null);
+      let entry: CachedFeed | null = null;
+      req.onsuccess = () => {
+        const value = req.result;
+        if (value?.key === key && Array.isArray(value.posts) && typeof value.cachedAt === 'string') entry = value;
+      };
+      tx.oncomplete = () => resolve(entry);
+      tx.onabort = tx.onerror = () => resolve(null);
     });
   } catch {
     return null;

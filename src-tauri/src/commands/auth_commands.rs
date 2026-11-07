@@ -2,8 +2,9 @@
 /// redirect's query string.
 ///
 /// The window is pointed at `auth_url`. When the authorization server
-/// redirects to anything starting with `redirect_prefix`, the navigation is
-/// cancelled before it loads, its query is handed back, and the window closes.
+/// redirects to the exact callback URI (apart from its query and fragment),
+/// navigation is cancelled before it loads, its query is handed back, and the
+/// window closes. Every other authorization-page navigation must stay HTTPS.
 /// The redirect URI (app.vercel.crispdeck:...) is never actually loaded.
 ///
 /// Closing the window counts as cancelling.
@@ -20,8 +21,8 @@ pub async fn auth_in_app_window(
     use tokio::sync::oneshot;
 
     let url: tauri::Url = auth_url.parse().map_err(|e| format!("invalid authorization URL: {e}"))?;
-    if url.scheme() != "https" {
-        return Err("refusing to sign in over an unencrypted connection".into());
+    if !is_secure_authorization_page(&url) {
+        return Err("sign-in requires an HTTPS URL without embedded credentials".into());
     }
     let redirect: tauri::Url = redirect_prefix.parse().map_err(|e| format!("invalid redirect URL: {e}"))?;
     let (tx, rx) = oneshot::channel::<Result<String, String>>();
@@ -56,11 +57,17 @@ pub async fn auth_in_app_window(
         .visible(true)
         .focused(true)
         .on_navigation(move |nav| {
-            let mut target = nav.clone();
-            target.set_query(None);
-            target.set_fragment(None);
-            if target == redirect {
+            if is_oauth_callback(nav, &redirect) {
                 on_redirect(Ok(nav.query().unwrap_or("").to_string()));
+                return false;
+            }
+            // Some webviews create an empty document before loading the
+            // requested URL. It contains no remote sign-in form.
+            if nav.as_str() == "about:blank" {
+                return true;
+            }
+            if !is_secure_authorization_page(nav) {
+                on_redirect(Err("the sign-in page attempted an unsafe navigation; use an HTTPS sign-in service".into()));
                 return false;
             }
             true
@@ -86,6 +93,20 @@ pub async fn auth_in_app_window(
     outcome
 }
 
+#[cfg(any(desktop, test))]
+fn is_secure_authorization_page(url: &tauri::Url) -> bool {
+    url.scheme() == "https" && url.host_str().is_some() &&
+        url.username().is_empty() && url.password().is_none()
+}
+
+#[cfg(any(desktop, test))]
+fn is_oauth_callback(url: &tauri::Url, redirect: &tauri::Url) -> bool {
+    let mut target = url.clone();
+    target.set_query(None);
+    target.set_fragment(None);
+    target == *redirect
+}
+
 /// "Sign in — mastodon.social (secure)". The host is the one fact a user
 /// needs to judge the page; the scheme is spelled out because there is no
 /// padlock to look at.
@@ -107,4 +128,41 @@ pub async fn auth_in_app_window(
 ) -> Result<String, String> {
     let _ = (auth_url, redirect_prefix, timeout_secs);
     Err("in-app sign-in windows are not available on mobile".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn authorization_can_hop_between_secure_providers() {
+        for value in ["https://bsky.social/oauth/authorize?state=123", "https://pds.example/oauth/login"] {
+            assert!(is_secure_authorization_page(&value.parse().unwrap()));
+        }
+    }
+
+    #[test]
+    fn authorization_never_downgrades_or_loads_a_local_document() {
+        for value in [
+            "http://pds.example/oauth/login",
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "data:text/html,hello",
+            "https://trusted.example@attacker.example/login",
+            "https://user:password@pds.example/login",
+        ] {
+            assert!(!is_secure_authorization_page(&value.parse().unwrap()), "{value}");
+        }
+    }
+
+    #[test]
+    fn captures_only_the_exact_registered_custom_callback() {
+        for redirect in ["app.vercel.crispdeck:/oauth/callback", "app.vercel.crispdeck://oauth/mastodon"] {
+            let expected = redirect.parse().unwrap();
+            assert!(is_oauth_callback(&format!("{redirect}?code=abc&state=xyz#ignored").parse().unwrap(), &expected));
+            assert!(!is_oauth_callback(&format!("{redirect}/other?code=abc").parse().unwrap(), &expected));
+            assert!(!is_oauth_callback(&format!("{redirect}-attacker?code=abc").parse().unwrap(), &expected));
+            assert!(!is_oauth_callback(&"https://attacker.example/oauth/callback?code=abc".parse().unwrap(), &expected));
+        }
+    }
 }

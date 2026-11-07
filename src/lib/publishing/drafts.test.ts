@@ -1,13 +1,31 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { listDrafts, deleteDraft } from '$lib/db';
-import { persistDraft, draftSnapshot } from './drafts';
+import { listDrafts, deleteDraft, saveDraft } from '$lib/db';
+import { persistDraft, draftSnapshot, publishDraft, publishScheduledDraft } from './drafts';
 import { snapshot } from './snapshots';
+import { all, exclusive, remove, write } from './storage';
+import { getJob } from './outbox';
+import { initAllClients } from '$lib/api/client-factory';
+import type { Account } from '$lib/types';
+
+const post = vi.hoisted(() => vi.fn());
+vi.mock('$lib/compose/adapter', () => ({ postToBluesky: post, postToMastodon: vi.fn(), postToThreads: vi.fn() }));
+vi.mock('$lib/compose/mentions', () => ({ resolveMentionsForPlatform: async (text: string) => text }));
 
 vi.mock('$lib/api/client-factory', () => ({ initAllClients: vi.fn() }));
 
 beforeEach(async () => {
+  vi.clearAllMocks();
   for (const draft of await listDrafts()) await deleteDraft(draft.id);
+  for (const store of ['jobs', 'snapshots', 'leases']) {
+    for (const item of await all<{ id: string }>(store)) await remove(store, item.id);
+  }
+  const account = { id: 1, platform: 'bluesky', did: 'did:plc:writer', handle: 'writer.example.com' } as Account;
+  vi.mocked(initAllClients).mockResolvedValue({ accounts: [account], clients: new Map([[1, {
+    accountId: 1, platform: 'bluesky', handle: account.handle,
+    client: {} as never, oauthAgent: { did: account.did } as never,
+  }]]) });
+  post.mockResolvedValue({ platform: 'bluesky', success: true, uri: 'at://did:plc:writer/app.bsky.feed.post/one', cid: 'cid' });
 });
 
 describe('complete draft persistence', () => {
@@ -28,5 +46,65 @@ describe('complete draft persistence', () => {
     expect(restored.options.visibility).toBe('private');
     expect(restored.options.altTexts).toEqual(['Description']);
     expect(restored.options.disableQuotes).toBe(true);
+  });
+
+  it('publishes the current saved revision when another window changed the draft', async () => {
+    const first = snapshot('test', 'Old draft', [1], {}, {});
+    const id = await persistDraft(first);
+    const stale = (await listDrafts())[0];
+    await persistDraft({ ...first, text: 'The reviewed revision' }, null, id);
+    const result = await publishDraft(stale);
+    expect(result.status).toBe('posted');
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post.mock.calls[0][1].text).toBe('The reviewed revision');
+  });
+
+  it('never recreates delivery from a deleted legacy draft snapshot', async () => {
+    await saveDraft({ text: 'Do not publish', target_accounts: [1] });
+    const stale = (await listDrafts())[0];
+    await deleteDraft(stale.id);
+    await expect(publishDraft(stale)).rejects.toThrow(/no longer/);
+    expect(post).not.toHaveBeenCalled();
+    expect(initAllClients).not.toHaveBeenCalled();
+    expect(await all('jobs')).toEqual([]);
+  });
+
+  it('does not publish a stale due row after it was rescheduled, but still permits an explicit send', async () => {
+    const saved = snapshot('test', 'For tomorrow', [1], {}, {});
+    const id = await persistDraft(saved, new Date(Date.now() - 60_000).toISOString());
+    const stale = (await listDrafts())[0];
+    await persistDraft(saved, new Date(Date.now() + 86_400_000).toISOString(), id);
+    expect(await publishScheduledDraft(stale)).toBeNull();
+    expect(post).not.toHaveBeenCalled();
+    expect(initAllClients).not.toHaveBeenCalled();
+    expect(await getJob(`draft-${id}`)).toBeUndefined();
+    expect((await publishDraft(stale)).status).toBe('posted');
+  });
+
+  it('skips a scheduler tick while the composer is saving a draft', async () => {
+    await persistDraft(snapshot('test', 'Being edited', [1], {}, {}), new Date(Date.now() - 60_000).toISOString());
+    const draft = (await listDrafts())[0];
+    await exclusive('draft-write', async () => {
+      expect(await publishScheduledDraft(draft)).toBeNull();
+      expect(post).not.toHaveBeenCalled();
+      expect(initAllClients).not.toHaveBeenCalled();
+    });
+    expect((await publishScheduledDraft(draft))?.status).toBe('posted');
+  });
+
+  it('keeps failed scheduled deliveries awaiting manual review', async () => {
+    await persistDraft(snapshot('test', 'Needs review', [1], {}, {}), new Date(Date.now() - 60_000).toISOString());
+    const draft = (await listDrafts())[0];
+    post.mockResolvedValueOnce({ platform: 'bluesky', success: false, error: 'Rejected' });
+    const failed = await publishDraft(draft);
+    expect(failed.status).toBe('failed');
+    expect(await publishScheduledDraft(draft)).toBeNull();
+    expect(post).toHaveBeenCalledTimes(1);
+    // An interrupted queued job resumes its already-frozen content.
+    const queued: typeof failed = { ...failed, status: 'queued' };
+    await write('jobs', queued);
+    expect((await publishScheduledDraft(draft))?.status).toBe('posted');
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post.mock.calls[1][1].text).toBe('Needs review');
   });
 });

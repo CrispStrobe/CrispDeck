@@ -292,6 +292,25 @@ export function getFeedDefinition(id: string): FeedDefinition | null {
  */
 const FEED_API_BASE = apiUrl('/api/feed');
 
+/** Use a short-lived token for this service/action, never the account's JWT. */
+async function feedMutationHeaders(agent: any, action: 'publish' | 'unpublish'): Promise<Record<string, string>> {
+  const { data } = await agent.api.com.atproto.server.getServiceAuth({
+    aud: `${GENERATOR_DID}#bsky_fg`,
+    lxm: `app.vercel.crispdeck.feed.${action}`,
+    exp: Math.floor(Date.now() / 1000) + 60,
+  });
+  if (!data?.token || typeof data.token !== 'string') throw new Error('Could not authorize feed publishing');
+  return { 'Content-Type': 'application/json', Authorization: `Bearer ${data.token}` };
+}
+
+async function removeStoredFeed(agent: any, userDid: string, rkey: string): Promise<void> {
+  await fetchOk(`${FEED_API_BASE}/unpublish`, {
+    method: 'POST',
+    headers: await feedMutationHeaders(agent, 'unpublish'),
+    body: JSON.stringify({ rkey, userDid }),
+  }, 'unpublish feed definition');
+}
+
 let rkeyCounter = 0;
 
 /**
@@ -329,7 +348,7 @@ export async function publishFeedGenerator(
   // 1. Store feed definition on the server (Vercel Blob)
   const storeResp = await fetch(`${FEED_API_BASE}/publish`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await feedMutationHeaders(agent, 'publish'),
     body: JSON.stringify({
       rkey,
       query,
@@ -353,12 +372,23 @@ export async function publishFeedGenerator(
     createdAt: new Date().toISOString(),
   };
 
-  await agent.api.com.atproto.repo.putRecord({
-    repo: userDid,
-    collection: FEED_COLLECTION,
-    rkey,
-    record,
-  });
+  try {
+    await agent.api.com.atproto.repo.putRecord({
+      repo: userDid,
+      collection: FEED_COLLECTION,
+      rkey,
+      record,
+    });
+  } catch (e) {
+    // A timeout/server error can arrive after the PDS committed the record.
+    // Keep its query available in that ambiguous case. Clean up only a clear
+    // client rejection (including neither a timeout nor a transient 5xx).
+    const status = e && typeof e === 'object' && 'status' in e ? e.status : undefined;
+    if (typeof status === 'number' && [400, 401, 403, 404, 409, 413, 422].includes(status)) {
+      await removeStoredFeed(agent, userDid, rkey).catch((cleanupError) => swallow('feed-builder.rollback', cleanupError));
+    }
+    throw e;
+  }
 
   const atUri = `at://${userDid}/${FEED_COLLECTION}/${rkey}`;
   return { atUri, rkey };
@@ -366,28 +396,20 @@ export async function publishFeedGenerator(
 
 /**
  * Unpublish a feed from the Bluesky network.
- * 1. Deletes the feed definition from Vercel Blob
- * 2. Deletes the `app.bsky.feed.generator` record from the user's PDS
+ * 1. Deletes the `app.bsky.feed.generator` record from the user's PDS
+ * 2. Deletes the feed definition from Vercel Blob
  */
 export async function unpublishFeedGenerator(
   agent: any,
   userDid: string,
   rkey: string,
 ): Promise<void> {
-  // 1. Remove from server storage
-  // Best-effort: deleting the PDS record below is the critical path, and a
-  // stale definition on the server is harmless once the record is gone. Still
-  // recorded, or an accumulating leak on the server is invisible.
-  await fetchOk(`${FEED_API_BASE}/unpublish`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ rkey }),
-  }, 'unpublish feed definition').catch((e) => swallow('feed-builder.unpublish', e));
-
-  // 2. Delete from user's PDS
+  // Delete the PDS record first: a rejected deletion must not break a feed
+  // that is still published. Only storage cleanup is best-effort.
   await agent.api.com.atproto.repo.deleteRecord({
     repo: userDid,
     collection: FEED_COLLECTION,
     rkey,
   });
+  await removeStoredFeed(agent, userDid, rkey).catch((e) => swallow('feed-builder.unpublish', e));
 }

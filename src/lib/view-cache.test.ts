@@ -2,12 +2,13 @@
  * Tests for stale-while-revalidate view cache.
  * @vitest-environment jsdom
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { getCached, setCache, isStale, clearCache, clearAllCache, swr, type CacheEntry } from './view-cache';
 
 beforeEach(() => {
   localStorage.clear();
 });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('setCache and getCached', () => {
   it('stores and retrieves data', () => {
@@ -38,6 +39,19 @@ describe('setCache and getCached', () => {
     setCache('k', 'old');
     setCache('k', 'new');
     expect(getCached<string>('k')!.data).toBe('new');
+  });
+
+  it.each([null, 42, [], {}, { data: [], cachedAt: 'yesterday' }, { data: [], cachedAt: null }, { cachedAt: 10 }])('rejects a malformed cache envelope: %j', entry => {
+    localStorage.setItem('crispdeck-vc-shape', JSON.stringify(entry));
+    expect(getCached('shape')).toBeNull();
+    expect(swr('shape', async () => []).isStale).toBe(true);
+  });
+
+  it('serializes a provider payload only once when caching it', () => {
+    const toJSON = vi.fn(() => ({ posts: ['serialized'] }));
+    setCache('large-feed', { toJSON });
+    expect(toJSON).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(localStorage.getItem('crispdeck-vc-large-feed')!).data).toEqual({ posts: ['serialized'] });
   });
 });
 
@@ -78,6 +92,11 @@ describe('clearAllCache', () => {
     expect(getCached('x')).toBeNull();
     expect(getCached('y')).toBeNull();
     expect(localStorage.getItem('crispdeck-other')).toBe('keep');
+  });
+
+  it('does not throw during account switching when browser storage is blocked', () => {
+    vi.stubGlobal('localStorage', { get length() { throw new DOMException('Storage blocked', 'SecurityError'); } });
+    expect(() => clearAllCache()).not.toThrow();
   });
 });
 

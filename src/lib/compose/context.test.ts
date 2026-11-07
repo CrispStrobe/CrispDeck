@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { UnifiedPost } from '$lib/types';
-import { postContext, postContextKey, hasDraftContent } from './context';
+import type { Account, UnifiedPost } from '$lib/types';
+import { postContext, postContextKey, hasDraftContent, postContextParams, composeContextFromParams } from './context';
 import { snapshot } from '$lib/publishing/snapshots';
 
 const post: UnifiedPost = {
@@ -10,6 +10,26 @@ const post: UnifiedPost = {
 };
 
 describe('post context', () => {
+  it.each(['reply', 'quote'] as const)('carries %s metadata and source identity through URL navigation', action => {
+    const scoped = { ...post, sourceAccountId: 4, raw: (post.raw as any).post };
+    const params = postContextParams(scoped, action);
+    expect(params.get('account')).toBe('4');
+    const restored = composeContextFromParams(params, [
+      { id: 1, platform: 'bluesky', handle: 'personal.bsky.social' },
+      { id: 4, platform: 'bluesky', handle: 'work.bsky.social' },
+    ] as Account[]);
+    expect(restored).toMatchObject({
+      ...postContext(action === 'reply' ? scoped : null, action === 'quote' ? scoped : null), accountIds: [4],
+    });
+  });
+  it('carries a boosted Mastodon reply local ID and quote URL independently', () => {
+    const scoped = { ...post, platform: 'mastodon' as const, sourceAccountId: 2,
+      uri: 'https://remote.example/@alice/123', raw: { id: 'boost-local', reblog: { id: 'local-parent' } } };
+    expect(postContextParams(scoped, 'reply').get('replyId')).toBe('local-parent');
+    const quote = postContextParams(scoped, 'quote');
+    expect(quote.get('quoteUrl')).toBe(scoped.uri);
+    expect(quote.has('quoteUri')).toBe(false);
+  });
   it('keeps Bluesky reply parent and root, for both timeline and direct-post shapes', () => {
     const first = postContext(post, null);
     const direct = postContext({ ...post, raw: (post.raw as any).post }, null);

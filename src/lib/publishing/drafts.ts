@@ -65,16 +65,41 @@ export async function removeDraft(draft: Draft) {
 export async function publishDraft(draft: Draft, allowUncertain = false): Promise<PublishJob> {
   const job = await exclusive(`draft-${draft.id}`, async () => {
     const existing = await getJob(`draft-${draft.id}`);
+    // Views and the scheduler may retain rows across an edit or deletion in
+    // another window. Never prepare delivery from that stale copy.
+    const current = (await listDrafts()).find(saved => saved.id === draft.id);
     // A successful delivery with a failed local cleanup must never resend.
-    if (existing && isComplete(existing)) { await removeDraft(draft); return existing; }
+    if (existing && isComplete(existing)) { if (current) await removeDraft(current); return existing; }
+    if (!current) throw new Error('This draft is no longer available. Refresh the draft list before publishing.');
     const { accounts, clients } = await initAllClients();
-    const pending = existing ?? await createJob(await draftSnapshot(draft), accounts, draft.id);
+    const pending = existing ?? await createJob(await draftSnapshot(current), accounts, current.id);
     const delivered = await deliverJob(pending.id, clients, allowUncertain);
-    if (isComplete(delivered)) await removeDraft(draft);
+    if (isComplete(delivered)) await removeDraft(current);
     return delivered;
   });
   if (job) return job;
   const current = await getJob(`draft-${draft.id}`);
   if (!current) throw new Error('This draft is being prepared in another window.');
   return current;
+}
+
+/** Recheck scheduled work and freeze its job while draft edits are excluded. */
+export async function publishScheduledDraft(draft: Draft): Promise<PublishJob | null> {
+  const dueDraft = await exclusive('draft-write', async () => {
+    const current = (await listDrafts()).find(saved => saved.id === draft.id);
+    const due = current?.scheduled_at ? Date.parse(current.scheduled_at) : NaN;
+    if (!current || !Number.isFinite(due) || due > Date.now()) return null;
+    const existing = await getJob(`draft-${current.id}`);
+    // Failed, partial and cancelled jobs require a user's explicit decision.
+    if (existing && !isComplete(existing) && existing.status !== 'queued' && existing.status !== 'sending') return null;
+    if (!existing) {
+      const { accounts } = await initAllClients();
+      await createJob(await draftSnapshot(current), accounts, current.id);
+    }
+    return current;
+  });
+  // If an edit owns the lock, the next scheduler tick reads its saved result.
+  // Once the job exists, persistDraft refuses further edits. Release the write
+  // lock before uploading media so unrelated drafts can still be saved.
+  return dueDraft ? publishDraft(dueDraft) : null;
 }

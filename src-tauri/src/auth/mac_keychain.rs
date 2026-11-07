@@ -30,6 +30,7 @@
 #![cfg(target_os = "macos")]
 
 use anyhow::{anyhow, Context, Result};
+use security_framework::item::{ItemClass, ItemSearchOptions};
 use security_framework::os::macos::keychain::SecKeychain;
 use security_framework::passwords::{
     delete_generic_password_options, generic_password, set_generic_password_options,
@@ -91,6 +92,17 @@ fn protected_options(key: &str) -> PasswordOptions {
     options
 }
 
+fn deletion_result(result: security_framework::base::Result<()>) -> Result<()> {
+    // Apple's errSecItemNotFound is the only failed status equivalent to a
+    // completed deletion. Locked keychains and denied access must be reported.
+    const ERR_SEC_ITEM_NOT_FOUND: i32 = -25300;
+    match result {
+        Ok(()) => Ok(()),
+        Err(error) if error.code() == ERR_SEC_ITEM_NOT_FOUND => Ok(()),
+        Err(error) => Err(anyhow!("could not remove the credential from the selected keychain: {error}")),
+    }
+}
+
 /// The macOS secret store, in whichever keychain the user chose.
 pub struct MacKeychainStore {
     pub which: MacKeychain,
@@ -142,23 +154,36 @@ impl SecretStore for MacKeychainStore {
         // Already gone is the outcome the caller wanted: forget() runs on every
         // account deletion, including accounts never stored here.
         if self.which == MacKeychain::DataProtection {
-            let _ = delete_generic_password_options(protected_options(key));
-            return Ok(());
+            return deletion_result(delete_generic_password_options(protected_options(key)));
         }
         let keychain = self.file_keychain()?;
-        match keychain.find_generic_password(SERVICE, key) {
-            Err(_) => Ok(()),
-            Ok((_, item)) => {
-                item.delete();
-                Ok(())
-            }
-        }
+        // SecKeychainItem::delete discards the OS status. The query-based API
+        // returns it and keeps deletion scoped to this service, account, and
+        // selected keychain without first reading the credential itself.
+        deletion_result(ItemSearchOptions::new()
+            .keychains(&[keychain])
+            .class(ItemClass::generic_password())
+            .service(SERVICE)
+            .account(key)
+            .delete())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn deleting_an_absent_item_is_idempotent() {
+        assert!(deletion_result(Ok(())).is_ok());
+        assert!(deletion_result(Err(security_framework::base::Error::from_code(-25300))).is_ok());
+    }
+
+    #[test]
+    fn a_refused_deletion_is_reported() {
+        // errSecAuthFailed must not masquerade as an absent credential.
+        assert!(deletion_result(Err(security_framework::base::Error::from_code(-25293))).is_err());
+    }
 
     #[test]
     fn the_two_names_are_reserved_and_anything_path_like_is_a_path() {

@@ -4,51 +4,82 @@ import { loadAtprotoSdk } from './atproto-sdk';
 const PUBLIC_API = 'https://public.api.bsky.app';
 const AUTH_API = 'https://bsky.social';
 
+/** App passwords must only be sent to an HTTPS server origin. */
+function pdsOrigin(value: unknown): string {
+  if (typeof value === 'string') {
+    try {
+      const url = new URL(value);
+      if (url.protocol === 'https:' && !url.username && !url.password &&
+          url.pathname === '/' && !url.search && !url.hash) return url.origin;
+    } catch { /* Report the same safe error for every malformed endpoint. */ }
+  }
+  throw new Error('The Bluesky PDS must be an HTTPS server origin without credentials, a path, or a query.');
+}
+
+/** AT Protocol supports PLC identifiers and hostname-level did:web identities. */
+function didDocumentUrl(did: unknown): string | null {
+  if (typeof did !== 'string' || did.length > 2048) return null;
+  if (/^did:plc:[a-z2-7]{24}$/.test(did)) return `https://plc.directory/${did}`;
+  if (did.startsWith('did:web:')) {
+    const hostname = did.slice('did:web:'.length);
+    // No URL userinfo, path, port, query, fragment or percent-encoded escapes.
+    // See https://atproto.com/specs/did#didweb-in-at-protocol.
+    if (hostname.length <= 253 && /^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/.test(hostname)) {
+      return `https://${hostname}/.well-known/did.json`;
+    }
+  }
+  return null;
+}
+
 /**
  * Resolve a user's actual PDS endpoint from their DID document.
  * - did:plc → query plc.directory
  * - did:web → fetch .well-known/did.json
- * Falls back to bsky.social if resolution fails.
+ * Falls back to bsky.social for initial handle sign-in unless requireVerified
+ * is set. Saved DID/password logins must never send credentials to a fallback.
  */
-export async function resolvePdsEndpoint(handleOrDid: string): Promise<string> {
+export async function resolvePdsEndpoint(
+  handleOrDid: string,
+  options: { requireVerified?: boolean } = {},
+): Promise<string> {
+  const endpoint = await discoverPdsEndpoint(handleOrDid);
+  if (endpoint) return endpoint;
+  if (options.requireVerified) {
+    throw new Error("Could not verify this Bluesky account's PDS. No password was sent. Check your connection and try again.");
+  }
+  return AUTH_API;
+}
+
+async function discoverPdsEndpoint(handleOrDid: string): Promise<string | null> {
   try {
     let did = handleOrDid;
 
     // If it's a handle, resolve to DID first via public API
     if (!did.startsWith('did:')) {
       const resp = await fetch(`${PUBLIC_API}/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(did)}`);
-      if (!resp.ok) return AUTH_API;
+      if (!resp.ok) return null;
       const data = await resp.json();
       did = data.did;
     }
 
-    // Fetch DID document
-    let didDoc: any;
-    if (did.startsWith('did:plc:')) {
-      const resp = await fetch(`https://plc.directory/${did}`);
-      if (!resp.ok) return AUTH_API;
-      didDoc = await resp.json();
-    } else if (did.startsWith('did:web:')) {
-      const domain = did.replace('did:web:', '');
-      const resp = await fetch(`https://${domain}/.well-known/did.json`);
-      if (!resp.ok) return AUTH_API;
-      didDoc = await resp.json();
-    } else {
-      return AUTH_API;
-    }
+    const documentUrl = didDocumentUrl(did);
+    if (!documentUrl) return null;
+    const resp = await fetch(documentUrl);
+    if (!resp.ok) return null;
+    const didDoc = await resp.json();
+    if (didDoc?.id !== did || !Array.isArray(didDoc.service)) return null;
 
-    // Extract PDS endpoint from service array
-    const services = didDoc.service ?? [];
-    const pdsSvc = services.find((s: any) =>
-      s.type === 'AtprotoPersonalDataServer' || s.id === '#atproto_pds'
+    // Both fields identify the PDS. An unrelated service with only the right
+    // type or fragment must never receive the user's app password.
+    const pdsSvc = didDoc.service.find((s: { type?: unknown; id?: unknown } | null) =>
+      s?.type === 'AtprotoPersonalDataServer' &&
+      (s.id === '#atproto_pds' || s.id === `${did}#atproto_pds`)
     );
-    if (pdsSvc?.serviceEndpoint) {
-      return pdsSvc.serviceEndpoint;
-    }
+    if (pdsSvc) return pdsOrigin(pdsSvc.serviceEndpoint);
   } catch {
-    // Resolution failed — fall back
+    // Missing/untrusted metadata and network failures establish no destination.
   }
-  return AUTH_API;
+  return null;
 }
 
 /**
@@ -69,7 +100,7 @@ export class BlueskyClient {
   constructor(handle: string, appPassword?: string, pdsUrl?: string) {
     this.handle = handle;
     this.appPassword = appPassword ?? null;
-    this.pdsUrl = pdsUrl ?? null;
+    this.pdsUrl = pdsUrl === undefined ? null : pdsOrigin(pdsUrl);
   }
 
   /**
@@ -128,7 +159,7 @@ export class BlueskyClient {
 
     // Resolve PDS if not already known
     if (!this.pdsUrl) {
-      this.pdsUrl = await resolvePdsEndpoint(this.handle);
+      this.pdsUrl = await resolvePdsEndpoint(this.handle, { requireVerified: this.handle.startsWith('did:') });
       // Re-create auth agent with resolved PDS
       this.authAgent = new this.Agent!({ service: this.pdsUrl });
     }

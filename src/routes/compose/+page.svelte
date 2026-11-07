@@ -19,7 +19,7 @@
   import { graphemeLength, type ThreadGate } from '$lib/compose/adapter';
   import { validateMediaFile, createPreviewUrl, revokePreviewUrl, isVideoFile } from '$lib/compose/media';
   import { mediaAttachmentLimit, parseMediaUrls, validateMediaForPlatform } from '$lib/compose/media-policy';
-  import { hasDraftContent } from '$lib/compose/context';
+  import { composeContextFromParams, hasDraftContent } from '$lib/compose/context';
   import { tryVoiceCommand, looksLikeCommand } from '$lib/voice-commands';
   import { runAIAction, isAIConfigured, type AIAction } from '$lib/compose/ai';
   import { computeBestHour, formatHour, type PostingTimeInsight } from '$lib/posting-times';
@@ -28,6 +28,7 @@
   import type { Account, Platform } from '$lib/types';
   import { snapshot, saveSnapshot, loadSnapshot, deleteSnapshot, restoreFiles, type ComposerSnapshot, type StoredOptions } from '$lib/publishing/snapshots';
   import { persistDraft, draftSnapshot, removeDraft } from '$lib/publishing/drafts';
+  import { deletePublishingDraft } from '$lib/deck-publishing';
   import { createJob, deliverJob, getJob, isComplete, type PublishJob } from '$lib/publishing/outbox';
   import DeliveryStatus from '$lib/components/DeliveryStatus.svelte';
   import DestinationPreviews from '$lib/components/DestinationPreviews.svelte';
@@ -264,22 +265,19 @@
         }
       }
 
-      // Reply context
-      replyTo = params.get('replyTo') ?? replyTo;
-      replyAuthor = params.get('author') ?? replyAuthor;
-      replyPlatform = params.get('platform') ?? replyPlatform;
-      if (replyAuthor && !text) {
-        text = `@${replyAuthor} `;
+      // A post action has an account identity of its own. Saved drafts and
+      // ordinary compose visits keep their explicit/default destinations.
+      const context = composeContextFromParams(params, accounts);
+      if (context) {
+        selectedAccountIds = context.accountIds;
+        replyDetails = context.options.replyTo;
+        replyTo = replyDetails?.uri ?? ''; replyPlatform = replyDetails?.platform ?? '';
+        replyAuthor = context.display.replyAuthor;
+        quoteUri = context.options.quoteUri ?? ''; quoteCid = context.options.quoteCid ?? '';
+        quoteUrl = context.options.quoteUrl ?? '';
+        quoteAuthor = context.display.quoteAuthor; quoteText = context.display.quoteText;
+        if (replyAuthor && !text) text = `@${replyAuthor} `;
       }
-
-      // Quote context
-      const requestedQuoteUri = params.get('quoteUri');
-      if (requestedQuoteUri !== null && requestedQuoteUri !== quoteUri) quoteUrl = '';
-      quoteUri = requestedQuoteUri ?? quoteUri;
-      quoteCid = params.get('quoteCid') ?? quoteCid;
-      quoteUrl = params.get('quoteUrl') ?? quoteUrl;
-      quoteAuthor = params.get('quoteAuthor') ?? quoteAuthor;
-      quoteText = params.get('quoteText') ?? quoteText;
 
       // Handle shared content from PWA share_target
       const sharedText = params.get('text') ?? '';
@@ -413,6 +411,17 @@
       } else {
         toast.warning(i18n.t.workflow.needsAttention);
       }
+    } catch (e) { error = String(e); }
+    finally { posting = false; }
+  }
+
+  async function handleDiscardDraft() {
+    if (editingDraftId === null || posting) return;
+    posting = true;
+    try {
+      await deletePublishingDraft(editingDraftId);
+      editingDraftId = null;
+      pendingJob = null;
     } catch (e) { error = String(e); }
     finally { posting = false; }
   }
@@ -672,7 +681,7 @@
         {#if editingDraftId}
           <div class="p-2 bg-yellow-950/30 border border-yellow-700/30 rounded-lg text-xs text-yellow-300 flex items-center justify-between">
             <span>Editing draft #{editingDraftId}</span>
-            <button onclick={async () => { const draft = (await listDrafts()).find(d => d.id === editingDraftId); if (draft) await removeDraft(draft); editingDraftId = null; }} class="text-yellow-400 hover:text-yellow-200 underline">{i18n.t.compose.discardDraft}</button>
+            <button onclick={handleDiscardDraft} disabled={posting} class="text-yellow-400 hover:text-yellow-200 underline">{i18n.t.compose.discardDraft}</button>
           </div>
         {/if}
 

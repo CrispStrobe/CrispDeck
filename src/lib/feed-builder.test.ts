@@ -326,7 +326,8 @@ describe('publishFeedGenerator', () => {
     feed.description = 'Svelte posts';
 
     const putRecord = vi.fn().mockResolvedValue({});
-    const mockAgent = { api: { com: { atproto: { repo: { putRecord } } } } };
+    const getServiceAuth = vi.fn().mockResolvedValue({ data: { token: 'publish-service-token' } });
+    const mockAgent = { api: { com: { atproto: { repo: { putRecord }, server: { getServiceAuth } } } } };
 
     // Mock fetch for the server publish call
     const originalFetch = globalThis.fetch;
@@ -342,6 +343,10 @@ describe('publishFeedGenerator', () => {
       expect(globalThis.fetch).toHaveBeenCalledOnce();
       const fetchCall = (globalThis.fetch as any).mock.calls[0];
       expect(fetchCall[0]).toContain('/api/feed/publish');
+      expect(fetchCall[1].headers.Authorization).toBe('Bearer publish-service-token');
+      expect(getServiceAuth).toHaveBeenCalledWith({
+        aud: `${GENERATOR_DID}#bsky_fg`, lxm: 'app.vercel.crispdeck.feed.publish', exp: expect.any(Number),
+      });
       const body = JSON.parse(fetchCall[1].body);
       expect(body.query).toBe('svelte');
       expect(body.userDid).toBe('did:plc:abc123');
@@ -364,7 +369,9 @@ describe('publishFeedGenerator', () => {
     const feed = createFeedDefinition('Fail Feed');
     feed.rules = [createRule('keyword', 'test')];
 
-    const mockAgent = { api: { com: { atproto: { repo: { putRecord: vi.fn() } } } } };
+    const mockAgent = { api: { com: { atproto: { repo: { putRecord: vi.fn() }, server: {
+      getServiceAuth: vi.fn().mockResolvedValue({ data: { token: 'service-token' } }),
+    } } } } };
 
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn().mockResolvedValue({
@@ -379,14 +386,56 @@ describe('publishFeedGenerator', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it.each([undefined, 500, 408])('preserves the stored query after an ambiguous PDS failure (status %s)', async (status) => {
+    const feed = createFeedDefinition('Ambiguous');
+    feed.rules = [createRule('keyword', 'svelte')];
+    const failure = Object.assign(new Error('Publish response lost'), { status });
+    const getServiceAuth = vi.fn().mockResolvedValue({ data: { token: 'service-token' } });
+    const agent = { api: { com: { atproto: { repo: { putRecord: vi.fn().mockRejectedValue(failure) }, server: { getServiceAuth } } } } };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    try {
+      await expect(publishFeedGenerator(agent, 'did:plc:abc123', feed)).rejects.toBe(failure);
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(getServiceAuth).toHaveBeenCalledTimes(1);
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('cleans up storage with a separate action token after a definite PDS rejection', async () => {
+    const feed = createFeedDefinition('Rejected');
+    feed.rules = [createRule('keyword', 'svelte')];
+    const failure = Object.assign(new Error('Invalid record'), { status: 400 });
+    const getServiceAuth = vi.fn().mockResolvedValue({ data: { token: 'service-token' } });
+    const agent = { api: { com: { atproto: { repo: { putRecord: vi.fn().mockRejectedValue(failure) }, server: { getServiceAuth } } } } };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    try {
+      await expect(publishFeedGenerator(agent, 'did:plc:abc123', feed)).rejects.toBe(failure);
+      const calls = vi.mocked(fetch).mock.calls;
+      expect(calls).toHaveLength(2);
+      expect(String(calls[1][0])).toContain('/api/feed/unpublish');
+      expect(JSON.parse(calls[1][1]!.body as string)).toMatchObject({ userDid: 'did:plc:abc123' });
+      expect(getServiceAuth.mock.calls[1][0].lxm).toBe('app.vercel.crispdeck.feed.unpublish');
+    } finally { vi.unstubAllGlobals(); }
+  });
 });
 
 // ── unpublishFeedGenerator ──────────────────────────────────────────────────
 
 describe('unpublishFeedGenerator', () => {
-  it('calls server unpublish then deleteRecord', async () => {
+  it('preserves the server definition when PDS deletion is rejected', async () => {
+    const failure = new Error('Not authorized');
+    const agent = { api: { com: { atproto: { repo: { deleteRecord: vi.fn().mockRejectedValue(failure) } } } } };
+    vi.stubGlobal('fetch', vi.fn());
+    try {
+      await expect(unpublishFeedGenerator(agent, 'did:plc:abc123', 'some-rkey')).rejects.toBe(failure);
+      expect(fetch).not.toHaveBeenCalled();
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('deletes the PDS record before removing the owner-scoped server definition', async () => {
     const deleteRecord = vi.fn().mockResolvedValue({});
-    const mockAgent = { api: { com: { atproto: { repo: { deleteRecord } } } } };
+    const getServiceAuth = vi.fn().mockResolvedValue({ data: { token: 'delete-service-token' } });
+    const mockAgent = { api: { com: { atproto: { repo: { deleteRecord }, server: { getServiceAuth } } } } };
 
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
@@ -398,6 +447,12 @@ describe('unpublishFeedGenerator', () => {
       expect(globalThis.fetch).toHaveBeenCalledOnce();
       const fetchCall = (globalThis.fetch as any).mock.calls[0];
       expect(fetchCall[0]).toContain('/api/feed/unpublish');
+      expect(fetchCall[1].headers.Authorization).toBe('Bearer delete-service-token');
+      expect(JSON.parse(fetchCall[1].body)).toEqual({ userDid: 'did:plc:abc123', rkey: 'some-rkey' });
+      expect(getServiceAuth).toHaveBeenCalledWith({
+        aud: `${GENERATOR_DID}#bsky_fg`, lxm: 'app.vercel.crispdeck.feed.unpublish', exp: expect.any(Number),
+      });
+      expect(deleteRecord.mock.invocationCallOrder[0]).toBeLessThan(getServiceAuth.mock.invocationCallOrder[0]);
 
       // Should have called deleteRecord
       expect(deleteRecord).toHaveBeenCalledWith({

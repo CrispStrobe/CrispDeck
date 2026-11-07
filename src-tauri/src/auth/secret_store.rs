@@ -15,10 +15,9 @@
 //! by one backend is readable after switching to the other, because `load`
 //! dispatches on what it finds rather than on the current preference.
 //!
-//! FALLBACK. A headless Linux box has no Secret Service. Rather than refuse to
-//! start, the store falls back to the local blob and reports which backend it
-//! used, so the caller can say so rather than implying a protection that is
-//! not there.
+//! NO SILENT DOWNGRADE. If the selected OS store is locked or unavailable,
+//! saving fails without writing a local credential blob. The user can unlock
+//! the store or explicitly select the weaker local backend in Settings.
 //!
 //! macOS is special-cased. The `keyring` crate uses the default login keychain
 //! and cannot select another, so macOS goes through `security-framework`
@@ -62,7 +61,7 @@ impl Backend {
 
 /// The OS secret store, behind a trait so the logic above it can be tested
 /// without one. A test double is not a substitute for running against the
-/// real Keychain — it is a way to check the dispatch, the fallback and the
+/// real Keychain — it is a way to check the dispatch, failure handling and the
 /// migration, which is where the bugs would otherwise be.
 pub trait SecretStore {
     fn set(&self, key: &str, secret: &str) -> Result<()>;
@@ -83,9 +82,8 @@ pub fn key_for(platform: &str, handle: &str) -> String {
 
 /// Write a secret, returning the value to put in the `credentials_enc` column.
 ///
-/// Returns the backend actually used: asking for Keychain on a machine with no
-/// secret service yields Local, and the caller should say so rather than
-/// claim the stronger one.
+/// Returns the selected backend on success. A failed keychain write must
+/// never turn a protected credential into a machine-keyed local blob.
 pub fn store(
     preferred: Backend,
     store: &dyn SecretStore,
@@ -95,12 +93,10 @@ pub fn store(
 ) -> Result<(String, Backend)> {
     if preferred == Backend::Keychain {
         let key = key_for(platform, handle);
-        match store.set(&key, plaintext) {
-            Ok(()) => return Ok((format!("{KEYCHAIN_PREFIX}{key}"), Backend::Keychain)),
-            Err(e) => {
-                log::warn!("secret store unavailable, falling back to the local blob: {e}");
-            }
-        }
+        store.set(&key, plaintext).map_err(|_| anyhow!(
+            "Could not save credentials in the system keychain. Check that it is unlocked and available for this build, or explicitly choose local storage in Settings, then reconnect."
+        ))?;
+        return Ok((format!("{KEYCHAIN_PREFIX}{key}"), Backend::Keychain));
     }
     Ok((credentials::encrypt(plaintext)?, Backend::Local))
 }
@@ -134,9 +130,8 @@ pub fn is_keychain_ref(column: &str) -> bool {
 
 /// The real OS secret store, where there is one.
 ///
-/// Present on Linux (Secret Service) and Windows (Credential Manager). On any
-/// other platform — macOS for now, and anything unknown — every call fails, so
-/// `store` falls back to the local blob and reports that it did.
+/// Present on Linux (Secret Service), Windows (Credential Manager), and macOS
+/// (Keychain). Platforms without a backend must explicitly use Local.
 pub struct OsSecretStore;
 
 #[cfg(any(target_os = "linux", target_os = "windows"))]
@@ -338,13 +333,19 @@ mod tests {
     }
 
     #[test]
-    fn falls_back_when_there_is_no_secret_service() {
-        // Headless Linux. Refusing to start would be worse than the weaker
-        // store, but the caller has to know which it got.
+    fn unavailable_keychain_never_returns_a_weaker_local_blob() {
         let store_ = FakeStore::unavailable();
-        let (column, used) = store(Backend::Keychain, &store_, "bluesky", "a.test", SECRET).unwrap();
+        let error = store(Backend::Keychain, &store_, "bluesky", "a.test", SECRET).unwrap_err();
+        assert!(error.to_string().contains("system keychain"));
+        assert!(!error.to_string().contains(SECRET));
+        assert!(store_.items.borrow().is_empty());
+    }
 
-        assert_eq!(used, Backend::Local, "must report what it actually used");
+    #[test]
+    fn explicit_local_mode_still_works_without_a_secret_service() {
+        let store_ = FakeStore::unavailable();
+        let (column, used) = store(Backend::Local, &store_, "bluesky", "a.test", SECRET).unwrap();
+        assert_eq!(used, Backend::Local);
         assert!(!is_keychain_ref(&column));
         assert_eq!(load(&store_, &column).unwrap(), SECRET);
     }
@@ -413,8 +414,41 @@ mod tests {
     mod mac_setting {
         use super::*;
 
+        // These tests temporarily change the same process setting that the
+        // real-store CI legs select. Serialize the overrides and restore the
+        // original value even on a panic, so the later tests use the requested
+        // user-managed or data-protection keychain instead of always "login".
+        #[cfg(target_os = "macos")]
+        static KEYCHAIN_ENV_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+        #[cfg(target_os = "macos")]
+        struct RestoreKeychainEnv {
+            previous: Option<std::ffi::OsString>,
+            _lock: std::sync::MutexGuard<'static, ()>,
+        }
+
+        #[cfg(target_os = "macos")]
+        impl RestoreKeychainEnv {
+            fn new() -> Self {
+                let lock = KEYCHAIN_ENV_TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+                Self { previous: std::env::var_os(MAC_KEYCHAIN_ENV), _lock: lock }
+            }
+        }
+
+        #[cfg(target_os = "macos")]
+        impl Drop for RestoreKeychainEnv {
+            fn drop(&mut self) {
+                match &self.previous {
+                    Some(value) => std::env::set_var(MAC_KEYCHAIN_ENV, value),
+                    None => std::env::remove_var(MAC_KEYCHAIN_ENV),
+                }
+            }
+        }
+
         #[test]
         fn applying_a_choice_is_harmless_off_macos_and_takes_effect_on_it() {
+            #[cfg(target_os = "macos")]
+            let _restore = RestoreKeychainEnv::new();
             set_mac_keychain_choice("login");
 
             #[cfg(target_os = "macos")]
@@ -424,6 +458,7 @@ mod tests {
         #[cfg(target_os = "macos")]
         #[test]
         fn a_path_survives_being_stored_and_applied() {
+            let _restore = RestoreKeychainEnv::new();
             let path = "/Users/someone/Library/Keychains/Work.keychain-db";
             set_mac_keychain_choice(path);
             assert_eq!(std::env::var(MAC_KEYCHAIN_ENV).unwrap(), path);
@@ -432,6 +467,7 @@ mod tests {
         #[cfg(target_os = "macos")]
         #[test]
         fn a_stray_value_in_the_database_cannot_become_an_unintended_path() {
+            let _restore = RestoreKeychainEnv::new();
             // Normalised through parse/as_str, so junk lands on the login
             // keychain rather than being opened as a file name.
             set_mac_keychain_choice("../../etc/passwd");
@@ -461,13 +497,6 @@ mod tests {
         }
 
         /// Is there a store to talk to on this platform?
-        ///
-        /// macOS has none compiled in yet, so the round-trip tests below
-        /// cannot pass there, and asserting that they should was simply
-        /// wrong — the first CI run failed on exactly that, with "no OS
-        /// secret store wired up for this platform". What macOS needs
-        /// checking for is the other half: that the fallback works on the
-        /// platform that actually depends on it.
         fn has_store() -> bool {
             enabled() && os_store_compiled_in()
         }
@@ -529,19 +558,18 @@ mod tests {
             assert!(OsSecretStore.delete(&scratch_key()).is_ok());
         }
 
-        /// The macOS case, and any future platform without a backend.
-        ///
-        /// Falling back is the documented behaviour, so it deserves testing
-        /// on the platform that relies on it rather than only against a fake.
+        /// Platforms without an OS backend may use explicit local storage,
+        /// but asking for a keychain still cannot silently downgrade.
         #[test]
-        fn without_an_os_store_it_falls_back_and_still_works() {
+        fn without_an_os_store_only_explicit_local_storage_works() {
             if !enabled() || os_store_compiled_in() {
                 return;
             }
-            let secret = r#"{"token":"fallback-path"}"#;
+            let secret = r#"{"token":"explicit-local-path"}"#;
+            assert!(store(Backend::Keychain, &OsSecretStore, "bluesky", &scratch_key(), secret).is_err());
             let (column, used) =
-                store(Backend::Keychain, &OsSecretStore, "bluesky", &scratch_key(), secret)
-                    .expect("falling back must not be an error");
+                store(Backend::Local, &OsSecretStore, "bluesky", &scratch_key(), secret)
+                    .expect("explicit local storage works without an OS secret store");
 
             assert_eq!(used, Backend::Local, "must report the backend it actually used");
             assert!(!is_keychain_ref(&column));

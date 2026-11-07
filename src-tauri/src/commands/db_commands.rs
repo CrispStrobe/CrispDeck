@@ -78,12 +78,9 @@ fn add_account_impl(
     // platform has one; otherwise the local encrypted blob. `stored` is what
     // goes in the column either way — a reference or the blob itself.
     let preferred = preferred_backend(conn);
-    let (stored, used) =
+    let (stored, _) =
         secret_store::store(preferred, secrets, platform, handle, credentials)
             .map_err(|e| e.to_string())?;
-    if preferred == secret_store::Backend::Keychain && used == secret_store::Backend::Local {
-        log::warn!("no OS secret store available; {handle} was saved with the local blob");
-    }
 
     let account = accounts::insert(
         conn,
@@ -206,6 +203,31 @@ const CREDENTIAL_BACKEND_KEY: &str = "credential_backend";
 /// user manages. Ignored on other platforms.
 const MAC_KEYCHAIN_KEY: &str = "macos_keychain";
 
+// Reuse the selected credential backend and keychain for Wallabag, in a
+// reserved namespace that cannot collide with a real Bluesky DID.
+const WALLABAG_SESSION: &str = "did:crispdeck:wallabag";
+
+#[tauri::command]
+pub fn wallabag_session_get(state: State<'_, AppState>, backend: String, keychain: String) -> Result<Option<String>, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    ensure_oauth_storage(&conn, &backend, &keychain)?;
+    oauth_session_get_impl(&conn, &secret_store::OsSecretStore, WALLABAG_SESSION)
+}
+
+#[tauri::command]
+pub fn wallabag_session_set(state: State<'_, AppState>, value: String, backend: String, keychain: String) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    ensure_oauth_storage(&conn, &backend, &keychain)?;
+    oauth_session_set_impl(&conn, &secret_store::OsSecretStore, WALLABAG_SESSION, &value)
+}
+
+#[tauri::command]
+pub fn wallabag_session_delete(state: State<'_, AppState>, backend: String, keychain: String) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    ensure_oauth_storage(&conn, &backend, &keychain)?;
+    oauth_session_delete_impl(&conn, &secret_store::OsSecretStore, WALLABAG_SESSION)
+}
+
 /// Store native Bluesky OAuth sessions in the selected backend. The record
 /// identifies its backend so changing settings never consults another one.
 fn oauth_marker_key(did: &str) -> Result<String, String> {
@@ -309,8 +331,8 @@ fn backend_info(conn: &rusqlite::Connection) -> serde_json::Value {
         "macosKeychain": crate::db::get_setting(conn, MAC_KEYCHAIN_KEY, "login"),
         // The data protection keychain needs a keychain-access-groups
         // entitlement, so an unsigned build cannot use it. CI proved that:
-        // "A required entitlement isn't present." Offering it there would be
-        // offering a switch that silently falls back to the weaker store.
+        // "A required entitlement isn't present." A refused write is surfaced
+        // to the user; it never downgrades to the local credential store.
         "macosKeychainChoices": mac_keychain_choices(),
     })
 }
@@ -319,7 +341,7 @@ fn backend_info(conn: &rusqlite::Connection) -> serde_json::Value {
 fn mac_keychain_choices() -> Vec<&'static str> {
     if cfg!(target_os = "macos") {
         // data-protection is listed; whether it works depends on signing, and
-        // store() reports the backend it really used so the UI can say so.
+        // store() reports a signing/keychain error without a local fallback.
         vec!["login", "data-protection", "path"]
     } else {
         vec![]
@@ -337,11 +359,20 @@ pub fn macos_keychain_set(state: State<'_, AppState>, keychain: String) -> Resul
     // the user had no reason to connect to a setting they changed earlier.
     let keychain = expand_mac_keychain_path(&keychain)?;
     validate_mac_keychain(&keychain)?;
-    {
-        let conn = state.db.lock().map_err(|e| e.to_string())?;
-        crate::db::set_setting(&conn, MAC_KEYCHAIN_KEY, &keychain).map_err(|e| e.to_string())?;
-    }
-    secret_store::set_mac_keychain_choice(&keychain);
+    set_mac_keychain_impl(&state, &keychain, secret_store::set_mac_keychain_choice)
+}
+
+fn set_mac_keychain_impl(
+    state: &AppState,
+    keychain: &str,
+    apply_choice: impl FnOnce(&str),
+) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    crate::db::set_setting(&conn, MAC_KEYCHAIN_KEY, keychain).map_err(|e| e.to_string())?;
+    // Credential commands hold this same lock while checking the selection
+    // and accessing the OS store. Keep it until both selections agree, or a
+    // concurrent save could write to the previous keychain under a new marker.
+    apply_choice(keychain);
     Ok(())
 }
 
@@ -638,6 +669,7 @@ mod tests {
     struct FakeStore {
         entries: RefCell<HashMap<String, String>>,
         fail_writes: bool,
+        fail_deletes: bool,
     }
 
     impl FakeStore {
@@ -662,6 +694,9 @@ mod tests {
                 .ok_or_else(|| anyhow::anyhow!("not found"))
         }
         fn delete(&self, key: &str) -> anyhow::Result<()> {
+            if self.fail_deletes {
+                anyhow::bail!("secret store refused deletion");
+            }
             self.entries.borrow_mut().remove(key);
             Ok(())
         }
@@ -720,6 +755,24 @@ mod tests {
     }
 
     #[test]
+    fn failed_wallabag_deletion_preserves_the_marker_and_can_be_retried() {
+        let conn = test_db();
+        crate::db::set_setting(&conn, CREDENTIAL_BACKEND_KEY, "keychain").unwrap();
+        let mut store = FakeStore::default();
+        oauth_session_set_impl(&conn, &store, WALLABAG_SESSION, "wallabag-token").unwrap();
+        store.fail_deletes = true;
+
+        assert!(oauth_session_delete_impl(&conn, &store, WALLABAG_SESSION).is_err());
+        assert_eq!(oauth_session_get_impl(&conn, &store, WALLABAG_SESSION).unwrap().as_deref(), Some("wallabag-token"));
+        assert_eq!(store.len(), 1);
+
+        store.fail_deletes = false;
+        oauth_session_delete_impl(&conn, &store, WALLABAG_SESSION).unwrap();
+        assert_eq!(oauth_session_get_impl(&conn, &store, WALLABAG_SESSION).unwrap(), None);
+        assert_eq!(store.len(), 0);
+    }
+
+    #[test]
     fn local_oauth_session_survives_database_reopen_without_a_keychain() {
         let dir = std::env::temp_dir().join(format!("crispdeck-oauth-test-{}", rand::random::<u64>()));
         std::fs::create_dir(&dir).unwrap();
@@ -748,6 +801,34 @@ mod tests {
         let expanded = expand_mac_keychain_path("~/Library/Keychains/Work.keychain-db").unwrap();
         assert_eq!(expanded, std::path::PathBuf::from(std::env::var_os("HOME").unwrap()).join("Library/Keychains/Work.keychain-db").to_string_lossy());
         assert_eq!(expand_mac_keychain_path("login").unwrap(), "login");
+    }
+
+    #[test]
+    fn keychain_selection_stays_locked_until_the_os_store_is_updated() {
+        let state = AppState { db: std::sync::Mutex::new(test_db()) };
+        let mut applied = false;
+        set_mac_keychain_impl(&state, "data-protection", |choice| {
+            assert_eq!(choice, "data-protection");
+            assert!(matches!(state.db.try_lock(), Err(std::sync::TryLockError::WouldBlock)),
+                "credential operations must not observe the new marker with the old OS store");
+            applied = true;
+        }).unwrap();
+        assert!(applied);
+        let conn = state.db.lock().unwrap();
+        assert_eq!(crate::db::get_setting(&conn, MAC_KEYCHAIN_KEY, "login"), "data-protection");
+    }
+
+    #[test]
+    fn a_failed_keychain_preference_write_leaves_the_os_selection_unchanged() {
+        let conn = test_db();
+        conn.execute_batch("CREATE TRIGGER reject_keychain_preference BEFORE INSERT ON app_settings
+            WHEN NEW.key = 'macos_keychain' BEGIN SELECT RAISE(FAIL, 'read-only preference'); END;").unwrap();
+        let state = AppState { db: std::sync::Mutex::new(conn) };
+        let mut applied = false;
+        assert!(set_mac_keychain_impl(&state, "data-protection", |_| applied = true).is_err());
+        assert!(!applied);
+        let conn = state.db.lock().unwrap();
+        assert_eq!(crate::db::get_setting(&conn, MAC_KEYCHAIN_KEY, "login"), "login");
     }
 
     #[test]
@@ -823,15 +904,20 @@ mod tests {
     }
 
     #[test]
-    fn a_secret_store_that_will_not_write_falls_back_rather_than_losing_the_account() {
+    fn a_failed_keychain_write_does_not_create_a_local_account_or_credential_blob() {
         let conn = test_db();
         crate::db::set_setting(&conn, CREDENTIAL_BACKEND_KEY, "keychain").unwrap();
         let store = FakeStore { fail_writes: true, ..Default::default() };
 
-        let account = add(&conn, &store, "@me@x.social", "the-token").unwrap();
+        let error = add(&conn, &store, "@me@x.social", "the-token").unwrap_err();
+        assert!(error.contains("system keychain"));
+        assert!(!error.contains("the-token"));
+        assert!(accounts::list(&conn).unwrap().is_empty());
+        assert_eq!(store.len(), 0);
 
-        let column = accounts::get_credentials_enc(&conn, account.id).unwrap();
-        assert!(!secret_store::is_keychain_ref(&column), "should have fallen back to the blob");
+        // The user can deliberately choose local storage and retry.
+        crate::db::set_setting(&conn, CREDENTIAL_BACKEND_KEY, "local").unwrap();
+        let account = add(&conn, &store, "@me@x.social", "the-token").unwrap();
         assert_eq!(get_credentials_impl(&conn, &store, account.id).unwrap(), "the-token");
     }
 

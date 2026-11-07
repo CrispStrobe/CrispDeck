@@ -22,16 +22,22 @@ const DB_NAME = 'crispdeck';
 const DB_VERSION = 1;
 
 let _dbInstance: IDBDatabase | null = null;
+let _dbOpening: Promise<IDBDatabase> | null = null;
 
 function openDB(): Promise<IDBDatabase> {
   if (_dbInstance) return Promise.resolve(_dbInstance);
-  return new Promise((resolve, reject) => {
+  if (_dbOpening) return _dbOpening;
+  const opening = new Promise<IDBDatabase>((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onerror = () => reject(req.error);
     req.onsuccess = () => {
-      _dbInstance = req.result;
-      _dbInstance.onclose = () => { _dbInstance = null; };
-      resolve(_dbInstance);
+      const db = req.result;
+      _dbInstance = db;
+      const release = () => { if (_dbInstance === db) _dbInstance = null; };
+      db.onclose = release;
+      // Another tab (or the cache purge) must be able to upgrade/delete it.
+      db.onversionchange = () => { db.close(); release(); };
+      resolve(db);
     };
     req.onupgradeneeded = () => {
       const db = req.result;
@@ -63,6 +69,10 @@ function openDB(): Promise<IDBDatabase> {
       }
     };
   });
+  _dbOpening = opening;
+  const settled = () => { if (_dbOpening === opening) _dbOpening = null; };
+  void opening.then(settled, settled);
+  return opening;
 }
 
 function tx<T>(storeName: string, mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
@@ -75,6 +85,44 @@ function tx<T>(storeName: string, mode: IDBTransactionMode, fn: (store: IDBObjec
     txn.oncomplete = () => resolve(result);
     txn.onabort = txn.onerror = () => reject(txn.error ?? req.error);
   }));
+}
+
+/** Keep reads and their dependent writes in one IndexedDB transaction. */
+function atomic<T>(stores: string[], run: (txn: IDBTransaction, result: (value: T) => void, fail: (error: unknown) => void) => void): Promise<T> {
+  return openDB().then(db => new Promise<T>((resolve, reject) => {
+    const txn = db.transaction(stores, 'readwrite');
+    let result: T;
+    let failure: unknown;
+    const fail = (error: unknown) => { failure = error; txn.abort(); };
+    txn.oncomplete = () => resolve(result);
+    txn.onabort = txn.onerror = () => reject(failure ?? txn.error ?? new Error('Database transaction failed'));
+    try { run(txn, value => { result = value; }, fail); }
+    catch (error) { fail(error); }
+  }));
+}
+
+function updateRecord(storeName: string, id: number, message: string, update: (record: any) => void): Promise<void> {
+  return atomic<void>([storeName], (txn, _result, fail) => {
+    const store = txn.objectStore(storeName);
+    const request = store.get(id);
+    request.onsuccess = () => {
+      if (!request.result) { fail(new Error(message)); return; }
+      try {
+        update(request.result);
+        store.put(request.result);
+      } catch (error) { fail(error); }
+    };
+  });
+}
+
+function deleteIndexedRows(store: IDBObjectStore, index: string, key: IDBValidKey, done?: () => void): void {
+  const request = store.index(index).openKeyCursor(key);
+  request.onsuccess = () => {
+    const cursor = request.result;
+    if (!cursor) { done?.(); return; }
+    store.delete(cursor.primaryKey);
+    cursor.continue();
+  };
 }
 
 function getAll<T>(storeName: string): Promise<T[]> {
@@ -93,10 +141,6 @@ function getAllByIndex<T>(storeName: string, indexName: string, key: IDBValidKey
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   }));
-}
-
-function put<T>(storeName: string, value: T): Promise<IDBValidKey> {
-  return tx(storeName, 'readwrite', store => store.put(value));
 }
 
 function add<T>(storeName: string, value: T): Promise<IDBValidKey> {
@@ -121,14 +165,16 @@ function getSeed(): string {
   let seed = localStorage.getItem(CRYPTO_KEY_NAME);
   if (!seed) {
     seed = crypto.randomUUID();
-    writeString(CRYPTO_KEY_NAME, seed);
+    if (!writeString(CRYPTO_KEY_NAME, seed)) {
+      throw new Error('Could not save the credential encryption key. Allow browser storage and try connecting again.');
+    }
   }
   return seed;
 }
 
-async function deriveKey(salt: Uint8Array, iterations: number): Promise<CryptoKey> {
+async function deriveKey(salt: Uint8Array, iterations: number, seed = getSeed()): Promise<CryptoKey> {
   const enc = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(getSeed()), 'PBKDF2', false, ['deriveKey']);
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(seed), 'PBKDF2', false, ['deriveKey']);
   return crypto.subtle.deriveKey(
     { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
     keyMaterial,
@@ -138,19 +184,42 @@ async function deriveKey(salt: Uint8Array, iterations: number): Promise<CryptoKe
   );
 }
 
-let _cachedCryptoKey: CryptoKey | null = null;
-async function getCryptoKey(): Promise<CryptoKey> {
-  if (_cachedCryptoKey) return _cachedCryptoKey;
+let _cachedCryptoKey: { seed: string; salt: string; key: Promise<CryptoKey> } | null = null;
+function requireCurrentKey(material: { seed: string; salt: string }): void {
+  if (localStorage.getItem(CRYPTO_KEY_NAME) !== material.seed || localStorage.getItem(CRYPTO_SALT_NAME) !== material.salt) {
+    throw new Error('Credential encryption storage changed during the operation. Please try again.');
+  }
+}
+
+async function getCryptoKey(): Promise<{ seed: string; salt: string; key: CryptoKey }> {
   // New key: per-device random salt + 600k iterations (OWASP 2024).
   let saltB64 = localStorage.getItem(CRYPTO_SALT_NAME);
   if (!saltB64) {
     const saltBytes = crypto.getRandomValues(new Uint8Array(32));
     saltB64 = btoa(String.fromCharCode(...saltBytes));
-    writeString(CRYPTO_SALT_NAME, saltB64);
+    if (!writeString(CRYPTO_SALT_NAME, saltB64)) {
+      throw new Error('Could not save the credential encryption salt. Free browser storage and try connecting again.');
+    }
   }
-  const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
-  _cachedCryptoKey = await deriveKey(salt, 600000);
-  return _cachedCryptoKey;
+  const seed = getSeed();
+  // Starting several account clients at once must share this expensive KDF.
+  // Compare persisted material on each use so clearing/changing storage never
+  // causes new credentials to be saved with an old, memory-only key.
+  let pending = _cachedCryptoKey;
+  if (!pending || pending.seed !== seed || pending.salt !== saltB64) {
+    const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
+    pending = { seed, salt: saltB64, key: deriveKey(salt, 600000, seed) };
+    _cachedCryptoKey = pending;
+  }
+  try {
+    const key = await pending.key;
+    requireCurrentKey(pending);
+    return { seed: pending.seed, salt: pending.salt, key };
+  }
+  catch (error) {
+    if (_cachedCryptoKey === pending) _cachedCryptoKey = null;
+    throw error;
+  }
 }
 
 /** Legacy key for migrating existing data (static salt, 100k iterations) */
@@ -159,27 +228,34 @@ async function getLegacyCryptoKey(): Promise<CryptoKey> {
   return deriveKey(enc.encode('crispdeck-salt'), 100000);
 }
 
-async function encrypt(plaintext: string): Promise<string> {
-  const key = await getCryptoKey();
+export async function encrypt(plaintext: string): Promise<string> {
+  const material = await getCryptoKey();
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const enc = new TextEncoder();
-  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(plaintext));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, material.key, enc.encode(plaintext));
   // Pack iv + ciphertext as base64
   const packed = new Uint8Array(iv.length + ct.byteLength);
   packed.set(iv);
   packed.set(new Uint8Array(ct), iv.length);
-  return btoa(String.fromCharCode(...packed));
+  const chunks: string[] = [];
+  for (let start = 0; start < packed.length; start += 0x8000) {
+    chunks.push(String.fromCharCode(...packed.subarray(start, start + 0x8000)));
+  }
+  const encoded = btoa(chunks.join(''));
+  requireCurrentKey(material);
+  return encoded;
 }
 
-async function decrypt(encoded: string): Promise<string> {
+export async function decrypt(encoded: string): Promise<string> {
   const packed = Uint8Array.from(atob(encoded), c => c.charCodeAt(0));
   const iv = packed.slice(0, 12);
   const ct = packed.slice(12);
 
   // Try new key first
   try {
-    const key = await getCryptoKey();
-    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+    const material = await getCryptoKey();
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, material.key, ct);
+    requireCurrentKey(material);
     return new TextDecoder().decode(pt);
   } catch {
     // Fall back to legacy key (static salt, 100k iterations)
@@ -222,7 +298,8 @@ export async function addAccount(params: {
     updated_at: now(),
   };
   const id = await add('accounts', record) as number;
-  return { id, ...record } as unknown as Account;
+  const { credentials_enc: _secret, ...publicRecord } = record;
+  return { id, ...publicRecord } as unknown as Account;
 }
 
 export async function updateAccount(params: {
@@ -231,22 +308,26 @@ export async function updateAccount(params: {
   avatar_url?: string;
   is_primary?: boolean;
 }): Promise<void> {
-  const db = await openDB();
-  const existing = await new Promise<any>((resolve, reject) => {
-    const req = db.transaction('accounts', 'readonly').objectStore('accounts').get(params.id);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+  await updateRecord('accounts', params.id, 'Account not found', existing => {
+    if (params.display_name !== undefined) existing.display_name = params.display_name;
+    if (params.avatar_url !== undefined) existing.avatar_url = params.avatar_url;
+    if (params.is_primary !== undefined) existing.is_primary = params.is_primary;
+    existing.updated_at = now();
   });
-  if (!existing) throw new Error('Account not found');
-  if (params.display_name !== undefined) existing.display_name = params.display_name;
-  if (params.avatar_url !== undefined) existing.avatar_url = params.avatar_url;
-  if (params.is_primary !== undefined) existing.is_primary = params.is_primary;
-  existing.updated_at = now();
-  await put('accounts', existing);
 }
 
 export async function deleteAccount(id: number): Promise<void> {
-  await del('accounts', id);
+  await atomic<void>(['accounts', 'follows_cache', 'identity_links'], txn => {
+    txn.objectStore('accounts').delete(id);
+    deleteIndexedRows(txn.objectStore('follows_cache'), 'owner_account_id', id);
+    const request = txn.objectStore('identity_links').openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      if (cursor.value.account_id === id) cursor.update({ ...cursor.value, account_id: null });
+      cursor.continue();
+    };
+  });
 }
 
 export async function getDecryptedCredentials(accountId: number): Promise<string> {
@@ -262,18 +343,29 @@ export async function getDecryptedCredentials(accountId: number): Promise<string
 
 // ── Identities ────────────────────────────────────────────────────────────
 
-export async function listIdentities(_filter?: { confirmed_only?: boolean; tag?: string } | null): Promise<Identity[]> {
-  let identities = await getAll<any>('identities');
-  const allLinks = await getAll<IdentityLink>('identity_links');
-  const allTags = await getAll<{ identity_id: number; tag: string }>('identity_tags');
-
+export async function listIdentities(filter?: { confirmed_only?: boolean; tag?: string } | null): Promise<Identity[]> {
+  const [identities, allLinks, allTags] = await Promise.all([
+    getAll<any>('identities'), getAll<IdentityLink>('identity_links'),
+    getAll<{ identity_id: number; tag: string }>('identity_tags'),
+  ]);
+  const links = new Map<number, IdentityLink[]>();
+  const tags = new Map<number, string[]>();
+  for (const link of allLinks) {
+    const group = links.get(link.identity_id);
+    if (group) group.push(link); else links.set(link.identity_id, [link]);
+  }
+  for (const tag of allTags) {
+    const group = tags.get(tag.identity_id);
+    if (group) group.push(tag.tag); else tags.set(tag.identity_id, [tag.tag]);
+  }
   return identities.map(i => ({
     ...i,
     auto_detected: i.auto_detected ?? false,
     confirmed: i.confirmed ?? false,
-    links: allLinks.filter(l => l.identity_id === i.id),
-    tags: allTags.filter(t => t.identity_id === i.id).map(t => t.tag),
-  }));
+    links: links.get(i.id) ?? [],
+    tags: tags.get(i.id) ?? [],
+  })).filter(identity => (!filter?.confirmed_only || identity.confirmed) &&
+    (filter?.tag === undefined || identity.tags.includes(filter.tag)));
 }
 
 export async function createIdentity(params: { display_name?: string; notes?: string }): Promise<Identity> {
@@ -291,26 +383,19 @@ export async function createIdentity(params: { display_name?: string; notes?: st
 }
 
 export async function updateIdentity(params: { id: number; display_name?: string; notes?: string }): Promise<void> {
-  const db = await openDB();
-  const existing = await new Promise<any>((resolve, reject) => {
-    const req = db.transaction('identities', 'readonly').objectStore('identities').get(params.id);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+  await updateRecord('identities', params.id, 'Identity not found', existing => {
+    if (params.display_name !== undefined) existing.display_name = params.display_name;
+    if (params.notes !== undefined) existing.notes = params.notes;
+    existing.updated_at = now();
   });
-  if (!existing) throw new Error('Identity not found');
-  if (params.display_name !== undefined) existing.display_name = params.display_name;
-  if (params.notes !== undefined) existing.notes = params.notes;
-  existing.updated_at = now();
-  await put('identities', existing);
 }
 
 export async function deleteIdentity(id: number): Promise<void> {
-  await del('identities', id);
-  // Cascade delete links and tags
-  const links = await getAllByIndex<IdentityLink>('identity_links', 'identity_id', id);
-  for (const link of links) await del('identity_links', link.id);
-  const tags = await getAllByIndex<any>('identity_tags', 'identity_id', id);
-  for (const tag of tags) await del('identity_tags', tag.id);
+  await atomic<void>(['identities', 'identity_links', 'identity_tags'], txn => {
+    txn.objectStore('identities').delete(id);
+    deleteIndexedRows(txn.objectStore('identity_links'), 'identity_id', id);
+    deleteIndexedRows(txn.objectStore('identity_tags'), 'identity_id', id);
+  });
 }
 
 export async function linkToIdentity(params: {
@@ -327,7 +412,7 @@ export async function linkToIdentity(params: {
   bio?: string | null;
   account_id?: number | null;
 }): Promise<void> {
-  await add('identity_links', {
+  const record = {
     identity_id: params.identity_id,
     account_id: params.account_id ?? null,
     platform: params.platform,
@@ -339,6 +424,25 @@ export async function linkToIdentity(params: {
     avatar_url: params.avatar_url ?? null,
     bio: params.bio ?? null,
     created_at: now(),
+  };
+  await atomic<void>(['identities', 'accounts', 'identity_links'], (txn, _result, fail) => {
+    const insert = () => {
+      const links = txn.objectStore('identity_links');
+      const existing = links.index('platform_handle').getAll([params.platform, params.handle]);
+      existing.onsuccess = () => {
+        if (!existing.result.some(link => link.identity_id === params.identity_id)) links.add(record);
+      };
+    };
+    const parent = txn.objectStore('identities').get(params.identity_id);
+    parent.onsuccess = () => {
+      if (!parent.result) { fail(new Error('Identity not found')); return; }
+      if (params.account_id == null) { insert(); return; }
+      const account = txn.objectStore('accounts').get(params.account_id);
+      account.onsuccess = () => {
+        if (!account.result) { fail(new Error('Account not found')); return; }
+        insert();
+      };
+    };
   });
 }
 
@@ -347,17 +451,10 @@ export async function unlinkFromIdentity(linkId: number): Promise<void> {
 }
 
 export async function confirmIdentity(id: number): Promise<void> {
-  const db = await openDB();
-  const existing = await new Promise<any>((resolve, reject) => {
-    const req = db.transaction('identities', 'readonly').objectStore('identities').get(id);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-  if (existing) {
+  await updateRecord('identities', id, 'Identity not found', existing => {
     existing.confirmed = true;
     existing.updated_at = now();
-    await put('identities', existing);
-  }
+  });
 }
 
 export async function resolveHandle(handle: string, targetPlatform: string): Promise<string | null> {
@@ -371,15 +468,29 @@ export async function resolveHandle(handle: string, targetPlatform: string): Pro
 // ── Tags ──────────────────────────────────────────────────────────────────
 
 export async function addTag(identityId: number, tag: string): Promise<void> {
-  const existing = await getAllByIndex<any>('identity_tags', 'identity_id', identityId);
-  if (existing.some(t => t.tag === tag)) return;
-  await add('identity_tags', { identity_id: identityId, tag });
+  await atomic<void>(['identities', 'identity_tags'], (txn, _result, fail) => {
+    const parent = txn.objectStore('identities').get(identityId);
+    parent.onsuccess = () => {
+      if (!parent.result) { fail(new Error('Identity not found')); return; }
+      const store = txn.objectStore('identity_tags');
+      const existing = store.index('identity_id').getAll(identityId);
+      existing.onsuccess = () => {
+        if (!existing.result.some(value => value.tag === tag)) store.add({ identity_id: identityId, tag });
+      };
+    };
+  });
 }
 
 export async function removeTag(identityId: number, tag: string): Promise<void> {
-  const all = await getAllByIndex<any>('identity_tags', 'identity_id', identityId);
-  const match = all.find(t => t.tag === tag);
-  if (match) await del('identity_tags', match.id);
+  await atomic<void>(['identity_tags'], txn => {
+    const request = txn.objectStore('identity_tags').index('identity_id').openCursor(identityId);
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      if (cursor.value.tag === tag) cursor.delete();
+      cursor.continue();
+    };
+  });
 }
 
 // ── Identity detection (JS implementation) ────────────────────────────────
@@ -459,16 +570,16 @@ export async function detectIdentities(
 // ── Follows cache ─────────────────────────────────────────────────────────
 
 export async function cacheFollows(ownerAccountId: number, follows: FollowEntry[]): Promise<void> {
-  const old = await getAllByIndex<any>('follows_cache', 'owner_account_id', ownerAccountId);
-  const db = await openDB();
-  await new Promise<void>((resolve, reject) => {
-    const txn = db.transaction('follows_cache', 'readwrite');
-    const store = txn.objectStore('follows_cache');
-    for (const o of old) store.delete(o.id);
-    const ts = now();
-    for (const f of follows) store.add({ ...f, owner_account_id: ownerAccountId, fetched_at: ts });
-    txn.oncomplete = () => resolve();
-    txn.onerror = () => reject(txn.error);
+  await atomic<void>(['accounts', 'follows_cache'], (txn, _result, fail) => {
+    const owner = txn.objectStore('accounts').get(ownerAccountId);
+    owner.onsuccess = () => {
+      if (!owner.result) { fail(new Error('Account not found')); return; }
+      const store = txn.objectStore('follows_cache');
+      deleteIndexedRows(store, 'owner_account_id', ownerAccountId, () => {
+        const ts = now();
+        for (const follow of follows) store.add({ ...follow, owner_account_id: ownerAccountId, fetched_at: ts });
+      });
+    };
   });
 }
 
@@ -511,18 +622,14 @@ export async function saveDraft(params: {
   content_warning?: string | null;
   scheduled_at?: string | null;
 }): Promise<number> {
-  const previous = params.id === undefined ? undefined : await tx<Draft | undefined>('drafts', 'readonly', store => store.get(params.id!));
-  if (params.id !== undefined && !previous) throw new Error('Draft no longer exists');
-  const save = params.id === undefined ? add : put;
   const { id, ...fields } = params;
-  return await save('drafts', {
-    ...fields,
-    ...(id === undefined ? {} : { id }),
-    scheduled_at: params.scheduled_at ?? null,
-    is_sent: false,
-    created_at: previous?.created_at ?? now(),
-    updated_at: now(),
-  }) as number;
+  const record = (previous?: Draft) => ({
+    ...fields, ...(id === undefined ? {} : { id }), scheduled_at: params.scheduled_at ?? null,
+    is_sent: false, created_at: previous?.created_at ?? now(), updated_at: now(),
+  });
+  if (id === undefined) return await add('drafts', record()) as number;
+  await updateRecord('drafts', id, 'Draft no longer exists', previous => Object.assign(previous, record(previous)));
+  return id;
 }
 
 export async function listDrafts(): Promise<Draft[]> {

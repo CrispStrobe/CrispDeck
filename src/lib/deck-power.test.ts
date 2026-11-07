@@ -205,3 +205,52 @@ describe('concurrent deck actions', () => {
     expect((row.raw as any).post.viewer).toEqual({ like: 'like', repost: 'repost' });
   });
 });
+
+describe('Threads source-account actions', () => {
+  it.each(['like', 'repost'] as const)('shares a pending %s across duplicate rows', async action => {
+    let finish!: (value: { id: string }) => void;
+    const mutate = vi.fn(() => new Promise<{ id: string }>(resolve => { finish = resolve; }));
+    const client = { like: mutate, unlike: vi.fn(), repost: mutate };
+    const entry = { accountId: 1, platform: 'threads', client } as unknown as ClientEntry;
+    const clients = new Map([[1, entry]]);
+    const one = post('threads://concurrent', { platform: 'threads', sourceAccountId: 1, raw: { id: '42' } });
+    const two = structuredClone(one);
+    const first = performDeckAction(one, action, true, clients, [1]);
+    const second = performDeckAction(two, action, true, clients, [1]);
+    finish({ id: 'repost-id' });
+    await Promise.all([first, second]);
+    expect(mutate).toHaveBeenCalledTimes(1);
+    expect((one.raw as any)[action === 'like' ? 'favourited' : 'reblogged']).toBe(true);
+    expect((two.raw as any)[action === 'like' ? 'favourited' : 'reblogged']).toBe(true);
+  });
+
+  it('still performs a queued unlike after a pending like succeeds', async () => {
+    let finish!: () => void;
+    const client = { like: vi.fn(() => new Promise<void>(resolve => { finish = resolve; })), unlike: vi.fn().mockResolvedValue(undefined) };
+    const entry = { accountId: 1, platform: 'threads', client } as unknown as ClientEntry;
+    const clients = new Map([[1, entry]]);
+    const one = post('threads://toggle', { platform: 'threads', sourceAccountId: 1, raw: { id: '42' } });
+    const two = structuredClone(one);
+    const first = performDeckAction(one, 'like', true, clients, [1]);
+    const second = performDeckAction(two, 'like', false, clients, [1]);
+    expect(client.unlike).not.toHaveBeenCalled();
+    finish();
+    await Promise.all([first, second]);
+    expect(client.like).toHaveBeenCalledTimes(1);
+    expect(client.unlike).toHaveBeenCalledTimes(1);
+    expect((two.raw as any).favourited).toBe(false);
+  });
+
+  it('likes, unlikes and reposts through the account that supplied the post', async () => {
+    const client = { like: vi.fn().mockResolvedValue(undefined), unlike: vi.fn().mockResolvedValue(undefined), repost: vi.fn().mockResolvedValue({ id: 'repost-id' }) };
+    const other = { like: vi.fn() };
+    const clients = new Map<number, ClientEntry>([[1, { accountId: 1, platform: 'threads', client } as unknown as ClientEntry], [2, { accountId: 2, platform: 'threads', client: other } as unknown as ClientEntry]]);
+    const item = post('threads://42', { platform: 'threads', sourceAccountId: 1, raw: { id: '42' } });
+    await performDeckAction(item, 'like', true, clients, [1, 2]);
+    await performDeckAction(item, 'like', false, clients, [1, 2]);
+    await performDeckAction(item, 'repost', true, clients, [1, 2]);
+    await expect(performDeckAction(item, 'repost', false, clients, [1, 2])).rejects.toThrow('Undoing a Threads repost');
+    expect(client.like).toHaveBeenCalledWith('42'); expect(client.unlike).toHaveBeenCalledWith('42');
+    expect(client.repost).toHaveBeenCalledWith('42'); expect(other.like).not.toHaveBeenCalled();
+  });
+});

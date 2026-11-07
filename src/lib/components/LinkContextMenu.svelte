@@ -2,12 +2,21 @@
   import { onMount, tick } from 'svelte';
   import { isTauri } from '@tauri-apps/api/core';
   import { base } from '$app/paths';
+  import { goto } from '$app/navigation';
   import { i18n } from '$lib/i18n.svelte';
   import { toast } from '$lib/toast.svelte';
-  import { wallabagBookmarklet } from '$lib/wallabag';
+  import { readString } from '$lib/safe-storage';
+  let wallabagClient: Promise<typeof import('$lib/wallabag')> | undefined;
+  function loadWallabag() {
+    return wallabagClient ??= import('$lib/wallabag').catch(error => {
+      wallabagClient = undefined;
+      throw error;
+    });
+  }
   let menu = $state<{ url: string; x: number; y: number } | null>(null);
   let menuElement: HTMLDivElement | undefined = $state();
   let wallabag = $state('');
+  let wallabagReady = $state(false);
   let canShare = $state(false);
   onMount(() => {
     if (!isTauri()) return;
@@ -18,18 +27,29 @@
       if (!anchor) return;
       let url: URL;
       try { url = new URL(anchor.href); } catch { return; }
-      if (!['http:', 'https:'].includes(url.protocol)) return;
+      if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return;
       // Internal app routes retain their normal native menu.
       if (url.origin === location.origin) return;
       event.preventDefault();
-      wallabag = localStorage.getItem('crispdeck-wallabag-url') ?? '';
+      wallabag = readString('crispdeck-wallabag-url');
+      wallabagReady = false;
       menu = { url: url.href, x: event.clientX, y: event.clientY };
+      const shown = menu;
+      const server = wallabag;
       await tick();
-      if (!menuElement || !menu) return;
+      if (!menuElement || menu !== shown) return;
       const rect = menuElement.getBoundingClientRect();
       menu.x = Math.max(4, Math.min(menu.x, window.innerWidth - rect.width - 4));
       menu.y = Math.max(4, Math.min(menu.y, window.innerHeight - rect.height - 4));
       menuElement.querySelector<HTMLButtonElement>('button')?.focus();
+      if (server) {
+        try {
+          const { wallabagConnected } = await loadWallabag();
+          if (menu !== shown) return;
+          const connected = await wallabagConnected(server);
+          if (menu === shown) wallabagReady = connected;
+        } catch { /* Missing or unreadable credentials lead back to setup. */ }
+      }
     }
     function close(event: Event) { if (menuElement && !menuElement.contains(event.target as Node)) menu = null; }
     function key(event: KeyboardEvent) { if (event.key === 'Escape') { menu = null; } }
@@ -55,10 +75,28 @@
     const url = menu.url; menu = null;
     try { await navigator.share({url}); } catch { /* User may dismiss the share sheet. */ }
   }
-  function save() {
+  async function save() {
     if (!menu) return;
-    const url = wallabagBookmarklet(wallabag, menu.url);
-    if (url) void open(url); else { menu = null; location.href = `${base}/settings#wallabag-url`; }
+    const url = menu.url;
+    const server = wallabag;
+    menu = null;
+    try {
+      let connected = false;
+      let client: Awaited<ReturnType<typeof loadWallabag>> | undefined;
+      if (server) {
+        try {
+          client = await loadWallabag();
+          connected = await client.wallabagConnected(server);
+        } catch { /* Reconnect unreadable sessions in Settings. */ }
+      }
+      if (!connected || !client) {
+        await goto(`${base}/settings?tab=appearance#wallabag-url`);
+        return;
+      }
+      await client.saveToWallabag(server, url);
+      toast.success(i18n.t.linkMenu.wallabagSaved);
+    }
+    catch (e) { toast.error(e instanceof Error ? e.message : i18n.t.linkMenu.wallabagFailed); }
   }
 </script>
 {#if menu}
@@ -66,7 +104,7 @@
     <button role="menuitem" onclick={() => menu && open(menu.url)}>{i18n.t.linkMenu.open}</button>
     <button role="menuitem" onclick={copy}>{i18n.t.linkMenu.copy}</button>
     {#if canShare}<button role="menuitem" onclick={share}>{i18n.t.linkMenu.share}</button>{/if}
-    <button role="menuitem" onclick={save}>{wallabag ? i18n.t.linkMenu.saveWallabag : i18n.t.linkMenu.setupWallabag}</button>
+    <button role="menuitem" onclick={save}>{wallabagReady ? i18n.t.linkMenu.saveWallabag : i18n.t.linkMenu.setupWallabag}</button>
     <span class="hint">{i18n.t.linkMenu.systemMenuHint}</span>
   </div>
 {/if}

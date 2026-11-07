@@ -14,6 +14,29 @@ try {
     try { await page.goto(`http://localhost:4177/thread?uri=${encodeURIComponent(root)}&platform=bluesky`); break; }
     catch(e) { if(i===40) throw e; await new Promise(r=>setTimeout(r,250)); }
   }
+  await page.locator(`[data-post-uri="${root}"]`).first().waitFor({timeout:20000});
+  // Check actual rendered parent/child relationships against Bluesky's tree.
+  const response = await fetch(`https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?uri=${encodeURIComponent(root)}&depth=4`);
+  assert.ok(response.ok, `Bluesky thread HTTP ${response.status}`);
+  const {thread} = await response.json();
+  const pairs = [];
+  const collect = node => {
+    for (const child of node.replies ?? []) {
+      if (node.post?.uri && child.post?.uri) pairs.push([node.post.uri, child.post.uri]);
+      collect(child);
+    }
+  };
+  collect(thread);
+  let checked = 0;
+  for (const [parent, child] of pairs) {
+    const depths = await page.evaluate(([a,b]) => {
+      const row = uri => [...document.querySelectorAll('[data-post-uri]')].find(el => el.getAttribute('data-post-uri') === uri)?.closest('[data-thread-depth]');
+      const p = row(a), c = row(b);
+      return p && c ? [Number(p.dataset.threadDepth), Number(c.dataset.threadDepth)] : null;
+    }, [parent, child]);
+    if (depths) { assert.equal(depths[1], depths[0] + 1); checked++; }
+  }
+  assert.ok(checked > 0, 'expected at least one visible parent/reply pair');
   await page.getByRole('button',{name:/Younger white people being slightly/}).first().click({timeout:20000});
   await page.waitForURL(/3mykjpik4gk2g/);
   await page.locator(`[data-post-uri="${quoted}"]`).first().waitFor({timeout:20000});

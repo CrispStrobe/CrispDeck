@@ -37,6 +37,7 @@ describe('ThreadsClient API methods', () => {
       expect(url.searchParams.get('fields')).toContain('username');
       expect(url.searchParams.get('fields')).toContain('threads_profile_picture_url');
       expect(url.searchParams.get('access_token')).toBe(TOKEN);
+      expect(fetch.mock.calls[0][1]).toMatchObject({ redirect: 'error' });
     });
   });
 

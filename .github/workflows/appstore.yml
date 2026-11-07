@@ -76,11 +76,13 @@ jobs:
           ASC_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
           ASC_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          INPUT_PLATFORM: ${{ inputs.platform }}
+          INPUT_TASK: ${{ inputs.task }}
         run: |
           set -euo pipefail
           plat=()
-          [ "${{ inputs.platform }}" != "both" ] && plat=(--platform "${{ inputs.platform }}")
-          case "${{ inputs.task }}" in
+          [ "$INPUT_PLATFORM" != "both" ] && plat=(--platform "$INPUT_PLATFORM")
+          case "$INPUT_TASK" in
             status)          python3 tools/asc/status.py "${plat[@]}" ;;
             prepare-versions) python3 tools/asc/prepare.py ;;
             listing-dry-run) python3 tools/asc/listing.py --dry-run ;;

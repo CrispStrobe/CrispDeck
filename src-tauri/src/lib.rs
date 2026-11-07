@@ -1,3 +1,4 @@
+mod app_data;
 mod asr;
 mod auth;
 mod commands;
@@ -63,11 +64,8 @@ pub fn run() {
                 }
             }
 
-            let app_dir = app
-                .path()
-                .app_data_dir()
-                .expect("failed to resolve app data dir");
-            std::fs::create_dir_all(&app_dir).ok();
+            let app_dir = app.path().app_data_dir()?;
+            app_data::prepare_directory(&app_dir)?;
 
             let db_path = app_dir.join("crispdeck.db");
             log::info!("Opening database at {:?}", db_path);
@@ -106,6 +104,9 @@ pub fn run() {
             commands::db_commands::oauth_session_get,
             commands::db_commands::oauth_session_set,
             commands::db_commands::oauth_session_delete,
+            commands::db_commands::wallabag_session_get,
+            commands::db_commands::wallabag_session_set,
+            commands::db_commands::wallabag_session_delete,
             // Identity commands
             commands::db_commands::db_list_identities,
             commands::db_commands::db_create_identity,

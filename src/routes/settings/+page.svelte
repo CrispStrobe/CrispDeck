@@ -3,6 +3,7 @@
   import { getTtsEngine, setTtsEngine, getSttEngine, setSttEngine, getHomeMode, setHomeMode, type SpeechEngine, type HomeMode } from '$lib/settings';
   import { toast } from '$lib/toast.svelte';
   import { readString, removeKey, writeJson, writeString } from '$lib/safe-storage';
+  import { connectWallabag, disconnectWallabag, normalizeWallabagServer } from '$lib/wallabag';
   import { fetchOk, fetchJson } from '$lib/http';
   import { getCredentialBackend, setCredentialBackend, setMacosKeychain, type CredentialBackendInfo } from '$lib/db';
   import { apiUrl } from '$lib/api-origin';
@@ -283,6 +284,43 @@
   let hideEngagement = $state(localStorage.getItem('crispdeck-hide-engagement') === 'true');
   let compactPosts = $state(localStorage.getItem('crispdeck-compact-posts') === 'true');
   let wallabagUrl = $state(readString('crispdeck-wallabag-url', ''));
+  let wallabagClientId = $state('');
+  let wallabagClientSecret = $state('');
+  let wallabagUsername = $state('');
+  let wallabagPassword = $state('');
+  let wallabagBusy = $state(false);
+  function handleWallabagUrlChange() {
+    try {
+      const server = wallabagUrl.trim() ? normalizeWallabagServer(wallabagUrl) : '';
+      if (!writeString('crispdeck-wallabag-url', server)) throw new Error('Could not save the Wallabag server address. Check browser storage and try again.');
+      wallabagUrl = server;
+    } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
+  }
+  async function connectWallabagAccount() {
+    if (wallabagBusy) return;
+    const credentials = { server: wallabagUrl, clientId: wallabagClientId, clientSecret: wallabagClientSecret, username: wallabagUsername, password: wallabagPassword };
+    wallabagBusy = true;
+    try {
+      const server = normalizeWallabagServer(credentials.server);
+      // Ensure the routing preference is writable before obtaining a session.
+      if (!writeString('crispdeck-wallabag-url', server)) throw new Error('Could not save the Wallabag server address. Check browser storage and try again.');
+      wallabagUrl = await connectWallabag({ ...credentials, server });
+      wallabagPassword = ''; wallabagClientSecret = '';
+      toast.success(i18n.t.linkMenu.wallabagConnected);
+    } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
+    finally { wallabagBusy = false; }
+  }
+  async function disconnectWallabagAccount() {
+    if (wallabagBusy) return;
+    wallabagBusy = true;
+    try {
+      await disconnectWallabag();
+      wallabagPassword = ''; wallabagClientSecret = '';
+      toast.success(i18n.t.linkMenu.wallabagDisconnected);
+    }
+    catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
+    finally { wallabagBusy = false; }
+  }
   let sideMedia = $state(localStorage.getItem('crispdeck-side-media') !== 'false');
   let mediaPreview = $state<'lightbox' | 'browser'>((localStorage.getItem('crispdeck-media-preview') as 'lightbox' | 'browser') || 'lightbox');
   let liveCounters = $state(localStorage.getItem('crispdeck-live-counters') === 'true');
@@ -712,13 +750,8 @@
     error = '';
     try {
       const token = threadsManualToken.trim();
-      // Get user profile to find userId
-      const meResp = await fetch(`https://graph.threads.net/v1.0/me?fields=id,username,name,threads_profile_picture_url&access_token=${token}`);
-      if (!meResp.ok) {
-        const err = await meResp.json().catch(() => ({}));
-        throw new Error(err.error?.message || 'Invalid token — could not fetch profile');
-      }
-      const profile = await meResp.json();
+      // Use the same native-safe Graph transport as OAuth connections.
+      const profile = await new ThreadsClient(token, 'me').getProfile();
       const userId = profile.id;
 
       // Store the account
@@ -1285,8 +1318,18 @@
 
       <div>
         <label for="wallabag-url" class="text-sm text-[var(--color-text-muted)]">{i18n.t.linkMenu.wallabagInstance}</label>
-        <input id="wallabag-url" type="url" bind:value={wallabagUrl} onchange={() => writeString('crispdeck-wallabag-url', wallabagUrl.trim())} placeholder="https://wallabag.example.com" class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm" />
+        <input id="wallabag-url" type="url" bind:value={wallabagUrl} disabled={wallabagBusy} onchange={handleWallabagUrlChange} placeholder="https://wallabag.example.com" class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm" />
         <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.linkMenu.wallabagHint}</p>
+        <div class="grid gap-2 mt-2 sm:grid-cols-2">
+          <label class="text-xs">{i18n.t.linkMenu.wallabagClientId}<input type="text" autocomplete="off" bind:value={wallabagClientId} disabled={wallabagBusy} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
+          <label class="text-xs">{i18n.t.linkMenu.wallabagClientSecret}<input type="password" autocomplete="off" bind:value={wallabagClientSecret} disabled={wallabagBusy} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
+          <label class="text-xs">{i18n.t.linkMenu.wallabagUsername}<input type="text" autocomplete="username" bind:value={wallabagUsername} disabled={wallabagBusy} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
+          <label class="text-xs">{i18n.t.linkMenu.wallabagPassword}<input type="password" autocomplete="current-password" bind:value={wallabagPassword} disabled={wallabagBusy} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
+        </div>
+        <div class="flex gap-2 mt-2">
+          <button disabled={wallabagBusy} onclick={connectWallabagAccount} class="px-3 py-2 rounded-md bg-[var(--color-primary)] text-white text-xs">{i18n.t.linkMenu.wallabagConnect}</button>
+          <button disabled={wallabagBusy} onclick={disconnectWallabagAccount} class="px-3 py-2 rounded-md border border-[var(--color-border)] text-xs">{i18n.t.linkMenu.wallabagDisconnect}</button>
+        </div>
       </div>
 
       <!-- Media preview mode -->
@@ -2377,15 +2420,20 @@
         </div>
         {#if webPushSubscribed}
           <div class="flex items-center gap-2">
-            <span class="text-xs text-green-400 px-2 py-1 bg-green-900/20 rounded">{i18n.t.settings.webPushActive}</span>
+            <span class="text-xs text-[var(--color-text-muted)] px-2 py-1 bg-[var(--color-surface)] rounded">{vapidKeyAvailable ? i18n.t.settings.webPushActive : i18n.t.settings.webPushNotConfigured}</span>
             <button
               onclick={async () => {
                 webPushLoading = true;
                 webPushError = '';
                 try {
-                  await unsubscribeWebPush();
-                  await fetchOk(apiUrl('/api/push/subscribe'), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: 'default' }) }, 'unsubscribe from push');
+                  const subscription = await getPushSubscription();
+                  // Revoke locally even if legacy server storage is offline.
+                  // Capture proof first so this request can still clean it up.
+                  if (!await unsubscribeWebPush()) throw new Error('The browser could not remove the push subscription');
                   webPushSubscribed = false;
+                  if (subscription) {
+                    await fetchOk(apiUrl('/api/push/subscribe'), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: 'default', subscription }) }, 'unsubscribe from push');
+                  }
                 } catch (e) { webPushError = String(e); }
                 webPushLoading = false;
               }}
@@ -2406,7 +2454,12 @@
                 const { key } = await fetchJson<{ key: string }>(apiUrl('/api/push/vapid-key'), undefined, 'fetch VAPID key');
                 const sub = await subscribeWebPush(key);
                 if (sub) {
-                  await fetchOk(apiUrl('/api/push/subscribe'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub, userId: 'default' }) }, 'subscribe to push');
+                  try {
+                    await fetchOk(apiUrl('/api/push/subscribe'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub, userId: 'default' }) }, 'subscribe to push');
+                  } catch (e) {
+                    await unsubscribeWebPush().catch((cleanupError) => swallow('settings.pushCleanup', cleanupError));
+                    throw e;
+                  }
                   webPushSubscribed = true;
                 }
               } catch (e) { webPushError = String(e); }

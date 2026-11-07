@@ -27,19 +27,15 @@
 
 export async function GET(request: Request) {
   // Verify this is an authorized cron request
-  const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new Response('Unauthorized', { status: 401 });
-  }
-
-  const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
-  const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
-
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-    return new Response(JSON.stringify({ error: 'VAPID keys not configured' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
+  const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    return new Response(JSON.stringify({ error: 'Push cron is not configured' }), {
+      status: 503, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
     });
+  }
+  const authHeader = request.headers.get('authorization');
+  if (authHeader !== `Bearer ${secret}`) {
+    return new Response('Unauthorized', { status: 401 });
   }
 
   // TODO: List subscriptions from Blob, check for new notifications per user,
@@ -51,8 +47,8 @@ export async function GET(request: Request) {
   // 4. For each subscription, fetch new notifications from AT Protocol / Mastodon
   // 5. Call webpush.sendNotification(subscription, JSON.stringify(payload))
 
-  return new Response(JSON.stringify({ ok: true, message: 'Push cron executed' }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
+  return new Response(JSON.stringify({ error: 'Background web push delivery is not implemented' }), {
+    status: 501,
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
   });
 }

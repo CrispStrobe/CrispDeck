@@ -25,21 +25,16 @@ function isReasonRepost(v: unknown): v is AppBskyFeedDefs.ReasonRepost {
 
 type PlatformPost = AppBskyFeedDefs.FeedViewPost | mastodon.v1.Status | ThreadsPost;
 
-// Cached HTML stripping — avoids regex per-post on re-renders
-// Key includes content length as a cheap fingerprint to avoid stale cache
-// when the same URI has different content (e.g. edited posts)
-const _htmlCleanCache = new Map<string, string>();
+// Compare the actual HTML: an edit can change text without changing its length.
+const _htmlCleanCache = new Map<string, { html: string; clean: string }>();
 function stripHtmlCached(uri: string, html: string): string {
-  const key = `${uri}:${html.length}`;
-  let clean = _htmlCleanCache.get(key);
-  if (!clean) {
-    clean = html.replace(/<[^>]*>?/gm, '');
-    _htmlCleanCache.set(key, clean);
-    // Cap cache size to prevent memory leak
-    if (_htmlCleanCache.size > 2000) {
-      const first = _htmlCleanCache.keys().next().value;
-      if (first) _htmlCleanCache.delete(first);
-    }
+  const cached = _htmlCleanCache.get(uri);
+  if (cached?.html === html) return cached.clean;
+  const clean = html.replace(/<[^>]*>?/gm, '');
+  _htmlCleanCache.set(uri, { html, clean });
+  if (_htmlCleanCache.size > 2000) {
+    const first = _htmlCleanCache.keys().next().value;
+    if (first !== undefined) _htmlCleanCache.delete(first);
   }
   return clean;
 }
@@ -202,20 +197,29 @@ function areIdentityMatched(handle1: string, handle2: string, identityPairs: Set
 
 /**
  * Detect crossposted content between platforms.
- * When identityPairs is provided, uses a lower similarity threshold (0.7)
+ * When identityPairs is provided, uses a lower similarity threshold (0.55)
  * for posts by authors confirmed to be the same person.
  *
- * Optimized: caches results by URI set, uses text-length bucketing to reduce
- * comparisons, and exits early on high-confidence matches.
+ * Cache only unchanged input objects and grouping fields. A new fetch of the
+ * same URIs must retain its current viewer state and source account, while
+ * in-place text edits and identity changes must recompute the grouping.
  */
-let _crosspostCache: { key: string; result: FeedItem[] } | null = null;
+let _crosspostCache: {
+  posts: { post: UnifiedPost; uri: string; text: string; platform: Platform; handle: string; createdAt: string }[];
+  identityPairs: Set<string>;
+  result: FeedItem[];
+} | null = null;
 
 export function detectCrossposts(posts: UnifiedPost[], identityPairs?: Set<string>): FeedItem[] {
-  // Order-independent cache key: length + hash of all URIs
-  let h = 0;
-  for (const p of posts) { for (let i = 0; i < p.uri.length; i++) h = ((h << 5) - h + p.uri.charCodeAt(i)) | 0; }
-  const cacheKey = `${posts.length}:${h}`;
-  if (_crosspostCache && _crosspostCache.key === cacheKey) return _crosspostCache.result;
+  const cached = _crosspostCache;
+  if (cached && cached.posts.length === posts.length &&
+      cached.identityPairs.size === (identityPairs?.size ?? 0) &&
+      [...cached.identityPairs].every(pair => identityPairs?.has(pair)) &&
+      cached.posts.every((old, index) => {
+        const post = posts[index];
+        return old.post === post && old.uri === post.uri && old.text === post.text &&
+          old.platform === post.platform && old.handle === post.author.handle && old.createdAt === post.createdAt;
+      })) return cached.result;
 
   /**
    * How much of the shorter post has to appear, word-run for word-run, in the
@@ -309,7 +313,11 @@ export function detectCrossposts(posts: UnifiedPost[], identityPairs?: Set<strin
     }
   }
 
-  _crosspostCache = { key: cacheKey, result: feedItems };
+  _crosspostCache = {
+    posts: posts.map(post => ({ post, uri: post.uri, text: post.text, platform: post.platform, handle: post.author.handle, createdAt: post.createdAt })),
+    identityPairs: new Set(identityPairs),
+    result: feedItems,
+  };
   return feedItems;
 }
 
