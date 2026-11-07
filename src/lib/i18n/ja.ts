@@ -66,6 +66,7 @@ export default {
     },
 
     wallabagReader: {
+      search: 'Search all articles', searchButton: 'Search', thumbnails: 'Show article thumbnails', connectedStatus: 'Connected. Your saved session is kept for future launches.',
       unavailable: "保存済みの Wallabag 認証情報を確認できませんでした。設定で接続を確認してください。",
       title: "Wallabag リーダー",
       description: "Wallabag アカウントに保存した記事を読みます。",

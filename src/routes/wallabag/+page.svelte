@@ -5,6 +5,7 @@
   import { Archive, ArrowLeft, BookOpen, ChevronLeft, ChevronRight, ExternalLink, Inbox, Loader2, RefreshCw, Star } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { toast } from '$lib/toast.svelte';
+  import { readString } from '$lib/safe-storage';
   import { openExternalLink } from '$lib/external-link';
   import { loadWallabagSanitizer, sanitizeWallabagHtml as sanitizeHtml, wallabagArticleUrl } from '$lib/wallabag-content';
   import { wallabagAvailability, refreshWallabagAvailability } from '$lib/wallabag-availability';
@@ -13,6 +14,9 @@
   const filters: WallabagEntryFilter[] = ['unread', 'archived', 'starred', 'all'];
   const perPage = 20;
   let filter = $state<WallabagEntryFilter>('unread');
+  let searchInput = $state('');
+  let searchTerm = $state('');
+  let showThumbnails = $state(readString('crispdeck-wallabag-thumbnails', 'true') !== 'false');
   let entries = $state<WallabagEntry[]>([]);
   let currentPage = $state(1);
   let pages = $state(1);
@@ -44,6 +48,7 @@
   }
 
   onMount(() => {
+    showThumbnails = readString('crispdeck-wallabag-thumbnails', 'true') !== 'false';
     const unsubscribe = wallabagAvailability.subscribe(connection => {
       const nextKey = connection.status === 'ready' ? `${connection.revision}:${connection.server}` : '';
       if (nextKey === connectionKey) return;
@@ -53,7 +58,7 @@
       currentPage = 1; pages = 1; total = 0;
       loading = false; loadingArticle = false; updating = false;
       listError = false; articleError = false; actionError = false;
-      filter = 'unread';
+      filter = 'unread'; searchInput = ''; searchTerm = '';
       if (connection.status === 'ready') void loadEntries(1);
     });
     // The app shell normally starts verification. Direct mounts also work,
@@ -72,7 +77,7 @@
     const request = ++listRequest;
     loading = true; listError = false;
     try {
-      const result = await listWallabagEntries(connection.server, { filter, page: requestedPage, perPage });
+      const result = await listWallabagEntries(connection.server, { filter, page: requestedPage, perPage, ...(searchTerm ? { search: searchTerm } : {}) });
       if (request !== listRequest || !sameConnection(connection.server, connection.revision)) return;
       // A mutation or another client may have emptied the last page.
       const lastPage = Math.max(1, result.pages);
@@ -89,8 +94,16 @@
   }
 
   function changeFilter(next: WallabagEntryFilter) {
-    if (next === filter || updating) return;
-    filter = next;
+    if ((next === filter && !searchTerm) || updating) return;
+    searchTerm = ''; searchInput = ''; filter = next;
+    entries = []; currentPage = 1; pages = 1; total = 0;
+    void loadEntries(1);
+  }
+
+  function searchArticles(event: SubmitEvent) {
+    event.preventDefault();
+    searchTerm = searchInput.trim();
+    if (searchTerm) filter = 'all';
     entries = []; currentPage = 1; pages = 1; total = 0;
     void loadEntries(1);
   }
@@ -190,26 +203,25 @@
       </div>
     </div>
   {:else}
-    <header class="flex flex-wrap items-center justify-between gap-3 mb-5">
-      <div>
-        <h1 class="flex items-center gap-2 text-2xl font-bold"><BookOpen size={24} aria-hidden="true" />{i18n.t.wallabagReader.title}</h1>
-        <p class="mt-1 text-sm text-[var(--color-text-muted)]">{i18n.t.wallabagReader.description}</p>
-      </div>
-      <button class="reader-button" onclick={() => loadEntries()} disabled={loading || updating}>
+    <header class="reader-toolbar">
+      <h1 class="flex items-center gap-2 text-xl font-bold"><BookOpen size={22} aria-hidden="true" />{i18n.t.wallabagReader.title}</h1>
+      <button class="reader-button" onclick={() => loadEntries()} disabled={loading || updating} title={i18n.t.wallabagReader.refresh} aria-label={i18n.t.wallabagReader.refresh}>
         <RefreshCw size={16} class={loading ? 'animate-spin' : ''} aria-hidden="true" />
-        {i18n.t.wallabagReader.refresh}
       </button>
+      <div class="filters" role="group" aria-label={i18n.t.wallabagReader.filters}>
+        {#each filters as item}
+          <button class:active={filter === item} aria-pressed={filter === item} disabled={updating} onclick={() => changeFilter(item)}>{i18n.t.wallabagReader[item]}</button>
+        {/each}
+      </div>
+      <span class="text-xs text-[var(--color-text-muted)]" aria-live="polite">{i18n.t.wallabagReader.count.replace('{count}', String(total))}</span>
+      <form class="reader-search" onsubmit={searchArticles} role="search">
+        <input type="search" bind:value={searchInput} placeholder={i18n.t.wallabagReader.search} aria-label={i18n.t.wallabagReader.search} />
+        <button class="reader-button" type="submit" disabled={updating}>{i18n.t.wallabagReader.searchButton}</button>
+      </form>
     </header>
 
     <div class="reader-grid" class:has-selection={selectedId !== null}>
       <section class="article-list" aria-label={i18n.t.wallabagReader.articles} aria-busy={loading}>
-        <div class="filters" role="group" aria-label={i18n.t.wallabagReader.filters}>
-          {#each filters as item}
-            <button class:active={filter === item} aria-pressed={filter === item} disabled={updating} onclick={() => changeFilter(item)}>{i18n.t.wallabagReader[item]}</button>
-          {/each}
-        </div>
-        <p class="px-4 py-3 text-xs text-[var(--color-text-muted)]" aria-live="polite">{i18n.t.wallabagReader.count.replace('{count}', String(total))}</p>
-
         {#if listError}
           <div class="reader-error" role="alert">
             <p>{i18n.t.wallabagReader.listFailed}</p>
@@ -225,12 +237,17 @@
             {#each entries as entry (entry.id)}
               <li>
                 <button data-wallabag-entry={entry.id} class:selected={selectedId === entry.id} aria-current={selectedId === entry.id ? 'true' : undefined} disabled={updating} onclick={() => openArticle(entry.id)}>
-                  <span class="entry-title">{entry.title || i18n.t.wallabagReader.untitled}</span>
-                  <span class="entry-meta">
-                    <span class="truncate">{sourceLabel(entry)}</span>
-                    {#if entry.is_starred}<span class="inline-flex"><Star size={13} fill="currentColor" aria-hidden="true" /><span class="sr-only">{i18n.t.wallabagReader.starred}</span></span>{/if}
+                  {#if showThumbnails && wallabagArticleUrl(entry.preview_picture, entry.url)}
+                    <img class="entry-thumbnail" src={wallabagArticleUrl(entry.preview_picture, entry.url) ?? ''} alt="" loading="lazy" referrerpolicy="no-referrer" />
+                  {/if}
+                  <span class="entry-copy">
+                    <span class="entry-title">{entry.title || i18n.t.wallabagReader.untitled}</span>
+                    <span class="entry-meta">
+                      <span class="truncate">{sourceLabel(entry)}</span>
+                      {#if entry.reading_time}<span>{readingTime(entry.reading_time)}</span>{/if}
+                      {#if entry.is_starred}<span class="inline-flex"><Star size={13} fill="currentColor" aria-hidden="true" /><span class="sr-only">{i18n.t.wallabagReader.starred}</span></span>{/if}
+                    </span>
                   </span>
-                  {#if entry.reading_time}<span class="text-xs text-[var(--color-text-muted)]">{readingTime(entry.reading_time)}</span>{/if}
                 </button>
               </li>
             {/each}
@@ -297,18 +314,23 @@
 
 <style>
   .wallabag-reader { max-width: 1440px; margin-inline: auto; }
+  .reader-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: 1rem; }
+  .reader-search { display: flex; align-items: center; gap: .3rem; margin-inline-start: auto; }
+  .reader-search input { min-width: 8rem; max-width: 14rem; padding: .45rem; border: 1px solid var(--color-border); border-radius: .4rem; background: var(--color-bg); }
   .reader-grid { display: grid; grid-template-columns: minmax(15rem, 21rem) minmax(0, 1fr); gap: 1.5rem; align-items: start; }
   .article-list { min-width: 0; overflow: hidden; border: 1px solid var(--color-border); border-radius: .75rem; background: var(--color-surface); }
-  .filters { display: flex; flex-wrap: wrap; gap: .25rem; padding: .75rem; border-bottom: 1px solid var(--color-border); }
+  .filters { display: flex; flex-wrap: wrap; gap: .25rem; }
   .filters button { min-height: 2.5rem; flex: 1 0 auto; border-radius: .4rem; padding: .45rem .6rem; font-size: .8rem; color: var(--color-text-muted); }
   .filters button.active { color: var(--color-text); background: var(--color-surface-hover); font-weight: 600; box-shadow: inset 0 -2px var(--color-primary); }
   .entry-list { margin: 0; padding: 0; list-style: none; }
   .entry-list li { border-top: 1px solid var(--color-border); }
-  .entry-list button { width: 100%; padding: 1rem; text-align: start; display: flex; flex-direction: column; gap: .5rem; border-inline-start: 3px solid transparent; }
+  .entry-list button { width: 100%; padding: 1rem; text-align: start; display: flex; flex-direction: row; align-items: center; gap: .7rem; border-inline-start: 3px solid transparent; }
   .entry-list button:hover, .entry-list button.selected { background: var(--color-surface-hover); }
   .entry-list button.selected { border-inline-start-color: var(--color-primary); }
+  .entry-thumbnail { width: 4rem; height: 4rem; flex: none; object-fit: cover; border-radius: .35rem; }
+  .entry-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: .3rem; }
   .entry-title { font-weight: 600; font-size: .95rem; line-height: 1.45; overflow-wrap: anywhere; }
-  .entry-meta { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: .75rem; font-size: .75rem; color: var(--color-text-muted); }
+  .entry-meta { display: flex; width: 100%; align-items: center; justify-content: flex-start; flex-wrap: wrap; gap: .5rem; font-size: .75rem; color: var(--color-text-muted); }
   .reader-pagination { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .75rem; border-top: 1px solid var(--color-border); }
   .article-panel { min-width: 0; padding: 1.5rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: .75rem; }
   .article-title { font-size: clamp(1.4rem, 2.5vw, 2rem); line-height: 1.25; font-weight: 700; overflow-wrap: anywhere; }

@@ -44,7 +44,7 @@ export interface WallabagEntry {
 }
 export interface WallabagEntriesPage { items: WallabagEntry[]; page: number; pages: number; total: number }
 export type WallabagEntryFilter = 'unread' | 'archived' | 'starred' | 'all';
-export interface WallabagEntriesOptions { filter?: WallabagEntryFilter; page?: number; perPage?: number }
+export interface WallabagEntriesOptions { filter?: WallabagEntryFilter; page?: number; perPage?: number; search?: string }
 
 type Store = { kind: 'browser' } | { kind: 'native'; args: { backend: string; keychain: string } };
 interface SavedSession { store: Store; session: Session; generation: number }
@@ -429,7 +429,7 @@ function parseEntriesPage(value: unknown): WallabagEntriesPage {
 
 /** Fetch metadata only; individual article content is loaded when opened. */
 export async function listWallabagEntries(server: string, options: WallabagEntriesOptions = {}): Promise<WallabagEntriesPage> {
-  const { filter = 'unread', page = 1, perPage = 30 } = options;
+  const { filter = 'unread', page = 1, perPage = 30, search = '' } = options;
   if (!positiveInteger(page) || !positiveInteger(perPage) || perPage > 100 || !['unread', 'archived', 'starred', 'all'].includes(filter)) {
     throw new WallabagError('Invalid Wallabag article list options');
   }
@@ -437,6 +437,11 @@ export async function listWallabagEntries(server: string, options: WallabagEntri
   if (filter === 'unread') query.set('archive', '0');
   if (filter === 'archived') query.set('archive', '1');
   if (filter === 'starred') query.set('starred', '1');
+  if (search.trim()) {
+    const searchQuery = new URLSearchParams({ term: search.trim(), page: String(page), perPage: String(perPage) });
+    return authenticatedRequest(server, `/api/search.json?${searchQuery}`, { method: 'GET' }, async (response, signal) =>
+      parseEntriesPage(await boundedJson(response, maxArticleBytes, 'Wallabag returned an invalid article list', signal)), 'Wallabag could not search articles');
+  }
   return authenticatedRequest(server, `/api/entries.json?${query}`, { method: 'GET' }, async (response, signal) =>
     parseEntriesPage(await boundedJson(response, maxArticleBytes, 'Wallabag returned an invalid article list', signal)), 'Wallabag could not load articles');
 }

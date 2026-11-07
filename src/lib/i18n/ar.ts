@@ -66,6 +66,7 @@ export default {
     },
 
     wallabagReader: {
+      search: 'Search all articles', searchButton: 'Search', thumbnails: 'Show article thumbnails', connectedStatus: 'Connected. Your saved session is kept for future launches.',
       unavailable: "تعذر التحقق من بيانات اعتماد Wallabag المحفوظة. تحقق من الاتصال في الإعدادات.",
       title: "قارئ Wallabag",
       description: "اقرأ المقالات المحفوظة في حسابك على Wallabag.",

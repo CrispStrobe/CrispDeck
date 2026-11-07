@@ -66,6 +66,7 @@ export default {
     },
 
     wallabagReader: {
+      search: 'Search all articles', searchButton: 'Search', thumbnails: 'Show article thumbnails', connectedStatus: 'Connected. Your saved session is kept for future launches.',
       unavailable: "Impossible de vérifier les identifiants Wallabag enregistrés. Vérifiez la connexion dans les paramètres.",
       title: "Lecteur Wallabag",
       description: "Lisez les articles enregistrés dans votre compte Wallabag.",

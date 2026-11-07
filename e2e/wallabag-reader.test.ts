@@ -23,6 +23,7 @@ async function wallabagServer(page: Page) {
     created_at: '2026-11-01T10:00:00+00:00',
     reading_time: 4,
     domain_name: 'articles.example',
+    preview_picture: index === 0 ? 'https://articles.example/preview.jpg' : null,
     tags: [{ id: 1, label: 'Reading', slug: 'reading' }],
   }));
   const state = { rejectLogin: false, rejectReader: false, revoked: false, probeCount: 0, probeGate: undefined as Promise<void> | undefined, patchCount: 0 };
@@ -44,6 +45,13 @@ async function wallabagServer(page: Page) {
     if (state.revoked) return reply({ error: 'invalid_token' }, 401);
     if (state.rejectReader) return reply({ error: 'access_denied' }, 403);
     if (request.headers().authorization !== 'Bearer test-reader-access-token') return reply({}, 401);
+    if (url.pathname === '/api/search.json') {
+      const term = (url.searchParams.get('term') ?? '').toLowerCase();
+      const filtered = articles.filter(article => article.title.toLowerCase().includes(term));
+      const pageNumber = Number(url.searchParams.get('page') ?? 1);
+      const perPage = Number(url.searchParams.get('perPage') ?? 30);
+      return reply({ _embedded: { items: filtered.slice((pageNumber - 1) * perPage, pageNumber * perPage) }, page: pageNumber, pages: Math.ceil(filtered.length / perPage), total: filtered.length });
+    }
     if (url.pathname === '/api/entries.json') {
       const perPage = Number(url.searchParams.get('perPage') ?? 30);
       if (perPage === 1) {
@@ -207,4 +215,26 @@ test('offers the verified reader in mobile navigation with a usable article layo
   await page.screenshot({ path: testInfo.outputPath('wallabag-reader-mobile.png'), fullPage: true });
   await page.getByRole('button', { name: 'Back to articles' }).click();
   await expect(page.locator('[data-wallabag-entry="1"]')).toBeVisible();
+});
+
+test('searches all saved articles and shows the saved preview', async ({ page }) => {
+  await wallabagServer(page);
+  await connect(page);
+  await openReader(page);
+  await expect(page.locator('[data-wallabag-entry="1"] .entry-thumbnail')).toHaveAttribute('src', 'https://articles.example/preview.jpg');
+  await page.getByRole('searchbox', { name: 'Search all articles' }).fill('calmer');
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+  await expect(page.locator('[data-wallabag-entry="1"]')).toBeVisible();
+  await expect(page.locator('[data-wallabag-entry="2"]')).toHaveCount(0);
+});
+
+test('shows the saved connection after restarting without asking for credentials again', async ({ page }) => {
+  await wallabagServer(page);
+  await connect(page);
+  const settings = page.locator('#wallabag-settings');
+  await expect(settings.getByText('Connected. Your saved session is kept for future launches.')).toBeVisible();
+  await page.reload();
+  await expect(settings.getByText('Connected. Your saved session is kept for future launches.')).toBeVisible();
+  await expect(settings.getByLabel('Password', { exact: true })).toHaveCount(0);
+  await openReader(page);
 });

@@ -114,6 +114,14 @@ describe('reader availability requires saved credentials that the server accepts
 });
 
 describe('Wallabag reader entries', () => {
+  it('searches the complete library on the server with encoded terms and pagination', async () => {
+    mocks.fetch.mockResolvedValueOnce(page([entry()], { page: 2, pages: 3, total: 70 }));
+    await api.listWallabagEntries(server, { search: 'theology & faith', page: 2, perPage: 20 });
+    const url = new URL(mocks.fetch.mock.calls[0][0]);
+    expect(url.pathname).toBe('/wallabag/api/search.json');
+    expect(Object.fromEntries(url.searchParams)).toEqual({ term: 'theology & faith', page: '2', perPage: '20' });
+  });
+
   it.each([
     ['unread', { archive: '0' }],
     ['archived', { archive: '1' }],

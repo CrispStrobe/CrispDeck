@@ -290,6 +290,7 @@
   let wallabagUsername = $state('');
   let wallabagPassword = $state('');
   let wallabagBusy = $state(false);
+  let wallabagThumbnails = $state(readString('crispdeck-wallabag-thumbnails', 'true') !== 'false');
   function handleWallabagUrlChange() {
     try {
       const server = wallabagUrl.trim() ? normalizeWallabagServer(wallabagUrl) : '';
@@ -1328,20 +1329,29 @@
         <label for="wallabag-url" class="text-sm text-[var(--color-text-muted)]">{i18n.t.linkMenu.wallabagInstance}</label>
         <input id="wallabag-url" type="url" bind:value={wallabagUrl} disabled={wallabagBusy} onchange={handleWallabagUrlChange} placeholder="https://wallabag.example.com" class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm" />
         <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.linkMenu.wallabagHint}</p>
+        {#if $wallabagAvailability.status === 'ready'}
+          <p class="mt-2 text-sm" role="status">{i18n.t.wallabagReader.connectedStatus}</p>
+        {:else}
         <div class="grid gap-2 mt-2 sm:grid-cols-2">
           <label class="text-xs">{i18n.t.linkMenu.wallabagClientId}<input type="text" autocomplete="off" bind:value={wallabagClientId} disabled={wallabagBusy} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
           <label class="text-xs">{i18n.t.linkMenu.wallabagClientSecret}<input type="password" autocomplete="off" bind:value={wallabagClientSecret} disabled={wallabagBusy} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
           <label class="text-xs">{i18n.t.linkMenu.wallabagUsername}<input type="text" autocomplete="username" bind:value={wallabagUsername} disabled={wallabagBusy} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
           <label class="text-xs">{i18n.t.linkMenu.wallabagPassword}<input type="password" autocomplete="current-password" bind:value={wallabagPassword} disabled={wallabagBusy} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
         </div>
+        {/if}
         <div class="flex gap-2 mt-2">
-          <button disabled={wallabagBusy} onclick={connectWallabagAccount} class="px-3 py-2 rounded-md bg-[var(--color-primary)] text-white text-xs">{i18n.t.linkMenu.wallabagConnect}</button>
+          {#if $wallabagAvailability.status !== 'ready'}<button disabled={wallabagBusy} onclick={connectWallabagAccount} class="px-3 py-2 rounded-md bg-[var(--color-primary)] text-white text-xs">{i18n.t.linkMenu.wallabagConnect}</button>{/if}
           <button disabled={wallabagBusy} onclick={disconnectWallabagAccount} class="px-3 py-2 rounded-md border border-[var(--color-border)] text-xs">{i18n.t.linkMenu.wallabagDisconnect}</button>
           {#if $wallabagAvailability.status === 'ready'}
             <a href="{base}/wallabag" class="px-3 py-2 rounded-md border border-[var(--color-border)] text-xs">{i18n.t.nav.wallabag}</a>
           {/if}
         </div>
       </div>
+
+      <label class="flex items-center gap-2 text-sm mt-3 mb-4">
+        <input type="checkbox" bind:checked={wallabagThumbnails} onchange={() => writeString('crispdeck-wallabag-thumbnails', String(wallabagThumbnails))} />
+        {i18n.t.wallabagReader.thumbnails}
+      </label>
 
       <!-- Media preview mode -->
       <div class="flex items-center justify-between">

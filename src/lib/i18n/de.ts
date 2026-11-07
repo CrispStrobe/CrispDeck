@@ -66,6 +66,7 @@ export default {
     },
 
     wallabagReader: {
+      search: 'Alle Artikel durchsuchen', searchButton: 'Suchen', thumbnails: 'Artikelvorschaubilder anzeigen', connectedStatus: 'Verbunden. Deine gespeicherte Sitzung bleibt für künftige Starts erhalten.',
       unavailable: "Die gespeicherten Wallabag-Zugangsdaten konnten nicht überprüft werden. Prüfe die Verbindung in den Einstellungen.",
       title: "Wallabag Reader",
       description: "Lies die in deinem Wallabag-Konto gespeicherten Artikel.",

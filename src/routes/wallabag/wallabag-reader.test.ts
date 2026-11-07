@@ -80,6 +80,25 @@ async function expectEntries(target: HTMLElement, ids: number[]) {
   });
 }
 
+describe('Wallabag reader controls', () => {
+  it('shows previews by default and respects the saved thumbnail setting', async () => {
+    mocks.list.mockResolvedValue(page([entry(1, { preview_picture: 'https://news.example/picture.jpg' })]));
+    const target = render(); await expectEntries(target, [1]);
+    expect(target.querySelector<HTMLImageElement>('.entry-thumbnail')?.src).toBe('https://news.example/picture.jpg');
+    instance?.$destroy(); instance = undefined; target.remove();
+    localStorage.setItem('crispdeck-wallabag-thumbnails', 'false');
+    const hidden = render(); await expectEntries(hidden, [1]);
+    expect(hidden.querySelector('.entry-thumbnail')).toBeNull();
+  });
+  it('submits a search across all articles', async () => {
+    const target = render(); await expectEntries(target, [1, 2]);
+    const input = target.querySelector<HTMLInputElement>('input[type=search]')!;
+    input.value = 'theology'; input.dispatchEvent(new Event('input', { bubbles: true })); flushSync();
+    input.form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); flushSync();
+    await vi.waitFor(() => expect(mocks.list).toHaveBeenLastCalledWith(server, { filter: 'all', page: 1, perPage: 20, search: 'theology' }));
+  });
+});
+
 describe('Wallabag reader connection boundaries', () => {
   it('does not request articles before validation and clears a revoked account immediately', async () => {
     availability.set({ status: 'checking', server, revision: 1 });

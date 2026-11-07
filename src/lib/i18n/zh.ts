@@ -66,6 +66,7 @@ export default {
     },
 
     wallabagReader: {
+      search: 'Search all articles', searchButton: 'Search', thumbnails: 'Show article thumbnails', connectedStatus: 'Connected. Your saved session is kept for future launches.',
       unavailable: "无法验证已保存的 Wallabag 凭据。请在设置中检查连接。",
       title: "Wallabag 阅读器",
       description: "阅读保存在 Wallabag 账户中的文章。",

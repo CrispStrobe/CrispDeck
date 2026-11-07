@@ -66,6 +66,7 @@ export default {
     },
 
     wallabagReader: {
+      search: 'Search all articles', searchButton: 'Search', thumbnails: 'Show article thumbnails', connectedStatus: 'Connected. Your saved session is kept for future launches.',
       unavailable: "Não foi possível verificar as credenciais salvas do Wallabag. Verifique a conexão nas configurações.",
       title: "Leitor do Wallabag",
       description: "Leia os artigos salvos na sua conta do Wallabag.",
