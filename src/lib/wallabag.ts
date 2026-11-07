@@ -66,8 +66,13 @@ export async function disconnectWallabag(): Promise<void> {
   if (readString(browserKey)) throw new Error('Could not remove Wallabag credentials');
 }
 async function request(url: string, init: RequestInit): Promise<Response> {
-  const requestFetch = isTauri() ? (await import('@tauri-apps/plugin-http')).fetch : fetch;
-  return requestFetch(url, { ...init, redirect: 'error' });
+  if (isTauri()) {
+    const { fetch: nativeFetch } = await import('@tauri-apps/plugin-http');
+    // The native plugin does not forward Request.redirect to its HTTP client.
+    // Prevent 307/308 redirects from forwarding passwords or refresh tokens.
+    return nativeFetch(url, { ...init, redirect: 'error', maxRedirections: 0 });
+  }
+  return fetch(url, { ...init, redirect: 'error', credentials: 'omit', cache: 'no-store' });
 }
 async function token(server: string, fields: Record<string, string>): Promise<{ access_token: string; refresh_token: string; expires_in: number }> {
   const response = await request(`${server}/oauth/v2/token`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) });

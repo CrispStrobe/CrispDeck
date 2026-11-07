@@ -22,9 +22,11 @@ describe('direct Wallabag API', () => {
     await connectWallabag(credentials);
     expect(mocks.stored).not.toContain('password');
     expect(mocks.invoke).toHaveBeenCalledWith('wallabag_session_set', expect.objectContaining({ backend: 'keychain', keychain: '/chosen/brickwright.keychain-db' }));
+    expect(mocks.fetch.mock.calls[0][1]).toMatchObject({ redirect: 'error', maxRedirections: 0 });
     await saveToWallabag(credentials.server, 'https://example.org/article');
     expect(mocks.fetch.mock.calls[1][0]).toBe('https://wallabag.example/api/entries.json');
     expect(mocks.fetch.mock.calls[1][1].headers.Authorization).toBe('Bearer access');
+    expect(mocks.fetch.mock.calls[1][1].maxRedirections).toBe(0);
     expect(JSON.parse(mocks.fetch.mock.calls[1][1].body)).toEqual({ url: 'https://example.org/article' });
     await disconnectWallabag(); expect(mocks.stored).toBe('');
   });
@@ -40,5 +42,12 @@ describe('direct Wallabag API', () => {
     mocks.fetch.mockResolvedValueOnce(token('access')).mockResolvedValueOnce(new Response('', { status: 500 }));
     await connectWallabag(credentials);
     await expect(saveToWallabag(credentials.server, 'https://example.org')).rejects.toThrow('(500)');
+  });
+  it('does not accept an OAuth redirect as successful authentication', async () => {
+    mocks.fetch.mockResolvedValueOnce(new Response(null, { status: 307, headers: { Location: 'https://other.example/token' } }));
+    await expect(connectWallabag(credentials)).rejects.toThrow('(307)');
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    expect(mocks.fetch.mock.calls[0][1].maxRedirections).toBe(0);
+    expect(mocks.invoke).not.toHaveBeenCalledWith('wallabag_session_set', expect.anything());
   });
 });
