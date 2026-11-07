@@ -82,3 +82,24 @@ export async function publishDraft(draft: Draft, allowUncertain = false): Promis
   if (!current) throw new Error('This draft is being prepared in another window.');
   return current;
 }
+
+/** Recheck scheduled work and freeze its job while draft edits are excluded. */
+export async function publishScheduledDraft(draft: Draft): Promise<PublishJob | null> {
+  const dueDraft = await exclusive('draft-write', async () => {
+    const current = (await listDrafts()).find(saved => saved.id === draft.id);
+    const due = current?.scheduled_at ? Date.parse(current.scheduled_at) : NaN;
+    if (!current || !Number.isFinite(due) || due > Date.now()) return null;
+    const existing = await getJob(`draft-${current.id}`);
+    // Failed, partial and cancelled jobs require a user's explicit decision.
+    if (existing && !isComplete(existing) && existing.status !== 'queued' && existing.status !== 'sending') return null;
+    if (!existing) {
+      const { accounts } = await initAllClients();
+      await createJob(await draftSnapshot(current), accounts, current.id);
+    }
+    return current;
+  });
+  // If an edit owns the lock, the next scheduler tick reads its saved result.
+  // Once the job exists, persistDraft refuses further edits. Release the write
+  // lock before uploading media so unrelated drafts can still be saved.
+  return dueDraft ? publishDraft(dueDraft) : null;
+}

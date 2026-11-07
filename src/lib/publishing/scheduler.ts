@@ -18,13 +18,10 @@ export function startScheduler(): () => void {
           if (stopped) break;
           const due = draft.scheduled_at ? Date.parse(draft.scheduled_at) : NaN;
           if (!Number.isFinite(due) || draft.is_sent || due > Date.now()) continue;
-          const { getJob, isComplete } = await import('./outbox');
-          const { publishDraft } = await import('./drafts');
-          const job = await getJob(`draft-${draft.id}`);
-          if (!job || isComplete(job)) await publishDraft(draft);
-          // queued/sending means an interrupted attempt: safe protocols resume,
-          // ambiguous writes remain visible for review, never retried blindly.
-          else if (job.status === 'queued' || job.status === 'sending') await publishDraft(draft);
+          const { publishScheduledDraft } = await import('./drafts');
+          // Recheck the saved due time under the draft-write lock. A composer
+          // may have rescheduled this row since the loop took its snapshot.
+          await publishScheduledDraft(draft);
         }
       });
     } catch (error) { swallow('scheduler.tick', error); }
