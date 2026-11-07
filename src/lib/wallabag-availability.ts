@@ -79,6 +79,7 @@ export function startWallabagAvailability(): () => void {
     };
     window.addEventListener(WALLABAG_CONNECTION_CHANGED, hideWallabagReader);
     window.addEventListener('crispdeck:credential-storage-changed', changed);
+    window.addEventListener('crispdeck:wallabag-server-changed', changed);
     window.addEventListener('storage', storage);
     window.addEventListener('focus', visible);
     window.addEventListener('online', refresh);
@@ -90,6 +91,7 @@ export function startWallabagAvailability(): () => void {
       clearInterval(interval);
       window.removeEventListener(WALLABAG_CONNECTION_CHANGED, hideWallabagReader);
       window.removeEventListener('crispdeck:credential-storage-changed', changed);
+      window.removeEventListener('crispdeck:wallabag-server-changed', changed);
       window.removeEventListener('storage', storage);
       window.removeEventListener('focus', visible);
       window.removeEventListener('online', refresh);

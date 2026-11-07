@@ -110,6 +110,11 @@ export function importSettings(data: SettingsExport): number {
       if (!writeString(key, safe)) {
         throw new Error(`Could not import settings: storage failed after ${count} saved settings.`);
       }
+      // The storage event only reaches other tabs. A restored address must
+      // invalidate this tab's verified reader, even if a later import fails.
+      if (key === 'crispdeck-wallabag-url' && typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('crispdeck:wallabag-server-changed'));
+      }
       count++;
     }
   }

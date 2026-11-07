@@ -167,6 +167,17 @@ describe('live credential changes', () => {
     expect(get(availability.wallabagAvailability).status).toBe('ready');
   });
 
+  it('immediately rechecks a server imported in the same tab', async () => {
+    await ready();
+    api.validate.mockResolvedValue(false);
+    localStorage.setItem('crispdeck-wallabag-url', 'https://imported.example.org');
+    window.dispatchEvent(new Event('crispdeck:wallabag-server-changed'));
+    expect(get(availability.wallabagAvailability).status).toBe('checking');
+    await availability.refreshWallabagAvailability();
+    expect(api.validate).toHaveBeenLastCalledWith('https://imported.example.org');
+    expect(get(availability.wallabagAvailability).status).toBe('hidden');
+  });
+
   it('cleans up listeners, its interval and pending results on unmount', async () => {
     vi.useFakeTimers();
     await ready();
