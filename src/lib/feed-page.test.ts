@@ -258,4 +258,40 @@ describe('feed request and cache isolation', () => {
     mode(target, 'Timeline'); mode(target, 'For You'); await settle();
     expect(mocks.searchArchive).toHaveBeenCalledTimes(3);
   });
+
+  it('clears the last account immediately and cancels its pending refresh indicator and response', async () => {
+    const pending = deferred<Awaited<ReturnType<typeof personal.getTimeline>>>();
+    personal.getTimeline.mockResolvedValueOnce({ data: { feed: [post('Private feed before removal')], cursor: undefined } }).mockReturnValueOnce(pending.promise);
+    const target = render(); await ready(target, 'Private feed before removal');
+    refresh(target); await vi.waitFor(() => expect(personal.getTimeline).toHaveBeenCalledTimes(2));
+    mocks.initAllClients.mockResolvedValue({ accounts: [], clients: new Map() });
+    window.dispatchEvent(new CustomEvent('crispdeck:accounts-changed')); flushSync();
+    expect(target.textContent).not.toContain('Private feed before removal');
+    await ready(target, 'No Accounts Connected');
+    expect(target.querySelector('.animate-spin') === null).toBe(true);
+    const writes = mocks.cacheFeed.mock.calls.length;
+    pending.resolve({ data: { feed: [post('Late removed-account response')], cursor: undefined } }); await settle();
+    expect(target.textContent).not.toContain('Late removed-account response');
+    expect(mocks.cacheFeed).toHaveBeenCalledTimes(writes);
+  });
+
+  it('refreshes affinity for changed accounts and ignores the previous account scope\'s late history', async () => {
+    const oldHistory = deferred<{ authorHandle: string }[]>();
+    mocks.searchArchive.mockImplementationOnce(() => oldHistory.promise);
+    mocks.searchArchive.mockImplementation(async ({ type }) => type === 'like' ? [{ authorHandle: 'new-favorite' }] : []);
+    personal.getTimeline.mockResolvedValue({ data: { feed: [post('Initial personal timeline')], cursor: undefined } });
+    mocks.initAllClients.mockResolvedValue({ accounts: [accounts[0]], clients: new Map([[1, personal.entry]]) });
+    const target = render(); await ready(target, 'Initial personal timeline');
+    mode(target, 'For You'); await vi.waitFor(() => expect(mocks.searchArchive).toHaveBeenCalledTimes(3));
+    const oldFavorite = post('Old favorite post'); oldFavorite.post.author.handle = 'old-favorite';
+    const newFavorite = post('New favorite post'); newFavorite.post.author.handle = 'new-favorite';
+    work.getTimeline.mockResolvedValue({ data: { feed: [oldFavorite, newFavorite], cursor: undefined } });
+    mocks.initAllClients.mockResolvedValue({ accounts: [accounts[1]], clients: new Map([[2, work.entry]]) });
+    window.dispatchEvent(new CustomEvent('crispdeck:accounts-changed'));
+    await ready(target, 'New favorite post');
+    expect(mocks.searchArchive).toHaveBeenCalledTimes(6);
+    expect(target.querySelector('[data-post-uri]')?.getAttribute('data-post-uri')).toBe(newFavorite.post.uri);
+    oldHistory.resolve(Array.from({ length: 20 }, () => ({ authorHandle: 'old-favorite' }))); await settle();
+    expect(target.querySelector('[data-post-uri]')?.getAttribute('data-post-uri')).toBe(newFavorite.post.uri);
+  });
 });

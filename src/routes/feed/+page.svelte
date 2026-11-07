@@ -95,6 +95,7 @@
   let identityPairs: Set<string> = $state(new Set());
   let affinityMap: Map<string, number> = $state(new Map());
   let affinityPromise: Promise<void> | null = null;
+  let affinitySequence = 0;
   let disposed = false;
   let requestSequence = 0;
   let accountSequence = 0;
@@ -106,7 +107,15 @@
   function beginRequest(): number {
     newerSequence++; restoreSequence++;
     loadingMore = false;
+    isPulling = false; pullRefreshing = false; pullDistance = 0;
     return ++requestSequence;
+  }
+
+  function resetAffinity() {
+    affinitySequence++;
+    affinityMap = new Map();
+    affinityPromise = null;
+    if (feedMode === 'for-you') void loadAffinity();
   }
 
   function accountScope(list: Account[]): string {
@@ -128,15 +137,16 @@
    * does not disable the feature for the rest of the session.
    */
   function loadAffinity(): Promise<void> {
+    const sequence = affinitySequence;
     affinityPromise ??= (async () => {
       const [liked, reposted, replied] = await Promise.all([
         searchArchive({ type: 'like', limit: 500 }),
         searchArchive({ type: 'repost', limit: 500 }),
         searchArchive({ type: 'reply', limit: 500 }),
       ]);
-      affinityMap = buildAffinityMap(liked, reposted, replied);
+      if (!disposed && sequence === affinitySequence) affinityMap = buildAffinityMap(liked, reposted, replied);
     })().catch(() => {
-      affinityPromise = null; // the archive may not exist yet
+      if (sequence === affinitySequence) affinityPromise = null; // the archive may not exist yet
     });
     return affinityPromise;
   }
@@ -226,12 +236,13 @@
 
   async function initializeFeed(refreshAccounts = false) {
     const initialization = ++accountSequence;
+    const previousScope = accountScope(accounts);
     const request = beginRequest();
     const isCurrent = () => !disposed && initialization === accountSequence;
     if (refreshAccounts) {
       posts = []; progress = 0; accounts = []; clientEntries = new Map();
       cursors = {}; savedFeeds = []; mastodonFilters = []; identityPairs = new Set();
-      offlineBanner = ''; newPostsAvailable = 0; initialLoading = true;
+      offlineBanner = ''; error = ''; newPostsAvailable = 0; initialLoading = true;
     }
     const warm = refreshAccounts ? null : peekCachedClients();
     if (warm?.accounts.length) {
@@ -256,6 +267,7 @@
       if (accountScope(accounts) !== accountScope(result.accounts)) {
         posts = []; progress = 0; cursors = {}; mastodonFilters = [];
       }
+      if (previousScope !== accountScope(result.accounts)) resetAffinity();
       accounts = result.accounts;
       clientEntries = result.clients;
       // Sync Bluesky server muted words (non-blocking)
@@ -317,7 +329,10 @@
     } catch (e) {
       if (isCurrent()) error = String(e);
     } finally {
-      if (isCurrent()) initialLoading = false;
+      if (isCurrent()) {
+        initialLoading = false;
+        if (!accounts.length) { loading = false; loadingMore = false; progress = 0; }
+      }
     }
   }
 
@@ -350,7 +365,7 @@
   });
 
   onDestroy(() => {
-    disposed = true; requestSequence++; accountSequence++; newerSequence++; restoreSequence++;
+    disposed = true; requestSequence++; accountSequence++; newerSequence++; restoreSequence++; affinitySequence++;
     clearTimeout(searchTimer);
     stopWatchingConnection?.();
     stopWatchingConnection = undefined;
@@ -635,7 +650,7 @@
       const recovered = await retryDegradedClients(clientEntries);
       if (!currentRequest(request)) return;
       if (recovered) {
-        if (accountScope(accounts) !== accountScope(recovered.accounts)) { posts = []; progress = 0; }
+        if (accountScope(accounts) !== accountScope(recovered.accounts)) { posts = []; progress = 0; resetAffinity(); }
         accounts = recovered.accounts;
         clientEntries = recovered.clients;
       }
@@ -895,9 +910,11 @@
     if (!isPulling) return;
     isPulling = false;
     if (pullDistance >= 60) {
+      const request = beginRequest();
       pullRefreshing = true;
       pullDistance = 50;
-      await loadFeed();
+      await loadFeed(request);
+      if (!currentRequest(request)) return;
       pullRefreshing = false;
     }
     pullDistance = 0;
