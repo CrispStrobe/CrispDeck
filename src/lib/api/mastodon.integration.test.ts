@@ -77,10 +77,9 @@ describe.skipIf(!LIVE)('MastodonClient (live API)', () => {
   it('can exclude replies', async () => {
     const account = await client.getAccountByHandle('Gargron');
     const statuses = await client.getAccountStatuses(account.id, undefined, true, false);
-    // All returned statuses should not be replies (though API may not be perfect)
-    for (const s of statuses.slice(0, 5)) {
-      // inReplyToId should be null or undefined (not a string pointing to a parent)
-      expect(s.inReplyToId).toBeFalsy();
+    // Mastodon excludes replies to other accounts but retains self-replies.
+    for (const s of statuses) {
+      if (s.inReplyToId) expect(s.inReplyToAccountId).toBe(account.id);
     }
   }, 10000);
 
