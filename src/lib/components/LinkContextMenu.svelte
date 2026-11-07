@@ -5,8 +5,14 @@
   import { goto } from '$app/navigation';
   import { i18n } from '$lib/i18n.svelte';
   import { toast } from '$lib/toast.svelte';
-  import { saveToWallabag, wallabagConnected } from '$lib/wallabag';
   import { readString } from '$lib/safe-storage';
+  let wallabagClient: Promise<typeof import('$lib/wallabag')> | undefined;
+  function loadWallabag() {
+    return wallabagClient ??= import('$lib/wallabag').catch(error => {
+      wallabagClient = undefined;
+      throw error;
+    });
+  }
   let menu = $state<{ url: string; x: number; y: number } | null>(null);
   let menuElement: HTMLDivElement | undefined = $state();
   let wallabag = $state('');
@@ -38,6 +44,8 @@
       menuElement.querySelector<HTMLButtonElement>('button')?.focus();
       if (server) {
         try {
+          const { wallabagConnected } = await loadWallabag();
+          if (menu !== shown) return;
           const connected = await wallabagConnected(server);
           if (menu === shown) wallabagReady = connected;
         } catch { /* Missing or unreadable credentials lead back to setup. */ }
@@ -74,14 +82,18 @@
     menu = null;
     try {
       let connected = false;
+      let client: Awaited<ReturnType<typeof loadWallabag>> | undefined;
       if (server) {
-        try { connected = await wallabagConnected(server); } catch { /* Reconnect unreadable sessions in Settings. */ }
+        try {
+          client = await loadWallabag();
+          connected = await client.wallabagConnected(server);
+        } catch { /* Reconnect unreadable sessions in Settings. */ }
       }
-      if (!connected) {
+      if (!connected || !client) {
         await goto(`${base}/settings?tab=appearance#wallabag-url`);
         return;
       }
-      await saveToWallabag(server, url);
+      await client.saveToWallabag(server, url);
       toast.success(i18n.t.linkMenu.wallabagSaved);
     }
     catch (e) { toast.error(e instanceof Error ? e.message : i18n.t.linkMenu.wallabagFailed); }
