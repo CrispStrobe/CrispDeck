@@ -56,6 +56,10 @@ describe('Threads native transport', () => {
       .toMatchObject({ access_token: 'short', user_id: '9007199254740999' });
     expect((await exchangeForLongLivedToken('secret', 'short')).access_token).toBe('long');
     expect((await refreshLongLivedToken('long')).access_token).toBe('refreshed');
+    const refreshUrl = new URL(mock.fetch.mock.calls[2][0]);
+    expect(refreshUrl.pathname).toBe('/refresh_access_token');
+    expect(refreshUrl.searchParams.get('grant_type')).toBe('th_refresh_token');
+    expect(refreshUrl.searchParams.get('access_token')).toBe('long');
     expect(fetch).not.toHaveBeenCalled();
   });
 });

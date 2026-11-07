@@ -165,7 +165,7 @@ export async function refreshLongLivedToken(token: string): Promise<ThreadsToken
     access_token: token,
   });
 
-  const resp = await threadsFetch(`${THREADS_API_BASE}/access_token?${params.toString()}`);
+  const resp = await threadsFetch(`https://graph.threads.net/refresh_access_token?${params.toString()}`);
 
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));

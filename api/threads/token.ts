@@ -1,4 +1,5 @@
 import { corsFor, preflight, isAllowedRedirect, safeError } from '../_lib/cors.js';
+import { HttpError, readJsonObject } from '../_lib/request.js';
 /**
  * Vercel serverless function: Threads OAuth token exchange.
  *
@@ -12,7 +13,16 @@ import { corsFor, preflight, isAllowedRedirect, safeError } from '../_lib/cors.j
 
 const THREADS_TOKEN_URL = 'https://graph.threads.net/oauth/access_token';
 const THREADS_API_BASE = 'https://graph.threads.net/v1.0';
+const THREADS_REFRESH_URL = 'https://graph.threads.net/refresh_access_token';
 
+function tokenHeaders(request: Request): Record<string, string> {
+  return { ...corsFor(request, 'POST, OPTIONS'), 'Cache-Control': 'no-store', Pragma: 'no-cache' };
+}
+
+function hasToken(value: unknown): value is { access_token: string; expires_in?: number } {
+  return !!value && typeof value === 'object' && typeof (value as { access_token?: unknown }).access_token === 'string' &&
+    (value as { access_token: string }).access_token.length > 0;
+}
 
 export async function POST(request: Request) {
   const clientId = process.env.THREADS_CLIENT_ID;
@@ -21,24 +31,22 @@ export async function POST(request: Request) {
   if (!clientId || !clientSecret) {
     return new Response(JSON.stringify({
       error: 'Threads API not configured. Set THREADS_CLIENT_ID and THREADS_CLIENT_SECRET in Vercel environment variables.',
-    }), { status: 503, headers: corsFor(request, 'POST, OPTIONS') });
+    }), { status: 503, headers: tokenHeaders(request) });
   }
 
-  const body = await request.json();
-  const { code, redirect_uri, action, access_token } = body ?? {};
-
   try {
+    const { code, redirect_uri, action = 'exchange', access_token } = await readJsonObject(request);
     // Action: exchange code for short-lived token, then immediately get long-lived token
-    if (action === 'exchange' || !action) {
-      if (!code || !redirect_uri) {
-        return new Response(JSON.stringify({ error: 'Missing code or redirect_uri' }), { status: 400, headers: corsFor(request, 'POST, OPTIONS') });
+    if (action === 'exchange') {
+      if (typeof code !== 'string' || !code || code.length > 8192 || typeof redirect_uri !== 'string' || !redirect_uri || redirect_uri.length > 2048) {
+        throw new HttpError(400, 'Invalid code or redirect_uri');
       }
 
       // The code is spent against this URI with our client_secret. Same
       // reasoning as auth-url: do not take a stranger's word for where the
       // callback lives.
       if (!isAllowedRedirect(redirect_uri)) {
-        return new Response(JSON.stringify({ error: 'redirect_uri is not one of ours' }), { status: 400, headers: corsFor(request, 'POST, OPTIONS') });
+        throw new HttpError(400, 'redirect_uri is not one of ours');
       }
 
       // Step 1: Exchange code for short-lived token
@@ -52,83 +60,103 @@ export async function POST(request: Request) {
           redirect_uri,
           code,
         }),
+        redirect: 'error',
+        signal: AbortSignal.timeout(10_000),
       });
 
       if (!tokenResp.ok) {
-        const err = await tokenResp.json().catch(() => ({}));
+        await tokenResp.body?.cancel();
         return new Response(JSON.stringify({
-          error: err.error_message || `Token exchange failed: ${tokenResp.statusText}`,
-        }), { status: tokenResp.status, headers: corsFor(request, 'POST, OPTIONS') });
+          error: `Threads token exchange failed (HTTP ${tokenResp.status})`,
+        }), { status: tokenResp.status, headers: tokenHeaders(request) });
       }
 
       // Parse response as text first to preserve large user_id precision
       const shortLivedText = await tokenResp.text();
       const shortLived = JSON.parse(shortLivedText);
-      const userIdMatch = shortLivedText.match(/"user_id"\s*:\s*(\d+)/);
-      const safeUserId = userIdMatch ? userIdMatch[1] : String(shortLived.user_id);
-
-      // Step 2: Immediately exchange for long-lived token (58 days)
-      const longLivedResp = await fetch(
-        `${THREADS_API_BASE}/access_token?` +
-        new URLSearchParams({
-          grant_type: 'th_exchange_token',
-          client_secret: clientSecret,
-          access_token: shortLived.access_token,
-        }),
-      );
-
-      if (!longLivedResp.ok) {
-        return new Response(JSON.stringify({
-          access_token: shortLived.access_token,
-          token_type: 'bearer',
-          user_id: safeUserId,
-          long_lived: false,
-        }), { status: 200, headers: corsFor(request, 'POST, OPTIONS') });
+      const userIdMatch = shortLivedText.match(/"user_id"\s*:\s*(\d+)(?=\s*[,}])/);
+      const safeUserId = userIdMatch ? userIdMatch[1] : shortLived?.user_id;
+      if (!hasToken(shortLived) || typeof safeUserId !== 'string' || !/^\d+$/.test(safeUserId)) {
+        throw new HttpError(502, 'Threads returned an invalid token response');
       }
 
-      const longLived = await longLivedResp.json();
-
+      // The authorization code has been consumed. An optional upgrade failure
+      // must not discard the valid short-lived token and force another sign-in.
+      try {
+        const longLivedResp = await fetch(
+          `${THREADS_API_BASE}/access_token?` +
+          new URLSearchParams({
+            grant_type: 'th_exchange_token',
+            client_secret: clientSecret,
+            access_token: shortLived.access_token,
+          }),
+          { redirect: 'error', signal: AbortSignal.timeout(10_000) },
+        );
+        if (longLivedResp.ok) {
+          const longLived = await longLivedResp.json();
+          if (hasToken(longLived) && typeof longLived.expires_in === 'number' && Number.isSafeInteger(longLived.expires_in) && longLived.expires_in > 0) {
+            return new Response(JSON.stringify({
+              access_token: longLived.access_token,
+              token_type: 'bearer',
+              expires_in: longLived.expires_in,
+              user_id: safeUserId,
+              long_lived: true,
+            }), { status: 200, headers: tokenHeaders(request) });
+          }
+        } else {
+          await longLivedResp.body?.cancel();
+        }
+      } catch {
+        // Fetch errors can include the URL containing client_secret/token.
+        // The fallback response is sufficient; never log those credentials.
+      }
       return new Response(JSON.stringify({
-        access_token: longLived.access_token,
+        access_token: shortLived.access_token,
         token_type: 'bearer',
-        expires_in: longLived.expires_in,
+        expires_in: 3600,
         user_id: safeUserId,
-        long_lived: true,
-      }), { status: 200, headers: corsFor(request, 'POST, OPTIONS') });
+        long_lived: false,
+      }), { status: 200, headers: tokenHeaders(request) });
     }
 
     // Action: refresh a long-lived token
     if (action === 'refresh') {
-      if (!access_token) {
-        return new Response(JSON.stringify({ error: 'Missing access_token' }), { status: 400, headers: corsFor(request, 'POST, OPTIONS') });
+      if (typeof access_token !== 'string' || !access_token || access_token.length > 8192) {
+        throw new HttpError(400, 'Invalid access_token');
       }
 
       const refreshResp = await fetch(
-        `${THREADS_API_BASE}/access_token?` +
+        `${THREADS_REFRESH_URL}?` +
         new URLSearchParams({
           grant_type: 'th_refresh_token',
           access_token,
         }),
+        { redirect: 'error', signal: AbortSignal.timeout(10_000) },
       );
 
       if (!refreshResp.ok) {
-        const err = await refreshResp.json().catch(() => ({}));
+        await refreshResp.body?.cancel();
         return new Response(JSON.stringify({
-          error: err.error_message || `Token refresh failed: ${refreshResp.statusText}`,
-        }), { status: refreshResp.status, headers: corsFor(request, 'POST, OPTIONS') });
+          error: `Threads token refresh failed (HTTP ${refreshResp.status})`,
+        }), { status: refreshResp.status, headers: tokenHeaders(request) });
       }
 
       const refreshed = await refreshResp.json();
+      if (!hasToken(refreshed) || typeof refreshed.expires_in !== 'number' || !Number.isSafeInteger(refreshed.expires_in) || refreshed.expires_in <= 0) {
+        throw new HttpError(502, 'Threads returned an invalid token response');
+      }
       return new Response(JSON.stringify({
         access_token: refreshed.access_token,
         token_type: 'bearer',
         expires_in: refreshed.expires_in,
-      }), { status: 200, headers: corsFor(request, 'POST, OPTIONS') });
+      }), { status: 200, headers: tokenHeaders(request) });
     }
 
-    return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), { status: 400, headers: corsFor(request, 'POST, OPTIONS') });
+    throw new HttpError(400, 'Unknown token action');
   } catch (e) {
-    return new Response(JSON.stringify({ error: safeError('Threads token exchange', e) }), { status: 500, headers: corsFor(request, 'POST, OPTIONS') });
+    if (e instanceof HttpError) return new Response(JSON.stringify({ error: e.message }), { status: e.status, headers: tokenHeaders(request) });
+    // An upstream exception can contain a URL with account or app secrets.
+    return new Response(JSON.stringify({ error: safeError('Threads token exchange', { name: e instanceof Error ? e.name : 'UnknownError' }) }), { status: 502, headers: tokenHeaders(request) });
   }
 }
 
