@@ -12,7 +12,7 @@
   import KeyboardShortcuts from '$lib/components/KeyboardShortcuts.svelte';
   import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
   import ToastContainer from '$lib/components/ToastContainer.svelte';
-  import LinkContextMenu from '$lib/components/LinkContextMenu.svelte';
+  import { isTauri } from '@tauri-apps/api/core';
   import ScrollToTop from '$lib/components/ScrollToTop.svelte';
   import AccountSwitcher from '$lib/components/AccountSwitcher.svelte';
   import AppNavigation from '$lib/components/AppNavigation.svelte';
@@ -30,6 +30,18 @@
   import { onMount, onDestroy } from 'svelte';
   import { startScheduler } from '$lib/publishing/scheduler';
   onMount(startScheduler);
+  let NativeLinkMenu = $state<typeof import('$lib/components/LinkContextMenu.svelte').default>();
+  onMount(() => {
+    let active = true;
+    // The browser uses its own context menu. Native-only UI need not delay
+    // rendering the shared application shell on either platform.
+    if (isTauri()) {
+      void import('$lib/components/LinkContextMenu.svelte').then(module => {
+        if (active) NativeLinkMenu = module.default;
+      }).catch(error => swallow('layout.nativeLinkMenu', error));
+    }
+    return () => { active = false; };
+  });
   import { onNavigate } from '$app/navigation';
   import { getBookmarkCount } from '$lib/bookmarks';
 
@@ -410,7 +422,7 @@
   </main>
 
   <ToastContainer />
-  <LinkContextMenu />
+  {#if NativeLinkMenu}<NativeLinkMenu />{/if}
   <ScrollToTop />
 
   <!-- Mobile bottom tab bar (compact) -->
