@@ -23,12 +23,12 @@ vi.mock('@atproto/oauth-client-browser', () => ({
   TokenRefreshError: class extends Error {},
   TokenRevokedError: class extends Error {},
   TokenInvalidError: class extends Error {},
-  BrowserOAuthClient: vi.fn().mockImplementation((config: any) => {
+  BrowserOAuthClient: vi.fn().mockImplementation(function (config: any) {
     clientConfig = config;
     return client;
   }),
 }));
-vi.mock('@atproto/api', () => ({ Agent: vi.fn().mockImplementation((session: any) => ({ session })) }));
+vi.mock('@atproto/api', () => ({ Agent: vi.fn().mockImplementation(function (session: any) { return { session }; }) }));
 import { getOAuthClient, startBlueskyOAuth, restoreBlueskyOAuthSession, initBlueskyOAuth } from './bluesky-oauth';
 
 beforeEach(() => {

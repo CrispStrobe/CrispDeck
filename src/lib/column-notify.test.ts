@@ -24,7 +24,7 @@ describe('column-notify', () => {
       destination: {},
       currentTime: 0,
     };
-    vi.stubGlobal('AudioContext', vi.fn(() => mockAudioCtx));
+    vi.stubGlobal('AudioContext', vi.fn(function () { return mockAudioCtx; }));
   });
 
   afterEach(() => {
@@ -44,7 +44,7 @@ describe('column-notify', () => {
     });
 
     it('handles AudioContext failure gracefully', () => {
-      vi.stubGlobal('AudioContext', vi.fn(() => { throw new Error('not supported'); }));
+      vi.stubGlobal('AudioContext', vi.fn(function () { throw new Error('not supported'); }));
       expect(() => playColumnSound()).not.toThrow();
     });
   });
@@ -120,7 +120,7 @@ describe('column-notify', () => {
       vi.stubGlobal('Notification', mockNotification);
       Object.defineProperty(mockNotification, 'permission', { value: 'granted', configurable: true });
       // Reset AudioContext to track calls
-      vi.stubGlobal('AudioContext', vi.fn(() => { throw new Error('should not be called'); }));
+      vi.stubGlobal('AudioContext', vi.fn(function () { throw new Error('should not be called'); }));
       notifyColumn('desktop', 'Timeline', 'Hello');
       expect(mockNotification).toHaveBeenCalled();
     });

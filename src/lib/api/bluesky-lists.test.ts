@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@atproto/api', () => ({
-  BskyAgent: vi.fn().mockImplementation(() => ({
+  BskyAgent: vi.fn().mockImplementation(function () { return {
     login: vi.fn().mockResolvedValue({}),
     session: { did: 'did:plc:test123' },
     api: {
@@ -43,7 +43,7 @@ vi.mock('@atproto/api', () => ({
         },
       },
     },
-  })),
+  }; }),
   AppBskyFeedDefs: { isReasonRepost: () => false },
 }));
 
