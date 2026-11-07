@@ -380,8 +380,13 @@ export async function publishFeedGenerator(
       record,
     });
   } catch (e) {
-    // Do not leave an orphan definition after the PDS rejects the record.
-    await removeStoredFeed(agent, userDid, rkey).catch((cleanupError) => swallow('feed-builder.rollback', cleanupError));
+    // A timeout/server error can arrive after the PDS committed the record.
+    // Keep its query available in that ambiguous case. Clean up only a clear
+    // client rejection (including neither a timeout nor a transient 5xx).
+    const status = e && typeof e === 'object' && 'status' in e ? e.status : undefined;
+    if (typeof status === 'number' && [400, 401, 403, 404, 409, 413, 422].includes(status)) {
+      await removeStoredFeed(agent, userDid, rkey).catch((cleanupError) => swallow('feed-builder.rollback', cleanupError));
+    }
     throw e;
   }
 
