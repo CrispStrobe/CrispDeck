@@ -2,12 +2,15 @@
   import { onMount, tick } from 'svelte';
   import { isTauri } from '@tauri-apps/api/core';
   import { base } from '$app/paths';
+  import { goto } from '$app/navigation';
   import { i18n } from '$lib/i18n.svelte';
   import { toast } from '$lib/toast.svelte';
-  import { saveToWallabag } from '$lib/wallabag';
+  import { saveToWallabag, wallabagConnected } from '$lib/wallabag';
+  import { readString } from '$lib/safe-storage';
   let menu = $state<{ url: string; x: number; y: number } | null>(null);
   let menuElement: HTMLDivElement | undefined = $state();
   let wallabag = $state('');
+  let wallabagReady = $state(false);
   let canShare = $state(false);
   onMount(() => {
     if (!isTauri()) return;
@@ -18,18 +21,27 @@
       if (!anchor) return;
       let url: URL;
       try { url = new URL(anchor.href); } catch { return; }
-      if (!['http:', 'https:'].includes(url.protocol)) return;
+      if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return;
       // Internal app routes retain their normal native menu.
       if (url.origin === location.origin) return;
       event.preventDefault();
-      wallabag = localStorage.getItem('crispdeck-wallabag-url') ?? '';
+      wallabag = readString('crispdeck-wallabag-url');
+      wallabagReady = false;
       menu = { url: url.href, x: event.clientX, y: event.clientY };
+      const shown = menu;
+      const server = wallabag;
       await tick();
-      if (!menuElement || !menu) return;
+      if (!menuElement || menu !== shown) return;
       const rect = menuElement.getBoundingClientRect();
       menu.x = Math.max(4, Math.min(menu.x, window.innerWidth - rect.width - 4));
       menu.y = Math.max(4, Math.min(menu.y, window.innerHeight - rect.height - 4));
       menuElement.querySelector<HTMLButtonElement>('button')?.focus();
+      if (server) {
+        try {
+          const connected = await wallabagConnected(server);
+          if (menu === shown) wallabagReady = connected;
+        } catch { /* Missing or unreadable credentials lead back to setup. */ }
+      }
     }
     function close(event: Event) { if (menuElement && !menuElement.contains(event.target as Node)) menu = null; }
     function key(event: KeyboardEvent) { if (event.key === 'Escape') { menu = null; } }
@@ -58,9 +70,20 @@
   async function save() {
     if (!menu) return;
     const url = menu.url;
+    const server = wallabag;
     menu = null;
-    if (!wallabag) { location.href = `${base}/settings?tab=appearance#wallabag-url`; return; }
-    try { await saveToWallabag(wallabag, url); toast.success(i18n.t.linkMenu.wallabagSaved); }
+    try {
+      let connected = false;
+      if (server) {
+        try { connected = await wallabagConnected(server); } catch { /* Reconnect unreadable sessions in Settings. */ }
+      }
+      if (!connected) {
+        await goto(`${base}/settings?tab=appearance#wallabag-url`);
+        return;
+      }
+      await saveToWallabag(server, url);
+      toast.success(i18n.t.linkMenu.wallabagSaved);
+    }
     catch (e) { toast.error(e instanceof Error ? e.message : i18n.t.linkMenu.wallabagFailed); }
   }
 </script>
@@ -69,7 +92,7 @@
     <button role="menuitem" onclick={() => menu && open(menu.url)}>{i18n.t.linkMenu.open}</button>
     <button role="menuitem" onclick={copy}>{i18n.t.linkMenu.copy}</button>
     {#if canShare}<button role="menuitem" onclick={share}>{i18n.t.linkMenu.share}</button>{/if}
-    <button role="menuitem" onclick={save}>{wallabag ? i18n.t.linkMenu.saveWallabag : i18n.t.linkMenu.setupWallabag}</button>
+    <button role="menuitem" onclick={save}>{wallabagReady ? i18n.t.linkMenu.saveWallabag : i18n.t.linkMenu.setupWallabag}</button>
     <span class="hint">{i18n.t.linkMenu.systemMenuHint}</span>
   </div>
 {/if}

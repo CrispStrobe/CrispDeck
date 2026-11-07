@@ -1,6 +1,6 @@
 import { isTauri, invoke } from '@tauri-apps/api/core';
 import { getCredentialBackend } from '$lib/db';
-import { writeString } from '$lib/safe-storage';
+import { removeKey, writeString } from '$lib/safe-storage';
 
 /** Wallabag's bookmarklet uses the browser's own sign-in session. */
 export function wallabagBookmarklet(instance: string, link: string): string | null {
@@ -146,7 +146,7 @@ export async function disconnectWallabag(): Promise<void> {
       await invoke('wallabag_session_delete', store.args);
     } else {
       try {
-        localStorage.removeItem(browserKey);
+        removeKey(browserKey);
         if (localStorage.getItem(browserKey) !== null) throw new Error();
       } catch {
         throw new WallabagError('Could not remove Wallabag credentials. Check browser storage and try again.');

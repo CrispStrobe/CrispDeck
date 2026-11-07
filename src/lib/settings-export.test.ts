@@ -41,6 +41,18 @@ describe('settings export/import', () => {
       expect(listExportableKeys().map(entry => entry.key)).toEqual(['crispdeck-theme']);
     });
 
+    it.each(['https://reader:private-test-secret@wallabag.example', 'https://wallabag.example?access_token=private-test-secret', 'javascript:alert(1)'])('does not export credentials or invalid schemes in a legacy Wallabag address', value => {
+      localStorage.setItem('crispdeck-wallabag-url', value);
+      expect(exportSettings().settings['crispdeck-wallabag-url']).toBeUndefined();
+      expect(listExportableKeys()).toEqual([]);
+    });
+
+    it('exports a normalized Wallabag server without exporting its session', () => {
+      localStorage.setItem('crispdeck-wallabag-url', ' HTTPS://wallabag.example:443/read/ ');
+      localStorage.setItem('crispdeck-wallabag-session', 'encrypted-test-secret');
+      expect(exportSettings().settings).toEqual({ 'crispdeck-wallabag-url': 'https://wallabag.example/read' });
+    });
+
     it('exports provider preferences without AI, translation, or future secret fields', () => {
       localStorage.setItem('crispdeck-ai-compose-config', JSON.stringify({ provider: 'openai', baseUrl: 'https://api.example/v1', model: 'model', apiKey: 'compose-secret', futureSecret: 'secret' }));
       localStorage.setItem('crispdeck-translate-config', JSON.stringify({ provider: 'openai', targetLang: 'de', openaiApiKey: 'translation-secret', libreTranslateApiKey: 'libre-secret' }));
@@ -153,6 +165,14 @@ describe('settings export/import', () => {
       expect(count).toBe(1);
       expect(localStorage.getItem('crispdeck-encrypt-seed')).toBeNull();
       expect(localStorage.getItem('crispdeck-wallabag-session')).toBeNull();
+    });
+
+    it('skips imported Wallabag addresses containing credentials without replacing the current server', () => {
+      localStorage.setItem('crispdeck-wallabag-url', 'https://wallabag.example');
+      expect(importSettings({ version: 1, exported_at: '', settings: {
+        'crispdeck-wallabag-url': 'https://reader:private-test-secret@other.example',
+      } })).toBe(0);
+      expect(localStorage.getItem('crispdeck-wallabag-url')).toBe('https://wallabag.example');
     });
   });
 

@@ -3,6 +3,7 @@
   import { getTtsEngine, setTtsEngine, getSttEngine, setSttEngine, getHomeMode, setHomeMode, type SpeechEngine, type HomeMode } from '$lib/settings';
   import { toast } from '$lib/toast.svelte';
   import { readString, removeKey, writeJson, writeString } from '$lib/safe-storage';
+  import { connectWallabag, disconnectWallabag, normalizeWallabagServer } from '$lib/wallabag';
   import { fetchOk, fetchJson } from '$lib/http';
   import { getCredentialBackend, setCredentialBackend, setMacosKeychain, type CredentialBackendInfo } from '$lib/db';
   import { apiUrl } from '$lib/api-origin';
@@ -288,20 +289,35 @@
   let wallabagUsername = $state('');
   let wallabagPassword = $state('');
   let wallabagBusy = $state(false);
+  function handleWallabagUrlChange() {
+    try {
+      const server = wallabagUrl.trim() ? normalizeWallabagServer(wallabagUrl) : '';
+      if (!writeString('crispdeck-wallabag-url', server)) throw new Error('Could not save the Wallabag server address. Check browser storage and try again.');
+      wallabagUrl = server;
+    } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
+  }
   async function connectWallabagAccount() {
+    if (wallabagBusy) return;
+    const credentials = { server: wallabagUrl, clientId: wallabagClientId, clientSecret: wallabagClientSecret, username: wallabagUsername, password: wallabagPassword };
     wallabagBusy = true;
     try {
-      const { connectWallabag } = await import('$lib/wallabag');
-      await connectWallabag({ server: wallabagUrl, clientId: wallabagClientId, clientSecret: wallabagClientSecret, username: wallabagUsername, password: wallabagPassword });
-      writeString('crispdeck-wallabag-url', wallabagUrl.trim());
+      const server = normalizeWallabagServer(credentials.server);
+      // Ensure the routing preference is writable before obtaining a session.
+      if (!writeString('crispdeck-wallabag-url', server)) throw new Error('Could not save the Wallabag server address. Check browser storage and try again.');
+      wallabagUrl = await connectWallabag({ ...credentials, server });
       wallabagPassword = ''; wallabagClientSecret = '';
       toast.success(i18n.t.linkMenu.wallabagConnected);
     } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
     finally { wallabagBusy = false; }
   }
   async function disconnectWallabagAccount() {
+    if (wallabagBusy) return;
     wallabagBusy = true;
-    try { const { disconnectWallabag } = await import('$lib/wallabag'); await disconnectWallabag(); toast.success(i18n.t.linkMenu.wallabagDisconnected); }
+    try {
+      await disconnectWallabag();
+      wallabagPassword = ''; wallabagClientSecret = '';
+      toast.success(i18n.t.linkMenu.wallabagDisconnected);
+    }
     catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
     finally { wallabagBusy = false; }
   }
@@ -1302,13 +1318,13 @@
 
       <div>
         <label for="wallabag-url" class="text-sm text-[var(--color-text-muted)]">{i18n.t.linkMenu.wallabagInstance}</label>
-        <input id="wallabag-url" type="url" bind:value={wallabagUrl} onchange={() => writeString('crispdeck-wallabag-url', wallabagUrl.trim())} placeholder="https://wallabag.example.com" class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm" />
+        <input id="wallabag-url" type="url" bind:value={wallabagUrl} disabled={wallabagBusy} onchange={handleWallabagUrlChange} placeholder="https://wallabag.example.com" class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm" />
         <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.linkMenu.wallabagHint}</p>
         <div class="grid gap-2 mt-2 sm:grid-cols-2">
-          <label class="text-xs">{i18n.t.linkMenu.wallabagClientId}<input type="text" autocomplete="off" bind:value={wallabagClientId} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
-          <label class="text-xs">{i18n.t.linkMenu.wallabagClientSecret}<input type="password" autocomplete="off" bind:value={wallabagClientSecret} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
-          <label class="text-xs">{i18n.t.linkMenu.wallabagUsername}<input type="text" autocomplete="username" bind:value={wallabagUsername} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
-          <label class="text-xs">{i18n.t.linkMenu.wallabagPassword}<input type="password" autocomplete="current-password" bind:value={wallabagPassword} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
+          <label class="text-xs">{i18n.t.linkMenu.wallabagClientId}<input type="text" autocomplete="off" bind:value={wallabagClientId} disabled={wallabagBusy} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
+          <label class="text-xs">{i18n.t.linkMenu.wallabagClientSecret}<input type="password" autocomplete="off" bind:value={wallabagClientSecret} disabled={wallabagBusy} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
+          <label class="text-xs">{i18n.t.linkMenu.wallabagUsername}<input type="text" autocomplete="username" bind:value={wallabagUsername} disabled={wallabagBusy} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
+          <label class="text-xs">{i18n.t.linkMenu.wallabagPassword}<input type="password" autocomplete="current-password" bind:value={wallabagPassword} disabled={wallabagBusy} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
         </div>
         <div class="flex gap-2 mt-2">
           <button disabled={wallabagBusy} onclick={connectWallabagAccount} class="px-3 py-2 rounded-md bg-[var(--color-primary)] text-white text-xs">{i18n.t.linkMenu.wallabagConnect}</button>

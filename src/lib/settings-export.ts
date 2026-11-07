@@ -4,6 +4,7 @@
  */
 
 import { writeString } from './safe-storage';
+import { normalizeWallabagServer } from './wallabag';
 
 export interface SettingsExport {
   version: number;
@@ -36,6 +37,12 @@ const PROVIDER_FIELDS: Record<string, readonly string[]> = {
 };
 
 function exportableValue(key: string, value: string): string | null {
+  if (key === 'crispdeck-wallabag-url') {
+    // Older versions saved the text field verbatim, including URL passwords
+    // or query credentials. Only a valid server address belongs in a backup.
+    if (!value.trim()) return '';
+    try { return normalizeWallabagServer(value); } catch { return null; }
+  }
   const fields = PROVIDER_FIELDS[key];
   if (!fields) return value;
   try {
