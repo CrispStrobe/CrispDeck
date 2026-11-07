@@ -9,6 +9,15 @@ function authorIdentity(post: UnifiedPost) {
   return { id, handle: post.author.handle.toLowerCase(), platform: post.platform };
 }
 
+function authorsMatch(author: ReturnType<typeof authorIdentity>, other: ReturnType<typeof authorIdentity>): boolean {
+  return author.platform === other.platform &&
+    (author.id && other.id ? author.id === other.id : author.handle === other.handle);
+}
+
+export function sameThreadAuthor(first: UnifiedPost, second: UnifiedPost): boolean {
+  return authorsMatch(authorIdentity(first), authorIdentity(second));
+}
+
 /** Preserve parent-child relationships while keeping each branch together. */
 export function threadRows(ancestors: UnifiedPost[], main: UnifiedPost, replies: UnifiedPost[]): ThreadRow[] {
   const unique = new Map<string, UnifiedPost>();
@@ -62,8 +71,7 @@ export function threadRows(ancestors: UnifiedPost[], main: UnifiedPost, replies:
       const others: UnifiedPost[] = [];
       for (const child of children.get(post.uri) ?? []) {
         const other = authors.get(child.uri)!;
-        const sameAuthor = author.platform === other.platform &&
-          (author.id && other.id ? author.id === other.id : author.handle === other.handle);
+        const sameAuthor = authorsMatch(author, other);
         (sameAuthor ? continuation : others).push(child);
       }
       // Reverse onto a stack to keep each branch together without recursion,

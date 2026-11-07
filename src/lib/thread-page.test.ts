@@ -133,6 +133,35 @@ describe('scoped thread page navigation', () => {
     expect(article?.textContent).not.toContain('Answer outside the article');
   });
 
+  it('starts an article after an intervening author and retains same-DID parts after a handle change', async () => {
+    const loaded = response('Selected author response');
+    const thread: any = loaded.data.thread;
+    const earlierUri = 'at://did:plc:author/app.bsky.feed.post/earlier';
+    const questionUri = 'at://did:plc:visitor/app.bsky.feed.post/question';
+    const record = (text: string, parent?: string) => ({ text, createdAt: '2026-01-01T00:00:00Z',
+      ...(parent ? { reply: { parent: { uri: parent, cid: 'parent' }, root: { uri: earlierUri, cid: 'earlier' } } } : {}),
+    });
+    thread.post.record = record('Selected author response', questionUri);
+    thread.parent = {
+      post: { uri: questionUri, cid: 'question', author: { handle: 'visitor.bsky.social' }, record: record('An intervening question', earlierUri) },
+      parent: { post: { uri: earlierUri, cid: 'earlier', author: { handle: 'author.bsky.social' }, record: record('An earlier separate contribution') } },
+    };
+    thread.replies = [{ post: {
+      uri: 'at://did:plc:author/app.bsky.feed.post/continuation', cid: 'continuation',
+      author: { handle: 'renamed-author.bsky.social' }, record: record('Same author continuation', uri),
+    } }];
+    personal.getPostThread.mockResolvedValueOnce(loaded);
+    const target = render();
+    await vi.waitFor(() => { flushSync(); expect(target.textContent).toContain('Same author continuation'); });
+    const toggle = [...target.querySelectorAll('button')].find(button => button.textContent?.includes('Read as article'));
+    expect(toggle).toBeDefined(); toggle!.click(); flushSync();
+    const article = target.querySelector('article')!;
+    expect(article.textContent).toContain('Selected author response');
+    expect(article.textContent).toContain('Same author continuation');
+    expect(article.textContent).not.toContain('An intervening question');
+    expect(article.textContent).not.toContain('An earlier separate contribution');
+  });
+
   it('refreshes a scoped thread after reconnection and removes it when that account disappears', async () => {
     const target = render();
     await vi.waitFor(() => { flushSync(); expect(target.textContent).toContain('Thread for personal.bsky.social'); });

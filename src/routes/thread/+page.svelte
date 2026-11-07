@@ -7,7 +7,7 @@
   import { i18n } from '$lib/i18n.svelte';
   import { loadThreadPage, parseThreadRequest, threadErrorMessage } from '$lib/thread-loader';
   import { partitionThreadReplies } from '$lib/thread-continuation';
-  import { threadRows } from '$lib/thread-tree';
+  import { sameThreadAuthor, threadRows } from '$lib/thread-tree';
   import { performDeckAction } from '$lib/deck-actions';
   import { postContextParams } from '$lib/compose/context';
   import type { ClientEntry } from '$lib/api/client-factory';
@@ -69,20 +69,26 @@
   const groupedReplies = $derived(mainPost ? partitionThreadReplies(mainPost, replies) : { continuation: [], replies });
   const rows = $derived(mainPost ? threadRows(ancestors, mainPost, replies) : []);
 
-  /** Build a single article from the thread author's posts (ancestors + main + their replies) */
+  /** An article follows a contiguous self-thread, never jumps over another author. */
   const articlePosts = $derived.by(() => {
     if (!mainPost) return [];
-    const authorHandle = mainPost.author.handle;
-    const all = [...ancestors, mainPost, ...groupedReplies.continuation].filter(
-      p => p.author.handle === authorHandle
-    );
-    // Deduplicate by URI
-    const seen = new Set<string>();
-    return all.filter(p => {
-      if (seen.has(p.uri)) return false;
-      seen.add(p.uri);
-      return true;
+    const prior: UnifiedPost[] = [];
+    const seen = new Set<string>([mainPost.uri]);
+    let child = mainPost;
+    for (let i = ancestors.length - 1; i >= 0; i--) {
+      const parent = ancestors[i];
+      if (seen.has(parent.uri)) continue;
+      if (!sameThreadAuthor(mainPost, parent)) break;
+      const raw = parent.raw as { id?: string; reblog?: { id?: string } } | undefined;
+      const id = raw?.reblog?.id ?? raw?.id;
+      if (child.replyParentUri && child.replyParentUri !== parent.uri && child.replyParentUri !== id) break;
+      prior.push(parent); seen.add(parent.uri); child = parent;
+    }
+    const continuation = groupedReplies.continuation.filter(post => {
+      if (seen.has(post.uri)) return false;
+      seen.add(post.uri); return true;
     });
+    return [...prior.reverse(), mainPost, ...continuation];
   });
 
   const articleText = $derived(articlePosts.map(p => p.text).join('\n\n'));
