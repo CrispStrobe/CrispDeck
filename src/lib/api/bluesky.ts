@@ -35,26 +35,39 @@ function didDocumentUrl(did: unknown): string | null {
  * Resolve a user's actual PDS endpoint from their DID document.
  * - did:plc → query plc.directory
  * - did:web → fetch .well-known/did.json
- * Falls back to bsky.social if resolution fails.
+ * Falls back to bsky.social for initial handle sign-in unless requireVerified
+ * is set. Saved DID/password logins must never send credentials to a fallback.
  */
-export async function resolvePdsEndpoint(handleOrDid: string): Promise<string> {
+export async function resolvePdsEndpoint(
+  handleOrDid: string,
+  options: { requireVerified?: boolean } = {},
+): Promise<string> {
+  const endpoint = await discoverPdsEndpoint(handleOrDid);
+  if (endpoint) return endpoint;
+  if (options.requireVerified) {
+    throw new Error("Could not verify this Bluesky account's PDS. No password was sent. Check your connection and try again.");
+  }
+  return AUTH_API;
+}
+
+async function discoverPdsEndpoint(handleOrDid: string): Promise<string | null> {
   try {
     let did = handleOrDid;
 
     // If it's a handle, resolve to DID first via public API
     if (!did.startsWith('did:')) {
       const resp = await fetch(`${PUBLIC_API}/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(did)}`);
-      if (!resp.ok) return AUTH_API;
+      if (!resp.ok) return null;
       const data = await resp.json();
       did = data.did;
     }
 
     const documentUrl = didDocumentUrl(did);
-    if (!documentUrl) return AUTH_API;
+    if (!documentUrl) return null;
     const resp = await fetch(documentUrl);
-    if (!resp.ok) return AUTH_API;
+    if (!resp.ok) return null;
     const didDoc = await resp.json();
-    if (didDoc?.id !== did || !Array.isArray(didDoc.service)) return AUTH_API;
+    if (didDoc?.id !== did || !Array.isArray(didDoc.service)) return null;
 
     // Both fields identify the PDS. An unrelated service with only the right
     // type or fragment must never receive the user's app password.
@@ -64,9 +77,9 @@ export async function resolvePdsEndpoint(handleOrDid: string): Promise<string> {
     );
     if (pdsSvc) return pdsOrigin(pdsSvc.serviceEndpoint);
   } catch {
-    // Resolution failed — fall back
+    // Missing/untrusted metadata and network failures establish no destination.
   }
-  return AUTH_API;
+  return null;
 }
 
 /**
@@ -146,7 +159,7 @@ export class BlueskyClient {
 
     // Resolve PDS if not already known
     if (!this.pdsUrl) {
-      this.pdsUrl = await resolvePdsEndpoint(this.handle);
+      this.pdsUrl = await resolvePdsEndpoint(this.handle, { requireVerified: this.handle.startsWith('did:') });
       // Re-create auth agent with resolved PDS
       this.authAgent = new this.Agent!({ service: this.pdsUrl });
     }

@@ -82,4 +82,39 @@ describe('saved Bluesky account identity', () => {
     expect(mocks.profile).toHaveBeenCalledWith({ actor: DID });
     expect(mocks.login).not.toHaveBeenCalled();
   });
+
+  it('does not send the saved password to a fallback server when DID discovery fails', async () => {
+    vi.mocked(fetch).mockRejectedValue(new TypeError('Network unavailable'));
+    expect((await initAllClients()).clients.has(1)).toBe(false);
+    expect(mocks.login).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { id: OTHER_DID, service: [{ id: '#atproto_pds', type: 'AtprotoPersonalDataServer', serviceEndpoint: PDS }] },
+    { id: DID, service: [] },
+    { id: DID, service: [{ id: '#atproto_pds', type: 'AtprotoPersonalDataServer', serviceEndpoint: 'http://pds.example.com' }] },
+  ])('does not fall back when the DID document cannot establish a safe PDS: %j', async doc => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(doc)));
+    expect((await initAllClients()).clients.has(1)).toBe(false);
+    expect(mocks.login).not.toHaveBeenCalled();
+  });
+
+  it('can retry DID discovery without caching the failed fallback destination', async () => {
+    const client = new BlueskyClient(DID, 'saved-app-password');
+    vi.mocked(fetch).mockResolvedValueOnce(new Response('Unavailable', { status: 503 }));
+    await expect(client.login()).rejects.toThrow(/verify.*PDS/);
+    expect(mocks.login).not.toHaveBeenCalled();
+    expect(client.isAuthenticated()).toBe(false);
+    await client.login();
+    expect(mocks.login).toHaveBeenCalledWith(PDS, { identifier: DID, password: 'saved-app-password' });
+    expect(mocks.login).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains the default server fallback for an initial handle-based sign-in', async () => {
+    vi.mocked(fetch).mockRejectedValue(new TypeError('Handle lookup unavailable'));
+    await new BlueskyClient('new-user.example.com', 'entered-password').login();
+    expect(mocks.login).toHaveBeenCalledWith('https://bsky.social', {
+      identifier: 'new-user.example.com', password: 'entered-password',
+    });
+  });
 });
