@@ -1,6 +1,6 @@
 /// Match Android's system icons to the app theme, independently of OS theme.
 #[tauri::command]
-pub async fn set_system_bar_theme(window: tauri::WebviewWindow, light: bool) -> Result<(), String> {
+pub async fn set_system_bar_theme(window: tauri::Webview, light: bool) -> Result<(), String> {
     #[cfg(target_os = "android")]
     {
         let (sender, receiver) = tokio::sync::oneshot::channel();

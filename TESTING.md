@@ -86,7 +86,7 @@ Every one the help dialog (`?`) claims to offer.
 
 - [ ] `?` — Show this help
 
-## Routes (31)
+## Routes (32)
 
 Reachable, renders with real data, and reachable *from the UI* —
 a route only findable by typing the URL is a route nobody uses.
@@ -105,6 +105,7 @@ a route only findable by typing the URL is a route nobody uses.
 - [ ] `/feed-builder`
 - [ ] `/gallery`
 - [ ] `/identities`
+- [ ] `/instagram`
 - [ ] `/instance`
 - [ ] `/labelers`
 - [ ] `/lists`

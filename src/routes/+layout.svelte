@@ -101,6 +101,12 @@
   // Page transitions via View Transitions API (progressive enhancement)
   onNavigate((navigation) => {
     if (!document.startViewTransition) return;
+    // A native Instagram browser is a separate surface: it cannot be captured
+    // in DOM transition snapshots, whose overlay also prevents hit-testing the
+    // incoming viewport. Keep navigation to and from this route immediate.
+    const fromPath = navigation.from ? routePath(navigation.from.url.pathname).replace(/\/$/, '') : '';
+    const toPath = navigation.to ? routePath(navigation.to.url.pathname).replace(/\/$/, '') : '';
+    if (fromPath === '/instagram' || toPath === '/instagram') return;
     // Determine navigation direction for slide animation
     const fromDepth = routePath(window.location.pathname).split('/').filter(Boolean).length;
     const toDepth = navigation.to ? routePath(navigation.to.url.pathname).split('/').filter(Boolean).length : fromDepth;

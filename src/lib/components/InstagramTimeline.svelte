@@ -17,7 +17,7 @@
   let error = $state('');
   let origin = $state(new URL(INSTAGRAM_HOME_URL).origin);
   let busy = $state<'home' | 'reload' | 'popout' | 'retry' | null>(null);
-  let viewport: HTMLDivElement;
+  let viewport = $state<HTMLDivElement>();
   let controller: ReturnType<typeof createInstagramTimeline> | undefined;
   let mounted = false;
   let generation = 0;
@@ -37,7 +37,7 @@
       supported = available;
       if (!available) return;
       await tick();
-      if (!current()) return;
+      if (!current() || !viewport) return;
       controller = createInstagramTimeline(viewport, {
         onReady() {
           if (!current()) return;

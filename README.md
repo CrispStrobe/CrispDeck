@@ -2,6 +2,9 @@
 
 Full-featured cross-platform client for **Mastodon**, **Bluesky**, and **Threads** with crossposting, identity mapping, and smart mentions.
 
+**Instagram** is available as a separate signed-in website timeline inside the
+desktop app, with a browser link on web and mobile.
+
 Works as a **web app** (Vercel), **desktop app** (Windows/macOS/Linux via Tauri 2), and **mobile app** (iOS/Android via Tauri 2 mobile).
 
 **Live**: https://crispdeck.vercel.app
@@ -12,8 +15,9 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 
 ## Features
 
-### Full Social Client (31 routes)
+### Full Social Client (32 routes)
 - **3-network client**: Bluesky + Mastodon + Threads
+- **Instagram web timeline (desktop)**: Instagram's own interactive feed inside CrispDeck, with Home, Reload, and a popout window for use alongside the Deck; sign in directly with Instagram
 - **Timeline feed**: Bluesky + Mastodon home timelines merged, Threads own posts (Threads API has no home timeline), infinite scroll, "new posts" indicator, multi-account merge
 - **Platform filter**: All / Bluesky / Mastodon / Threads toggle
 - **Multi-column Deck**: 23 column types (timeline, mentions, notifications, hashtag, user, local, federated, search, list, feed, my-posts, tag-group, RSS, keyword-monitor, threads-search, messages, trending, activity, likes, followers, bookmarks, drafts, scheduled), per-column filters, saved layouts/workspaces, drag-reorder, column width presets + resize, color coding, collapse/pin, per-column notifications, scroll-lock, platform-aware column picker
@@ -98,6 +102,29 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **Media gallery**: masonry grid view for browsing media
 - **Reading lists**: themed post collections
 - **Export**: JSON, CSV, Markdown + full settings export/import
+
+### Instagram timeline
+
+Choose **Instagram** in the sidebar or Deck toolbar. In the desktop app, this
+opens the official Instagram website in an embedded native browser. Sign in
+there, then use Instagram's own feed and interaction controls. If Instagram
+offers **Following** in its menu, use that to select its chronological view.
+**Open in a window** keeps an Instagram window beside the Deck; **Open in browser**
+uses your system browser and is also available on web/mobile.
+
+Instagram's supported APIs do not provide the user's home/following timeline.
+This integration therefore uses the normal website rather than an API account.
+Instagram's session is separate from CrispDeck's connected accounts and from
+your system browser. Switch accounts or log out using Instagram's own controls.
+CrispDeck does not request an Instagram API key, collect passwords, import
+cookies, or scrape posts. Instagram posts are not merged into the API feed or
+sent through CrispDeck's crossposting composer.
+
+Website availability depends on Instagram and the installed system webview.
+Use the browser option if sign-in or a website feature does not work in the app.
+Native authenticated validation remains necessary before release; automated
+checks do not prove that a real account can sign in. See the
+[implementation, session storage, and validation details](docs/instagram.md).
 
 ### Threads Integration (API limitations)
 

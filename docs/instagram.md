@@ -8,8 +8,8 @@ do not provide the signed-in user's home/following timeline. Reading an account'
 own media would not satisfy a home-feed feature.
 
 This feature uses the **official Instagram website in a native desktop webview**.
-The intended result is a real, interactive, signed-in feed inside CrispDeck, with
-Instagram handling login, two-factor authentication, scrolling, and interactions.
+The `/instagram` page loads that website inside CrispDeck, with Instagram
+handling login, two-factor authentication, scrolling, and interactions.
 Web and mobile builds provide an explicit link to Instagram in the browser.
 
 The feed is a separate website surface. It is not an Instagram API adapter:
@@ -31,20 +31,84 @@ Threads lacks.
   caller, use fixed labels, and restrict navigation to approved HTTPS sites.
 - The native view must hide behind CrispDeck dialogs and close on route changes;
   a stale asynchronous operation must not leave it over another page.
-- Session storage behavior and native platform limitations are documented after
-  implementation and validation.
+
+## Using it
+
+1. Open **Instagram** from the sidebar or the Deck toolbar in the desktop app.
+2. Sign in on Instagram's own page. Complete any two-factor authentication or
+   account verification there. The origin displayed above the view identifies
+   the approved website currently being shown.
+3. Read and interact through Instagram's controls. Select **Following** in
+   Instagram's own menu if it is offered; CrispDeck does not control feed order.
+4. Use **Home** to return from a profile or post, **Reload** to retry the current
+   page, or **Open in a window** to place Instagram beside the Deck. The popout
+   uses the same embedded Instagram session and remains open when changing
+   CrispDeck routes.
+5. Switch Instagram accounts or sign out using Instagram's own controls. Your
+   Mastodon/Bluesky/Threads account picker does not control this website session.
+
+**Open in browser** is available if the system webview does not support a login
+flow or website feature. Web/PWA and iOS/Android use this external option. Your
+system browser has its own session; CrispDeck does not import that login.
+
+## Native browser and session boundaries
+
+The embedded feed is a desktop child webview, not an HTML iframe. It requires
+Tauri's `unstable` multiwebview feature. The existing main view keeps its full
+window sizing; Instagram occupies only the page's measured content rectangle.
+It is hidden when clipped, zoomed with a visual viewport transform, or covered
+by an app dialog, navigation overlay, menu, or notification. Switching routes
+closes the inline view; session ownership prevents late asynchronous cleanup
+from touching a replacement view. Native window creation is asynchronous to
+avoid the documented Windows WebView2 synchronous-command deadlock.
+
+Session cookies stay in the browser engine. Windows and Linux use a dedicated
+`instagram-web` directory under CrispDeck's application data. macOS 14 and later
+use a dedicated persistent WebKit data-store identifier. On macOS 11–13, Wry
+falls back to the app's default WebKit store, still separated by website origin;
+this is **not a distinct Instagram browser profile** on those older systems.
+Do not clear the shared WebKit store to log out; use Instagram's own Log out.
+
+The only permitted top-level destinations are HTTPS on exact Instagram,
+Facebook, and their selected Accounts Center hosts. Redirects to arbitrary
+sites, local app pages, custom schemes, credential-bearing URLs, and nonstandard
+ports are rejected. Approved popup links navigate the managed view, rather than
+creating an unmanaged window. File downloads are disabled in the embedded
+surface; use the system browser for those flows. Normal media/CDN requests stay
+under the browser engine's security rules.
+
+No remote Tauri capabilities were added. Control commands require the local
+`main` webview in the `main` window and verify its bundled origin (or the exact
+configured development origin in a dev build). The only website information
+sent to the main UI is an approved origin, never an authentication path/query.
+The application does not read cookies or execute custom scripts inside Instagram.
 
 ## Validation plan
 
-Automated coverage will exercise platform fallback, native dispatch, geometry,
+Automated coverage exercises platform fallback, native dispatch, geometry,
 overlay visibility, asynchronous teardown, navigation restrictions, and the new
-page. Existing frontend checks and production build must continue to pass.
-Native compilation/tests run on the repository's Linux, macOS, and Windows CI.
+page. Native compilation/tests run on the repository's Linux, macOS, and Windows
+CI. The browser suite checks the real route and fallback link, while unit tests
+mock the native bridge; neither proves an Instagram sign-in works.
 
 An authenticated Instagram feed cannot be proven by mocked tests. Before release,
 verify login, challenges, scrolling/media, navigation, logout, resizing, overlays,
 route changes, and reopening on real desktop builds. Instagram can change its
 website or reject a system webview; the external-browser path remains available.
+
+| Native acceptance check | Status |
+| --- | --- |
+| Sign in, complete 2FA/challenge, and reach the user's home feed | Pending real account |
+| Scroll multiple pages; images, video, carousel and replies | Pending real account |
+| Instagram's Following selection, where available | Pending real account |
+| Resize, sidebar collapse, dialogs, toasts and route transitions | Pending native runtime |
+| Popout, close/reopen, account switching and logout | Pending native runtime/account |
+| Relaunch and check session persistence, including older macOS | Pending native runtime/account |
+
+For each check record the commit, OS version, webview engine version, and result.
+Do not put account credentials, cookies, private feed captures, or login URLs
+into repository artifacts. Keep this feature in review until the relevant
+native acceptance checks have been performed.
 
 ## Primary references
 

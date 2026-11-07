@@ -25,7 +25,7 @@ pub fn run() {
     // the running app's deep-link listener, and the main window is raised.
     #[cfg(all(desktop, feature = "desktop"))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-        if let Some(w) = app.get_webview_window("main") {
+        if let Some(w) = app.get_window("main") {
             let _ = w.set_focus();
         }
     }));
@@ -46,6 +46,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init());
 
     builder
+        .manage(commands::instagram_commands::InstagramWebState::default())
         .setup(|app| {
             // Never log callback URLs: their query can contain authorization
             // codes. A fixed lifecycle message also lets native smoke checks
@@ -131,6 +132,14 @@ pub fn run() {
             commands::db_commands::db_get_cached_follows,
             // Auth
             commands::auth_commands::auth_in_app_window,
+            // Instagram's own desktop web timeline (no remote IPC capability)
+            commands::instagram_commands::instagram_web_supported,
+            commands::instagram_commands::instagram_web_open,
+            commands::instagram_commands::instagram_web_update,
+            commands::instagram_commands::instagram_web_navigate,
+            commands::instagram_commands::instagram_web_reload,
+            commands::instagram_commands::instagram_web_close,
+            commands::instagram_commands::instagram_web_popout,
             // Identity detection
             commands::detect_commands::db_detect_identities,
             // CrispASR (translation, TTS, STT)
