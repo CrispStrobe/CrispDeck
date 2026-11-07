@@ -74,7 +74,7 @@ export default {
       moderation: 'モデレーション', analytics: '分析', settings: '設定',
       post: '投稿', alerts: 'アラート', dms: 'DM',
     },
-    linkMenu: { title: "リンクの操作", open: "リンクを開く", copy: "リンクをコピー", share: "リンクを共有", saveWallabag: "Wallabagに保存", setupWallabag: "Wallabagを設定", copied: "リンクをコピーしました", copyFailed: "リンクをコピーできませんでした", systemMenuHint: "Shiftキーを押しながら右クリックでシステムメニュー", wallabagInstance: "WallabagサーバーURL", wallabagHint: "ブラウザのWallabagログインを使用します。" },
+    linkMenu: { title: "リンクの操作", open: "リンクを開く", copy: "リンクをコピー", share: "リンクを共有", saveWallabag: "Wallabagに保存", setupWallabag: "Wallabagを設定", copied: "リンクをコピーしました", copyFailed: "リンクをコピーできませんでした", systemMenuHint: "Shiftキーを押しながら右クリックでシステムメニュー", wallabagInstance: "WallabagサーバーURL", wallabagHint: "WallabagのAPIクライアントを接続してリンクを直接保存します。" },
     app: { voiceCommandsHint: '投稿画面でマイクが有効なときに話しかけてください。ドイツ語でも使えます。', toggleTheme: 'テーマを切り替え', skipToContent: '本文へスキップ', offlineBanner: 'オフラインです。一部の機能が利用できない場合があります', mainNavigation: 'メインナビゲーション', keyboardShortcutsLabel: 'キーボードショートカット', keyboardShortcuts: 'キーボードショートカット', dismissLabel: '閉じる', customizeSidebar: 'サイドバーをカスタマイズ', closeMenu: 'メニューを閉じる', closeKeyboardShortcuts: 'キーボードショートカットを閉じる', name: 'CrispDeck', subtitle: 'Mastodon + Bluesky', collapse: '折りたたむ', expand: '展開' },
     compose: {
       mediaLimitHint: "選択したアカウントでは最大{count}個の添付ファイルを使用できます。",

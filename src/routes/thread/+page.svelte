@@ -203,7 +203,7 @@
     </article>
   {:else}
     {#if mainPost}
-      <div class="overflow-x-auto" aria-label="Discussion thread">
+      <div class="overflow-x-auto" aria-label={i18n.t.thread.discussionLabel}>
         {#each rows as row (row.post.uri)}
           <div class="mb-2 {row.selected ? 'border-l-4 border-[var(--color-primary)] rounded-r-lg' : ''}"
             style:margin-left="{row.depth * 16}px" style:min-width="min(22rem, 100%)" data-thread-depth={row.depth}>

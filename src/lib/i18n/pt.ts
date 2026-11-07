@@ -74,7 +74,7 @@ export default {
       moderation: 'Moderação', analytics: 'Análise', settings: 'Configurações',
       post: 'Publicar', alerts: 'Alertas', dms: 'DMs',
     },
-    linkMenu: { title: "Ações do link", open: "Abrir link", copy: "Copiar link", share: "Compartilhar link", saveWallabag: "Salvar no Wallabag", setupWallabag: "Configurar Wallabag", copied: "Link copiado", copyFailed: "Não foi possível copiar o link", systemMenuHint: "Shift-clique direito para menu do sistema", wallabagInstance: "Endereço do servidor Wallabag", wallabagHint: "Usa a sessão do Wallabag no navegador." },
+    linkMenu: { title: "Ações do link", open: "Abrir link", copy: "Copiar link", share: "Compartilhar link", saveWallabag: "Salvar no Wallabag", setupWallabag: "Configurar Wallabag", copied: "Link copiado", copyFailed: "Não foi possível copiar o link", systemMenuHint: "Shift-clique direito para menu do sistema", wallabagInstance: "Endereço do servidor Wallabag", wallabagHint: "Conecte um cliente da API Wallabag para salvar links diretamente." },
     app: { voiceCommandsHint: 'Di-los enquanto o microfone estiver ativo em Redigir. Também funciona em alemão.', toggleTheme: 'Mudar de tema', skipToContent: 'Saltar para o conteúdo', offlineBanner: 'Estás offline — algumas funcionalidades podem não estar disponíveis', mainNavigation: 'Navegação principal', keyboardShortcutsLabel: 'Atalhos de teclado', keyboardShortcuts: 'Atalhos de teclado', dismissLabel: 'Dispensar', customizeSidebar: 'Personalizar barra lateral', closeMenu: 'Fechar menu', closeKeyboardShortcuts: 'Fechar atalhos de teclado', name: 'CrispDeck', subtitle: 'Mastodon + Bluesky', collapse: 'Recolher', expand: 'Expandir' },
     compose: {
       mediaLimitHint: "Até {count} anexos para as contas selecionadas.",

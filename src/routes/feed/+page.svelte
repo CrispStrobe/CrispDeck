@@ -1037,7 +1037,7 @@
               class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1 {platformFilter === 'threads' ? 'bg-[var(--color-threads)] text-white' : 'text-[var(--color-text-muted)]'}"
             ><span class="w-1.5 h-1.5 rounded-full bg-[var(--color-threads)]"></span> {i18n.t.common.threads}</button>
             <div class="relative">
-              <button onclick={() => showThreadsInfo = !showThreadsInfo} aria-label="Threads feed information" aria-expanded={showThreadsInfo} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)]"><Info size={15} /></button>
+              <button onclick={() => showThreadsInfo = !showThreadsInfo} aria-label={i18n.t.feed.threadsInfoLabel} aria-expanded={showThreadsInfo} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)]"><Info size={15} /></button>
               {#if showThreadsInfo}
                 <div class="absolute right-0 top-full z-30 mt-1 w-72 max-w-[80vw] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-xs text-[var(--color-text-muted)] shadow-lg" role="note">
                   {i18n.t.feed.threadsTimelineLimited}
@@ -1051,7 +1051,7 @@
 
       {#if !multiPlatform && connectedPlatforms.has('threads')}
         <div class="relative">
-          <button onclick={() => showThreadsInfo = !showThreadsInfo} aria-label="Threads feed information" aria-expanded={showThreadsInfo} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)]"><Info size={15} /></button>
+          <button onclick={() => showThreadsInfo = !showThreadsInfo} aria-label={i18n.t.feed.threadsInfoLabel} aria-expanded={showThreadsInfo} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)]"><Info size={15} /></button>
           {#if showThreadsInfo}
             <div class="absolute right-0 top-full z-30 mt-1 w-72 max-w-[80vw] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-xs text-[var(--color-text-muted)] shadow-lg" role="note">
               {i18n.t.feed.threadsTimelineLimited}

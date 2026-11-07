@@ -74,7 +74,7 @@ export default {
       analytics: 'التحليلات', settings: 'الإعدادات', post: 'نشر', alerts: 'تنبيهات', dms: 'رسائل مباشرة',
       gallery: 'معرض الوسائط', calendar: 'تقويم المحتوى', readingLists: 'قوائم القراءة',
     },
-    linkMenu: { title: "إجراءات الرابط", open: "فتح الرابط", copy: "نسخ الرابط", share: "مشاركة الرابط", saveWallabag: "الحفظ في Wallabag", setupWallabag: "إعداد Wallabag", copied: "تم نسخ الرابط", copyFailed: "تعذر نسخ الرابط", systemMenuHint: "اضغط Shift مع الزر الأيمن لقائمة النظام", wallabagInstance: "عنوان خادم Wallabag", wallabagHint: "يستخدم تسجيل الدخول إلى Wallabag في المتصفح." },
+    linkMenu: { title: "إجراءات الرابط", open: "فتح الرابط", copy: "نسخ الرابط", share: "مشاركة الرابط", saveWallabag: "الحفظ في Wallabag", setupWallabag: "إعداد Wallabag", copied: "تم نسخ الرابط", copyFailed: "تعذر نسخ الرابط", systemMenuHint: "اضغط Shift مع الزر الأيمن لقائمة النظام", wallabagInstance: "عنوان خادم Wallabag", wallabagHint: "اربط عميل واجهة Wallabag لحفظ الروابط مباشرة." },
     app: { voiceCommandsHint: 'انطق هذه الأوامر أثناء تشغيل الميكروفون في صفحة الإنشاء. تعمل بالألمانية أيضًا.', toggleTheme: 'تبديل المظهر', skipToContent: 'تخطٍّ إلى المحتوى', offlineBanner: 'أنت غير متصل — قد لا تتوفر بعض الميزات', mainNavigation: 'التنقل الرئيسي', keyboardShortcutsLabel: 'اختصارات لوحة المفاتيح', keyboardShortcuts: 'اختصارات لوحة المفاتيح', dismissLabel: 'تجاهل', customizeSidebar: 'تخصيص الشريط الجانبي', closeMenu: 'إغلاق القائمة', closeKeyboardShortcuts: 'إغلاق اختصارات لوحة المفاتيح', name: 'CrispDeck', subtitle: 'ماستودون + بلوسكاي', collapse: 'طي', expand: 'توسيع' },
     compose: {
       mediaLimitHint: "حتى {count} من المرفقات للحسابات المحددة.",

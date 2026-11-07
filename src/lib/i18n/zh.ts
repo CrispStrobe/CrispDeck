@@ -74,7 +74,7 @@ export default {
       moderation: '管理', analytics: '分析', settings: '设置',
       post: '发布', alerts: '提醒', dms: '私信',
     },
-    linkMenu: { title: "链接操作", open: "打开链接", copy: "复制链接", share: "分享链接", saveWallabag: "保存到 Wallabag", setupWallabag: "设置 Wallabag", copied: "链接已复制", copyFailed: "无法复制链接", systemMenuHint: "按住 Shift 右键点击可打开系统菜单", wallabagInstance: "Wallabag 服务器地址", wallabagHint: "使用浏览器中的 Wallabag 登录状态保存链接。" },
+    linkMenu: { title: "链接操作", open: "打开链接", copy: "复制链接", share: "分享链接", saveWallabag: "保存到 Wallabag", setupWallabag: "设置 Wallabag", copied: "链接已复制", copyFailed: "无法复制链接", systemMenuHint: "按住 Shift 右键点击可打开系统菜单", wallabagInstance: "Wallabag 服务器地址", wallabagHint: "连接 Wallabag API 客户端以直接保存链接。" },
     app: { voiceCommandsHint: '在撰写页面麦克风开启时说出这些指令。德语同样适用。', toggleTheme: '切换主题', skipToContent: '跳到主要内容', offlineBanner: '你当前离线 — 部分功能可能不可用', mainNavigation: '主导航', keyboardShortcutsLabel: '键盘快捷键', keyboardShortcuts: '键盘快捷键', dismissLabel: '忽略', customizeSidebar: '自定义侧边栏', closeMenu: '关闭菜单', closeKeyboardShortcuts: '关闭键盘快捷键', name: 'CrispDeck', subtitle: 'Mastodon + Bluesky', collapse: '折叠', expand: '展开' },
     compose: {
       mediaLimitHint: "所选账户最多支持 {count} 个附件。",

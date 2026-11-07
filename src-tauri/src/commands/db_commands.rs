@@ -206,6 +206,31 @@ const CREDENTIAL_BACKEND_KEY: &str = "credential_backend";
 /// user manages. Ignored on other platforms.
 const MAC_KEYCHAIN_KEY: &str = "macos_keychain";
 
+// Reuse the selected credential backend and keychain for Wallabag, in a
+// reserved namespace that cannot collide with a real Bluesky DID.
+const WALLABAG_SESSION: &str = "did:crispdeck:wallabag";
+
+#[tauri::command]
+pub fn wallabag_session_get(state: State<'_, AppState>, backend: String, keychain: String) -> Result<Option<String>, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    ensure_oauth_storage(&conn, &backend, &keychain)?;
+    oauth_session_get_impl(&conn, &secret_store::OsSecretStore, WALLABAG_SESSION)
+}
+
+#[tauri::command]
+pub fn wallabag_session_set(state: State<'_, AppState>, value: String, backend: String, keychain: String) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    ensure_oauth_storage(&conn, &backend, &keychain)?;
+    oauth_session_set_impl(&conn, &secret_store::OsSecretStore, WALLABAG_SESSION, &value)
+}
+
+#[tauri::command]
+pub fn wallabag_session_delete(state: State<'_, AppState>, backend: String, keychain: String) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    ensure_oauth_storage(&conn, &backend, &keychain)?;
+    oauth_session_delete_impl(&conn, &secret_store::OsSecretStore, WALLABAG_SESSION)
+}
+
 /// Store native Bluesky OAuth sessions in the selected backend. The record
 /// identifies its backend so changing settings never consults another one.
 fn oauth_marker_key(did: &str) -> Result<String, String> {

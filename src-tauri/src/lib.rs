@@ -106,6 +106,9 @@ pub fn run() {
             commands::db_commands::oauth_session_get,
             commands::db_commands::oauth_session_set,
             commands::db_commands::oauth_session_delete,
+            commands::db_commands::wallabag_session_get,
+            commands::db_commands::wallabag_session_set,
+            commands::db_commands::wallabag_session_delete,
             // Identity commands
             commands::db_commands::db_list_identities,
             commands::db_commands::db_create_identity,
