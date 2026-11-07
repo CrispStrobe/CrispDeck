@@ -11,7 +11,7 @@
  *
  *   node scripts/mount-at-base.mjs --origin https://user.github.io --base /CrispDeck
  *
- * Three files need it:
+ * Two files need it:
  *   client-metadata.json  AT Protocol fetches client_id as a URL and requires
  *                         every redirect_uri to sit under the same origin. A
  *                         copy served elsewhere pointing at the Vercel origin
@@ -19,7 +19,8 @@
  *                         leaving them logged in on the wrong deployment.
  *   manifest.json         start_url/scope/id decide what the installed PWA
  *                         opens and which pages it owns.
- *   sw.js                 the shell it precaches, and the offline fallback.
+ * The service worker derives its shell, cache namespace and notification paths
+ * from its registration scope at runtime, so it needs no source rewriting.
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -66,16 +67,4 @@ const url = (p) => `${origin}${root}${p}`;
   if (Array.isArray(m.screenshots)) m.screenshots = m.screenshots.map((s) => ({ ...s, src: rebase(s.src) }));
   writeFileSync(f, JSON.stringify(m, null, 2) + '\n');
   console.log(`  manifest scope ${m.scope}`);
-}
-
-// --- sw.js ----------------------------------------------------------------
-{
-  const f = 'static/sw.js';
-  let s = readFileSync(f, 'utf8');
-  s = s.replace("const SHELL_URLS = ['/'];", `const SHELL_URLS = ['${root}/'];`);
-  s = s.replace(/caches\.match\('\/'\)/g, `caches.match('${root}/')`);
-  s = s.replace(/'\/favicon\.png'/g, `'${root}/favicon.png'`);
-  s = s.replace(/\|\| '\/notifications'/g, `|| '${root}/notifications'`);
-  writeFileSync(f, s);
-  console.log(`  sw shell ${root}/`);
 }
