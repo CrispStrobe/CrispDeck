@@ -2,8 +2,9 @@
 
 Full-featured cross-platform client for **Mastodon**, **Bluesky**, and **Threads** with crossposting, identity mapping, and smart mentions.
 
-**Instagram** is available as a separate signed-in website timeline inside the
-desktop app, with a browser link on web and mobile.
+**Instagram** is available as a separate signed-in website timeline on desktop:
+inline on Windows/macOS, in a dedicated window on Linux, and via a browser link
+on web and mobile.
 
 Works as a **web app** (Vercel), **desktop app** (Windows/macOS/Linux via Tauri 2), and **mobile app** (iOS/Android via Tauri 2 mobile).
 
@@ -17,7 +18,7 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 
 ### Full Social Client (32 routes)
 - **3-network client**: Bluesky + Mastodon + Threads
-- **Instagram web timeline (desktop)**: Instagram's own interactive feed inside CrispDeck, with Home, Reload, and a popout window for use alongside the Deck; sign in directly with Instagram
+- **Instagram web timeline (desktop)**: Instagram's own interactive feed inline on Windows/macOS or in a dedicated Linux window, with a popout option for use alongside the Deck; sign in directly with Instagram
 - **Timeline feed**: Bluesky + Mastodon home timelines merged, Threads own posts (Threads API has no home timeline), infinite scroll, "new posts" indicator, multi-account merge
 - **Platform filter**: All / Bluesky / Mastodon / Threads toggle
 - **Multi-column Deck**: 23 column types (timeline, mentions, notifications, hashtag, user, local, federated, search, list, feed, my-posts, tag-group, RSS, keyword-monitor, threads-search, messages, trending, activity, likes, followers, bookmarks, drafts, scheduled), per-column filters, saved layouts/workspaces, drag-reorder, column width presets + resize, color coding, collapse/pin, per-column notifications, scroll-lock, platform-aware column picker
@@ -105,8 +106,10 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 
 ### Instagram timeline
 
-Choose **Instagram** in the sidebar or Deck toolbar. In the desktop app, this
-opens the official Instagram website in an embedded native browser. Sign in
+Choose **Instagram** in the sidebar or Deck toolbar. On Windows/macOS, this
+opens the official Instagram website in an embedded native browser. Linux uses
+**Open in a window** because the pinned Tauri version has unreliable inline
+webview geometry on GTK. Sign in
 there, then use Instagram's own feed and interaction controls. If Instagram
 offers **Following** in its menu, use that to select its chronological view.
 **Open in a window** keeps an Instagram window beside the Deck; **Open in browser**

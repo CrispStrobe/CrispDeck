@@ -9,7 +9,7 @@ vi.mock('@tauri-apps/api/event', () => ({ listen: native.listen }));
 vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: native.openUrl }));
 
 import {
-  INSTAGRAM_HOME_URL, createInstagramTimeline, instagramBounds, instagramSupported,
+  INSTAGRAM_HOME_URL, createInstagramTimeline, instagramBounds, instagramCapabilities,
   openInstagramBrowser, popoutInstagram, type InstagramTimelineHandle,
 } from './instagram';
 
@@ -37,7 +37,7 @@ function deferred<T>() {
 beforeEach(() => {
   vi.clearAllMocks();
   native.isTauri.mockReturnValue(true);
-  native.invoke.mockImplementation(async (command) => command === 'instagram_web_supported' ? true : undefined);
+  native.invoke.mockImplementation(async (command) => command === 'instagram_web_supported' ? { inline: true, popout: true } : undefined);
   native.listen.mockImplementation(async (_event, handler) => {
     originListener = handler;
     return native.unlisten;
@@ -61,17 +61,26 @@ afterEach(async () => {
 describe('platform and external navigation', () => {
   it('never attempts native IPC from the web build', async () => {
     native.isTauri.mockReturnValue(false);
-    await expect(instagramSupported()).resolves.toBe(false);
+    await expect(instagramCapabilities()).resolves.toEqual({ inline: false, popout: false });
     expect(() => mount()).toThrow('desktop app');
     expect(native.invoke).not.toHaveBeenCalled();
   });
 
   it('uses native capability detection and opens Instagram externally on mobile', async () => {
-    native.invoke.mockResolvedValue(false);
-    await expect(instagramSupported()).resolves.toBe(false);
+    native.invoke.mockResolvedValue({ inline: false, popout: false });
+    await expect(instagramCapabilities()).resolves.toEqual({ inline: false, popout: false });
     await popoutInstagram();
     expect(native.openUrl).toHaveBeenCalledWith(INSTAGRAM_HOME_URL);
     expect(calls('instagram_web_popout')).toHaveLength(0);
+  });
+
+  it('offers a native window on Linux even when an inline view is unavailable', async () => {
+    native.invoke.mockResolvedValue({ inline: false, popout: true });
+    await expect(instagramCapabilities()).resolves.toEqual({ inline: false, popout: true });
+    await popoutInstagram();
+    expect(calls('instagram_web_popout')).toHaveLength(1);
+    expect(calls('instagram_web_open')).toHaveLength(0);
+    expect(native.openUrl).not.toHaveBeenCalled();
   });
 
   it('opens the fixed official URL through the OS or a browser popup', async () => {

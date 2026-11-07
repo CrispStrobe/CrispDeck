@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test('Instagram offers the official feed link in the web app', async ({ page }) => {
   await page.goto('/instagram');
   await expect(page.getByRole('heading', { name: 'Instagram', exact: true })).toBeVisible();
-  await expect(page.getByText('The embedded timeline is available in the desktop app.', { exact: false })).toBeVisible();
+  await expect(page.getByText('Use the Windows or macOS desktop app for an embedded timeline.', { exact: false })).toBeVisible();
   const link = page.getByRole('main').getByRole('link', { name: 'Open in browser', exact: true });
   await expect(link).toHaveAttribute('href', 'https://www.instagram.com/');
   await expect(link).toHaveAttribute('target', '_blank');

@@ -4,9 +4,10 @@
 
 ### Instagram
 
-- Add a dedicated Instagram website timeline to the desktop app, with sidebar
-  and Deck links, Home/Reload controls, and a popout window for reading beside
-  the Deck. Web and mobile builds link to the official website.
+- Add a dedicated Instagram website timeline, inline on Windows/macOS and in a
+  native window on Linux, with sidebar and Deck links, Home/Reload controls for
+  the inline view, and a popout window for reading beside the Deck. Web and mobile
+  builds link to the official website.
 - Keep login and session cookies in the native browser; restrict remote
   navigation, grant no native API access to Instagram, and hide/close the
   embedded view for app overlays and route changes.

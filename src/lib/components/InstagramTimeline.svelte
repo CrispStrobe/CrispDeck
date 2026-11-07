@@ -7,11 +7,12 @@
   import {
     INSTAGRAM_HOME_URL,
     createInstagramTimeline,
-    instagramSupported,
+    instagramCapabilities,
     popoutInstagram,
   } from '$lib/instagram';
 
   let supported = $state<boolean | null>(null);
+  let canPopout = $state(false);
   let ready = $state(false);
   let hidden = $state(false);
   let error = $state('');
@@ -32,10 +33,11 @@
     try {
       await controller?.destroy();
       controller = undefined;
-      const available = await instagramSupported();
+      const available = await instagramCapabilities();
       if (!current()) return;
-      supported = available;
-      if (!available) return;
+      supported = available.inline;
+      canPopout = available.popout;
+      if (!available.inline) return;
       await tick();
       if (!current() || !viewport) return;
       controller = createInstagramTimeline(viewport, {
@@ -116,7 +118,7 @@
         <div class="flex flex-wrap items-center gap-2">
           <button class="action" onclick={() => act('home')} disabled={busy !== null || !ready}><Home size={14} />{i18n.t.instagram.home}</button>
           <button class="action" onclick={() => act('reload')} disabled={busy !== null || !ready}><RefreshCw size={14} class={busy === 'reload' ? 'animate-spin' : ''} />{i18n.t.instagram.reload}</button>
-          <button class="action" onclick={() => act('popout')} disabled={busy !== null}><SquareArrowOutUpRight size={14} />{i18n.t.instagram.popout}</button>
+          {#if canPopout}<button class="action" onclick={() => act('popout')} disabled={busy !== null}><SquareArrowOutUpRight size={14} />{i18n.t.instagram.popout}</button>{/if}
           <a class="action" href={INSTAGRAM_HOME_URL} target="_blank" rel="noopener noreferrer" onclick={external}><ExternalLink size={14} />{i18n.t.instagram.openBrowser}</a>
         </div>
       {/if}
@@ -136,10 +138,10 @@
   {:else if supported}
     <div bind:this={viewport} class="relative min-h-0 flex-1 bg-[var(--color-bg)]" role="region" aria-label={i18n.t.instagram.timelineLabel} aria-busy={!ready && !error}>
       <div class="flex h-full items-center justify-center gap-2 p-6 text-center text-sm text-[var(--color-text-muted)]" role="status">
-        {#if !ready && !error}
-          <Loader2 size={18} class="animate-spin" />{i18n.t.instagram.loading}
-        {:else if hidden && !error}
+        {#if hidden && !error}
           {i18n.t.instagram.hidden}
+        {:else if !ready && !error}
+          <Loader2 size={18} class="animate-spin" />{i18n.t.instagram.loading}
         {/if}
       </div>
     </div>
@@ -147,9 +149,18 @@
     <div class="flex flex-1 items-center justify-center p-6">
       <div class="max-w-lg space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 text-center">
         <Camera size={36} class="mx-auto text-[var(--color-text-muted)]" />
-        <h2 class="text-lg font-semibold">{i18n.t.instagram.externalTitle}</h2>
-        <p class="text-sm leading-relaxed text-[var(--color-text-muted)]">{i18n.t.instagram.externalHint}</p>
-        <a class="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white" href={INSTAGRAM_HOME_URL} target="_blank" rel="noopener noreferrer" onclick={external}><ExternalLink size={16} />{i18n.t.instagram.openBrowser}</a>
+        {#if canPopout}
+          <h2 class="text-lg font-semibold">{i18n.t.instagram.windowTitle}</h2>
+          <p class="text-sm leading-relaxed text-[var(--color-text-muted)]">{i18n.t.instagram.windowHint}</p>
+          <div class="flex flex-wrap items-center justify-center gap-3">
+            <button class="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50" onclick={() => act('popout')} disabled={busy !== null}><SquareArrowOutUpRight size={16} />{i18n.t.instagram.popout}</button>
+            <a class="action" href={INSTAGRAM_HOME_URL} target="_blank" rel="noopener noreferrer" onclick={external}><ExternalLink size={14} />{i18n.t.instagram.openBrowser}</a>
+          </div>
+        {:else}
+          <h2 class="text-lg font-semibold">{i18n.t.instagram.externalTitle}</h2>
+          <p class="text-sm leading-relaxed text-[var(--color-text-muted)]">{i18n.t.instagram.externalHint}</p>
+          <a class="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white" href={INSTAGRAM_HOME_URL} target="_blank" rel="noopener noreferrer" onclick={external}><ExternalLink size={16} />{i18n.t.instagram.openBrowser}</a>
+        {/if}
       </div>
     </div>
   {/if}

@@ -20,6 +20,22 @@ pub struct InstagramWebState {
     owner: tokio::sync::Mutex<Option<String>>,
 }
 
+#[derive(Clone, Copy, Debug, serde::Serialize, PartialEq, Eq)]
+pub struct InstagramSupport {
+    inline: bool,
+    popout: bool,
+}
+
+const fn platform_support() -> InstagramSupport {
+    InstagramSupport {
+        // Tauri 2.11/Wry 0.55 attach Linux children to a GtkBox, which
+        // ignores their position. Do not let that cover the app's sidebar.
+        // A normal standalone webview window works on Linux.
+        inline: cfg!(all(desktop, any(windows, target_os = "macos"))),
+        popout: cfg!(desktop),
+    }
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct InstagramBounds {
@@ -280,8 +296,12 @@ fn child_builder(
 }
 
 #[tauri::command]
-pub fn instagram_web_supported(webview: Webview) -> bool {
-    cfg!(desktop) && is_main_caller(webview.label(), webview.window().label())
+pub fn instagram_web_supported(webview: Webview) -> InstagramSupport {
+    if is_main_caller(webview.label(), webview.window().label()) {
+        platform_support()
+    } else {
+        InstagramSupport { inline: false, popout: false }
+    }
 }
 
 #[tauri::command]
@@ -297,6 +317,9 @@ pub async fn instagram_web_open(
     bounds.validate()?;
     #[cfg(desktop)]
     {
+        if !platform_support().inline {
+            return Err("On this desktop, use Open in window for Instagram's timeline.".into());
+        }
         let mut owner = state.owner.lock().await;
         if let Some(existing) = app.get_webview(CHILD_LABEL) {
             existing
@@ -533,6 +556,17 @@ mod tests {
 
     fn url(value: &str) -> tauri::Url {
         value.parse().unwrap()
+    }
+
+    #[test]
+    fn native_capabilities_select_a_working_surface_for_each_target() {
+        let support = platform_support();
+        #[cfg(all(desktop, any(windows, target_os = "macos")))]
+        assert_eq!(support, InstagramSupport { inline: true, popout: true });
+        #[cfg(all(desktop, not(any(windows, target_os = "macos"))))]
+        assert_eq!(support, InstagramSupport { inline: false, popout: true });
+        #[cfg(mobile)]
+        assert_eq!(support, InstagramSupport { inline: false, popout: false });
     }
 
     #[test]

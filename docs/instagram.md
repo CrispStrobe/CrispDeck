@@ -8,8 +8,9 @@ do not provide the signed-in user's home/following timeline. Reading an account'
 own media would not satisfy a home-feed feature.
 
 This feature uses the **official Instagram website in a native desktop webview**.
-The `/instagram` page loads that website inside CrispDeck, with Instagram
-handling login, two-factor authentication, scrolling, and interactions.
+The `/instagram` page loads that website inline on Windows/macOS and opens a
+dedicated native window on Linux, with Instagram handling login, two-factor
+authentication, scrolling, and interactions.
 Web and mobile builds provide an explicit link to Instagram in the browser.
 
 The feed is a separate website surface. It is not an Instagram API adapter:
@@ -21,8 +22,8 @@ Threads lacks.
 ## Implementation boundaries
 
 - A dedicated `/instagram` page, discoverable from the sidebar and Deck.
-- A desktop child webview fitted to the page, with home, reload, and popout
-  controls. A native popup can be placed next to the Deck.
+- A Windows/macOS child webview fitted to the page, with home, reload, and popout
+  controls. Linux offers the native window. A popout can be placed next to Deck.
 - The fixed entry URL is `https://www.instagram.com/`. Feed selection stays in
   Instagram's own UI; no undocumented Following URL is presented as an API.
 - Credentials stay in the browser-managed Instagram session. No password
@@ -35,7 +36,8 @@ Threads lacks.
 ## Using it
 
 1. Open **Instagram** from the sidebar or the Deck toolbar in the desktop app.
-2. Sign in on Instagram's own page. Complete any two-factor authentication or
+2. On Linux, choose **Open in a window**. On Windows/macOS, the inline page opens
+   automatically. Sign in on Instagram's own page. Complete any two-factor authentication or
    account verification there. The origin displayed above the view identifies
    the approved website currently being shown.
 3. Read and interact through Instagram's controls. Select **Following** in
@@ -53,7 +55,7 @@ system browser has its own session; CrispDeck does not import that login.
 
 ## Native browser and session boundaries
 
-The embedded feed is a desktop child webview, not an HTML iframe. It requires
+The Windows/macOS embedded feed is a child webview, not an HTML iframe. It requires
 Tauri's `unstable` multiwebview feature. The existing main view keeps its full
 window sizing; Instagram occupies only the page's measured content rectangle.
 It is hidden when clipped, zoomed with a visual viewport transform, or covered
@@ -61,6 +63,13 @@ by an app dialog, navigation overlay, menu, or notification. Switching routes
 closes the inline view; session ownership prevents late asynchronous cleanup
 from touching a replacement view. Native window creation is asynchronous to
 avoid the documented Windows WebView2 synchronous-command deadlock.
+
+Linux uses the stable native-window path because the pinned Tauri 2.11.2/Wry
+0.55.1 GTK integration does not reliably honor child-webview bounds. The native
+capability result distinguishes inline and popout support, and the open command
+also rejects an inline Linux request. This avoids a remote view covering the
+app's sidebar. See the upstream [multiwebview positioning issue](https://github.com/tauri-apps/tauri/issues/10420)
+and [WebKitGTK/Wayland report](https://github.com/tauri-apps/tauri/issues/15656).
 
 Session cookies stay in the browser engine. Windows and Linux use a dedicated
 `instagram-web` directory under CrispDeck's application data. macOS 14 and later
@@ -117,6 +126,7 @@ native acceptance checks have been performed.
 - [Instagram's description of Home, Following, and Favorites](https://about.fb.com/news/2022/03/two-new-ways-to-control-your-instagram-feed/)
 - [Tauri child webviews](https://docs.rs/tauri/2.11.2/tauri/window/struct.Window.html#method.add_child)
 - [Tauri capability and remote-origin boundaries](https://v2.tauri.app/security/capabilities/)
+- [Pinned Wry WebKit data-store behavior](https://github.com/tauri-apps/wry/blob/wry-v0.55.1/src/wkwebview/mod.rs)
 
 The direct Meta developer site was rate limited during research; the API scope
 above is based on Meta's official Postman documentation, rather than a claim to

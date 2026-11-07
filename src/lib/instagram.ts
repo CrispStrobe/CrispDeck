@@ -3,6 +3,11 @@ import { isTauri } from '$lib/platform';
 
 export const INSTAGRAM_HOME_URL = 'https://www.instagram.com/';
 
+export interface InstagramCapabilities {
+  inline: boolean;
+  popout: boolean;
+}
+
 export interface InstagramBounds {
   x: number;
   y: number;
@@ -39,8 +44,9 @@ async function invoke<T>(command: string, args?: Record<string, unknown>): Promi
 }
 
 /** Runtime capability, rather than a mobile user-agent guess (iPad can look like Mac). */
-export async function instagramSupported(): Promise<boolean> {
-  return isTauri() ? invoke<boolean>('instagram_web_supported') : false;
+export async function instagramCapabilities(): Promise<InstagramCapabilities> {
+  if (!isTauri()) return { inline: false, popout: false };
+  return invoke<InstagramCapabilities>('instagram_web_supported');
 }
 
 export async function openInstagramBrowser(): Promise<void> {
@@ -63,7 +69,7 @@ function serial<T>(operation: () => Promise<T>): Promise<T> {
 }
 
 export async function popoutInstagram(): Promise<void> {
-  if (!await instagramSupported()) return openInstagramBrowser();
+  if (!(await instagramCapabilities()).popout) return openInstagramBrowser();
   await serial(() => invoke<void>('instagram_web_popout'));
 }
 
