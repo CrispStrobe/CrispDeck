@@ -59,6 +59,55 @@ describe('browser credential durability', () => {
     expect(await (await import('./browser-db')).decrypt(encrypted)).toBe('new-session');
   });
 
+  it('rejects credential encryption if the persisted seed is cleared while derivation is pending', async () => {
+    let release!: () => void;
+    let started!: () => void;
+    const blocked = new Promise<void>(resolve => { release = resolve; });
+    const entered = new Promise<void>(resolve => { started = resolve; });
+    const deriveKey = crypto.subtle.deriveKey.bind(crypto.subtle);
+    vi.spyOn(crypto.subtle, 'deriveKey').mockImplementationOnce(async (...args) => {
+      started();
+      await blocked;
+      return deriveKey(...args);
+    });
+    const db = await import('./browser-db');
+    const encrypting = db.encrypt('must-not-be-saved-with-the-discarded-key');
+    const rejected = expect(encrypting).rejects.toThrow();
+    await entered;
+    localStorage.removeItem('crispdeck-key');
+    release();
+    await rejected;
+
+    const retried = await db.encrypt('new-credential');
+    vi.resetModules();
+    expect(await (await import('./browser-db')).decrypt(retried)).toBe('new-credential');
+  });
+
+  it('rejects credential encryption if the persisted salt changes while encryption is pending', async () => {
+    const db = await import('./browser-db');
+    await db.encrypt('prime-the-cached-key');
+    let release!: () => void;
+    let started!: () => void;
+    const blocked = new Promise<void>(resolve => { release = resolve; });
+    const entered = new Promise<void>(resolve => { started = resolve; });
+    const encrypt = crypto.subtle.encrypt.bind(crypto.subtle);
+    vi.spyOn(crypto.subtle, 'encrypt').mockImplementationOnce(async (...args) => {
+      started();
+      await blocked;
+      return encrypt(...args);
+    });
+    const encrypting = db.encrypt('must-not-be-saved-with-the-replaced-salt');
+    const rejected = expect(encrypting).rejects.toThrow();
+    await entered;
+    localStorage.setItem('crispdeck-salt-v2', btoa('s'.repeat(32)));
+    release();
+    await rejected;
+
+    const retried = await db.encrypt('new-credential');
+    vi.resetModules();
+    expect(await (await import('./browser-db')).decrypt(retried)).toBe('new-credential');
+  });
+
   it('handles a large credential document without overflowing the argument stack', async () => {
     const db = await import('./browser-db');
     const document = JSON.stringify({ token: 'a'.repeat(256_000), name: 'Zoë 日本語' });

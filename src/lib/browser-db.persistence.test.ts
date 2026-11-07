@@ -123,6 +123,42 @@ describe('atomic browser storage', () => {
     expect((await rows('identity_links')).map(link => link.identity_id)).toEqual([second.id]);
     expect((await rows('identity_tags')).map(tag => tag.identity_id)).toEqual([second.id]);
   });
+
+  it('rejects child records inserted after a concurrent identity deletion', async () => {
+    const db = await import('./browser-db');
+    const identity = await db.createIdentity({ display_name: 'Delete' });
+    const results = await Promise.allSettled([
+      db.deleteIdentity(identity.id),
+      db.linkToIdentity({ identity_id: identity.id, platform: 'bluesky', handle: 'late-link' }),
+      db.addTag(identity.id, 'late-tag'),
+    ]);
+    expect(results.map(result => result.status)).toEqual(['fulfilled', 'rejected', 'rejected']);
+    expect(await rows('identity_links')).toEqual([]);
+    expect(await rows('identity_tags')).toEqual([]);
+  });
+
+  it('does not recreate a reference to an account after it is deleted', async () => {
+    const db = await seedAccounts();
+    const identity = await db.createIdentity({ display_name: 'Keep' });
+    const results = await Promise.allSettled([
+      db.deleteAccount(1),
+      db.linkToIdentity({ identity_id: identity.id, platform: 'bluesky', handle: 'deleted-account', account_id: 1 }),
+    ]);
+    expect(results.map(result => result.status)).toEqual(['fulfilled', 'rejected']);
+    expect(await rows('identity_links')).toEqual([]);
+  });
+
+  it('keeps concurrent tag and link insertions unique', async () => {
+    const db = await import('./browser-db');
+    const identity = await db.createIdentity({ display_name: 'One person' });
+    const link = { identity_id: identity.id, platform: 'bluesky', handle: 'one.example' };
+    await Promise.all([db.addTag(identity.id, 'friend'), db.addTag(identity.id, 'friend'), db.linkToIdentity(link), db.linkToIdentity(link)]);
+    const saved = (await db.listIdentities())[0];
+    expect(saved.tags).toEqual(['friend']);
+    expect(saved.links).toHaveLength(1);
+    await db.removeTag(identity.id, 'friend');
+    expect((await db.listIdentities())[0].tags).toEqual([]);
+  });
 });
 
 describe('browser identity filters', () => {

@@ -185,7 +185,13 @@ async function deriveKey(salt: Uint8Array, iterations: number, seed = getSeed())
 }
 
 let _cachedCryptoKey: { seed: string; salt: string; key: Promise<CryptoKey> } | null = null;
-async function getCryptoKey(): Promise<CryptoKey> {
+function requireCurrentKey(material: { seed: string; salt: string }): void {
+  if (localStorage.getItem(CRYPTO_KEY_NAME) !== material.seed || localStorage.getItem(CRYPTO_SALT_NAME) !== material.salt) {
+    throw new Error('Credential encryption storage changed during the operation. Please try again.');
+  }
+}
+
+async function getCryptoKey(): Promise<{ seed: string; salt: string; key: CryptoKey }> {
   // New key: per-device random salt + 600k iterations (OWASP 2024).
   let saltB64 = localStorage.getItem(CRYPTO_SALT_NAME);
   if (!saltB64) {
@@ -196,14 +202,20 @@ async function getCryptoKey(): Promise<CryptoKey> {
     }
   }
   const seed = getSeed();
-  if (_cachedCryptoKey?.seed === seed && _cachedCryptoKey.salt === saltB64) return _cachedCryptoKey.key;
-  const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
   // Starting several account clients at once must share this expensive KDF.
   // Compare persisted material on each use so clearing/changing storage never
   // causes new credentials to be saved with an old, memory-only key.
-  const pending = { seed, salt: saltB64, key: deriveKey(salt, 600000, seed) };
-  _cachedCryptoKey = pending;
-  try { return await pending.key; }
+  let pending = _cachedCryptoKey;
+  if (!pending || pending.seed !== seed || pending.salt !== saltB64) {
+    const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
+    pending = { seed, salt: saltB64, key: deriveKey(salt, 600000, seed) };
+    _cachedCryptoKey = pending;
+  }
+  try {
+    const key = await pending.key;
+    requireCurrentKey(pending);
+    return { seed: pending.seed, salt: pending.salt, key };
+  }
   catch (error) {
     if (_cachedCryptoKey === pending) _cachedCryptoKey = null;
     throw error;
@@ -217,10 +229,10 @@ async function getLegacyCryptoKey(): Promise<CryptoKey> {
 }
 
 export async function encrypt(plaintext: string): Promise<string> {
-  const key = await getCryptoKey();
+  const material = await getCryptoKey();
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const enc = new TextEncoder();
-  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(plaintext));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, material.key, enc.encode(plaintext));
   // Pack iv + ciphertext as base64
   const packed = new Uint8Array(iv.length + ct.byteLength);
   packed.set(iv);
@@ -229,7 +241,9 @@ export async function encrypt(plaintext: string): Promise<string> {
   for (let start = 0; start < packed.length; start += 0x8000) {
     chunks.push(String.fromCharCode(...packed.subarray(start, start + 0x8000)));
   }
-  return btoa(chunks.join(''));
+  const encoded = btoa(chunks.join(''));
+  requireCurrentKey(material);
+  return encoded;
 }
 
 export async function decrypt(encoded: string): Promise<string> {
@@ -239,8 +253,9 @@ export async function decrypt(encoded: string): Promise<string> {
 
   // Try new key first
   try {
-    const key = await getCryptoKey();
-    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+    const material = await getCryptoKey();
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, material.key, ct);
+    requireCurrentKey(material);
     return new TextDecoder().decode(pt);
   } catch {
     // Fall back to legacy key (static salt, 100k iterations)
@@ -397,7 +412,7 @@ export async function linkToIdentity(params: {
   bio?: string | null;
   account_id?: number | null;
 }): Promise<void> {
-  await add('identity_links', {
+  const record = {
     identity_id: params.identity_id,
     account_id: params.account_id ?? null,
     platform: params.platform,
@@ -409,6 +424,25 @@ export async function linkToIdentity(params: {
     avatar_url: params.avatar_url ?? null,
     bio: params.bio ?? null,
     created_at: now(),
+  };
+  await atomic<void>(['identities', 'accounts', 'identity_links'], (txn, _result, fail) => {
+    const insert = () => {
+      const links = txn.objectStore('identity_links');
+      const existing = links.index('platform_handle').getAll([params.platform, params.handle]);
+      existing.onsuccess = () => {
+        if (!existing.result.some(link => link.identity_id === params.identity_id)) links.add(record);
+      };
+    };
+    const parent = txn.objectStore('identities').get(params.identity_id);
+    parent.onsuccess = () => {
+      if (!parent.result) { fail(new Error('Identity not found')); return; }
+      if (params.account_id == null) { insert(); return; }
+      const account = txn.objectStore('accounts').get(params.account_id);
+      account.onsuccess = () => {
+        if (!account.result) { fail(new Error('Account not found')); return; }
+        insert();
+      };
+    };
   });
 }
 
@@ -434,15 +468,29 @@ export async function resolveHandle(handle: string, targetPlatform: string): Pro
 // ── Tags ──────────────────────────────────────────────────────────────────
 
 export async function addTag(identityId: number, tag: string): Promise<void> {
-  const existing = await getAllByIndex<any>('identity_tags', 'identity_id', identityId);
-  if (existing.some(t => t.tag === tag)) return;
-  await add('identity_tags', { identity_id: identityId, tag });
+  await atomic<void>(['identities', 'identity_tags'], (txn, _result, fail) => {
+    const parent = txn.objectStore('identities').get(identityId);
+    parent.onsuccess = () => {
+      if (!parent.result) { fail(new Error('Identity not found')); return; }
+      const store = txn.objectStore('identity_tags');
+      const existing = store.index('identity_id').getAll(identityId);
+      existing.onsuccess = () => {
+        if (!existing.result.some(value => value.tag === tag)) store.add({ identity_id: identityId, tag });
+      };
+    };
+  });
 }
 
 export async function removeTag(identityId: number, tag: string): Promise<void> {
-  const all = await getAllByIndex<any>('identity_tags', 'identity_id', identityId);
-  const match = all.find(t => t.tag === tag);
-  if (match) await del('identity_tags', match.id);
+  await atomic<void>(['identity_tags'], txn => {
+    const request = txn.objectStore('identity_tags').index('identity_id').openCursor(identityId);
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      if (cursor.value.tag === tag) cursor.delete();
+      cursor.continue();
+    };
+  });
 }
 
 // ── Identity detection (JS implementation) ────────────────────────────────
