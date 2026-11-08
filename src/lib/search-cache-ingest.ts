@@ -3,6 +3,7 @@ import type { UnifiedPost } from '$lib/types';
 import type { SearchCacheInput } from '$lib/search-cache';
 import { cacheSearchItems, getSearchCacheGeneration, getSearchCacheSettings } from '$lib/search-cache';
 import { swallow } from '$lib/debug-log';
+import { readJson } from '$lib/safe-storage';
 
 /** Per-action bounds protect slow servers and mobile webviews. */
 export const WALLABAG_SYNC_PAGE_LIMIT = 1000;
@@ -107,30 +108,29 @@ export async function indexExistingSearchCache(options: SearchCacheSyncOptions =
   const { listAccounts } = await import('$lib/db');
   const accounts = new Set((await listAccounts()).map(account => account.id));
   checkActive(generation, options.signal);
-  const seen = new Set<string>();
-  const ingest = async (posts: UnifiedPost[]) => {
+  const cutoff = settings.maxAgeDays ? Date.now() - settings.maxAgeDays * 86_400_000 : -Infinity;
+  let candidates = new Map<string, SearchCacheInput>();
+  const consider = (posts: UnifiedPost[]) => {
     checkActive(generation, options.signal);
-    const entries: SearchCacheInput[] = [];
     for (const post of posts) {
       if (!accounts.has(post?.sourceAccountId!)) continue;
       const item = postSearchInput(post);
       if (!item) continue;
-      const key = `${item.scope}:${item.source}:${item.id}`;
-      if (seen.has(key)) continue;
-      if (seen.size >= settings.maxItems) { progress.stoppedEarly = true; break; }
-      seen.add(key); entries.push(item);
+      const createdAt = Date.parse(item.createdAt);
+      if (!Number.isFinite(createdAt) || createdAt < cutoff) continue;
+      candidates.set(`${item.scope}:${item.source}:${item.id}`, item);
     }
-    for (let offset = 0; offset < entries.length; offset += 500) {
-      checkActive(generation, options.signal);
-      const batch = entries.slice(offset, offset + 500);
-      progress.indexed += await cacheSearchItems(batch, { generation, strict: true });
-      progress.processed += batch.length;
+    if (candidates.size > settings.maxItems) {
+      progress.stoppedEarly = true;
+      candidates = new Map([...candidates.entries()]
+        .sort((a, b) => Date.parse(b[1].createdAt) - Date.parse(a[1].createdAt))
+        .slice(0, settings.maxItems));
     }
     progress.pages++;
     options.onProgress?.({ ...progress });
   };
   const { listBookmarks } = await import('$lib/bookmarks');
-  await ingest(await listBookmarks());
+  consider(await listBookmarks());
   checkActive(generation, options.signal);
   const feedKeys: string[] = [];
   for (let i = 0; i < localStorage.length; i++) {
@@ -138,22 +138,27 @@ export async function indexExistingSearchCache(options: SearchCacheSyncOptions =
     if (key?.startsWith('crispdeck-vc-')) feedKeys.push(key);
   }
   for (const key of feedKeys) {
-    if (progress.stoppedEarly) break;
     checkActive(generation, options.signal);
-    let data: unknown;
-    try { data = JSON.parse(localStorage.getItem(key) ?? 'null')?.data; }
-    catch { continue; /* A corrupt optional view entry is not an import source. */ }
+    const data: unknown = record(readJson<unknown>(key, null)).data;
     const posts = Array.isArray(data) ? data : record(data).posts;
-    if (Array.isArray(posts)) await ingest(posts);
+    if (Array.isArray(posts)) consider(posts);
   }
   checkActive(generation, options.signal);
   const { loadCachedFeed } = await import('$lib/offline-cache');
   // Current account feeds have localStorage mirrors. These older singleton
   // keys cover installations upgraded from the original offline cache.
   for (const key of ['feed', 'trending', 'notifications']) {
-    if (progress.stoppedEarly) break;
+    checkActive(generation, options.signal);
     const feed = await loadCachedFeed(key);
-    if (feed) await ingest(feed.posts);
+    if (feed) consider(feed.posts);
+  }
+  const entries = [...candidates.values()];
+  for (let offset = 0; offset < entries.length; offset += 500) {
+    checkActive(generation, options.signal);
+    const batch = entries.slice(offset, offset + 500);
+    progress.indexed += await cacheSearchItems(batch, { generation, strict: true });
+    progress.processed += batch.length;
+    options.onProgress?.({ ...progress });
   }
   checkActive(generation, options.signal);
   return progress;

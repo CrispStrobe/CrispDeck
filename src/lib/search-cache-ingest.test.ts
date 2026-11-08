@@ -101,6 +101,32 @@ describe('explicit backfill', () => {
     expect(mocks.cache.mock.calls.map(call => call[0].length)).toEqual([500, 500, 250]);
   });
 
+  it('does not spend the import budget on expired or undated bookmarks', async () => {
+    mocks.settings.maxItems = 100;
+    const expired = new Date(Date.now() - 100 * 86400000).toISOString();
+    mocks.bookmarks.mockResolvedValue([
+      ...Array.from({ length: 150 }, (_, i) => post({ uri: `https://social.example/old/${i}`, createdAt: expired })),
+      post({ uri: 'https://social.example/undated', createdAt: 'invalid' }),
+    ]);
+    localStorage.setItem('crispdeck-vc-feed', JSON.stringify({ data: [post({ uri: 'https://social.example/fresh' })] }));
+    const result = await indexExistingSearchCache();
+    expect(result).toMatchObject({ processed: 1, indexed: 1, stoppedEarly: false });
+    expect(mocks.cache.mock.calls.flatMap(call => call[0]).map(item => item.id)).toEqual(['https://social.example/fresh']);
+  });
+
+  it('retains fresher feed entries even when eligible bookmarks fill the item cap', async () => {
+    mocks.settings.maxItems = 100;
+    mocks.bookmarks.mockResolvedValue(Array.from({ length: 120 }, (_, i) => post({
+      uri: `https://social.example/bookmark/${i}`, createdAt: new Date(Date.now() - 86400000 - i * 60000).toISOString(),
+    })));
+    localStorage.setItem('crispdeck-vc-feed', JSON.stringify({ data: Array.from({ length: 5 }, (_, i) => post({ uri: `https://social.example/fresh/${i}` })) }));
+    const result = await indexExistingSearchCache();
+    const retained = mocks.cache.mock.calls.flatMap(call => call[0]).map(item => item.id);
+    expect(result).toMatchObject({ processed: 100, indexed: 100, stoppedEarly: true });
+    expect(retained).toEqual(expect.arrayContaining(Array.from({ length: 5 }, (_, i) => `https://social.example/fresh/${i}`)));
+    expect(retained).not.toContain('https://social.example/bookmark/119');
+  });
+
   it('passes the generation and fixed scope to Wallabag pages, stopping at the date window', async () => {
     const old = new Date(Date.now() - 100 * 86400000).toISOString();
     mocks.listWallabag.mockResolvedValueOnce({ scope: 'wallabag:connection-one', entries: [article(1)], hasMore: true })

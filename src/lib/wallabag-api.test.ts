@@ -312,6 +312,33 @@ describe('Wallabag browser persistence', () => {
     await expect(api.disconnectWallabag()).rejects.toThrow('Could not remove Wallabag credentials');
   });
 
+  it('keeps the connected session if neither local-search revocation store is writable', async () => {
+    mocks.native = true;
+    mocks.fetch.mockResolvedValueOnce(token('original'));
+    await api.connectWallabag(credentials);
+    const previous = mocks.stored;
+    vi.spyOn(Object.getPrototypeOf(localStorage), 'setItem').mockImplementation(() => {
+      throw new DOMException('Storage blocked', 'SecurityError');
+    });
+    await expect(api.disconnectWallabag()).rejects.toThrow('storage');
+    expect(mocks.stored).toBe(previous);
+    expect(mocks.invoke).not.toHaveBeenCalledWith('wallabag_session_delete', expect.anything());
+  });
+
+  it('revokes the old connection after new authentication but before replacing its session', async () => {
+    mocks.native = true;
+    mocks.fetch.mockResolvedValueOnce(token('original')).mockResolvedValueOnce(token('replacement'));
+    await api.connectWallabag(credentials);
+    const previous = mocks.stored;
+    vi.spyOn(Object.getPrototypeOf(localStorage), 'setItem').mockImplementation(() => {
+      throw new DOMException('Storage blocked', 'SecurityError');
+    });
+    await expect(api.connectWallabag({ ...credentials, username: 'another-reader' })).rejects.toThrow('storage');
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+    expect(mocks.stored).toBe(previous);
+    expect(mocks.invoke.mock.calls.filter(([command]) => command === 'wallabag_session_set')).toHaveLength(1);
+  });
+
   it('reports browser connectivity/CORS failures without echoing transport secrets', async () => {
     mocks.browserFetch.mockRejectedValueOnce(new Error('Transport body had a private-test-sentinel password'));
     const error = await api.connectWallabag(credentials).catch(error => error);

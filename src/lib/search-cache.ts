@@ -5,6 +5,7 @@
  * No provider payloads, credentials, images, or remote search calls live here.
  */
 import { swallow } from './debug-log';
+import { readJson, writeJson, writeString } from './safe-storage';
 
 export const SEARCH_CACHE_SOURCES = ['bluesky', 'mastodon', 'threads', 'rss', 'wallabag'] as const;
 export type SearchCacheSource = typeof SEARCH_CACHE_SOURCES[number];
@@ -60,6 +61,7 @@ interface CachedItem extends Omit<SearchCacheResult, 'score'> {
 
 const SETTINGS_KEY = 'crispdeck-search-cache-settings';
 const GENERATION_KEY = 'crispdeck-search-cache-generation';
+const REVOKED_PREFIX = 'crispdeck-search-cache-revoked:';
 const DB_NAME = 'crispdeck-search-cache';
 const ITEMS = 'items';
 const META = 'meta';
@@ -76,9 +78,10 @@ let dbPromise: Promise<IDBDatabase> | null = null;
 let queue: Promise<unknown> = Promise.resolve();
 let generation = 0;
 let lastError: string | undefined;
+const revokedScopes = new Set<string>();
 
 if (typeof window !== 'undefined') window.addEventListener('storage', event => {
-  if (event.key !== null && event.key !== SETTINGS_KEY && event.key !== GENERATION_KEY) return;
+  if (event.key !== null && event.key !== SETTINGS_KEY && event.key !== GENERATION_KEY && !event.key.startsWith(REVOKED_PREFIX)) return;
   getSearchCacheGeneration();
   // Only maintain a database this tab already used; disabled installs do not
   // start opening databases merely because a preference changed elsewhere.
@@ -111,8 +114,7 @@ function normalizeSettings(value: unknown): SearchCacheSettings {
 
 /** Re-read preferences so another tab or a settings import takes effect. */
 export function getSearchCacheSettings(): SearchCacheSettings {
-  try { return normalizeSettings(JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? 'null')); }
-  catch { return normalizeSettings(null); }
+  return normalizeSettings(readJson<unknown>(SETTINGS_KEY, null));
 }
 
 /** Capture before a fetch; clear/disable/reconfigure invalidates stale writers. */
@@ -125,11 +127,34 @@ export function getSearchCacheGeneration(): number {
 }
 function invalidate(): void {
   generation = getSearchCacheGeneration() + 1;
-  try { localStorage.setItem(GENERATION_KEY, String(generation)); }
-  catch { /* The in-process generation still cancels queued work. */ }
+  // The in-process generation still cancels queued work if storage is blocked.
+  writeString(GENERATION_KEY, String(generation));
 }
 function changed(): void {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event('search-cache-changed'));
+}
+function revocationKey(scope: string): string { return REVOKED_PREFIX + encodeURIComponent(scope); }
+function scopeRevoked(scope: string): boolean {
+  if (revokedScopes.has(scope)) return true;
+  try {
+    if (localStorage.getItem(revocationKey(scope)) !== null) {
+      revokedScopes.add(scope);
+      return true;
+    }
+  } catch { return true; /* Fail closed when the durable gate cannot be read. */ }
+  return false;
+}
+function revocations(): Set<string> {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(REVOKED_PREFIX)) {
+        try { revokedScopes.add(decodeURIComponent(key.slice(REVOKED_PREFIX.length))); }
+        catch { /* Ignore a malformed foreign storage key. */ }
+      }
+    }
+  } catch { /* getSearchCacheSettings fails closed if preferences are blocked. */ }
+  return revokedScopes;
 }
 function failure(error: unknown): Error {
   // Never log a provider response, a query, or cached private text.
@@ -286,6 +311,7 @@ function finishRecord(item: Omit<CachedItem, 'tokens' | 'bytes'>): CachedItem {
 }
 function recordFor(input: SearchCacheInput, settings: SearchCacheSettings): CachedItem | null {
   if (!SEARCH_CACHE_SOURCES.includes(input.source) || !input.scope || input.scope.length > 2048 || !input.id || input.id.length > 4096 || typeof input.text !== 'string') return null;
+  if (scopeRevoked(input.scope)) return null;
   const config = selectedPolicy(settings, input.source);
   const createdAtMs = Date.parse(input.createdAt);
   if (!config.enabled || !Number.isFinite(createdAtMs) || (settings.maxAgeDays && createdAtMs < Date.now() - settings.maxAgeDays * DAY)) return null;
@@ -307,6 +333,27 @@ function maintain(tx: IDBTransaction, settings: SearchCacheSettings, rebuild = f
   const items = tx.objectStore(ITEMS);
   const meta = tx.objectStore(META);
   if (!settings.enabled) { items.clear(); return; }
+  // A scope may have been revoked while IndexedDB was unavailable. The
+  // independent gate hides it immediately; retry physical cleanup here.
+  const revoked = [...revocations()];
+  const policyMaintenance = () => maintainPolicy(tx, settings, rebuild);
+  if (!revoked.length) { policyMaintenance(); return; }
+  let pending = revoked.length;
+  for (const scope of revoked) {
+    const cursor = items.index('scope').openCursor(scope);
+    cursor.onsuccess = () => {
+      if (cursor.result) { cursor.result.delete(); cursor.result.continue(); return; }
+      const tombstone = meta.get(`revoked:${scope}`);
+      tombstone.onsuccess = () => {
+        if (!tombstone.result) meta.put({ key: `revoked:${scope}`, value: true });
+        if (--pending === 0) policyMaintenance();
+      };
+    };
+  }
+}
+function maintainPolicy(tx: IDBTransaction, settings: SearchCacheSettings, rebuild: boolean): void {
+  const items = tx.objectStore(ITEMS);
+  const meta = tx.objectStore(META);
   const signature = JSON.stringify({ posts: settings.posts, wallabag: settings.wallabag });
   const savedPolicy = meta.get('policy');
   savedPolicy.onsuccess = () => {
@@ -383,7 +430,7 @@ export async function cacheSearchItems(inputs: SearchCacheInput[], options: { ge
           const revoked = meta.get(`revoked:${scope}`);
           revoked.onsuccess = () => {
             try {
-              if (!revoked.result && started === getSearchCacheGeneration() && getSearchCacheSettings().enabled) {
+              if (!revoked.result && !scopeRevoked(scope) && started === getSearchCacheGeneration() && getSearchCacheSettings().enabled) {
                 for (const record of scoped) { items.put(record); count++; }
               }
               if (--remaining === 0) { result(count); maintain(tx, getSearchCacheSettings()); }
@@ -405,8 +452,7 @@ export async function cacheSearchItems(inputs: SearchCacheInput[], options: { ge
 export async function updateSearchCacheSettings(value: SearchCacheSettings): Promise<SearchCacheSettings> {
   const settings = normalizeSettings(value);
   invalidate();
-  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
-  catch (error) { throw failure(error); }
+  if (!writeJson(SETTINGS_KEY, settings)) throw failure(new Error('Preference write failed'));
   try {
     await serialized(() => maintenance());
     lastError = undefined;
@@ -428,9 +474,19 @@ export async function clearSearchCache(): Promise<void> {
   } catch (error) { throw failure(error); }
 }
 
-/** Persist the tombstone and deletion atomically, including across tabs. */
+/**
+ * Revoke independently of database cleanup, including across tabs/restarts.
+ * A failed deletion transaction must not resurrect a disconnected account.
+ * Call before deleting account credentials: if neither durable mechanism works,
+ * this rejects and the account can remain connected until storage recovers.
+ */
 export async function removeSearchCacheScope(scope: string): Promise<void> {
   invalidate();
+  revokedScopes.add(scope);
+  // The IndexedDB tombstone below is a second durable mechanism if this fails.
+  const gated = writeString(revocationKey(scope), '1');
+  changed();
+  if (typeof indexedDB === 'undefined' && gated) return;
   try {
     await serialized(async () => {
       const db = await openDB();
@@ -443,7 +499,11 @@ export async function removeSearchCacheScope(scope: string): Promise<void> {
       });
     });
     changed();
-  } catch (error) { throw failure(error); }
+  } catch (error) {
+    const reported = failure(error);
+    // The durable gate blocks reads/writes and maintenance retries deletion.
+    if (!gated) throw reported;
+  }
 }
 
 /** Rebuild from retained excerpts; deliberately cannot recover discarded text. */
@@ -463,7 +523,9 @@ export async function getSearchCacheStats(): Promise<SearchCacheStats> {
       request.onsuccess = () => {
         if (!request.result) return;
         const item = request.result.value as CachedItem;
-        stats.count++; stats.bytes += item.bytes; stats.bySource[item.source]++;
+        if (!scopeRevoked(item.scope)) {
+          stats.count++; stats.bytes += item.bytes; stats.bySource[item.source]++;
+        }
         request.result.continue();
       };
     });
@@ -498,7 +560,7 @@ export async function searchCache(query: string, options: { source?: SearchCache
           const request = store.get(key);
           request.onsuccess = () => {
             const item = request.result as CachedItem | undefined;
-            if (!item || (options.source && item.source !== options.source)) return;
+            if (!item || scopeRevoked(item.scope) || (options.source && item.source !== options.source)) return;
             const settings = getSearchCacheSettings();
             if (!settings.enabled || !selectedPolicy(settings, item.source).enabled || (settings.maxAgeDays && item.createdAtMs < Date.now() - settings.maxAgeDays * DAY)) return;
             const title = normalized(item.title);

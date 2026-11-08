@@ -1687,7 +1687,10 @@
                 <span class="text-[10px] text-[var(--color-text-muted)] block truncate">{feed.url}</span>
               </div>
               <button
-                onclick={() => { removeFeed(feed.id); rssFeeds = listFeeds(); }}
+                onclick={async () => {
+                  try { await removeFeed(feed.id); rssFeeds = listFeeds(); }
+                  catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
+                }}
                 class="text-[var(--color-text-muted)] hover:text-[var(--color-danger)] p-1 flex-shrink-0"
                aria-label={i18n.t.common.remove}>
                 <Trash2 size={12} />

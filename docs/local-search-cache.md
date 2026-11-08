@@ -65,8 +65,15 @@ The separate Archive feature is unchanged. Direct-message content is excluded.
 Connect Wallabag in Settings, enable the local cache and Wallabag source, then
 use **Sync Wallabag**. The import requests entries from the configured
 Wallabag server, newest first, and applies the same excerpt and retention rules.
-An import is bounded and can be cancelled; it does not run a background crawler
-while the app is closed.
+It requests up to 50 entries per page and stops when it reaches the configured
+item limit, passes the history window, or runs out of entries. The maximum
+setting permits up to 50,000 entries; the UI reports when a limit stops an
+import. A larger item limit allows a later sync to reach older entries.
+
+An import can be cancelled, and leaving the Settings page cancels it. It does
+not run a background crawler while the app is closed. Excerpt limits control
+the text retained locally; a provider may return a full article during a fetch
+before CrispDeck extracts the configured portion.
 
 The browser build requires the Wallabag server to allow the app's origin through
 CORS. Native builds use CrispDeck's native HTTP transport. Authentication stays

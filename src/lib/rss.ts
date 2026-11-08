@@ -51,10 +51,12 @@ export function addFeed(url: string, title?: string): RssFeed {
   return feed;
 }
 
-export function removeFeed(id: string): void {
+export async function removeFeed(id: string): Promise<void> {
+  await removeSearchCacheScope(`rss:${id}`);
+  // Read after the asynchronous cleanup so a newly added subscription is not
+  // overwritten by a snapshot from before the removal started.
   const feeds = listFeeds().filter(f => f.id !== id);
-  writeJson(STORAGE_KEY, feeds);
-  if (typeof indexedDB !== 'undefined') void removeSearchCacheScope(`rss:${id}`).catch(error => swallow('search-cache.rss.remove', error));
+  if (!writeJson(STORAGE_KEY, feeds)) throw new Error('Could not remove the RSS feed. Check browser storage and try again.');
 }
 
 export function importOPML(opmlText: string): RssFeed[] {

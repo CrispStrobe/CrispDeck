@@ -44,7 +44,7 @@ const searchScope = (session: Session): string | undefined => session.connection
 
 async function clearConnectionSearchCache(session: Session | null): Promise<void> {
   const scope = session && searchScope(session);
-  if (scope && typeof indexedDB !== 'undefined') {
+  if (scope) {
     const { removeSearchCacheScope } = await import('$lib/search-cache');
     await removeSearchCacheScope(scope);
   }
@@ -152,6 +152,7 @@ export async function disconnectWallabag(): Promise<void> {
   await withSessionLock(async () => {
     const store = await selectedStore();
     const previous = await readSession(store).catch(() => null);
+    await clearConnectionSearchCache(previous);
     if (store.kind === 'native') {
       await invoke('wallabag_session_delete', store.args);
     } else {
@@ -162,7 +163,6 @@ export async function disconnectWallabag(): Promise<void> {
         throw new WallabagError('Could not remove Wallabag credentials. Check browser storage and try again.');
       }
     }
-    await clearConnectionSearchCache(previous);
   });
 }
 
@@ -260,9 +260,12 @@ export async function connectWallabag(credentials: WallabagCredentials): Promise
     if (started !== generation) throw connectionChanged();
     const result = await token(server, { grant_type: 'password', client_id: clientId, client_secret: clientSecret, username, password: credentials.password });
     if (started !== generation) throw connectionChanged();
+    // Authenticate first, then revoke the previous connection before replacing
+    // its credentials. A failed cleanup must leave a connection we can retry.
+    await clearConnectionSearchCache(previous);
+    if (started !== generation) throw connectionChanged();
     await writeSession(store, { server, clientId, clientSecret, accessToken: result.access_token, refreshToken: result.refresh_token, expiresAt: Date.now() + result.expires_in * 1000, connectionId: crypto.randomUUID() });
     if (started !== generation) throw connectionChanged();
-    await clearConnectionSearchCache(previous);
     return server;
   });
 }

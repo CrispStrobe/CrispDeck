@@ -91,14 +91,13 @@ export async function updateAccount(params: {
 }
 
 export async function deleteAccount(id: number): Promise<void> {
+  // Revoke before deleting credentials. If both cache stores are unavailable,
+  // retain the connected account so removal can be safely retried.
+  const { removeSearchCacheScope } = await import('$lib/search-cache');
+  await removeSearchCacheScope(`account:${id}`);
   if (!isTauri()) await browserDb.deleteAccount(id);
   else await invoke('db_delete_account', { id });
-  try {
-    if (typeof indexedDB !== 'undefined') {
-      const { removeSearchCacheScope } = await import('$lib/search-cache');
-      await removeSearchCacheScope(`account:${id}`);
-    }
-  } finally { accountsChanged(true); }
+  accountsChanged(true);
 }
 
 /** Refresh the non-secret account marker after native OAuth reconnection. */
