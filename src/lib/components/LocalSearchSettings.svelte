@@ -8,6 +8,7 @@
     getSearchCacheSettings, updateSearchCacheSettings, getSearchCacheStats,
     clearSearchCache, rebuildSearchCache, type SearchCacheSettings,
   } from '$lib/search-cache';
+  import { indexExistingSearchCache, syncWallabagSearchCache, type SearchCacheSyncProgress, type SearchCacheSyncResult } from '$lib/search-cache-ingest';
 
   function copy(settings: SearchCacheSettings): SearchCacheSettings {
     return { ...settings, posts: { ...settings.posts }, wallabag: { ...settings.wallabag } };
@@ -20,6 +21,8 @@
   let operation = $state('');
   let error = $state('');
   let notice = $state('');
+  let progress = $state<SearchCacheSyncProgress | null>(null);
+  let syncController: AbortController | null = null;
   let disposed = false;
   let statusTimer: ReturnType<typeof setTimeout> | undefined;
   const busy = $derived(operation !== '');
@@ -55,8 +58,12 @@
       await action();
       if (!disposed) notice = success();
     } catch (cause) {
-      swallow('search-cache.settings.action', cause);
-      if (!disposed) error = cause instanceof Error ? cause.message : i18n.t.localSearch.operationFailed;
+      if (cause && typeof cause === 'object' && 'name' in cause && cause.name === 'AbortError') {
+        if (!disposed) notice = i18n.t.localSearch.stopped;
+      } else {
+        swallow('search-cache.settings.action', cause);
+        if (!disposed) error = cause instanceof Error ? cause.message : i18n.t.localSearch.operationFailed;
+      }
     } finally {
       if (!disposed) {
         operation = '';
@@ -75,6 +82,26 @@
     }, () => i18n.t.localSearch.saved);
   }
 
+  async function indexItems(source: 'existing' | 'wallabag') {
+    if (busy) return;
+    const controller = new AbortController();
+    syncController = controller;
+    progress = { processed: 0, indexed: 0, pages: 0 };
+    let result: SearchCacheSyncResult | null = null;
+    try {
+      await runAction(source, async () => {
+        const action = source === 'wallabag' ? syncWallabagSearchCache : indexExistingSearchCache;
+        result = await action({
+          signal: controller.signal,
+          onProgress: value => { if (!disposed) progress = value; },
+        });
+        if (controller.signal.aborted) throw new DOMException('Indexing stopped.', 'AbortError');
+      }, () => `${i18n.t.localSearch.synced.replace('{count}', String(result?.indexed ?? 0))}${result?.stoppedEarly ? ` ${i18n.t.localSearch.syncLimited}` : ''}`);
+    } finally {
+      if (syncController === controller) syncController = null;
+    }
+  }
+
   onMount(() => {
     void refreshStatus();
     const changed = () => {
@@ -84,6 +111,7 @@
     window.addEventListener('search-cache-changed', changed);
     return () => {
       disposed = true;
+      syncController?.abort();
       clearTimeout(statusTimer);
       window.removeEventListener('search-cache-changed', changed);
     };
@@ -154,13 +182,20 @@
     </form>
 
     <div class="pt-4 border-t border-[var(--color-border)] space-y-3">
+      <p class="text-xs text-[var(--color-text-muted)]">{i18n.t.localSearch.syncHint}</p>
       {#if stats}
         <p class="text-xs text-[var(--color-text-muted)]">{i18n.t.localSearch.stats.replace('{count}', String(stats.count)).replace('{size}', formattedBytes(stats.bytes))}</p>
         {#if !stats.available}<p role="alert" class="text-xs text-[var(--color-danger)]">{i18n.t.localSearch.unavailable}</p>{/if}
         {#if stats.error && stats.available}<p role="alert" class="text-xs text-[var(--color-danger)]">{stats.error}</p>{/if}
       {/if}
       <div class="flex flex-wrap items-center gap-2">
-        <button type="button" disabled={busy || !saved.enabled || !stats?.available}
+        <button type="button" disabled={busy || dirty || !saved.enabled || !saved.posts.enabled || !stats?.available}
+          onclick={() => { void indexItems('existing'); }}
+          class="px-3 py-2 rounded-md border border-[var(--color-border)] text-xs disabled:opacity-50">{i18n.t.localSearch.indexExisting}</button>
+        <button type="button" disabled={busy || dirty || !saved.enabled || !saved.wallabag.enabled || !stats?.available}
+          onclick={() => { void indexItems('wallabag'); }}
+          class="px-3 py-2 rounded-md border border-[var(--color-border)] text-xs disabled:opacity-50">{i18n.t.localSearch.syncWallabag}</button>
+        <button type="button" disabled={busy || dirty || !saved.enabled || !stats?.available}
           onclick={() => runAction('rebuild', rebuildSearchCache, () => i18n.t.localSearch.rebuilt)}
           class="px-3 py-2 rounded-md border border-[var(--color-border)] text-xs disabled:opacity-50">{i18n.t.localSearch.rebuild}</button>
         <button type="button" disabled={busy || !stats?.available}
@@ -172,6 +207,12 @@
       </div>
     </div>
     {#if busy}<p role="status" class="flex items-center gap-2 text-xs"><Loader2 size={14} class="animate-spin" />{i18n.t.localSearch.working}</p>{/if}
+    {#if operation === 'existing' || operation === 'wallabag'}
+      <div class="flex flex-wrap items-center gap-3">
+        {#if progress}<p role="status" class="text-xs">{i18n.t.localSearch.syncProgress.replace('{processed}', String(progress.processed)).replace('{indexed}', String(progress.indexed))}</p>{/if}
+        <button type="button" onclick={() => syncController?.abort()} class="px-3 py-2 rounded-md border border-[var(--color-border)] text-xs">{i18n.t.localSearch.stop}</button>
+      </div>
+    {/if}
     {#if notice}<p role="status" class="text-xs text-[var(--color-success)]">{notice}</p>{/if}
     {#if error}<p role="alert" class="text-sm text-[var(--color-danger)]">{error}</p>{/if}
   </div>

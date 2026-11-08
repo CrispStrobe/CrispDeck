@@ -78,7 +78,11 @@ export function queuePostsForSearchCache(posts: UnifiedPost[], generation = getS
     const items = [...queued.values()];
     const capturedGeneration = queueGeneration;
     queued.clear();
-    void cacheSearchItems(items, { generation: capturedGeneration }).catch(error => swallow('search-cache.ingest', error));
+    void (async () => {
+      for (let offset = 0; offset < items.length; offset += 500) {
+        await cacheSearchItems(items.slice(offset, offset + 500), { generation: capturedGeneration });
+      }
+    })().catch(error => swallow('search-cache.ingest', error));
   });
 }
 
@@ -116,8 +120,12 @@ export async function indexExistingSearchCache(options: SearchCacheSyncOptions =
       if (seen.size >= settings.maxItems) { progress.stoppedEarly = true; break; }
       seen.add(key); entries.push(item);
     }
-    progress.processed += entries.length;
-    progress.indexed += await cacheSearchItems(entries, { generation });
+    for (let offset = 0; offset < entries.length; offset += 500) {
+      checkActive(generation, options.signal);
+      const batch = entries.slice(offset, offset + 500);
+      progress.indexed += await cacheSearchItems(batch, { generation, strict: true });
+      progress.processed += batch.length;
+    }
     progress.pages++;
     options.onProgress?.({ ...progress });
   };
@@ -181,7 +189,7 @@ export async function syncWallabagSearchCache(options: SearchCacheSyncOptions = 
         title: entry.title, text: entry.content, html: true, createdAt: entry.createdAt });
     }
     progress.processed += inputs.length;
-    progress.indexed += await cacheSearchItems(inputs, { generation });
+    progress.indexed += await cacheSearchItems(inputs, { generation, strict: true });
     progress.pages++;
     options.onProgress?.({ ...progress });
     checkActive(generation, options.signal);

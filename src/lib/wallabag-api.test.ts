@@ -264,7 +264,12 @@ describe('Wallabag account and refresh lifecycle', () => {
   it('propagates failed native deletion and keeps the session available for a retry', async () => {
     mocks.fetch.mockResolvedValueOnce(token('access'));
     await api.connectWallabag(credentials);
-    mocks.invoke.mockRejectedValueOnce(new Error('Keychain deletion failed'));
+    const original = mocks.invoke.getMockImplementation()!;
+    let failDelete = true;
+    mocks.invoke.mockImplementation(async (command, args) => {
+      if (command === 'wallabag_session_delete' && failDelete) { failDelete = false; throw new Error('Keychain deletion failed'); }
+      return original(command, args);
+    });
     await expect(api.disconnectWallabag()).rejects.toThrow('Keychain deletion failed');
     expect(await api.wallabagConnected(credentials.server)).toBe(true);
     await api.disconnectWallabag();
@@ -312,5 +317,74 @@ describe('Wallabag browser persistence', () => {
     const error = await api.connectWallabag(credentials).catch(error => error);
     expect(error.message).toContain('browser CORS settings');
     expect(error.message).not.toContain('private-test-sentinel');
+  });
+});
+
+const articlePage = (items: unknown[], pages = 1) => new Response(JSON.stringify({ _embedded: { items }, pages }), { status: 200 });
+const article = { id: 1, title: 'A saved article', url: 'https://example.org/article', content: '<p>First paragraph</p><p>Later</p>', created_at: '2026-11-01T12:00:00Z', password: 'never project', annotations: ['omit'] };
+
+describe('Wallabag search-index reads', () => {
+  it('lists a bounded page with no credential in the URL and returns only article fields', async () => {
+    mocks.fetch.mockResolvedValueOnce(token('access')).mockResolvedValueOnce(articlePage([article], 3));
+    await api.connectWallabag(credentials);
+    const scope = await api.wallabagSearchScope(credentials.server);
+    const result = await api.listWallabagEntries(credentials.server, { page: 2, perPage: 25, expectedScope: scope });
+    expect(result).toEqual({ scope, entries: [{ id: 1, title: article.title, url: article.url, content: article.content, createdAt: article.created_at }], hasMore: true });
+    expect(mocks.fetch.mock.calls[1][0]).toBe('https://wallabag.example/api/entries.json?page=2&perPage=25&sort=created&order=desc');
+    expect(mocks.fetch.mock.calls[1][1]).toMatchObject({ method: 'GET', headers: { Authorization: 'Bearer access' }, redirect: 'error', maxRedirections: 0 });
+    expect(scope).not.toContain('access'); expect(JSON.stringify(result)).not.toContain('never project');
+  });
+
+  it('uses browser CORS transport and refreshes once after unauthorized', async () => {
+    mocks.native = false;
+    mocks.browserFetch.mockResolvedValueOnce(token('old')).mockResolvedValueOnce(new Response('', { status: 401 }))
+      .mockResolvedValueOnce(token('new')).mockResolvedValueOnce(articlePage([article]));
+    await api.connectWallabag(credentials);
+    const result = await api.listWallabagEntries(credentials.server);
+    expect(result.entries).toHaveLength(1);
+    expect(mocks.browserFetch.mock.calls[3][1].headers.Authorization).toBe('Bearer new');
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it('pins an import to its connection, including reconnects on the same server', async () => {
+    mocks.fetch.mockResolvedValueOnce(token('first')).mockResolvedValueOnce(token('second'));
+    await api.connectWallabag(credentials);
+    const oldScope = await api.wallabagSearchScope(credentials.server);
+    await api.connectWallabag(credentials);
+    expect(await api.wallabagSearchScope(credentials.server)).not.toBe(oldScope);
+    await expect(api.listWallabagEntries(credentials.server, { expectedScope: oldScope })).rejects.toThrow('connection changed');
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects a response from a connection replaced while the page was being read', async () => {
+    const pending = deferred<Response>();
+    mocks.fetch.mockResolvedValueOnce(token('first')).mockImplementationOnce(() => pending.promise).mockResolvedValueOnce(token('second'));
+    await api.connectWallabag(credentials);
+    const reading = api.listWallabagEntries(credentials.server);
+    const checked = expect(reading).rejects.toThrow('connection changed');
+    await vi.waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(2));
+    await api.connectWallabag(credentials);
+    pending.resolve(articlePage([article]));
+    await checked;
+  });
+
+  it('cancels a page request through the supplied AbortSignal', async () => {
+    const controller = new AbortController();
+    mocks.fetch.mockResolvedValueOnce(token('first')).mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
+      init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
+    }));
+    await api.connectWallabag(credentials);
+    const reading = api.listWallabagEntries(credentials.server, { signal: controller.signal });
+    const checked = expect(reading).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(2));
+    controller.abort(); await checked;
+  });
+
+  it('rejects invalid bounds and malformed pages without following next links', async () => {
+    await expect(api.listWallabagEntries(credentials.server, { perPage: 51 })).rejects.toThrow('page size');
+    mocks.fetch.mockResolvedValueOnce(token('access')).mockResolvedValueOnce(new Response(JSON.stringify({ _embedded: { items: [{}] }, _links: { next: { href: 'https://other.example' } } }), { status: 200 }));
+    await api.connectWallabag(credentials);
+    await expect(api.listWallabagEntries(credentials.server)).rejects.toThrow('invalid article');
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
   });
 });

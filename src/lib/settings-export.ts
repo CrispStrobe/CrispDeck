@@ -16,6 +16,7 @@ export interface SettingsExport {
 const EXCLUDE_PATTERNS = [
   'crispdeck-oauth',     // OAuth state (transient)
   'crispdeck-threads-oauth', // Threads OAuth state (transient)
+  'crispdeck-search-cache-generation', // Local cancellation epoch, not a preference
 ];
 
 /** Keys that contain encrypted credentials — never export */

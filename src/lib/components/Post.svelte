@@ -33,7 +33,6 @@
 </script>
 
 <script lang="ts">
-  import { queuePostsForSearchCache } from '$lib/search-cache-ingest';
   import * as embeds from '$lib/components/post-embeds';
   import { readJson } from '$lib/safe-storage';
   import { hrefOrHash, safeExternalUrl } from '$lib/safe-url';
@@ -218,7 +217,6 @@
   };
 
   onMount(async () => {
-    queuePostsForSearchCache([post]);
     bookmarked = await isBookmarked(post.uri);
     bookmarkLoaded = true;
     pinned = isPinned(post.uri);

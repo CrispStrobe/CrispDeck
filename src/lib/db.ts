@@ -94,8 +94,10 @@ export async function deleteAccount(id: number): Promise<void> {
   if (!isTauri()) await browserDb.deleteAccount(id);
   else await invoke('db_delete_account', { id });
   try {
-    const { removeSearchCacheScope } = await import('$lib/search-cache');
-    await removeSearchCacheScope(`account:${id}`);
+    if (typeof indexedDB !== 'undefined') {
+      const { removeSearchCacheScope } = await import('$lib/search-cache');
+      await removeSearchCacheScope(`account:${id}`);
+    }
   } finally { accountsChanged(true); }
 }
 

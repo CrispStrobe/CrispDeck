@@ -44,7 +44,7 @@ const searchScope = (session: Session): string | undefined => session.connection
 
 async function clearConnectionSearchCache(session: Session | null): Promise<void> {
   const scope = session && searchScope(session);
-  if (scope) {
+  if (scope && typeof indexedDB !== 'undefined') {
     const { removeSearchCacheScope } = await import('$lib/search-cache');
     await removeSearchCacheScope(scope);
   }

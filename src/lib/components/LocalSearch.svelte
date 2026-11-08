@@ -4,6 +4,7 @@
   import { Search, Loader2, ExternalLink, Database } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { swallow } from '$lib/debug-log';
+  import { toast } from '$lib/toast.svelte';
   import { safeExternalUrl } from '$lib/safe-url';
   import { openExternalLink } from '$lib/external-link';
   import {
@@ -141,6 +142,7 @@
     <div class="flex gap-2">
       <input
         type="search"
+        maxlength="256"
         value={query}
         oninput={(event) => { query = event.currentTarget.value; scheduleSearch(); }}
         aria-label={i18n.t.localSearch.placeholder}
@@ -190,7 +192,7 @@
           <h2 class="font-semibold text-sm break-words">
             {#if url}
               <a href={url} target="_blank" rel="noopener noreferrer" class="hover:underline text-[var(--color-primary-text)]"
-                onclick={(event) => openExternalLink(event, url, () => { error = i18n.t.localSearch.searchFailed; })}>
+                onclick={(event) => openExternalLink(event, url, () => { toast.error(i18n.t.common.somethingWentWrong); })}>
                 {result.title || i18n.t.localSearch.untitled}
               </a>
             {:else}{result.title || i18n.t.localSearch.untitled}{/if}
@@ -200,7 +202,7 @@
             <span>{i18n.t.localSearch.cached.replace('{date}', formattedDate(result.indexedAt))}</span>
             {#if url}
               <a href={url} target="_blank" rel="noopener noreferrer" class="flex items-center gap-1 hover:underline"
-                onclick={(event) => openExternalLink(event, url, () => { error = i18n.t.localSearch.searchFailed; })}>
+                onclick={(event) => openExternalLink(event, url, () => { toast.error(i18n.t.common.somethingWentWrong); })}>
                 {i18n.t.localSearch.open}<ExternalLink size={12} />
               </a>
             {/if}

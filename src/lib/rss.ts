@@ -54,7 +54,7 @@ export function addFeed(url: string, title?: string): RssFeed {
 export function removeFeed(id: string): void {
   const feeds = listFeeds().filter(f => f.id !== id);
   writeJson(STORAGE_KEY, feeds);
-  void removeSearchCacheScope(`rss:${id}`).catch(error => swallow('search-cache.rss.remove', error));
+  if (typeof indexedDB !== 'undefined') void removeSearchCacheScope(`rss:${id}`).catch(error => swallow('search-cache.rss.remove', error));
 }
 
 export function importOPML(opmlText: string): RssFeed[] {
@@ -136,11 +136,16 @@ export async function fetchFeed(url: string): Promise<RssItem[]> {
   const items = parseRssXml(xml);
   const settings = getSearchCacheSettings();
   if (settings.enabled && settings.posts.enabled) {
-    void cacheSearchItems(items.map(item => ({
+    const entries = items.map(item => ({
       source: 'rss' as const, scope: `rss:${subscription?.id ?? url}`, id: item.link, url: item.link,
       title: item.title, text: item.content ?? item.description, html: true,
       author: item.author || subscription?.title || '', createdAt: item.pubDate,
-    })), { generation: searchGeneration }).catch(error => swallow('search-cache.rss.ingest', error));
+    }));
+    void (async () => {
+      for (let offset = 0; offset < entries.length; offset += 500) {
+        await cacheSearchItems(entries.slice(offset, offset + 500), { generation: searchGeneration });
+      }
+    })().catch(error => swallow('search-cache.rss.ingest', error));
   }
   return items;
 }

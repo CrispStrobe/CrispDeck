@@ -13,6 +13,8 @@
   import { searchMastodon, searchThreads, mergeSearchResults } from '$lib/universal-search';
   import Post from '$lib/components/Post.svelte';
   import LocalSearch from '$lib/components/LocalSearch.svelte';
+  import { getSearchCacheGeneration } from '$lib/search-cache';
+  import { queuePostsForSearchCache } from '$lib/search-cache-ingest';
   import type { UnifiedPost, Account, Platform } from '$lib/types';
 
   let accounts: Account[] = $state([]);
@@ -23,6 +25,7 @@
   let query = $state(initialParams.get('q') ?? '');
   let searchScope = $state<'networks' | 'local'>(initialParams.get('scope') === 'local' ? 'local' : 'networks');
   let remoteInitialized = false;
+  let disposed = false;
   let results: UnifiedPost[] = $state([]);
   let actors: SearchActor[] = $state([]);
   let searchSequence = 0;
@@ -63,13 +66,14 @@
     remoteInitialized = true;
     try {
       const result = await initAllClients();
+      if (disposed) return;
       accounts = result.accounts;
       clientEntries = result.clients;
       if (query.trim() && searchScope === 'networks') await handleSearch();
     } catch (e) {
-      error = String(e);
+      if (!disposed) error = String(e);
     } finally {
-      loading = false;
+      if (!disposed) loading = false;
     }
   }
 
@@ -82,7 +86,7 @@
     refreshSavedSearches();
     // Opening local search must not require a network connection or token refresh.
     if (searchScope === 'networks') void initializeRemoteSearch();
-    return () => { searchSequence++; };
+    return () => { disposed = true; searchSequence++; };
   });
 
   async function handleSearch() {
@@ -96,26 +100,28 @@
 
     const resultsByPlatform = new Map<Platform, UnifiedPost[]>();
     const q = query.trim();
+    const cacheGeneration = getSearchCacheGeneration();
 
     const searchResults = await Promise.allSettled(accounts.map(async (acct) => {
       const entry = clientEntries.get(acct.id);
       if (!entry) return { platform: acct.platform, posts: [] as UnifiedPost[] };
+      const scopedPosts = (posts: UnifiedPost[]) => posts.map(post => ({ ...post, sourceAccountId: acct.id, sourceAccount: acct.handle }));
 
       if (acct.platform === 'bluesky') {
         const found = await searchBlueskyAccount(entry, q);
-        return { platform: acct.platform, ...found };
+        return { platform: acct.platform, ...found, posts: scopedPosts(found.posts) };
       } else if (acct.platform === 'mastodon') {
         const masto = entry.client as MastodonClient;
         const token = masto.getAccessToken();
         if (!token) return { platform: acct.platform, posts: [] };
         const statuses = await searchMastodon(q, masto.getInstanceUrl(), token, 40);
-        return { platform: acct.platform, posts: statuses.map((s: any) => normalizePost(s, 'mastodon')) };
+        return { platform: acct.platform, posts: scopedPosts(statuses.map((s: any) => normalizePost(s, 'mastodon'))) };
       } else if (acct.platform === 'threads') {
         const threads = entry.client as ThreadsClient;
         const token = threads.getAccessToken?.();
         if (!token) return { platform: acct.platform, posts: [] };
         const threadsPosts = await searchThreads(q, token, 25);
-        return { platform: acct.platform, posts: threadsPosts.map((p: any) => threads.normalizePost(p)) };
+        return { platform: acct.platform, posts: scopedPosts(threadsPosts.map((p: any) => threads.normalizePost(p))) };
       }
       return { platform: acct.platform, posts: [] as UnifiedPost[] };
     }));
@@ -130,6 +136,7 @@
         if (result.value.postFailed || result.value.actorFailed) failed++;
       }
       if (result.value.posts.length > 0) {
+        queuePostsForSearchCache(result.value.posts, cacheGeneration);
         const p = result.value.platform;
         resultsByPlatform.set(p, [...(resultsByPlatform.get(p) ?? []), ...result.value.posts]);
       }

@@ -77,6 +77,15 @@ let queue: Promise<unknown> = Promise.resolve();
 let generation = 0;
 let lastError: string | undefined;
 
+if (typeof window !== 'undefined') window.addEventListener('storage', event => {
+  if (event.key !== null && event.key !== SETTINGS_KEY && event.key !== GENERATION_KEY) return;
+  getSearchCacheGeneration();
+  // Only maintain a database this tab already used; disabled installs do not
+  // start opening databases merely because a preference changed elsewhere.
+  if (dbPromise) void serialized(() => maintenance()).catch(failure);
+  changed();
+});
+
 function bounded(value: unknown, fallback: number, min: number, max: number): number {
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.min(max, Math.max(min, Math.floor(value))) : fallback;
@@ -124,13 +133,15 @@ function changed(): void {
 }
 function failure(error: unknown): Error {
   // Never log a provider response, a query, or cached private text.
-  const name = error instanceof Error ? error.name : '';
+  const name = error && typeof error === 'object' && 'name' in error ? String(error.name) : '';
   const message = name === 'QuotaExceededError'
     ? 'Local search storage is full. Clear the cache or reduce its limits.'
     : 'Local search storage is unavailable. Check site storage permissions and try again.';
-  if (lastError !== message) swallow('search-cache.storage', new Error(message));
+  const newError = lastError !== message;
+  if (newError) swallow('search-cache.storage', new Error(message));
   lastError = message;
-  changed();
+  // A status read must not trigger an endless status-read/event retry loop.
+  if (newError) changed();
   return new Error(message);
 }
 function serialized<T>(action: () => Promise<T>): Promise<T> {
@@ -179,14 +190,16 @@ function openDB(): Promise<IDBDatabase> {
 }
 
 /** Resolve only after commit. Request success can still be followed by abort. */
-function transaction<T>(db: IDBDatabase, mode: IDBTransactionMode, run: (tx: IDBTransaction, result: (value: T) => void) => void): Promise<T> {
+function transaction<T>(db: IDBDatabase, mode: IDBTransactionMode, run: (tx: IDBTransaction, result: (value: T) => void, abort: (error: unknown) => void) => void): Promise<T> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction([ITEMS, META], mode);
     let value: T;
+    let cause: unknown;
     tx.oncomplete = () => resolve(value);
-    tx.onerror = tx.onabort = () => reject(tx.error ?? new Error('Local search transaction aborted'));
-    try { run(tx, result => { value = result; }); }
-    catch (error) { tx.abort(); reject(error); }
+    tx.onerror = tx.onabort = () => reject(cause ?? tx.error ?? new Error('Local search transaction aborted'));
+    const abort = (error: unknown) => { cause = error; tx.abort(); };
+    try { run(tx, result => { value = result; }, abort); }
+    catch (error) { abort(error); }
   });
 }
 
@@ -280,7 +293,8 @@ function recordFor(input: SearchCacheInput, settings: SearchCacheSettings): Cach
   return finishRecord({
     id: JSON.stringify([input.source, input.scope, input.id]),
     source: input.source, scope: input.scope, url: safeLink(input.url),
-    title: clip(extractSearchText(input.title ?? '', input.html).text.replace(/\s+/g, ' '), 512),
+    title: clip(extractSearchText(input.title ?? '', input.html).text.replace(/\s+/g, ' '), 512)
+      || clip(content.paragraph.split('\n')[0], 160),
     excerpt: retainedExcerpt(content.text, content.paragraph, config),
     author: clip(whitespace(input.author ?? '').replace(/\s+/g, ' '), 256),
     createdAt: new Date(createdAtMs).toISOString(), createdAtMs,
@@ -339,9 +353,16 @@ async function maintenance(rebuild = false): Promise<void> {
 }
 
 /** Optional automatic collection must never make a feed fail to load. */
-export async function cacheSearchItems(inputs: SearchCacheInput[], options: { generation?: number } = {}): Promise<number> {
+export async function cacheSearchItems(inputs: SearchCacheInput[], options: { generation?: number; strict?: boolean } = {}): Promise<number> {
   const started = options.generation ?? getSearchCacheGeneration();
   if (!inputs.length || !getSearchCacheSettings().enabled || started !== getSearchCacheGeneration()) return 0;
+  if (inputs.length > 500) {
+    let total = 0;
+    for (let offset = 0; offset < inputs.length; offset += 500) {
+      total += await cacheSearchItems(inputs.slice(offset, offset + 500), { ...options, generation: started });
+    }
+    return total;
+  }
   return serialized(async () => {
     try {
       if (started !== getSearchCacheGeneration()) return 0;
@@ -349,9 +370,9 @@ export async function cacheSearchItems(inputs: SearchCacheInput[], options: { ge
       const settings = getSearchCacheSettings();
       if (!settings.enabled || started !== getSearchCacheGeneration()) return 0;
       // Bound one transaction and yield between batches at the ingestion layer.
-      const records = inputs.slice(0, 500).map(input => recordFor(input, settings)).filter((v): v is CachedItem => !!v);
+      const records = inputs.map(input => recordFor(input, settings)).filter((v): v is CachedItem => !!v);
       if (!records.length) { await maintenance(); return 0; }
-      const added = await transaction<number>(db, 'readwrite', (tx, result) => {
+      const added = await transaction<number>(db, 'readwrite', (tx, result, abort) => {
         const items = tx.objectStore(ITEMS);
         const meta = tx.objectStore(META);
         const byScope = new Map<string, CachedItem[]>();
@@ -361,17 +382,23 @@ export async function cacheSearchItems(inputs: SearchCacheInput[], options: { ge
         for (const [scope, scoped] of byScope) {
           const revoked = meta.get(`revoked:${scope}`);
           revoked.onsuccess = () => {
-            if (!revoked.result && started === getSearchCacheGeneration() && getSearchCacheSettings().enabled) {
-              for (const record of scoped) { items.put(record); count++; }
-            }
-            if (--remaining === 0) { result(count); maintain(tx, getSearchCacheSettings()); }
+            try {
+              if (!revoked.result && started === getSearchCacheGeneration() && getSearchCacheSettings().enabled) {
+                for (const record of scoped) { items.put(record); count++; }
+              }
+              if (--remaining === 0) { result(count); maintain(tx, getSearchCacheSettings()); }
+            } catch (error) { abort(error); }
           };
         }
       });
       lastError = undefined;
       changed();
       return added;
-    } catch (error) { failure(error); return 0; }
+    } catch (error) {
+      const reported = failure(error);
+      if (options.strict) throw reported;
+      return 0;
+    }
   });
 }
 
@@ -445,14 +472,13 @@ export async function getSearchCacheStats(): Promise<SearchCacheStats> {
   return stats;
 }
 
-/** AND words, with a prefix match for the final word. Never scans cached bodies. */
+/** AND words, with a prefix for the final word (2+ chars). No body scans. */
 export async function searchCache(query: string, options: { source?: SearchCacheSource; limit?: number } = {}): Promise<SearchCacheResult[]> {
   const started = getSearchCacheGeneration();
   if (!getSearchCacheSettings().enabled) return [];
-  const words = tokenizeSearchText(query.trim().slice(0, 256));
-  if (!words.length) return [];
-  // Bound request fan-out. Long prose belongs in the source, not a search box.
-  const terms = words.slice(0, 16);
+  if (query.length > 256) throw new Error('Local search queries must be 256 characters or fewer.');
+  const terms = tokenizeSearchText(query.trim());
+  if (!terms.length) return [];
   const limit = bounded(options.limit, 100, 1, 500);
   try {
     await serialized(() => maintenance());
@@ -484,7 +510,7 @@ export async function searchCache(query: string, options: { source?: SearchCache
         }
       };
       terms.forEach((term, i) => {
-        const key = i === terms.length - 1 ? IDBKeyRange.bound(term, `${term}\uffff`) : term;
+        const key = i === terms.length - 1 && Array.from(term).length >= 2 ? IDBKeyRange.bound(term, `${term}\uffff`) : term;
         const request = index.getAllKeys(key);
         request.onsuccess = () => { lists.push(new Set(request.result)); if (--pending === 0) collect(); };
       });
