@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { useLocalSearchTranslations } from '$lib/local-search-i18n.svelte';
+  const localSearch = useLocalSearchTranslations();
   import { appendOperator as append, fromMeOperator, pastWeekOperator } from '$lib/search-operators';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
@@ -13,8 +15,8 @@
   import { searchMastodon, searchThreads, mergeSearchResults } from '$lib/universal-search';
   import Post from '$lib/components/Post.svelte';
   import LocalSearch from '$lib/components/LocalSearch.svelte';
-  import { getSearchCacheGeneration } from '$lib/search-cache';
-  import { queuePostsForSearchCache } from '$lib/search-cache-ingest';
+  import { getSearchCacheGeneration } from '$lib/search-cache-lazy';
+  import { queuePostsForSearchCache } from '$lib/search-cache-lazy';
   import type { UnifiedPost, Account, Platform } from '$lib/types';
 
   let accounts: Account[] = $state([]);
@@ -159,14 +161,14 @@
     <h1 class="text-2xl font-bold">{i18n.t.search.title}</h1>
   </div>
 
-  <div role="group" aria-label={i18n.t.localSearch.searchScope} class="flex flex-wrap gap-2 mb-5">
+  <div role="group" aria-label={localSearch.t.searchScope} class="flex flex-wrap gap-2 mb-5">
     <button type="button" aria-pressed={searchScope === 'networks'} onclick={() => changeSearchScope('networks')}
       class="px-4 py-2 rounded-lg border text-sm transition-colors {searchScope === 'networks' ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white' : 'border-[var(--color-border)] bg-[var(--color-surface)]'}">
-      {i18n.t.localSearch.networks}
+      {localSearch.t.networks}
     </button>
     <button type="button" aria-pressed={searchScope === 'local'} onclick={() => changeSearchScope('local')}
       class="px-4 py-2 rounded-lg border text-sm transition-colors {searchScope === 'local' ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white' : 'border-[var(--color-border)] bg-[var(--color-surface)]'}">
-      {i18n.t.localSearch.onDevice}
+      {localSearch.t.onDevice}
     </button>
   </div>
 

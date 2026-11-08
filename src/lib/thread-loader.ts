@@ -3,8 +3,8 @@ import type { ClientEntry } from '$lib/api/client-factory';
 import { BlueskyClient } from '$lib/api/bluesky';
 import type { MastodonClient } from '$lib/api/mastodon';
 import type { ThreadsClient } from '$lib/api/threads';
-import { queuePostsForSearchCache } from '$lib/search-cache-ingest';
-import { getSearchCacheGeneration } from '$lib/search-cache';
+import { queuePostsForSearchCache } from '$lib/search-cache-lazy';
+import { getSearchCacheGeneration } from '$lib/search-cache-lazy';
 import { normalizePost } from '$lib/api/unified';
 
 export interface ThreadRequest { platform: Platform; uri: string; statusId: string; accountId?: number }

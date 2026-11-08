@@ -6,7 +6,7 @@
 
 import type { UnifiedPost } from './types';
 import { writeJson } from './safe-storage';
-import { cacheSearchItems, getSearchCacheGeneration, getSearchCacheSettings, removeSearchCacheScope } from './search-cache';
+import { cacheSearchItems, getSearchCacheGeneration, isSearchCacheEnabled, removeSearchCacheScope } from './search-cache-lazy';
 import { swallow } from './debug-log';
 
 export interface RssFeed {
@@ -136,8 +136,7 @@ export async function fetchFeed(url: string): Promise<RssItem[]> {
   if (!resp.ok) throw new Error(`Failed to fetch feed: ${resp.status}`);
   const xml = await resp.text();
   const items = parseRssXml(xml);
-  const settings = getSearchCacheSettings();
-  if (settings.enabled && settings.posts.enabled) {
+  if (isSearchCacheEnabled('posts')) {
     const entries = items.map(item => ({
       source: 'rss' as const, scope: `rss:${subscription?.id ?? url}`, id: item.link, url: item.link,
       title: item.title, text: item.content ?? item.description, html: true,

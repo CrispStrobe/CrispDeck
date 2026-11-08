@@ -6,6 +6,11 @@
  */
 import { swallow } from './debug-log';
 import { readJson, writeJson, writeString } from './safe-storage';
+import {
+  SEARCH_CACHE_SETTINGS_KEY as SETTINGS_KEY, SEARCH_CACHE_GENERATION_KEY as GENERATION_KEY,
+  getSearchCacheGeneration, invalidateSearchCacheGeneration as invalidate,
+} from './search-cache-state';
+export { getSearchCacheGeneration } from './search-cache-state';
 
 export const SEARCH_CACHE_SOURCES = ['bluesky', 'mastodon', 'threads', 'rss', 'wallabag'] as const;
 export type SearchCacheSource = typeof SEARCH_CACHE_SOURCES[number];
@@ -59,8 +64,6 @@ interface CachedItem extends Omit<SearchCacheResult, 'score'> {
   bytes: number;
 }
 
-const SETTINGS_KEY = 'crispdeck-search-cache-settings';
-const GENERATION_KEY = 'crispdeck-search-cache-generation';
 const REVOKED_PREFIX = 'crispdeck-search-cache-revoked:';
 const DB_NAME = 'crispdeck-search-cache';
 const ITEMS = 'items';
@@ -76,7 +79,6 @@ const DEFAULTS: SearchCacheSettings = {
 };
 let dbPromise: Promise<IDBDatabase> | null = null;
 let queue: Promise<unknown> = Promise.resolve();
-let generation = 0;
 let lastError: string | undefined;
 const revokedScopes = new Set<string>();
 
@@ -117,19 +119,6 @@ export function getSearchCacheSettings(): SearchCacheSettings {
   return normalizeSettings(readJson<unknown>(SETTINGS_KEY, null));
 }
 
-/** Capture before a fetch; clear/disable/reconfigure invalidates stale writers. */
-export function getSearchCacheGeneration(): number {
-  try {
-    const saved = Number(localStorage.getItem(GENERATION_KEY));
-    if (Number.isSafeInteger(saved) && saved > generation) generation = saved;
-  } catch { /* An unavailable preference store means the feature is off. */ }
-  return generation;
-}
-function invalidate(): void {
-  generation = getSearchCacheGeneration() + 1;
-  // The in-process generation still cancels queued work if storage is blocked.
-  writeString(GENERATION_KEY, String(generation));
-}
 function changed(): void {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event('search-cache-changed'));
 }

@@ -13,7 +13,7 @@ vi.mock('$lib/search-cache', () => ({
   getSearchCacheGeneration: boundaries.generation,
 }));
 vi.mock('$lib/api/client-factory', () => ({ initAllClients: boundaries.initAllClients }));
-vi.mock('$lib/search-cache-ingest', () => ({ queuePostsForSearchCache: boundaries.queue }));
+vi.mock('$lib/search-cache-lazy', () => ({ getSearchCacheGeneration: boundaries.generation, queuePostsForSearchCache: boundaries.queue }));
 vi.mock('$lib/universal-search', async importOriginal => ({
   ...await importOriginal<typeof import('$lib/universal-search')>(),
   searchMastodon: boundaries.mastodonSearch,
@@ -22,6 +22,8 @@ vi.mock('$lib/components/Post.svelte', async () => ({ default: (await import('./
 
 import LocalSearch from './LocalSearch.svelte';
 import SearchPage from '../../routes/search/+page.svelte';
+import { i18n } from '$lib/i18n.svelte';
+import { loadLocalSearchTranslations } from '$lib/local-search-i18n.svelte';
 
 let instance: ReturnType<typeof mount> | undefined;
 let settings: SearchCacheSettings;
@@ -34,6 +36,7 @@ const found: SearchCacheResult = {
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
+  i18n.setLanguage('en');
   window.history.replaceState({}, '', '/search');
   settings = {
     enabled: true,
@@ -52,6 +55,7 @@ afterEach(async () => {
   if (instance) await unmount(instance);
   instance = undefined;
   document.body.innerHTML = '';
+  i18n.setLanguage('en');
   vi.useRealTimers();
 });
 
@@ -77,6 +81,17 @@ function submit(target: HTMLElement) {
 }
 
 describe('local search UI', () => {
+  it('updates optional translations and ignores a language load superseded by another choice', async () => {
+    const target = await render();
+    i18n.setLanguage('de');
+    await vi.waitFor(() => { flushSync(); expect(target.querySelector('section')?.getAttribute('aria-label')).toBe('Auf diesem Gerät'); });
+    i18n.setLanguage('fr'); flushSync();
+    i18n.setLanguage('en'); flushSync();
+    await loadLocalSearchTranslations('fr'); flushSync();
+    expect(target.querySelector('section')?.getAttribute('aria-label')).toBe('On this device');
+    expect(target.querySelector('input')?.getAttribute('placeholder')).toBe('Search cached posts and Wallabag items');
+  });
+
   it('opens directly and searches offline without initializing network clients or needing accounts', async () => {
     window.history.replaceState({}, '', '/search?scope=local&q=solar');
     const target = await render(true);

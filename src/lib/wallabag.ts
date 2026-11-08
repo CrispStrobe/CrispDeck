@@ -31,6 +31,9 @@ interface SavedSession { store: Store; session: Session; generation: number }
 interface Token { access_token: string; refresh_token: string; expires_in: number }
 
 const browserKey = 'crispdeck-wallabag-session';
+// Non-secret and device-local: retained separately so broken credentials do
+// not prevent removing the articles indexed through that connection.
+const searchScopeKey = 'crispdeck-wallabag-search-scope';
 const maxSessionBytes = 64 * 1024;
 const requestTimeoutMs = 30_000;
 let generation = 0;
@@ -42,11 +45,43 @@ class WallabagError extends Error {}
 const connectionChanged = () => new WallabagError('The Wallabag connection changed. Try again.');
 const searchScope = (session: Session): string | undefined => session.connectionId ? `wallabag:${session.connectionId}` : undefined;
 
+function validSearchScope(value: string | null): value is string {
+  return value !== null && /^wallabag:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+function readSearchScopeMarker(): string | null {
+  try { return localStorage.getItem(searchScopeKey); }
+  catch { throw new WallabagError('Could not read the Wallabag cache marker. Check browser storage and try again.'); }
+}
+
 async function clearConnectionSearchCache(session: Session | null): Promise<void> {
-  const scope = session && searchScope(session);
-  if (scope) {
+  const marker = readSearchScopeMarker();
+  const scopes = new Set<string>();
+  const current = session && searchScope(session);
+  if (current) scopes.add(current);
+  // Never interpret a corrupt marker as an account/RSS scope or arbitrary key.
+  if (validSearchScope(marker)) scopes.add(marker);
+  if (scopes.size) {
     const { removeSearchCacheScope } = await import('$lib/search-cache');
-    await removeSearchCacheScope(scope);
+    for (const scope of scopes) await removeSearchCacheScope(scope);
+  }
+  // Revoke durably first, and do not erase a marker another tab replaced.
+  if (validSearchScope(marker) && readSearchScopeMarker() === marker) {
+    removeKey(searchScopeKey);
+    if (readSearchScopeMarker() === marker) throw new WallabagError('Could not clear the Wallabag cache marker. Check browser storage and try again.');
+  }
+}
+
+async function rememberSearchScope(session: Session): Promise<void> {
+  const scope = searchScope(session);
+  if (!scope || !validSearchScope(scope)) throw new WallabagError('The saved Wallabag connection identity is invalid. Reconnect in Settings.');
+  const previous = readSearchScopeMarker();
+  if (previous === scope) return;
+  // Also cover native credential changes made outside this module. Keep the
+  // old marker until its scope has been revoked, before saving a replacement.
+  if (validSearchScope(previous)) await clearConnectionSearchCache(null);
+  if (!writeString(searchScopeKey, scope) || readSearchScopeMarker() !== scope) {
+    throw new WallabagError('Could not save the Wallabag cache marker. Check browser storage and try indexing again.');
   }
 }
 
@@ -350,6 +385,9 @@ async function searchSession(server: string): Promise<SavedSession> {
       session = { ...session, connectionId: crypto.randomUUID() };
       await writeSession(store, session);
     }
+    // Every indexed article read goes through this function. Refuse the read
+    // if its independent cleanup identity cannot be saved durably.
+    await rememberSearchScope(session);
     return { store, session, generation };
   });
 }

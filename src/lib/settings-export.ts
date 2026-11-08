@@ -18,6 +18,7 @@ const EXCLUDE_PATTERNS = [
   'crispdeck-threads-oauth', // Threads OAuth state (transient)
   'crispdeck-search-cache-generation', // Local cancellation epoch, not a preference
   'crispdeck-search-cache-revoked:', // Device-local account revocations
+  'crispdeck-wallabag-search-scope', // Device-local cleanup identity, not a preference
 ];
 
 /** Keys that contain encrypted credentials — never export */

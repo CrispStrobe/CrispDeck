@@ -78,6 +78,16 @@ describe('settings export/import', () => {
       expect(data.settings['crispdeck-threads-oauth-state']).toBeUndefined();
     });
 
+    it('keeps the Wallabag cleanup marker local and ignores it in imported backups', () => {
+      const key = 'crispdeck-wallabag-search-scope';
+      const marker = 'wallabag:11111111-2222-4333-8444-555555555555';
+      localStorage.setItem(key, marker);
+      expect(exportSettings().settings[key]).toBeUndefined();
+      expect(listExportableKeys()).toEqual([]);
+      expect(importSettings({ version: 1, exported_at: '', settings: { [key]: 'wallabag:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee' } })).toBe(0);
+      expect(localStorage.getItem(key)).toBe(marker);
+    });
+
     it('returns empty settings when nothing stored', () => {
       const data = exportSettings();
       expect(Object.keys(data.settings)).toHaveLength(0);

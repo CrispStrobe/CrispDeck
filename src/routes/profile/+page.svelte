@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { queuePostsForSearchCache } from '$lib/search-cache-ingest';
-  import { getSearchCacheGeneration } from '$lib/search-cache';
+  import { queuePostsForSearchCache } from '$lib/search-cache-lazy';
+  import { getSearchCacheGeneration } from '$lib/search-cache-lazy';
   import { swallow } from '$lib/debug-log';
   import { hrefOrHash } from '$lib/safe-url';
   import { base } from '$app/paths';

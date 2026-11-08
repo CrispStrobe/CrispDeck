@@ -1,11 +1,13 @@
 <script lang="ts">
+  import { useLocalSearchTranslations } from '$lib/local-search-i18n.svelte';
+  const localSearch = useLocalSearchTranslations();
   import { onMount } from 'svelte';
   import { base } from '$app/paths';
   import { Search, Loader2, ExternalLink, Database } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { swallow } from '$lib/debug-log';
   import { toast } from '$lib/toast.svelte';
-  import { safeExternalUrl } from '$lib/safe-url';
+  import { safeExternalUrl, hrefOrHash } from '$lib/safe-url';
   import { openExternalLink } from '$lib/external-link';
   import {
     getSearchCacheSettings, getSearchCacheStats, searchCache,
@@ -29,7 +31,7 @@
 
   function sourceLabel(value: SearchCacheSource): string {
     return value === 'rss' || value === 'wallabag'
-      ? i18n.t.localSearch[value]
+      ? localSearch.t[value]
       : i18n.t.common[value];
   }
 
@@ -96,7 +98,7 @@
       swallow('search-cache.search', cause);
       if (!disposed && current === sequence) {
         results = [];
-        error = i18n.t.localSearch.searchFailed;
+        error = localSearch.t.searchFailed;
       }
     } finally {
       if (!disposed && current === sequence) searching = false;
@@ -135,8 +137,8 @@
   });
 </script>
 
-<section aria-label={i18n.t.localSearch.onDevice}>
-  <p id="local-search-description" class="text-sm text-[var(--color-text-muted)] mb-4">{i18n.t.localSearch.searchDescription}</p>
+<section aria-label={localSearch.t.onDevice}>
+  <p id="local-search-description" class="text-sm text-[var(--color-text-muted)] mb-4">{localSearch.t.searchDescription}</p>
 
   <form onsubmit={(event) => { event.preventDefault(); void handleSearch(); }} class="space-y-3 mb-6">
     <div class="flex gap-2">
@@ -145,9 +147,9 @@
         maxlength="256"
         value={query}
         oninput={(event) => { query = event.currentTarget.value; scheduleSearch(); }}
-        aria-label={i18n.t.localSearch.placeholder}
+        aria-label={localSearch.t.placeholder}
         aria-describedby="local-search-description"
-        placeholder={i18n.t.localSearch.placeholder}
+        placeholder={localSearch.t.placeholder}
         class="min-w-0 flex-1 px-4 py-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-sm focus:outline-none focus:border-[var(--color-primary)]"
       />
       <button type="submit" disabled={!enabled || !available || !query.trim() || searching}
@@ -157,21 +159,21 @@
       </button>
     </div>
     <div class="flex flex-wrap items-center gap-3">
-      <label for="local-search-source" class="text-xs text-[var(--color-text-muted)]">{i18n.t.localSearch.source}</label>
+      <label for="local-search-source" class="text-xs text-[var(--color-text-muted)]">{localSearch.t.source}</label>
       <select id="local-search-source" value={source}
         onchange={(event) => { source = event.currentTarget.value as typeof source; scheduleSearch(); }}
         class="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md text-sm">
-        <option value="all">{i18n.t.localSearch.allSources}</option>
+        <option value="all">{localSearch.t.allSources}</option>
         {#each sources as item}<option value={item}>{sourceLabel(item)}</option>{/each}
       </select>
-      <a href="{base}/settings?tab=content#local-search-cache" class="text-xs text-[var(--color-primary-text)] underline">{i18n.t.localSearch.settings}</a>
+      <a href="{base}/settings?tab=content#local-search-cache" class="text-xs text-[var(--color-primary-text)] underline">{localSearch.t.settings}</a>
     </div>
   </form>
 
   {#if !enabled}
-    <p class="p-4 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-sm text-[var(--color-text-muted)]">{i18n.t.localSearch.disabled}</p>
+    <p class="p-4 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-sm text-[var(--color-text-muted)]">{localSearch.t.disabled}</p>
   {:else if !available}
-    <p role="alert" class="p-4 border border-[var(--color-border)] rounded-lg text-sm">{i18n.t.localSearch.unavailable}</p>
+    <p role="alert" class="p-4 border border-[var(--color-border)] rounded-lg text-sm">{localSearch.t.unavailable}</p>
   {:else if error}
     <p role="alert" class="p-4 border border-[var(--color-danger)] rounded-lg text-sm">{error}</p>
   {:else if searching}
@@ -179,7 +181,7 @@
       <Loader2 size={18} class="animate-spin" />{i18n.t.search.searching}
     </div>
   {:else if hasSearched && results.length > 0}
-    <p role="status" class="text-sm text-[var(--color-text-muted)] mb-4">{i18n.t.localSearch.results.replace('{count}', String(results.length))}</p>
+    <p role="status" class="text-sm text-[var(--color-text-muted)] mb-4">{localSearch.t.results.replace('{count}', String(results.length))}</p>
     <div class="space-y-3">
       {#each results as result (result.id)}
         {@const url = resultUrl(result.url)}
@@ -191,32 +193,32 @@
           </div>
           <h2 class="font-semibold text-sm break-words">
             {#if url}
-              <a href={url} target="_blank" rel="noopener noreferrer" class="hover:underline text-[var(--color-primary-text)]"
+              <a href={hrefOrHash(url)} target="_blank" rel="noopener noreferrer" class="hover:underline text-[var(--color-primary-text)]"
                 onclick={(event) => openExternalLink(event, url, () => { toast.error(i18n.t.common.somethingWentWrong); })}>
-                {result.title || i18n.t.localSearch.untitled}
+                {result.title || localSearch.t.untitled}
               </a>
-            {:else}{result.title || i18n.t.localSearch.untitled}{/if}
+            {:else}{result.title || localSearch.t.untitled}{/if}
           </h2>
           {#if result.excerpt}<p class="text-sm whitespace-pre-line break-words mt-2">{snippet(result.excerpt)}</p>{/if}
           <div class="flex flex-wrap items-center justify-between gap-2 mt-3 text-xs text-[var(--color-text-muted)]">
-            <span>{i18n.t.localSearch.cached.replace('{date}', formattedDate(result.indexedAt))}</span>
+            <span>{localSearch.t.cached.replace('{date}', formattedDate(result.indexedAt))}</span>
             {#if url}
-              <a href={url} target="_blank" rel="noopener noreferrer" class="flex items-center gap-1 hover:underline"
+              <a href={hrefOrHash(url)} target="_blank" rel="noopener noreferrer" class="flex items-center gap-1 hover:underline"
                 onclick={(event) => openExternalLink(event, url, () => { toast.error(i18n.t.common.somethingWentWrong); })}>
-                {i18n.t.localSearch.open}<ExternalLink size={12} />
+                {localSearch.t.open}<ExternalLink size={12} />
               </a>
             {/if}
           </div>
         </article>
       {/each}
     </div>
-    {#if results.length === 100}<p class="text-xs text-[var(--color-text-muted)] mt-4">{i18n.t.localSearch.resultLimit}</p>{/if}
+    {#if results.length === 100}<p class="text-xs text-[var(--color-text-muted)] mt-4">{localSearch.t.resultLimit}</p>{/if}
   {:else if hasSearched}
-    <p role="status" class="py-8 text-center text-sm text-[var(--color-text-muted)]">{i18n.t.localSearch.noResults}</p>
+    <p role="status" class="py-8 text-center text-sm text-[var(--color-text-muted)]">{localSearch.t.noResults}</p>
   {:else if count === 0}
     <div class="text-center p-6 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-[var(--color-text-muted)]">
       <Database size={28} class="mx-auto mb-3" />
-      <p class="text-sm">{i18n.t.localSearch.empty}</p>
+      <p class="text-sm">{localSearch.t.empty}</p>
     </div>
   {/if}
 </section>

@@ -136,6 +136,12 @@ and load candidate records, avoiding a full document scan for every keystroke.
 Record updates and deletes update the corresponding terms through the same
 IndexedDB transaction.
 
+Ordinary feed and deck views import only the small opt-in/generation gate in
+`search-cache-state.ts` and the lazy facade in `search-cache-lazy.ts`. Parsing,
+index storage, and import code load after collection is enabled or a cache
+action is requested. The facade preserves the request's generation across the
+dynamic import so clearing or disabling the cache cannot revive an older write.
+
 Writes settle only after their transaction commits. Connection close and
 version-change handlers allow database cleanup and later reopening. Collection
 and import paths check the current settings so the feature can remain optional.

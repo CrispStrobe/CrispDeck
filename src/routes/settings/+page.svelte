@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { useLocalSearchTranslations } from '$lib/local-search-i18n.svelte';
+  const localSearch = useLocalSearchTranslations();
   import ThreadsFeedSources from '$lib/components/ThreadsFeedSources.svelte';
   import LocalSearchSettings from '$lib/components/LocalSearchSettings.svelte';
   import { clearSearchCache } from '$lib/search-cache';
@@ -390,7 +392,7 @@
   async function purgeAllData() {
     if (!confirm(i18n.t.settings.purgeConfirm)) return;
     try { await clearSearchCache(); }
-    catch (e) { swallow('settings.purgeSearchCache', e); toast.error(i18n.t.localSearch.operationFailed); }
+    catch (e) { swallow('settings.purgeSearchCache', e); toast.error(localSearch.t.operationFailed); }
     // Delete IndexedDB databases
     for (const name of ['crispdeck-archive', 'crispdeck-bookmarks', 'crispdeck-engagement', 'crispdeck-translations']) {
       try { indexedDB.deleteDatabase(name); } catch (e) { swallow('settings.purgeAllData', e); }
