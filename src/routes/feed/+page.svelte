@@ -937,29 +937,33 @@
         {newPostsAvailable} new post{newPostsAvailable > 1 ? 's' : ''} — refresh
       </button>
     {/if}
-    <div class="flex items-center gap-3">
+    <div class="feed-toolbar flex min-w-0 w-full flex-wrap items-center gap-2 lg:w-auto">
       <!-- Feed mode toggle -->
-      <div class="flex items-center bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-0.5">
+      <div class="feed-mode-tabs flex min-w-0 max-w-full w-full sm:w-auto overflow-x-auto items-center bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-0.5">
         <button
           onclick={() => switchMode('timeline')}
-          class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {feedMode === 'timeline' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+          aria-pressed={feedMode === 'timeline'}
+          class="flex flex-1 shrink-0 justify-center whitespace-nowrap items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {feedMode === 'timeline' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
         >
-          <Globe size={12} />
+          <Globe size={12} class="shrink-0" />
           {i18n.t.feed.timeline}
         </button>
         <button
           onclick={() => switchMode('for-you')}
-          class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {feedMode === 'for-you' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+          aria-pressed={feedMode === 'for-you'}
+          class="flex flex-1 shrink-0 justify-center whitespace-nowrap items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {feedMode === 'for-you' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
         >
           {i18n.t.feed.forYou}
         </button>
         <button
           onclick={() => switchMode('my-posts')}
-          class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {feedMode === 'my-posts' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+          aria-pressed={feedMode === 'my-posts'}
+          class="flex flex-1 shrink-0 justify-center whitespace-nowrap items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors {feedMode === 'my-posts' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
         >
-          <User size={12} />
+          <User size={12} class="shrink-0" />
           {i18n.t.feed.myPosts}
         </button>
+      </div>
 
         <!-- Pinned Bluesky feeds and lists. Hidden entirely when the account
              has none pinned, so a Mastodon-only user never sees a dead menu. -->
@@ -968,12 +972,12 @@
              feeds already pinned meant someone with none could never reach
              the search that would get them some. -->
         {#if savedFeeds.length > 0}
-          <div class="relative">
+          <div class="feed-picker relative min-w-0">
             <button
               onclick={() => showFeedMenu = !showFeedMenu}
               aria-haspopup="menu"
               aria-expanded={showFeedMenu}
-              class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors max-w-[10rem] {feedMode === 'custom' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+              class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] transition-colors max-w-[10rem] {feedMode === 'custom' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
               title={i18n.t.feed.switchFeed}
             >
               <span class="truncate">{currentFeedLabel ?? i18n.t.feed.feeds}</span>
@@ -981,7 +985,7 @@
             </button>
             {#if showFeedMenu}
               <div class="fixed inset-0 z-40" role="presentation" onclick={() => showFeedMenu = false}></div>
-              <div role="menu" class="absolute right-0 top-full mt-1 z-50 w-72 max-h-[26rem] overflow-y-auto bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl py-1">
+              <div role="menu" class="feed-picker-menu absolute end-0 top-full mt-1 z-50 w-72 max-w-[calc(100vw-2rem)] max-h-[min(26rem,60dvh)] overflow-y-auto bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl py-1">
 
                 {#snippet feedRow(choice: FeedChoice, showPin: boolean)}
                   <div class="flex items-stretch hover:bg-[var(--color-surface-hover)] transition-colors">
@@ -1068,11 +1072,10 @@
             {/if}
           </div>
         {/if}
-      </div>
 
       <!-- Platform filter (only shown when multiple platforms connected) -->
       {#if multiPlatform}
-        <div class="flex items-center bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-0.5">
+        <div class="feed-platform-filter flex max-w-full flex-wrap items-center bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-0.5">
           <button
             onclick={() => platformFilter = 'all'}
             class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors {platformFilter === 'all' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)]'}"
@@ -1121,15 +1124,20 @@
 
       <button
         onclick={() => showFilters = !showFilters}
-        class="p-1.5 rounded-md transition-colors {showFilters ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary-text)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
-        title="Filters & Sort"
+        aria-label={i18n.t.feed.filtersSort}
+        aria-expanded={showFilters}
+        aria-controls="feed-filters"
+        class="feed-filter-toggle flex shrink-0 items-center justify-center p-1.5 rounded-md transition-colors {showFilters ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary-text)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+        title={i18n.t.feed.filtersSort}
       >
         <SlidersHorizontal size={16} />
       </button>
 
       <button
         onclick={() => hideMedia = !hideMedia}
-        class="p-1.5 rounded-md transition-colors {hideMedia ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary-text)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+        aria-label={i18n.t.feed.hideMediaLabel}
+        aria-pressed={hideMedia}
+        class="feed-media-toggle flex shrink-0 items-center justify-center p-1.5 rounded-md transition-colors {hideMedia ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary-text)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
         title={i18n.t.feed.hideMediaLabel}
       >
         <EyeOff size={14} />
@@ -1172,7 +1180,7 @@
     </div>
   {:else}
     {#if showFilters}
-      <AdvancedFilters {filters} onchange={handleFilterChange} startOpen={true} />
+      <div id="feed-filters"><AdvancedFilters {filters} onchange={handleFilterChange} startOpen={true} /></div>
     {/if}
 
     {#if loading && posts.length === 0}
@@ -1234,6 +1242,21 @@
 </div>
 
 <style>
+  /* The picker becomes a bounded sheet on phones. Its contents can scroll
+     without putting feed rows or search controls under either fixed bar. */
+  @media (width < 48rem) {
+    .feed-picker-menu {
+      position: fixed;
+      top: auto;
+      bottom: calc(var(--mobile-tab-height) + var(--safe-area-bottom) + 0.5rem);
+      left: calc(var(--safe-area-left) + 0.75rem);
+      right: calc(var(--safe-area-right) + 0.75rem);
+      width: auto;
+      max-width: none;
+      max-height: calc(100dvh - var(--mobile-header-height) - var(--mobile-tab-height) - var(--safe-area-top) - var(--safe-area-bottom) - 1rem);
+    }
+  }
+
   /**
    * Skip layout, style and paint for posts that are scrolled out of view.
    *
