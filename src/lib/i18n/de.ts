@@ -210,7 +210,7 @@ export default {
       autoSaveRestored: 'Ungesendeter Text aus automatischer Speicherung wiederhergestellt.',
       discard: 'Verwerfen',
     },
-    post: { replyingTo: "Antwort an {name}", replyingToPost: "Antwort auf einen Beitrag", openLinkFailed: "Der Link konnte nicht geöffnet werden.", showFullPost: "Ganzen Beitrag anzeigen", showLessPost: "Weniger anzeigen", playVideo: "Video abspielen", videoPlaybackFailed: "Das Video konnte nicht abgespielt werden.", openVideoPost: "Beitrag öffnen", scrollImagesLeft: "Bilder nach links scrollen", scrollImagesRight: "Bilder nach rechts scrollen",
+    post: { moreActions: "Weitere Beitragsaktionen", replyingTo: "Antwort an {name}", replyingToPost: "Antwort auf einen Beitrag", openLinkFailed: "Der Link konnte nicht geöffnet werden.", showFullPost: "Ganzen Beitrag anzeigen", showLessPost: "Weniger anzeigen", playVideo: "Video abspielen", videoPlaybackFailed: "Das Video konnte nicht abgespielt werden.", openVideoPost: "Beitrag öffnen", scrollImagesLeft: "Bilder nach links scrollen", scrollImagesRight: "Bilder nach rechts scrollen",
       reportHint: 'Nutze zum Abschließen der Meldung das Meldewerkzeug der Plattform auf der geöffneten Seite.',
       noReadingLists: 'Noch keine Leselisten',
       engagementBreakdown: 'Interaktionen im Detail',

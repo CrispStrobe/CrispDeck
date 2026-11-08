@@ -42,7 +42,7 @@
   import { formatDate, relativeTime } from '$lib/time-format';
   import { i18n } from '$lib/i18n.svelte';
   import { base } from '$app/paths';
-  import { Heart, Repeat, MessageCircle, Quote, Bookmark, Share, Flag, Languages, Camera, Loader2, Volume2, VolumeOff, BarChart3, UserPlus, UserCheck, Pin, ListPlus, X as XIcon } from '@lucide/svelte';
+  import { Heart, Repeat, MessageCircle, Quote, Bookmark, Share, Flag, Languages, Camera, Loader2, Volume2, VolumeOff, BarChart3, UserPlus, UserCheck, Pin, ListPlus, Ellipsis, ExternalLink, X as XIcon } from '@lucide/svelte';
   import { goto } from '$app/navigation';
   import { isPinned, pinPost, unpinPost } from '$lib/pinned-posts';
   import { addBookmark, removeBookmark, isBookmarked } from '$lib/bookmarks';
@@ -54,7 +54,7 @@
   import { postSourceClient } from '$lib/post-source';
   import { postReactionSnapshot } from '$lib/post-reactions';
   import { translateText, type TranslationResult } from '$lib/translate';
-  import { onMount, onDestroy, untrack } from 'svelte';
+  import { onMount, onDestroy, untrack, tick } from 'svelte';
   import { jetstream } from '$lib/jetstream';
   import type { UnifiedPost } from '$lib/types';
   import { sanitizeHtml, injectCustomEmoji } from '$lib/sanitize';
@@ -171,15 +171,52 @@
   let pinned = $state(false);
   let showListPicker = $state(false);
   let readingLists: ReadingList[] = $state([]);
+  const actionsId = $props.id();
+  let showMoreActions = $state(false);
+  let actionsToggle: HTMLButtonElement | undefined = $state();
+  const countFormatter = $derived(new Intl.NumberFormat(i18n.lang, { notation: 'compact', maximumFractionDigits: 1 }));
+
+  function closePostActions(restoreFocus = false) {
+    showMoreActions = false;
+    showListPicker = false;
+    if (restoreFocus) actionsToggle?.focus();
+  }
+
+  // Only expanded disclosures listen for dismissal. They remain ordinary
+  // buttons and links, so Tab works without imposing menu-specific key rules.
+  $effect(() => {
+    if (!showMoreActions) return;
+    const onKeydown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !postEl?.contains(event.target as Node)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      closePostActions(true);
+    };
+    const onPointerdown = (event: PointerEvent) => {
+      if (!postEl?.contains(event.target as Node)) closePostActions();
+    };
+    document.addEventListener('keydown', onKeydown);
+    document.addEventListener('pointerdown', onPointerdown);
+    return () => {
+      document.removeEventListener('keydown', onKeydown);
+      document.removeEventListener('pointerdown', onPointerdown);
+    };
+  });
+
+  async function shareImageFromActions() {
+    closePostActions(true);
+    await tick(); // Exclude the expanded action panel from the shared image.
+    await handleShareAsImage();
+  }
 
   function openListPicker() {
-    readingLists = listReadingLists();
-    showListPicker = true;
+    if (!showListPicker) readingLists = listReadingLists();
+    showListPicker = !showListPicker;
   }
 
   function addToList(listId: string) {
     addPostToList(listId, post);
-    showListPicker = false;
+    closePostActions(true);
   }
 
   // Media lightbox
@@ -944,7 +981,7 @@
 {:else}
 <!-- <article>, not <div>: a screen reader can then move post to post. Without
      it a timeline is one undifferentiated run of text hundreds of items long. -->
-<article bind:this={postEl} data-post-uri={post.uri} class="group {compact ? 'p-2.5' : 'p-4'} bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] transition-shadow">
+<article bind:this={postEl} data-post-uri={post.uri} style="--post-indent: {compact ? '2.25rem' : '3.25rem'}" class="post-card group {compact ? 'p-2.5' : 'p-4'} bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] transition-shadow">
   <!-- Label warnings -->
   {#if warnedLabels.length > 0 && !labelRevealed}
     <div class="mb-2 p-2 bg-yellow-900/20 border border-yellow-700/30 rounded text-xs text-yellow-300 flex items-center justify-between">
@@ -974,50 +1011,38 @@
       {#if context.text}<span class="reply-context-text">{context.text}</span>{/if}
     </a>
   {/if}
-  <div class="flex items-start {compact ? 'gap-2' : 'gap-3'}">
-    <div class="relative group/avatar">
-      <a href={getProfileUrl(post)}>
-        {#if post.author.avatar}
-          <img loading="lazy" decoding="async" src={post.author.avatar} alt="" width="40" height="40" class="{compact ? 'w-7 h-7' : 'w-10 h-10'} rounded-full bg-[var(--color-surface-hover)]" />
-        {:else}
-          <div class="{compact ? 'w-7 h-7 text-[9px]' : 'w-10 h-10 text-xs'} rounded-full bg-[var(--color-surface-hover)] flex items-center justify-center text-[var(--color-text-muted)]">
-            {post.author.handle.charAt(0).toUpperCase()}
-          </div>
+  {#if post.isRepost && post.repostAuthor}
+    <div class="post-repost flex items-center gap-1 mb-1 text-[10px] text-[var(--color-text-muted)]" title="Reposted by {post.repostAuthor.displayName || post.repostAuthor.handle}">
+      <Repeat size={12} /> <span class="truncate">Reposted by {post.repostAuthor.displayName || post.repostAuthor.handle}</span>
+    </div>
+  {/if}
+  <div class="post-main" class:compact>
+    <a class="post-avatar" href={getProfileUrl(post)} aria-label={post.author.displayName || post.author.handle}>
+      {#if post.author.avatar}
+        <img loading="lazy" decoding="async" src={post.author.avatar} alt="" width="40" height="40" class="{compact ? 'w-7 h-7' : 'w-10 h-10'} rounded-full bg-[var(--color-surface-hover)]" />
+      {:else}
+        <span class="{compact ? 'w-7 h-7 text-[9px]' : 'w-10 h-10 text-xs'} rounded-full bg-[var(--color-surface-hover)] flex items-center justify-center text-[var(--color-text-muted)]">
+          {post.author.handle.charAt(0).toUpperCase()}
+        </span>
+      {/if}
+    </a>
+    <div class="post-heading flex items-start gap-2 min-w-0">
+      <a href={getProfileUrl(post)} class="post-author flex items-center gap-2 min-w-0 group">
+        <span class="post-author-name font-semibold text-[var(--color-text)] group-hover:underline truncate text-sm">
+          {post.author.displayName || post.author.handle}
+        </span>
+        <span class="post-author-handle text-[var(--color-text-muted)] text-xs truncate">{post.author.handle}</span>
+        <span class="post-platform w-2 h-2 rounded-full flex-shrink-0" style="background: {platformColor}" title={post.platform}></span>
+      </a>
+      <a href={getThreadUrl(post)} class="post-time text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:underline flex-shrink-0 ml-auto" title={formatDate(post.createdAt)}>
+        <time datetime={post.createdAt}>{relAge}</time>
+        {#if post.platform === 'mastodon' && (post.raw as any)?.edited_at}
+          <span class="block text-[9px] opacity-60" title="Edited {formatDate((post.raw as any).edited_at)}">(edited)</span>
         {/if}
       </a>
-      <button
-        onclick={(e) => { e.stopPropagation(); following = !following; onfollow?.(post, following); }}
-        class="absolute -bottom-1 -right-1 {compact ? 'w-4 h-4' : 'w-5 h-5'} rounded-full flex items-center justify-center transition-all opacity-0 group-hover/avatar:opacity-100 {following ? 'bg-[var(--color-success)] text-white' : 'bg-[var(--color-primary)] text-white'}"
-        title={following ? 'Following' : 'Follow'}
-        aria-label={following ? `Unfollow ${post.author.handle}` : `Follow ${post.author.handle}`}
-      >
-        {#if following}<UserCheck size={10} />{:else}<UserPlus size={10} />{/if}
-      </button>
     </div>
-    <div class="flex-1 min-w-0">
-      <div class="flex items-center gap-2 mb-1">
-        <a href={getProfileUrl(post)} class="flex items-center gap-2 min-w-0 group">
-          <span class="font-semibold text-[var(--color-text)] group-hover:underline truncate text-sm">
-            {post.author.displayName || post.author.handle}
-          </span>
-          <span class="text-[var(--color-text-muted)] text-xs truncate">{post.author.handle}</span>
-          <span class="w-2 h-2 rounded-full flex-shrink-0" style="background: {platformColor}"></span>
-        </a>
-        {#if post.isRepost && post.repostAuthor}
-          <span class="flex items-center gap-1 text-[10px] text-[var(--color-text-muted)] min-w-0 truncate" title="Reposted by {post.repostAuthor.displayName || post.repostAuthor.handle}">
-            <Repeat size={12} /> <span class="truncate">Reposted by {post.repostAuthor.displayName || post.repostAuthor.handle}</span>
-          </span>
-        {/if}
-        <a href={getThreadUrl(post)} class="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:underline flex-shrink-0 ml-auto" title={formatDate(post.createdAt)}>
-          <!-- <time datetime> carries the real instant. "2h" read aloud on its
-               own says nothing, and the title attribute is mouse-only. -->
-          <time datetime={post.createdAt}>{relAge}</time>
-        </a>
-        {#if post.platform === 'mastodon' && (post.raw as any)?.edited_at}
-          <span class="text-[9px] text-[var(--color-text-muted)] opacity-60" title="Edited {formatDate((post.raw as any).edited_at)}">(edited)</span>
-        {/if}
-      </div>
-      <a href={getThreadUrl(post)} class="block min-w-0 hover:bg-[var(--color-surface-hover)]/30 rounded -mx-1 px-1 transition-colors">
+    {#if (post.platform === 'mastodon' ? mastodonHtml || post.text : post.text).trim()}
+      <a href={getThreadUrl(post)} class="post-body block min-w-0 hover:bg-[var(--color-surface-hover)]/30 rounded -mx-1 px-1 transition-colors">
         {#if post.platform === 'mastodon' && mastodonHtml}
         <!-- Delegation surface for the links inside {@html}: the interactive
              elements are the real <a> tags this contains, which are already
@@ -1046,12 +1071,12 @@
           <p class="text-sm text-[var(--color-text)] whitespace-pre-wrap break-words">{post.text}</p>
         {/if}
       </a>
-    </div>
+    {/if}
   </div>
 
   <!-- Translation -->
   {#if translation}
-    <div class="mt-2 pl-13 p-2 bg-blue-950/20 border border-blue-900/30 rounded-md">
+    <div class="post-extra-offset mt-2 p-2 bg-blue-950/20 border border-blue-900/30 rounded-md">
       <p class="text-sm text-[var(--color-text)] whitespace-pre-wrap break-words">{translation.translated}</p>
       <p class="text-[10px] text-[var(--color-text-muted)] mt-1">
         Translated from {translation.sourceLang} · {translation.provider}
@@ -1059,10 +1084,10 @@
     </div>
   {/if}
   {#if translateError}
-    <p class="mt-1 pl-13 text-[10px] text-red-400">{translateError}</p>
+    <p class="post-extra-offset mt-1 text-[10px] text-red-400">{translateError}</p>
   {/if}
   {#if splitQuote}
-    <button type="button" class="quote-copy mt-2 ml-13 text-left border border-[var(--color-border)] rounded-lg p-3 bg-[var(--color-bg)] hover:border-[var(--color-text-muted)]" onclick={() => goto(getRelatedThreadUrl(bskyQuote.uri))}>
+    <button type="button" class="quote-copy post-extra-offset mt-2 text-left border border-[var(--color-border)] rounded-lg p-3 bg-[var(--color-bg)] hover:border-[var(--color-text-muted)]" onclick={() => goto(getRelatedThreadUrl(bskyQuote.uri))}>
       <span class="flex items-center gap-2 mb-1">
         {#if bskyQuote.author?.avatar}<img decoding="async" loading="lazy" src={bskyQuote.author.avatar} alt="" class="w-5 h-5 rounded-full" />{/if}
         <span class="text-xs font-medium">{bskyQuote.author?.displayName || bskyQuote.author?.handle}</span>
@@ -1074,7 +1099,7 @@
   </div>
 
   {#if !hideMedia}
-    <div class="post-media mt-2 pl-13">
+    <div class="post-media mt-2">
       {#if splitQuote}
         <button type="button" class="media-preview-button w-full" onclick={() => openLightbox(quoteImages.map((img: any) => ({ url: img.fullsize, thumb: img.thumb, alt: img.alt })), 0)} aria-label={i18n.t.post.viewQuotedImages}>
           <img decoding="async" loading="lazy" src={quoteImages[0].thumb} alt={quoteImages[0].alt || ''} class="media-preview-image" />
@@ -1327,203 +1352,151 @@
   </div>
   </div>
 
-  <div class="flex items-center justify-between mt-3 pl-13">
-    <div class="flex items-center gap-4 flex-wrap">
-      {#if feedPreview && (previewClipped || previewExpanded)}
-        <button type="button" class="preview-toggle" onclick={() => { previewExpanded = !previewExpanded; }}>{previewExpanded ? i18n.t.post.showLessPost : i18n.t.post.showFullPost}</button>
-      {/if}
+  <div class="post-footer">
+    {#if feedPreview && (previewClipped || previewExpanded)}
+      <button type="button" class="preview-toggle" aria-expanded={previewExpanded} onclick={() => { previewExpanded = !previewExpanded; }}>{previewExpanded ? i18n.t.post.showLessPost : i18n.t.post.showFullPost}</button>
+    {/if}
+    <div class="post-actions">
       {#if onreply}
-        <button onclick={() => onreply?.(post)} class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-blue-400 transition-all hover:scale-110 active:scale-90" title={i18n.t.post.reply} aria-label="Reply ({post.replyCount ?? 0} replies)">
-          <MessageCircle size={14} />
-          {#if !hideEngagement}<span class="text-xs">{post.replyCount ?? 0}</span>{/if}
+        <button type="button" onclick={() => onreply?.(post)} class="text-[var(--color-text-muted)] hover:text-blue-400 transition-colors" title={i18n.t.post.reply} aria-label="Reply ({post.replyCount ?? 0} replies)">
+          <MessageCircle size={18} />
+          {#if !hideEngagement}<span class="post-action-count">{countFormatter.format(post.replyCount ?? 0)}</span>{/if}
         </button>
       {:else}
-        <div class="flex items-center gap-1.5 text-[var(--color-text-muted)]" aria-label="{post.replyCount ?? 0} replies">
-          <MessageCircle size={14} />
-          {#if !hideEngagement}<span class="text-xs">{post.replyCount ?? 0}</span>{/if}
-        </div>
+        <a href={getThreadUrl(post)} class="text-[var(--color-text-muted)] hover:text-blue-400 transition-colors" aria-label="{post.replyCount ?? 0} replies">
+          <MessageCircle size={18} />
+          {#if !hideEngagement}<span class="post-action-count">{countFormatter.format(post.replyCount ?? 0)}</span>{/if}
+        </a>
       {/if}
 
       <button
+        type="button"
         onclick={handleBoost}
         disabled={!onboost || boostPending}
         aria-busy={boostPending}
-        class="flex items-center gap-1.5 transition-all {boosted ? 'text-green-400' : 'text-[var(--color-text-muted)]'} {onboost ? 'hover:text-green-400 hover:scale-110 active:scale-90' : ''}"
+        class="transition-colors {boosted ? 'text-green-400' : 'text-[var(--color-text-muted)]'} {onboost ? 'hover:text-green-400' : ''}"
         title={i18n.t.post.boost}
         aria-label="{boosted ? 'Undo boost' : 'Boost'} ({localBoostCount} boosts)"
         aria-pressed={boosted}
       >
-        <Repeat size={14} />
-        {#if !hideEngagement}<span class="text-xs">{localBoostCount}</span>{/if}
+        <Repeat size={18} />
+        {#if !hideEngagement}<span class="post-action-count">{countFormatter.format(localBoostCount)}</span>{/if}
       </button>
 
-      {#if onquote}
-        <button
-          onclick={() => onquote?.(post)}
-          class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-purple-400 transition-all hover:scale-110 active:scale-90"
-          title={i18n.t.post.quote}
-          aria-label={i18n.t.post.quotePost}
-        >
-          <Quote size={14} />
-        </button>
-      {/if}
-
       <button
+        type="button"
         onclick={handleLike}
         disabled={!onlike || likePending}
         aria-busy={likePending}
-        class="flex items-center gap-1.5 transition-all relative {liked ? 'text-red-400' : 'text-[var(--color-text-muted)]'} {onlike ? 'hover:text-red-400 hover:scale-110 active:scale-90' : ''}"
+        class="transition-colors relative {liked ? 'text-red-400' : 'text-[var(--color-text-muted)]'} {onlike ? 'hover:text-red-400' : ''}"
         title={i18n.t.post.like}
         aria-label="{liked ? 'Unlike' : 'Like'} ({localLikeCount} likes)"
         aria-pressed={liked}
       >
-        <Heart size={14} class="{liked ? 'fill-current' : ''} {likeAnimating ? 'like-pop' : ''}" />
+        <Heart size={18} class="{liked ? 'fill-current' : ''} {likeAnimating ? 'like-pop' : ''}" />
         {#if likeAnimating}
           <span class="like-burst" aria-hidden="true">
             <span></span><span></span><span></span><span></span><span></span><span></span>
           </span>
         {/if}
-        {#if !hideEngagement}<span class="text-xs">{localLikeCount}</span>{/if}
+        {#if !hideEngagement}<span class="post-action-count">{countFormatter.format(localLikeCount)}</span>{/if}
       </button>
 
       <button
+        type="button"
         onclick={handleBookmark}
         disabled={bookmarkPending || !bookmarkLoaded}
         aria-busy={bookmarkPending}
-        class="flex items-center gap-1.5 transition-all {bookmarked ? 'text-yellow-400' : 'text-[var(--color-text-muted)]'} hover:text-yellow-400 hover:scale-110 active:scale-90"
-        title={bookmarked ? 'Remove bookmark' : 'Bookmark'}
+        class="transition-colors {bookmarked ? 'text-yellow-400' : 'text-[var(--color-text-muted)]'} hover:text-yellow-400"
+        title={bookmarked ? i18n.t.post.removeBookmark : i18n.t.post.bookmark}
         aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark this post'}
         aria-pressed={bookmarked}
       >
-        <Bookmark size={14} class={bookmarked ? 'fill-current' : ''} />
+        <Bookmark size={18} class={bookmarked ? 'fill-current' : ''} />
       </button>
 
       <button
-        onclick={handlePin}
-        class="flex items-center gap-1.5 transition-colors {pinned ? 'text-orange-400' : 'text-[var(--color-text-muted)]'} hover:text-orange-400 opacity-0 group-hover:opacity-100"
-        title={pinned ? 'Unpin' : 'Pin to top'}
-        aria-label={pinned ? 'Unpin post' : 'Pin post to top'}
-        aria-pressed={pinned}
+        type="button"
+        bind:this={actionsToggle}
+        onclick={() => { if (showMoreActions) closePostActions(); else showMoreActions = true; }}
+        class="transition-colors {showMoreActions ? 'text-[var(--color-primary-text)] bg-[var(--color-surface-hover)]' : 'text-[var(--color-text-muted)]'} hover:text-[var(--color-text)]"
+        title={i18n.t.post.moreActions}
+        aria-label={i18n.t.post.moreActions}
+        aria-expanded={showMoreActions}
+        aria-controls={actionsId}
       >
-        <Pin size={12} class={pinned ? 'fill-current' : ''} />
-      </button>
-
-      <!-- Add to reading list -->
-      <div class="relative">
-        <button
-          onclick={openListPicker}
-          class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors opacity-0 group-hover:opacity-100"
-          title={i18n.t.post.addToReadingList}
-          aria-label={i18n.t.post.addPostToReadingList}
-        >
-          <ListPlus size={12} />
-        </button>
-        {#if showListPicker}
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <div class="fixed inset-0 z-40" onclick={() => showListPicker = false} onkeydown={(e) => { if (e.key === 'Escape') showListPicker = false; }}></div>
-          <div class="absolute bottom-full right-0 mb-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl z-50 py-1 min-w-[160px] max-h-40 overflow-y-auto">
-            {#if readingLists.length > 0}
-              {#each readingLists as rl}
-                <button
-                  onclick={() => addToList(rl.id)}
-                  class="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-surface-hover)] truncate"
-                >
-                  {rl.name}
-                </button>
-              {/each}
-            {:else}
-              <p class="px-3 py-1.5 text-[10px] text-[var(--color-text-muted)]">{i18n.t.post.noReadingLists}</p>
-            {/if}
-            <a
-              href="{base}/bookmarks?tab=reading-lists"
-              onclick={() => showListPicker = false}
-              class="block px-3 py-1.5 text-xs text-[var(--color-primary-text)] hover:bg-[var(--color-surface-hover)] border-t border-[var(--color-border)]"
-            >
-              Manage lists
-            </a>
-          </div>
-        {/if}
-      </div>
-
-      <button
-        onclick={handleShare}
-        class="flex items-center gap-1.5 transition-colors {copied ? 'text-[var(--color-success)]' : 'text-[var(--color-text-muted)]'} hover:text-[var(--color-text)]"
-        title={copied ? 'Copied!' : 'Copy link'}
-        aria-label={i18n.t.post.copyLinkToPost}
-      >
-        <Share size={14} />
-      </button>
-
-      <button
-        onclick={toggleReadAloud}
-        class="flex items-center gap-1.5 transition-colors {speaking ? 'text-green-400' : 'text-[var(--color-text-muted)]'} hover:text-green-400 opacity-0 group-hover:opacity-100"
-        title={speaking ? 'Stop reading' : 'Read aloud'}
-        aria-label={speaking ? 'Stop reading aloud' : 'Read post aloud'}
-        aria-pressed={speaking}
-      >
-        {#if speaking}<VolumeOff size={12} />{:else}<Volume2 size={12} />{/if}
-      </button>
-
-      <button
-        onclick={handleTranslate}
-        disabled={translating}
-        class="flex items-center gap-1.5 transition-colors {translation ? 'text-blue-400' : 'text-[var(--color-text-muted)]'} hover:text-blue-400 opacity-0 group-hover:opacity-100"
-        title={translation ? 'Hide translation' : 'Translate'}
-        aria-label={translation ? 'Hide translation' : 'Translate post'}
-      >
-        {#if translating}
-          <Loader2 size={12} class="animate-spin" />
-        {:else}
-          <Languages size={12} />
-        {/if}
-      </button>
-
-      <button
-        onclick={handleShareAsImage}
-        disabled={capturingImage}
-        class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors opacity-0 group-hover:opacity-100"
-        title={i18n.t.post.shareAsImage}
-        aria-label={i18n.t.post.sharePostAsImage}
-      >
-        {#if capturingImage}
-          <Loader2 size={12} class="animate-spin" />
-        {:else}
-          <Camera size={12} />
-        {/if}
-      </button>
-      {#if shareError}
-        <span class="text-[9px] text-red-400">{shareError}</span>
-      {/if}
-
-      <button
-        onclick={() => showStats = !showStats}
-        class="flex items-center gap-1.5 transition-colors {showStats ? 'text-[var(--color-primary-text)]' : 'text-[var(--color-text-muted)]'} hover:text-[var(--color-primary-text)] opacity-0 group-hover:opacity-100"
-        title={i18n.t.post.postStatistics}
-        aria-label={i18n.t.post.showPostStatistics}
-        aria-pressed={showStats}
-      >
-        <BarChart3 size={12} />
-      </button>
-
-      <button
-        onclick={handleReport}
-        class="flex items-center gap-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors opacity-0 group-hover:opacity-100"
-        title={i18n.t.post.report}
-        aria-label={i18n.t.post.reportPost}
-      >
-        <Flag size={12} />
+        <Ellipsis size={20} />
       </button>
     </div>
-    <a href={getPostUrl(post)} target="_blank" rel="noopener noreferrer" class="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:underline opacity-0 group-hover:opacity-100">
-      {post.platform}
-    </a>
+
+    <!-- Secondary actions take space only after an explicit tap. Keeping
+         visible labels also makes the same controls usable without hover. -->
+    <div id={actionsId} class="post-secondary-actions" hidden={!showMoreActions} role="group" aria-label={i18n.t.post.moreActions}>
+      {#if onquote}
+        <button type="button" onclick={() => { closePostActions(true); onquote?.(post); }} aria-label={i18n.t.post.quotePost}>
+          <Quote size={18} /><span>{i18n.t.post.quotePost}</span>
+        </button>
+      {/if}
+      <button type="button" onclick={handleShare} class:action-active={copied} aria-label={i18n.t.post.copyLinkToPost}>
+        <Share size={18} /><span aria-live="polite">{copied ? i18n.t.post.copied : i18n.t.post.copyLink}</span>
+      </button>
+      {#if onfollow}
+        <button type="button" onclick={() => { following = !following; onfollow?.(post, following); }} aria-label={following ? `Unfollow ${post.author.handle}` : `Follow ${post.author.handle}`} aria-pressed={following}>
+          {#if following}<UserCheck size={18} />{:else}<UserPlus size={18} />{/if}
+          <span>{following ? i18n.t.profile.following : i18n.t.profile.follow}</span>
+        </button>
+      {/if}
+      <button type="button" onclick={handlePin} class:action-active={pinned} aria-label={pinned ? 'Unpin post' : 'Pin post to top'} aria-pressed={pinned}>
+        <Pin size={18} /><span>{pinned ? 'Unpin' : 'Pin to top'}</span>
+      </button>
+      <button type="button" onclick={openListPicker} aria-label={i18n.t.post.addPostToReadingList} aria-expanded={showListPicker} aria-controls={actionsId + '-lists'}>
+        <ListPlus size={18} /><span>{i18n.t.post.addToReadingList}</span>
+      </button>
+      <div id={actionsId + '-lists'} class="post-reading-lists" hidden={!showListPicker}>
+        {#if readingLists.length > 0}
+          {#each readingLists as rl}
+            <button type="button" onclick={() => addToList(rl.id)}><span>{rl.name}</span></button>
+          {/each}
+        {:else}
+          <p class="px-3 py-2 text-xs text-[var(--color-text-muted)]">{i18n.t.post.noReadingLists}</p>
+        {/if}
+        <a href="{base}/bookmarks?tab=reading-lists" onclick={() => closePostActions()} class="text-[var(--color-primary-text)]">{i18n.t.nav.readingLists}</a>
+      </div>
+      <button type="button" onclick={toggleReadAloud} class:action-active={speaking} aria-label={speaking ? 'Stop reading aloud' : 'Read post aloud'} aria-pressed={speaking}>
+        {#if speaking}<VolumeOff size={18} />{:else}<Volume2 size={18} />{/if}
+        <span>{speaking ? 'Stop reading' : 'Read aloud'}</span>
+      </button>
+      <button type="button" onclick={handleTranslate} disabled={translating} class:action-active={!!translation} aria-label={translation ? 'Hide translation' : 'Translate post'} aria-busy={translating}>
+        {#if translating}<Loader2 size={18} class="animate-spin" />{:else}<Languages size={18} />{/if}
+        <span>{translation ? i18n.t.post.hideTranslation : i18n.t.post.translate}</span>
+      </button>
+      <button type="button" onclick={shareImageFromActions} disabled={capturingImage} aria-label={i18n.t.post.sharePostAsImage} aria-busy={capturingImage}>
+        {#if capturingImage}<Loader2 size={18} class="animate-spin" />{:else}<Camera size={18} />{/if}
+        <span>{i18n.t.post.shareAsImage}</span>
+      </button>
+      <button type="button" onclick={() => showStats = !showStats} class:action-active={showStats} aria-label={i18n.t.post.showPostStatistics} aria-pressed={showStats}>
+        <BarChart3 size={18} /><span>{i18n.t.post.postStatistics}</span>
+      </button>
+      <button type="button" onclick={handleReport} class="report-action" aria-label={i18n.t.post.reportPost}>
+        <Flag size={18} /><span>{i18n.t.post.report}</span>
+      </button>
+      <a href={getPostUrl(post)} target="_blank" rel="noopener noreferrer">
+        <ExternalLink size={18} /><span>{i18n.t.common.openInBrowser}</span>
+      </a>
+      <button type="button" onclick={() => closePostActions(true)}>
+        <XIcon size={18} /><span>{i18n.t.common.close}</span>
+      </button>
+    </div>
+    {#if shareError}
+      <p class="mt-2 text-xs text-red-400" role="status">{shareError}</p>
+    {/if}
   </div>
 
   <!-- Post statistics overlay -->
   {#if showStats}
     {@const totalEngagement = (post.likeCount ?? 0) + (post.repostCount ?? 0) + (post.replyCount ?? 0)}
     {@const engagementRate = totalEngagement > 0 ? 100 : 0}
-    <div class="mt-3 pl-13 p-3 bg-[var(--color-bg)] rounded-lg border border-[var(--color-border)] space-y-2">
+    <div class="post-statistics post-extra-offset mt-3 p-3 bg-[var(--color-bg)] rounded-lg border border-[var(--color-border)] space-y-2">
       <div class="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
         <BarChart3 size={12} />
         <span class="font-medium">{i18n.t.post.engagementBreakdown}</span>
@@ -1566,13 +1539,59 @@
 {/if}
 
 <style>
-  .reply-context { display: block; margin: 0 0 0.45rem 3.25rem; padding: 0.25rem 0.55rem; border-left: 2px solid var(--color-border); color: var(--color-text-muted); }
+  .post-card { container-type: inline-size; container-name: post; }
+  .post-main { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr); column-gap: 0.75rem; align-items: start; }
+  .post-main.compact { grid-template-columns: 1.75rem minmax(0, 1fr); column-gap: 0.5rem; }
+  .post-avatar { grid-row: 1 / span 2; display: flex; align-items: start; justify-content: center; }
+  .post-heading { grid-column: 2; min-height: 1.5rem; }
+  .post-body { grid-column: 2; overflow-wrap: anywhere; }
+  .post-media { padding-inline-start: var(--post-indent); min-width: 0; }
+  .post-media:empty { display: none; }
+  .post-extra-offset { margin-inline-start: var(--post-indent); }
+  .post-footer { margin-top: 0.5rem; margin-inline-start: var(--post-indent); }
+  .post-actions { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.125rem; max-width: 24rem; }
+  .post-actions > button, .post-actions > a {
+    display: flex; align-items: center; justify-content: center; gap: 0.25rem;
+    min-width: 44px; min-height: 44px; border-radius: 0.5rem;
+  }
+  .post-actions :global(svg), .post-secondary-actions :global(svg) { flex-shrink: 0; }
+  .post-action-count { min-width: 0; max-width: 4ch; overflow: hidden; text-overflow: ellipsis; font-size: 0.7rem; }
+  .post-actions > :hover { background: var(--color-surface-hover); }
+  .post-secondary-actions {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.25rem;
+    margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--color-border);
+  }
+  .post-secondary-actions[hidden], .post-reading-lists[hidden] { display: none; }
+  .post-secondary-actions button, .post-secondary-actions a {
+    display: flex; align-items: center; gap: 0.5rem; min-width: 0; min-height: 44px;
+    padding: 0.5rem; border-radius: 0.375rem; color: var(--color-text-muted);
+    text-align: start; font-size: 0.75rem; overflow-wrap: anywhere;
+  }
+  .post-secondary-actions button:hover, .post-secondary-actions a:hover { background: var(--color-surface-hover); color: var(--color-text); }
+  .post-secondary-actions .action-active { color: var(--color-primary-text); }
+  .post-secondary-actions .report-action:hover { color: var(--color-danger); }
+  .post-reading-lists { grid-column: 1 / -1; padding: 0.25rem; border: 1px solid var(--color-border); border-radius: 0.375rem; }
+  .post-reading-lists > button, .post-reading-lists > a { width: 100%; }
+  @container post (max-width: 36rem) {
+    .post-avatar { grid-row: 1; }
+    .post-heading { align-items: start; min-height: 2.5rem; }
+    .post-author { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 0.4rem; }
+    .post-author-name { grid-column: 1; grid-row: 1; }
+    .post-author-handle { grid-column: 1; grid-row: 2; }
+    .post-platform { grid-column: 2; grid-row: 1; align-self: center; }
+    .post-body { grid-column: 1 / -1; margin-top: 0.5rem; }
+    .post-media { padding-inline-start: 0; }
+    .post-footer, .post-extra-offset { margin-inline-start: 0; }
+    .post-copy .reply-context { margin-inline-start: 0; }
+    .post-actions { max-width: none; }
+  }
+  .reply-context { display: block; margin: 0 0 0.45rem; margin-inline-start: var(--post-indent); padding: 0.25rem 0.55rem; border-left: 2px solid var(--color-border); color: var(--color-text-muted); }
   .reply-context:hover { color: var(--color-text); }
   .reply-context-label { display: block; font-size: 0.7rem; }
   .reply-context-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; font-size: 0.75rem; white-space: pre-wrap; overflow-wrap: anywhere; }
   .preview-wrap { position: relative; }
   .feed-preview { max-height: calc(50svh - 9rem); overflow: clip; --preview-media-limit: max(0px, calc(50svh - 10.5rem)); }
-  .preview-toggle { color: var(--color-primary-text); font-size: 0.75rem; }
+  .preview-toggle { display: block; min-height: 44px; padding-inline: 0.25rem; color: var(--color-primary-text); font-size: 0.75rem; text-align: start; }
   .post-layout-container { container-type: inline-size; }
   .feed-preview .media-preview-image, .feed-preview .link-preview-image { max-height: min(18rem, 22svh); }
   .feed-preview .media-tile { height: min(22svh, 13rem); }

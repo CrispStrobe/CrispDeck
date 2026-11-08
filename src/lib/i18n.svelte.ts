@@ -223,7 +223,7 @@ export const translations = {
       autoSaveRestored: 'Unsent text restored from auto-save.',
       discard: 'Discard',
     },
-    post: { replyingTo: "Replying to {name}", replyingToPost: "Replying to a post", openLinkFailed: "Could not open the link.", showFullPost: "Show full post", showLessPost: "Show less", playVideo: "Play video", videoPlaybackFailed: "Video could not be played.", openVideoPost: "Open the post", scrollImagesLeft: "Scroll images left", scrollImagesRight: "Scroll images right",
+    post: { moreActions: "More post actions", replyingTo: "Replying to {name}", replyingToPost: "Replying to a post", openLinkFailed: "Could not open the link.", showFullPost: "Show full post", showLessPost: "Show less", playVideo: "Play video", videoPlaybackFailed: "Video could not be played.", openVideoPost: "Open the post", scrollImagesLeft: "Scroll images left", scrollImagesRight: "Scroll images right",
       reportHint: "To complete the report, use the platform's reporting tool on the opened page.",
       noReadingLists: 'No reading lists yet',
       engagementBreakdown: 'Engagement breakdown',
