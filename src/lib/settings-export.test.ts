@@ -95,6 +95,18 @@ describe('settings export/import', () => {
   });
 
   describe('importSettings', () => {
+    it('notifies this tab immediately when a Wallabag server is imported', () => {
+      const changed = vi.fn();
+      window.addEventListener('crispdeck:wallabag-server-changed', changed);
+      try {
+        importSettings({ version: 1, exported_at: '', settings: { 'crispdeck-wallabag-url': 'https://read.example.org/' } });
+        expect(changed).toHaveBeenCalledTimes(1);
+        expect(localStorage.getItem('crispdeck-wallabag-url')).toBe('https://read.example.org');
+      } finally {
+        window.removeEventListener('crispdeck:wallabag-server-changed', changed);
+      }
+    });
+
     it('imports valid settings', () => {
       const data = {
         version: 1,

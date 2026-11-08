@@ -14,6 +14,7 @@ vi.mock('$lib/wallabag', () => ({ wallabagConnected: mocks.connected, saveToWall
 vi.mock('$lib/toast.svelte', () => ({ toast: mocks.toast }));
 vi.mock('$lib/i18n.svelte', () => ({ i18n: { t: {
   post: { openLinkFailed: 'Open failed' },
+  settings: { wallabagConnectFirst: 'Wallabag zuerst verbinden' },
   linkMenu: { title: 'Link actions', open: 'Open link', copy: 'Copy link', share: 'Share link',
     copied: 'Copied', copyFailed: 'Copy failed', saveWallabag: 'Save to Wallabag', setupWallabag: 'Set up Wallabag',
     wallabagSaved: 'Saved to Wallabag', wallabagFailed: 'Save failed', systemMenuHint: 'Shift-right-click for system menu' },
@@ -89,6 +90,15 @@ describe('native link context menu', () => {
     save.click();
     await vi.waitFor(() => expect(mocks.goto).toHaveBeenCalledTimes(1));
     expect(mocks.save).not.toHaveBeenCalled();
+  });
+
+  it('localizes a session that disappears before saving', async () => {
+    localStorage.setItem('crispdeck-wallabag-url', server);
+    mocks.connected.mockResolvedValue(true);
+    mocks.save.mockRejectedValue(new Error('Connect Wallabag in Settings first'));
+    await render(); rightClick();
+    (await menuButton('Save to Wallabag')).click();
+    await vi.waitFor(() => expect(mocks.toast.error).toHaveBeenCalledWith('Wallabag zuerst verbinden'));
   });
 
   it('routes unreadable sessions to setup instead of leaving a dead Save action', async () => {

@@ -169,6 +169,7 @@ test.describe('optional local cache and search', () => {
     await expect(section.getByText('Search cache cleared.', { exact: true })).toBeVisible();
     await expect(section.getByText(/^0 cached items · estimated /)).toBeVisible();
     await section.getByRole('link', { name: 'On this device', exact: true }).click();
+    await expect(page).toHaveURL(/\/search\?scope=local/);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await query(page, 'aurorafield');
     await expect(localSearch(page).getByText('No cached items match this search.', { exact: true })).toBeVisible();
@@ -187,6 +188,7 @@ test.describe('optional local cache and search', () => {
     await section.getByRole('button', { name: 'Save cache settings', exact: true }).click();
     await expect(section.getByText('Cache settings saved.', { exact: true })).toBeVisible();
     await section.getByRole('link', { name: 'On this device', exact: true }).click();
+    await expect(page).toHaveURL(/\/search\?scope=local/);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await query(page, 'aurorafield');
     await expect(localSearch(page).getByText('No cached items match this search.', { exact: true })).toBeVisible();

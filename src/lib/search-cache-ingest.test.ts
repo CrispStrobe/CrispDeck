@@ -14,7 +14,7 @@ vi.mock('$lib/search-cache', () => ({
 vi.mock('$lib/db', () => ({ listAccounts: mocks.listAccounts }));
 vi.mock('$lib/bookmarks', () => ({ listBookmarks: mocks.bookmarks }));
 vi.mock('$lib/offline-cache', () => ({ loadCachedFeed: mocks.offline }));
-vi.mock('$lib/wallabag', () => ({ listWallabagEntries: mocks.listWallabag, wallabagSearchScope: mocks.scope }));
+vi.mock('$lib/wallabag', () => ({ listWallabagIndexEntries: mocks.listWallabag, wallabagSearchScope: mocks.scope }));
 
 import { indexExistingSearchCache, postSearchInput, queuePostsForSearchCache, syncWallabagSearchCache } from './search-cache-ingest';
 const date = () => new Date().toISOString();

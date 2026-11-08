@@ -357,7 +357,7 @@ describe('Wallabag search-index reads', () => {
     mocks.fetch.mockResolvedValueOnce(token('access')).mockResolvedValueOnce(articlePage([article], 3));
     await api.connectWallabag(credentials);
     const scope = await api.wallabagSearchScope(credentials.server);
-    const result = await api.listWallabagEntries(credentials.server, { page: 2, perPage: 25, expectedScope: scope });
+    const result = await api.listWallabagIndexEntries(credentials.server, { page: 2, perPage: 25, expectedScope: scope });
     expect(result).toEqual({ scope, entries: [{ id: 1, title: article.title, url: article.url, content: article.content, createdAt: article.created_at }], hasMore: true });
     expect(mocks.fetch.mock.calls[1][0]).toBe('https://wallabag.example/api/entries.json?page=2&perPage=25&sort=created&order=desc');
     expect(mocks.fetch.mock.calls[1][1]).toMatchObject({ method: 'GET', headers: { Authorization: 'Bearer access' }, redirect: 'error', maxRedirections: 0 });
@@ -369,7 +369,7 @@ describe('Wallabag search-index reads', () => {
     mocks.browserFetch.mockResolvedValueOnce(token('old')).mockResolvedValueOnce(new Response('', { status: 401 }))
       .mockResolvedValueOnce(token('new')).mockResolvedValueOnce(articlePage([article]));
     await api.connectWallabag(credentials);
-    const result = await api.listWallabagEntries(credentials.server);
+    const result = await api.listWallabagIndexEntries(credentials.server);
     expect(result.entries).toHaveLength(1);
     expect(mocks.browserFetch.mock.calls[3][1].headers.Authorization).toBe('Bearer new');
     expect(mocks.fetch).not.toHaveBeenCalled();
@@ -381,7 +381,7 @@ describe('Wallabag search-index reads', () => {
     const oldScope = await api.wallabagSearchScope(credentials.server);
     await api.connectWallabag(credentials);
     expect(await api.wallabagSearchScope(credentials.server)).not.toBe(oldScope);
-    await expect(api.listWallabagEntries(credentials.server, { expectedScope: oldScope })).rejects.toThrow('connection changed');
+    await expect(api.listWallabagIndexEntries(credentials.server, { expectedScope: oldScope })).rejects.toThrow('connection changed');
     expect(mocks.fetch).toHaveBeenCalledTimes(2);
   });
 
@@ -389,7 +389,7 @@ describe('Wallabag search-index reads', () => {
     const pending = deferred<Response>();
     mocks.fetch.mockResolvedValueOnce(token('first')).mockImplementationOnce(() => pending.promise).mockResolvedValueOnce(token('second'));
     await api.connectWallabag(credentials);
-    const reading = api.listWallabagEntries(credentials.server);
+    const reading = api.listWallabagIndexEntries(credentials.server);
     const checked = expect(reading).rejects.toThrow('connection changed');
     await vi.waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(2));
     await api.connectWallabag(credentials);
@@ -403,17 +403,17 @@ describe('Wallabag search-index reads', () => {
       init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
     }));
     await api.connectWallabag(credentials);
-    const reading = api.listWallabagEntries(credentials.server, { signal: controller.signal });
+    const reading = api.listWallabagIndexEntries(credentials.server, { signal: controller.signal });
     const checked = expect(reading).rejects.toMatchObject({ name: 'AbortError' });
     await vi.waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(2));
     controller.abort(); await checked;
   });
 
   it('rejects invalid bounds and malformed pages without following next links', async () => {
-    await expect(api.listWallabagEntries(credentials.server, { perPage: 51 })).rejects.toThrow('page size');
+    await expect(api.listWallabagIndexEntries(credentials.server, { perPage: 51 })).rejects.toThrow('page size');
     mocks.fetch.mockResolvedValueOnce(token('access')).mockResolvedValueOnce(new Response(JSON.stringify({ _embedded: { items: [{}] }, _links: { next: { href: 'https://other.example' } } }), { status: 200 }));
     await api.connectWallabag(credentials);
-    await expect(api.listWallabagEntries(credentials.server)).rejects.toThrow('invalid article');
+    await expect(api.listWallabagIndexEntries(credentials.server)).rejects.toThrow('invalid article');
     expect(mocks.fetch).toHaveBeenCalledTimes(2);
   });
 });
@@ -475,12 +475,12 @@ describe('Wallabag durable cache cleanup marker', () => {
     transport.mockResolvedValueOnce(token('access'));
     await api.connectWallabag(credentials);
     const original = Object.getPrototypeOf(localStorage).setItem;
-    vi.spyOn(Object.getPrototypeOf(localStorage), 'setItem').mockImplementation(function (this: Storage, key: string, value: string) {
+    vi.spyOn(Object.getPrototypeOf(localStorage) as Storage, 'setItem').mockImplementation(function (this: Storage, key: string, value: string) {
       if (key === searchScopeKey) throw new DOMException('Storage full', 'QuotaExceededError');
       return original.call(this, key, value);
     });
     await expect(api.wallabagSearchScope(credentials.server)).rejects.toThrow('Could not save the Wallabag cache marker');
-    await expect(api.listWallabagEntries(credentials.server)).rejects.toThrow('Could not save the Wallabag cache marker');
+    await expect(api.listWallabagIndexEntries(credentials.server)).rejects.toThrow('Could not save the Wallabag cache marker');
     expect(transport).toHaveBeenCalledTimes(1);
     expect(localStorage.getItem(searchScopeKey)).toBeNull();
     expect(await api.wallabagConnected(credentials.server)).toBe(true);

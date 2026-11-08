@@ -8,7 +8,7 @@
   import '../app.css';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import { Home, Rss, Columns3, PenSquare, Bell, MessageSquare, Bookmark, Users, Search, List, Shield, TrendingUp, Archive, BarChart3, Settings, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon, Smartphone } from '@lucide/svelte';
+  import { Home, Rss, Columns3, PenSquare, Bell, MessageSquare, Bookmark, BookOpen, Users, Search, List, Shield, TrendingUp, Archive, BarChart3, Settings, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon, Smartphone } from '@lucide/svelte';
   import KeyboardShortcuts from '$lib/components/KeyboardShortcuts.svelte';
   import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
   import ToastContainer from '$lib/components/ToastContainer.svelte';
@@ -30,6 +30,22 @@
   import { onMount, onDestroy } from 'svelte';
   import { startScheduler } from '$lib/publishing/scheduler';
   onMount(startScheduler);
+  let wallabagReady = $state(false);
+  onMount(() => {
+    let active = true;
+    let stop: (() => void) | undefined;
+    let unsubscribe: (() => void) | undefined;
+    // Keep the optional reader's connection watcher off the startup path.
+    // Navigation stays hidden until the loaded watcher verifies saved access.
+    void import('$lib/wallabag-availability').then(module => {
+      if (!active) return;
+      unsubscribe = module.wallabagAvailability.subscribe(connection => {
+        wallabagReady = connection.status === 'ready';
+      });
+      stop = module.startWallabagAvailability();
+    }).catch(error => swallow('layout.wallabag', error));
+    return () => { active = false; unsubscribe?.(); stop?.(); };
+  });
   let NativeLinkMenu = $state<typeof import('$lib/components/LinkContextMenu.svelte').default>();
   onMount(() => {
     let active = true;
@@ -285,6 +301,7 @@
     { href: '/messages', icon: MessageSquare, label: i18n.t.nav.messages, badge: () => unreadMessages > 0 ? unreadMessages : 0 },
     { href: '/search', icon: Search, label: i18n.t.nav.search },
     { href: '/bookmarks', icon: Bookmark, label: i18n.t.nav.bookmarks, badge: () => bookmarkCount > 0 ? bookmarkCount : 0 },
+    ...(wallabagReady ? [{ href: '/wallabag', icon: BookOpen, label: i18n.t.nav.wallabag }] : []),
     { href: '/lists', icon: List, label: 'Lists & Feeds' },
     { href: '/trending', icon: TrendingUp, label: 'Discover' },
     { href: '/identities', icon: Users, label: i18n.t.nav.identities },
@@ -292,7 +309,7 @@
     { href: '/analytics', icon: BarChart3, label: i18n.t.nav.analytics },
     { href: '/moderation', icon: Shield, label: i18n.t.nav.moderation },
     { href: '/settings', icon: Settings, label: i18n.t.nav.settings },
-    { href: '/about', icon: Info, label: 'About' },
+    { href: '/about', icon: Info, label: i18n.t.nav.about },
   ]);
 
   // Filtered nav items (respects simple mode / custom hidden items)

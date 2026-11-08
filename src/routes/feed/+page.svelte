@@ -2,6 +2,7 @@
   import { queuePostsForSearchCache } from '$lib/search-cache-lazy';
   import { getSearchCacheGeneration } from '$lib/search-cache-lazy';
   import { buildThreadsFeed, getThreadsSources } from '$lib/threads-feed';
+  import { loadFeedFilterDefaults, saveFeedFilterDefaults, resetFeedFilterDefaults, factoryFeedFilters } from '$lib/feed-filter-defaults';
   import { base } from '$app/paths';
   import { goto } from '$app/navigation';
   import { onMount, onDestroy, tick } from 'svelte';
@@ -84,14 +85,7 @@
   let offlineBanner = $state(''); // "Offline — cached from 5 min ago"
   let stopWatchingConnection: (() => void) | undefined;
 
-  let filters: Filters = $state({
-    searchTerm: '',
-    sortBy: 'newest',
-    hasMedia: false,
-    hideReplies: false,
-    hideReposts: false,
-    minLikes: 0,
-  });
+  let filters: Filters = $state(loadFeedFilterDefaults());
 
   let clientEntries: Map<number, ClientEntry> = new Map();
   let identityPairs: Set<string> = $state(new Set());
@@ -1129,7 +1123,7 @@
       <button
         onclick={() => showFilters = !showFilters}
         class="p-1.5 rounded-md transition-colors {showFilters ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary-text)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
-        title="Filters & Sort"
+        title={i18n.t.settings.filterSortTitle}
       >
         <SlidersHorizontal size={16} />
       </button>
@@ -1179,7 +1173,7 @@
     </div>
   {:else}
     {#if showFilters}
-      <AdvancedFilters {filters} onchange={handleFilterChange} startOpen={true} />
+      <AdvancedFilters {filters} onchange={handleFilterChange} onSaveDefault={() => saveFeedFilterDefaults(filters) ? toast.success(i18n.t.settings.filterSaved) : toast.error(i18n.t.settings.filterSaveFailed)} onReset={() => { if (resetFeedFilterDefaults()) filters = { ...factoryFeedFilters }; else toast.error(i18n.t.settings.filterSaveFailed); }} startOpen={true} />
     {/if}
 
     {#if loading && posts.length === 0}

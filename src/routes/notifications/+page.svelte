@@ -1,7 +1,5 @@
 <script lang="ts">
   import { swallow } from '$lib/debug-log';
-  import { readJson, writeJson } from '$lib/safe-storage';
-  import { sanitizeHtml } from '$lib/sanitize';
   import { toast } from '$lib/toast.svelte';
   import { base } from '$app/paths';
   import { onMount, onDestroy } from 'svelte';
@@ -15,7 +13,7 @@
   import { MastodonClient } from '$lib/api/mastodon';
   import { ThreadsClient } from '$lib/api/threads';
   import type { Account } from '$lib/types';
-  import { groupNotifications, type UnifiedNotification, type NotificationGroup } from '$lib/notification-grouping';
+  import { groupNotifications, notificationPostHref, notificationActorName, type UnifiedNotification, type NotificationGroup } from '$lib/notification-grouping';
   import { getCached, setCache } from '$lib/view-cache';
   import SkeletonNotification from '$lib/components/SkeletonNotification.svelte';
   import DelayedSpinner from '$lib/components/DelayedSpinner.svelte';
@@ -25,10 +23,6 @@
   let loading = $state(true);
   let error = $state('');
   let refreshing = $state(false);
-  let announcements: Array<{ id: string; content: string; publishedAt: string }> = $state([]);
-  const dismissedAnnouncementIds = new Set<string>(
-    readJson<string[]>('crispdeck-dismissed-announcements', [], Array.isArray)
-  );
   let expandedGroups: Set<string> = $state(new Set());
   let offlineBanner = $state('');
   let stopWatchingConnection: (() => void) | undefined;
@@ -110,8 +104,20 @@
                 createdAt: n.indexedAt,
                 author: { handle: n.author.handle, displayName: n.author.displayName, avatar: n.author.avatar },
                 text: (n.record as any)?.text,
-                postUri: n.reasonSubject,
+                postUri: n.reasonSubject ?? (['mention', 'reply', 'quote'].includes(n.reason) ? n.uri : undefined),
+                sourceAccountId: acct.id,
               });
+            }
+            const subjects = [...new Set(notifs.filter(n => ['like', 'repost'].includes(n.type) && n.postUri).map(n => n.postUri!))].slice(0, 50);
+            if (subjects.length) {
+              try {
+                const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
+                for (let start = 0; start < subjects.length; start += 25) {
+                  const response = await agent.api.app.bsky.feed.getPosts({ uris: subjects.slice(start, start + 25) });
+                  const texts = new Map(response.data.posts.map(p => [p.uri, typeof (p.record as { text?: unknown })?.text === 'string' ? (p.record as { text: string }).text : '']));
+                  for (const notif of notifs) if (notif.postUri && texts.has(notif.postUri)) notif.text = texts.get(notif.postUri) || notif.text;
+                }
+              } catch (e) { swallow('notifications.subjects', e); }
             }
           } catch (e) { swallow(`notifications.load:${acct.handle}`, e); failedAccounts++; }
           return notifs;
@@ -147,7 +153,7 @@
                   createdAt: n.created_at,
                   author: { handle: n.account?.acct ? `@${n.account.acct}` : '?', displayName: n.account?.display_name, avatar: n.account?.avatar, accountId: n.account?.id },
                   text: n.status?.content?.replace(/<[^>]*>?/gm, ''),
-                  postUri: n.status?.uri,
+                  postUri: n.status?.uri, postId: n.status?.id, sourceAccountId: acct.id,
                 });
               }
             }
@@ -169,17 +175,6 @@
       if (failedAccounts === fetchers.length && all.length === 0) return;
     }
 
-    // Fetch Mastodon announcements
-    for (const [, entry] of clientEntries) {
-      if (entry.platform !== 'mastodon') continue;
-      const masto = entry.client as MastodonClient;
-      try {
-        const anns = await masto.getAnnouncements();
-        announcements = anns
-          .filter((a: any) => !dismissedAnnouncementIds.has(a.id))
-          .map((a: any) => ({ id: a.id, content: a.content, publishedAt: a.published_at ?? a.created_at }));
-      } catch (e) { swallow('notifications.loadNotifications', e); }
-    }
     groups = groupNotifications(all);
     setCache('notifications', groups);
   }
@@ -211,17 +206,6 @@
   }
 
   const ptr = createPullToRefresh(async () => { await loadNotifications(); });
-
-  function dismissAnnouncement(id: string) {
-    dismissedAnnouncementIds.add(id);
-    writeJson('crispdeck-dismissed-announcements', [...dismissedAnnouncementIds]);
-    announcements = announcements.filter(a => a.id !== id);
-    // Also dismiss on server
-    for (const [, entry] of clientEntries) {
-      if (entry.platform !== 'mastodon') continue;
-      (entry.client as MastodonClient).dismissAnnouncement(id).catch(() => {});
-    }
-  }
 
   function toggleGroup(groupId: string) {
     const next = new Set(expandedGroups);
@@ -297,18 +281,6 @@
     </div>
   {/if}
 
-  <!-- Instance announcements -->
-  {#each announcements as ann (ann.id)}
-    <div class="mb-4 p-3 bg-[var(--color-mastodon)]/10 border border-[var(--color-mastodon)]/30 rounded-lg">
-      <div class="flex items-start justify-between gap-2">
-        <!-- Announcement HTML is written by the instance admin. Every other
-             {@html} in this app is sanitized; this one was missed. -->
-        <div class="text-sm text-[var(--color-text)]">{@html sanitizeHtml(ann.content)}</div>
-        <button onclick={() => dismissAnnouncement(ann.id)} class="text-[var(--color-text-muted)] hover:text-[var(--color-text)] flex-shrink-0 text-xs">{i18n.t.common.dismiss}</button>
-      </div>
-    </div>
-  {/each}
-
   <div class="flex items-center justify-between mb-6">
     <div class="flex items-center gap-2">
       <Bell size={24} />
@@ -383,7 +355,7 @@
                   <div class="flex -space-x-2">
                     {#each group.actors.slice(0, MAX_AVATARS) as actor}
                       {#if actor.avatar}
-                        <a href="{base}/profile?handle={encodeURIComponent(actor.handle)}&platform={actor.platform}" title={actor.displayName || actor.handle}>
+                        <a href="{base}/profile?handle={encodeURIComponent(actor.handle)}&platform={actor.platform}" title={notificationActorName(actor)}>
                           <img loading="lazy" src={actor.avatar} alt="" class="w-7 h-7 rounded-full border-2 border-[var(--color-bg)]" />
                         </a>
                       {/if}
@@ -406,7 +378,7 @@
                   {#if isGrouped}
                     <!-- Grouped: show first actor name + "and N others" -->
                     <a href="{base}/profile?handle={encodeURIComponent(group.actors[0].handle)}&platform={group.actors[0].platform}" class="font-semibold hover:underline">
-                      {group.actors[0].displayName || group.actors[0].handle}
+                      {notificationActorName(group.actors[0])}
                     </a>
                     <span class="text-[var(--color-text-muted)]">
                       {getActionText(group.type, group.actors.length)}
@@ -426,14 +398,16 @@
                   {:else}
                     <!-- Single notification -->
                     <a href="{base}/profile?handle={encodeURIComponent(group.actors[0].handle)}&platform={group.actors[0].platform}" class="font-semibold hover:underline">
-                      {group.actors[0].displayName || group.actors[0].handle}
+                      {notificationActorName(group.actors[0])}
                     </a>
                     <span class="text-[var(--color-text-muted)]">
                       {getActionText(group.type, 1)}
                     </span>
                   {/if}
                 </p>
-                {#if group.text}
+                {#if notificationPostHref(group, base)}
+                  <a href={notificationPostHref(group, base) ?? '#'} class="block text-xs text-[var(--color-primary-text)] hover:underline mt-1 line-clamp-2">{group.text || i18n.t.post.openVideoPost}</a>
+                {:else if group.text}
                   <p class="text-xs text-[var(--color-text-muted)] mt-1 line-clamp-2">{group.text}</p>
                 {/if}
                 {#if group.type === 'follow_request'}
@@ -475,7 +449,7 @@
                   {#if actor.avatar}
                     <img loading="lazy" src={actor.avatar} alt="" class="w-5 h-5 rounded-full" />
                   {/if}
-                  <span class="text-xs font-medium">{actor.displayName || actor.handle}</span>
+                  <span class="text-xs font-medium">{notificationActorName(actor)}</span>
                   <span class="text-[10px] text-[var(--color-text-muted)]">@{actor.handle}</span>
                   <span class="w-1.5 h-1.5 rounded-full ml-auto" style="background: var(--color-{actor.platform})"></span>
                 </a>

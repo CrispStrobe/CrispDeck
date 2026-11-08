@@ -173,7 +173,7 @@ export async function syncWallabagSearchCache(options: SearchCacheSyncOptions = 
   checkActive(generation, options.signal);
   const server = localStorage.getItem('crispdeck-wallabag-url') ?? '';
   if (!server.trim()) throw new Error('Connect Wallabag in Settings first.');
-  const { listWallabagEntries, wallabagSearchScope } = await import('$lib/wallabag');
+  const { listWallabagIndexEntries, wallabagSearchScope } = await import('$lib/wallabag');
   const scope = await wallabagSearchScope(server);
   checkActive(generation, options.signal);
   const cutoff = settings.maxAgeDays ? Date.now() - settings.maxAgeDays * 86_400_000 : -Infinity;
@@ -181,7 +181,7 @@ export async function syncWallabagSearchCache(options: SearchCacheSyncOptions = 
   const pageLimit = Math.min(WALLABAG_SYNC_PAGE_LIMIT, Math.ceil(settings.maxItems / WALLABAG_SYNC_PAGE_SIZE));
   for (let page = 1; page <= pageLimit; page++) {
     checkActive(generation, options.signal);
-    const result = await listWallabagEntries(server, {
+    const result = await listWallabagIndexEntries(server, {
       page, perPage: WALLABAG_SYNC_PAGE_SIZE, expectedScope: scope, signal: options.signal,
     });
     checkActive(generation, options.signal);

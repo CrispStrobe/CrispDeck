@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { groupNotifications, type UnifiedNotification } from './notification-grouping';
+import { groupNotifications, notificationPostHref, notificationActorName, type UnifiedNotification } from './notification-grouping';
 
 function makeNotif(overrides: Partial<UnifiedNotification> & { id: string }): UnifiedNotification {
   return {
@@ -232,5 +232,25 @@ describe('notification-grouping', () => {
       expect(groups[0].actors).toHaveLength(500);
       expect(elapsed).toBeLessThan(100);
     });
+  });
+});
+
+
+describe('notification navigation', () => {
+  it('links the target post and uses a usable handle for punctuation-only names', () => {
+    const [group] = groupNotifications([makeNotif({ id: 'one', sourceAccountId: 3, author: { handle: 'alice.bsky.social', displayName: '•' } })]);
+    expect(notificationActorName(group.actors[0])).toBe('alice.bsky.social');
+    const url = notificationPostHref(group, '/app')!;
+    expect(url).toContain('/app/thread?');
+    const params = new URL(url, 'https://example.com').searchParams;
+    expect(params.get('uri')).toBe('at://did:plc:abc/app.bsky.feed.post/123');
+    expect(params.get('account')).toBe('3');
+  });
+  it('uses the local Mastodon status id and never invents missing targets', () => {
+    const [group] = groupNotifications([makeNotif({ id: 'two', platform: 'mastodon', postId: '1234', sourceAccountId: 4 })]);
+    const params = new URL(notificationPostHref(group)!, 'https://example.com').searchParams;
+    expect(params.get('id')).toBe('1234');
+    expect(params.get('account')).toBe('4');
+    expect(notificationPostHref({ ...group, postId: undefined })).toBeNull();
   });
 });
