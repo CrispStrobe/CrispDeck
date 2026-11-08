@@ -49,15 +49,28 @@ def display_insets(dump):
 def viewport_geometry(xml, dump):
     """Compare native accessibility bounds with independently reported OS insets."""
     display, sources = display_insets(dump)
-    webviews = set()
-    for node in ET.fromstring(xml).iter('node'):
-        if node.get('package') == smoke.BUNDLE and node.get('class', '').endswith('WebView'):
+    root = ET.fromstring(xml)
+    parents = {child: parent for parent in root.iter() for child in parent}
+    webviews = []
+    for node in root.iter('node'):
+        if node.get('package') != smoke.BUNDLE or not node.get('class', '').endswith('WebView'):
+            continue
+        # Chromium can expose its page as a nested WebView accessibility node.
+        # The outer node is the native view whose bounds include system insets.
+        parent = parents.get(node)
+        nested = False
+        while parent is not None:
+            if parent.get('package') == smoke.BUNDLE and parent.get('class', '').endswith('WebView'):
+                nested = True
+                break
+            parent = parents.get(parent)
+        if not nested:
             match = re.fullmatch(FRAME, node.get('bounds', ''))
             if match:
-                webviews.add(tuple(map(int, match.groups())))
+                webviews.append(tuple(map(int, match.groups())))
     if len(webviews) != 1:
         raise RuntimeError(f'Expected one native CrispDeck WebView, found {len(webviews)}')
-    actual = next(iter(webviews))
+    actual = webviews[0]
     expected = list(display)
     for source in sources:
         if not source['visible']:

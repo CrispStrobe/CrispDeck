@@ -36,6 +36,17 @@ def hierarchy(bounds, package=layout.smoke.BUNDLE):
 
 
 class AndroidLayoutTests(unittest.TestCase):
+    def test_nested_web_accessibility_node_does_not_replace_native_bounds(self):
+        xml = hierarchy((0, 84, 1080, 2274)).replace('/>\n    </node>',
+            '><node package="com.christianstrobele.crispdeck" class="android.webkit.WebView" bounds="[0,84][1080,2276]"/></node>\n    </node>')
+        self.assertEqual(layout.viewport_geometry(xml, native_dump())['webview'], (0, 84, 1080, 2274))
+
+    def test_independent_webviews_are_not_silently_ignored(self):
+        xml = hierarchy((0, 84, 1080, 2274)).replace('</hierarchy>',
+            '<node package="com.christianstrobele.crispdeck" class="android.webkit.WebView" bounds="[0,84][1080,2274]"/></hierarchy>')
+        with self.assertRaisesRegex(RuntimeError, 'found 2'):
+            layout.viewport_geometry(xml, native_dump())
+
     def test_three_button_insets_fit_the_actual_native_webview(self):
         result = layout.viewport_geometry(hierarchy((0, 84, 1080, 2274)), native_dump())
         self.assertEqual(result['safe_viewport'], [0, 84, 1080, 2274])
