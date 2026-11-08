@@ -3,6 +3,8 @@ import type { ClientEntry } from '$lib/api/client-factory';
 import { BlueskyClient } from '$lib/api/bluesky';
 import type { MastodonClient } from '$lib/api/mastodon';
 import type { ThreadsClient } from '$lib/api/threads';
+import { queuePostsForSearchCache } from '$lib/search-cache-ingest';
+import { getSearchCacheGeneration } from '$lib/search-cache';
 import { normalizePost } from '$lib/api/unified';
 
 export interface ThreadRequest { platform: Platform; uri: string; statusId: string; accountId?: number }
@@ -53,6 +55,7 @@ function camelCase(value: unknown): any {
 }
 
 export async function loadThreadPage(request: ThreadRequest, accounts: Account[], clients: Map<number, ClientEntry>): Promise<ThreadPage> {
+  const searchGeneration = getSearchCacheGeneration();
   const selected = selectAccount(request, accounts, clients);
   const result: ThreadPage = { mainPost: null, ancestors: [], replies: [] };
   const normalized = (value: unknown): UnifiedPost => {
@@ -61,7 +64,9 @@ export async function loadThreadPage(request: ThreadRequest, accounts: Account[]
       const status = value as { reblog?: { spoilerText?: string }; spoilerText?: string };
       post.contentWarning = (status.reblog ?? status).spoilerText || undefined;
     }
-    return selected ? { ...post, sourceAccountId: selected.account.id, sourceAccount: selected.account.handle } : post;
+    const scoped = selected ? { ...post, sourceAccountId: selected.account.id, sourceAccount: selected.account.handle } : post;
+    queuePostsForSearchCache([scoped], searchGeneration);
+    return scoped;
   };
 
   if (request.platform === 'bluesky') {

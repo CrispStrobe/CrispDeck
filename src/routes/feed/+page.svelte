@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { queuePostsForSearchCache } from '$lib/search-cache-ingest';
+  import { getSearchCacheGeneration } from '$lib/search-cache';
   import { buildThreadsFeed, getThreadsSources } from '$lib/threads-feed';
   import { base } from '$app/paths';
   import { goto } from '$app/navigation';
@@ -480,7 +482,12 @@
     view: FeedView,
   ): Promise<{ posts: UnifiedPost[]; cursor?: string; degraded: boolean }> {
     const { limit, cursor } = opts;
-    const tag = (p: UnifiedPost) => { p.sourceAccount = acct.handle; p.sourceAccountId = acct.id; return p; };
+    const searchGeneration = getSearchCacheGeneration();
+    const tag = (p: UnifiedPost) => {
+      p.sourceAccount = acct.handle; p.sourceAccountId = acct.id;
+      queuePostsForSearchCache([p], searchGeneration);
+      return p;
+    };
     const wantsTimeline = view.mode === 'timeline' || view.mode === 'for-you';
 
     // A feed generator or list is Bluesky-only and account-independent: its

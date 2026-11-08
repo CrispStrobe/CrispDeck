@@ -79,6 +79,7 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **Bluesky Starter Packs**: browse, search, create from identity DB
 - **Trending**: unified Bluesky + Mastodon trending
 - **Universal search**: queries all 3 networks simultaneously with engagement/recency scoring (Threads: keyword search via official API)
+- **Optional local search cache**: keep titles and configurable text excerpts from encountered posts and Wallabag entries, then search them offline with an IndexedDB text index. Separate post/Wallabag limits, history window, entry cap, clear/rebuild controls, and explicit Wallabag import. Disabled by default; [setup and limits](docs/local-search-cache.md).
 - **Catch-up mode**: AI-ranked missed posts
 - **"For You" algorithm**: local engagement-based ranking
 - **RSS feeds**: subscribe + OPML import, RSS deck columns
@@ -392,6 +393,7 @@ src/
     keyword-monitor.ts Keyword matching + saved keyword sets for deck monitoring
     byok-providers.ts  10 BYOK provider presets with /models discovery
     universal-search.ts Cross-network search with merge/dedup
+    search-cache.ts    Optional bounded text cache + IndexedDB token index
     archive.ts         Local post archive (IndexedDB)
     bookmarks.ts       Cross-platform bookmarks (IndexedDB)
     templates.ts       Post templates with variables (localStorage)

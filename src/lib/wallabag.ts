@@ -39,7 +39,16 @@ let nativeTransport: Promise<typeof import('@tauri-apps/plugin-http')> | undefin
 const requests = new Set<AbortController>();
 
 class WallabagError extends Error {}
-const connectionChanged = () => new WallabagError('The Wallabag connection changed. Try saving the link again.');
+const connectionChanged = () => new WallabagError('The Wallabag connection changed. Try again.');
+const searchScope = (session: Session): string | undefined => session.connectionId ? `wallabag:${session.connectionId}` : undefined;
+
+async function clearConnectionSearchCache(session: Session | null): Promise<void> {
+  const scope = session && searchScope(session);
+  if (scope) {
+    const { removeSearchCacheScope } = await import('$lib/search-cache');
+    await removeSearchCacheScope(scope);
+  }
+}
 
 /** Only an explicit new connection may replace or rebind saved credentials. */
 function changeConnection(): number {
@@ -142,6 +151,7 @@ export async function disconnectWallabag(): Promise<void> {
   changeConnection();
   await withSessionLock(async () => {
     const store = await selectedStore();
+    const previous = await readSession(store).catch(() => null);
     if (store.kind === 'native') {
       await invoke('wallabag_session_delete', store.args);
     } else {
@@ -152,17 +162,22 @@ export async function disconnectWallabag(): Promise<void> {
         throw new WallabagError('Could not remove Wallabag credentials. Check browser storage and try again.');
       }
     }
+    await clearConnectionSearchCache(previous);
   });
 }
 
 /** Keep the deadline active until the response body is consumed or discarded. */
 async function request<T>(url: string, init: RequestInit, consume: (response: Response) => Promise<T> | T): Promise<T> {
   const controller = new AbortController();
+  const abort = () => controller.abort();
+  init.signal?.addEventListener('abort', abort, { once: true });
+  if (init.signal?.aborted) controller.abort();
   let timedOut = false;
   const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, requestTimeoutMs);
   requests.add(controller);
   let response: Response | undefined;
   try {
+    if (controller.signal.aborted) throw new Error();
     const options: RequestInit = { ...init, redirect: 'error', credentials: 'omit', cache: 'no-store', signal: controller.signal };
     if (isTauri()) {
       const { fetch: nativeFetch } = await (nativeTransport ??= import('@tauri-apps/plugin-http').catch(error => {
@@ -175,8 +190,11 @@ async function request<T>(url: string, init: RequestInit, consume: (response: Re
       response = await fetch(url, options);
     }
     if (controller.signal.aborted) throw new Error();
-    return await consume(response);
+    const result = await consume(response);
+    if (controller.signal.aborted) throw new Error();
+    return result;
   } catch (error) {
+    if (init.signal?.aborted) throw new DOMException('Wallabag sync cancelled.', 'AbortError');
     if (timedOut) throw new WallabagError('The Wallabag request timed out. Try again.');
     if (controller.signal.aborted) throw connectionChanged();
     if (error instanceof WallabagError) throw error;
@@ -185,6 +203,7 @@ async function request<T>(url: string, init: RequestInit, consume: (response: Re
       : 'Could not reach Wallabag. Check the server URL, connection, and browser CORS settings.');
   } finally {
     clearTimeout(timeout);
+    init.signal?.removeEventListener('abort', abort);
     requests.delete(controller);
     if (response?.body && !response.body.locked) void response.body.cancel().catch(() => {});
   }
@@ -237,11 +256,13 @@ export async function connectWallabag(credentials: WallabagCredentials): Promise
   return withSessionLock(async () => {
     if (started !== generation) throw connectionChanged();
     const store = await selectedStore();
+    const previous = await readSession(store).catch(() => null);
     if (started !== generation) throw connectionChanged();
     const result = await token(server, { grant_type: 'password', client_id: clientId, client_secret: clientSecret, username, password: credentials.password });
     if (started !== generation) throw connectionChanged();
     await writeSession(store, { server, clientId, clientSecret, accessToken: result.access_token, refreshToken: result.refresh_token, expiresAt: Date.now() + result.expires_in * 1000, connectionId: crypto.randomUUID() });
     if (started !== generation) throw connectionChanged();
+    await clearConnectionSearchCache(previous);
     return server;
   });
 }
@@ -298,4 +319,127 @@ export async function saveToWallabag(server: string, link: string): Promise<void
   let status = await save(saved);
   if (status === 401) { saved = await usableSession(saved, true); status = await save(saved); }
   if (status < 200 || status >= 300) throw new WallabagError(`Wallabag could not save the link (${status})`);
+}
+
+/** A credential-free article projection used by the optional local index. */
+export interface WallabagEntry {
+  id: number;
+  title: string;
+  url: string;
+  content: string;
+  createdAt: string;
+}
+export interface WallabagEntryPage {
+  scope: string;
+  entries: WallabagEntry[];
+  hasMore: boolean;
+}
+
+async function searchSession(server: string): Promise<SavedSession> {
+  const normalized = normalizeWallabagServer(server);
+  return withSessionLock(async () => {
+    const store = await selectedStore();
+    let session = await readSession(store);
+    if (!session || session.server !== normalized) throw new WallabagError('Connect Wallabag in Settings first');
+    // Older connections predate connectionId. Assign it once under the same
+    // lock used for token rotation so subsequent imports use one stable scope.
+    if (!session.connectionId) {
+      session = { ...session, connectionId: crypto.randomUUID() };
+      await writeSession(store, session);
+    }
+    return { store, session, generation };
+  });
+}
+
+/** Read an opaque, non-secret connection identity; never return the session. */
+export async function wallabagSearchScope(server: string): Promise<string> {
+  return searchScope((await searchSession(server)).session)!;
+}
+
+function checkCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new DOMException('Wallabag sync cancelled.', 'AbortError');
+}
+
+async function readEntryResponse(response: Response): Promise<Record<string, unknown>> {
+  // Article HTML is much larger than a token response. Bound the entire page
+  // before parsing it so a broken server cannot exhaust a mobile webview.
+  const maxBytes = 16 * 1024 * 1024;
+  const reader = response.body?.getReader();
+  if (!reader) throw new WallabagError('Wallabag returned an invalid article page');
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) throw new WallabagError('The Wallabag article page is too large. Try again with fewer items.');
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  try {
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    const data: unknown = JSON.parse(new TextDecoder().decode(bytes));
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error();
+    return data as Record<string, unknown>;
+  } catch {
+    throw new WallabagError('Wallabag returned an invalid article page');
+  }
+}
+
+/**
+ * Read a bounded page, newest saved first, using the existing encrypted
+ * session and native/browser transport. expectedScope pins a multi-page
+ * import to its original connection, including reconnections to one server.
+ */
+export async function listWallabagEntries(server: string, options: {
+  page?: number;
+  perPage?: number;
+  expectedScope?: string;
+  signal?: AbortSignal;
+} = {}): Promise<WallabagEntryPage> {
+  const page = options.page ?? 1;
+  const perPage = options.perPage ?? 50;
+  if (!Number.isSafeInteger(page) || page < 1 || page > 10000 ||
+      !Number.isSafeInteger(perPage) || perPage < 1 || perPage > 50) throw new WallabagError('Invalid Wallabag page size');
+  checkCancelled(options.signal);
+  let saved = await searchSession(server);
+  const scope = searchScope(saved.session)!;
+  if (options.expectedScope && options.expectedScope !== scope) throw connectionChanged();
+  saved = await usableSession(saved);
+  const fetchPage = async (value: SavedSession) => {
+    checkCancelled(options.signal);
+    assertConnection(value, value.session);
+    const params = new URLSearchParams({ page: String(page), perPage: String(perPage), sort: 'created', order: 'desc' });
+    return request(`${value.session.server}/api/entries.json?${params}`, {
+      method: 'GET', headers: { Authorization: `Bearer ${value.session.accessToken}` }, signal: options.signal,
+    }, async response => {
+      if (response.status === 401) return null;
+      if (!response.ok) throw new WallabagError(`Wallabag could not load articles (${response.status})`);
+      return readEntryResponse(response);
+    });
+  };
+  let data = await fetchPage(saved);
+  if (data === null) { saved = await usableSession(saved, true); data = await fetchPage(saved); }
+  if (data === null) throw new WallabagError('Wallabag could not load articles (401)');
+  checkCancelled(options.signal);
+  await withSessionLock(async () => assertConnection(saved, await readSession(saved.store)));
+  const embedded = data._embedded as { items?: unknown } | undefined;
+  if (!embedded || !Array.isArray(embedded.items) || embedded.items.length > perPage) throw new WallabagError('Wallabag returned an invalid article page');
+  const entries = embedded.items.map((item: unknown): WallabagEntry => {
+    if (!item || typeof item !== 'object') throw new WallabagError('Wallabag returned an invalid article');
+    const entry = item as Record<string, unknown>;
+    if (!Number.isSafeInteger(entry.id) || Number(entry.id) <= 0 || typeof entry.title !== 'string' ||
+        typeof entry.url !== 'string' || typeof entry.created_at !== 'string' || !Number.isFinite(Date.parse(entry.created_at)) ||
+        (entry.content !== undefined && typeof entry.content !== 'string')) throw new WallabagError('Wallabag returned an invalid article');
+    return { id: Number(entry.id), title: entry.title, url: entry.url, content: entry.content as string ?? '', createdAt: entry.created_at };
+  });
+  const pages = Number(data.pages);
+  // Never follow a server-supplied next URL: it could cross origins with auth.
+  const hasMore = entries.length > 0 && (Number.isSafeInteger(pages) && pages >= page ? page < pages : entries.length === perPage);
+  return { scope, entries, hasMore };
 }

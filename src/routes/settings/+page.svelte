@@ -1,5 +1,7 @@
 <script lang="ts">
   import ThreadsFeedSources from '$lib/components/ThreadsFeedSources.svelte';
+  import LocalSearchSettings from '$lib/components/LocalSearchSettings.svelte';
+  import { clearSearchCache } from '$lib/search-cache';
   import { getTtsEngine, setTtsEngine, getSttEngine, setSttEngine, getHomeMode, setHomeMode, type SpeechEngine, type HomeMode } from '$lib/settings';
   import { toast } from '$lib/toast.svelte';
   import { readString, removeKey, writeJson, writeString } from '$lib/safe-storage';
@@ -387,6 +389,8 @@
   }
   async function purgeAllData() {
     if (!confirm(i18n.t.settings.purgeConfirm)) return;
+    try { await clearSearchCache(); }
+    catch (e) { swallow('settings.purgeSearchCache', e); toast.error(i18n.t.localSearch.operationFailed); }
     // Delete IndexedDB databases
     for (const name of ['crispdeck-archive', 'crispdeck-bookmarks', 'crispdeck-engagement', 'crispdeck-translations']) {
       try { indexedDB.deleteDatabase(name); } catch (e) { swallow('settings.purgeAllData', e); }
@@ -1735,6 +1739,8 @@
       </label>
     </div>
   </section>
+
+  <LocalSearchSettings />
 
   <!-- Feed cache size (Content tab) -->
   <section class="mb-8">

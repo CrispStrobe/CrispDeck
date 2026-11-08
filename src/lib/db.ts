@@ -93,7 +93,10 @@ export async function updateAccount(params: {
 export async function deleteAccount(id: number): Promise<void> {
   if (!isTauri()) await browserDb.deleteAccount(id);
   else await invoke('db_delete_account', { id });
-  accountsChanged(true);
+  try {
+    const { removeSearchCacheScope } = await import('$lib/search-cache');
+    await removeSearchCacheScope(`account:${id}`);
+  } finally { accountsChanged(true); }
 }
 
 /** Refresh the non-secret account marker after native OAuth reconnection. */
