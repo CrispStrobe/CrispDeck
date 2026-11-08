@@ -15,7 +15,9 @@ on:
       - 'src/lib/components/**'
       - 'package*.json'
       - 'scripts/merge-android-manifest.py'
+      - 'scripts/test_android_layout.py'
       - 'tools/validation/android_layout_smoke.py'
+      - 'tools/validation/mobile_smoke.py'
       - 'tools/validation/requirements-android.txt'
   workflow_dispatch:
 
@@ -28,7 +30,7 @@ concurrency:
 
 jobs:
   android-layout:
-    name: Android debug build
+    name: Android debug build and native layout
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -95,6 +97,23 @@ jobs:
               'release_signed': False, 'published': False,
           }, indent=2) + '\n')
           PY
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install native UI automation
+        run: python3 -m pip install --disable-pip-version-check -r tools/validation/requirements-android.txt
+      - name: Enable emulator acceleration
+        run: sudo chmod 666 /dev/kvm
+      - name: Verify system bars, rotation, and keyboard in the debug APK
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: python3 tools/validation/android_layout_smoke.py --apk android-layout/CrispDeck-android-layout-debug.apk --output android-layout/evidence
       - uses: actions/upload-artifact@v4
         if: always()
         with:
