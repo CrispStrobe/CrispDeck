@@ -75,6 +75,55 @@ jobs:
           ACTIVITY=src-tauri/gen/android/app/src/main/java/com/christianstrobele/crispdeck/MainActivity.kt
           test -f "$ACTIVITY"
           cp src-tauri/android/MainActivity.kt "$ACTIVITY"
+      - name: Download and verify the generated Gradle distribution
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+          wrapper = Path('src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties')
+          properties = wrapper.read_text()
+          distribution = re.search(
+              r'^distributionUrl=https://(?:services|downloads)\.gradle\.org/distributions/(gradle-(\d+(?:\.\d+){1,2})-bin\.zip)$',
+              properties.replace(r'\:', ':'), re.MULTILINE)
+          if distribution is None:
+              raise SystemExit('Expected the generated official Gradle binary distribution')
+          filename, version = distribution.groups()
+          curl = ['curl', '--fail', '--location', '--silent', '--show-error',
+                  '--retry', '3', '--retry-delay', '2', '--retry-max-time', '120',
+                  '--connect-timeout', '15', '--max-time', '60']
+          release_api = 'https://api.github.com/repos/gradle/gradle-distributions/releases'
+          release = json.loads(subprocess.check_output([*curl, f'{release_api}/tags/v{version}']))
+          assets = [asset for asset in release['assets'] if asset['name'] == filename]
+          if len(assets) != 1:
+              raise SystemExit('Expected one matching official Gradle release asset')
+          checksum = subprocess.check_output(
+              [*curl, f'https://downloads.gradle.org/distributions/{filename}.sha256'], text=True).strip()
+          if re.fullmatch(r'[a-f0-9]{64}', checksum) is None:
+              raise SystemExit('Invalid official Gradle distribution checksum')
+          existing_checksum = re.search(r'^distributionSha256Sum=(.+)$', properties, re.MULTILINE)
+          if existing_checksum and existing_checksum[1].strip() != checksum:
+              raise SystemExit('Generated Gradle checksum differs from the official release')
+          archive = Path(os.environ['RUNNER_TEMP']) / filename
+          # The browser download endpoint returned repeated HTTP 504s. The
+          # official asset API serves the same bytes, verified against Gradle.
+          asset_url = f'{release_api}/assets/{int(assets[0]["id"])}'
+          subprocess.run([*curl, '--header', 'Accept: application/octet-stream',
+                          '--output', str(archive), asset_url], check=True)
+          with archive.open('rb') as file:
+              actual_checksum = hashlib.file_digest(file, 'sha256').hexdigest()
+          if actual_checksum != checksum:
+              raise SystemExit('Downloaded Gradle distribution checksum mismatch')
+          properties = re.sub(r'^distributionUrl=.+$', 'distributionUrl=' + archive.as_uri(),
+                              properties, flags=re.MULTILINE)
+          if existing_checksum is None:
+              properties = properties.rstrip() + f'\ndistributionSha256Sum={checksum}\n'
+          wrapper.write_text(properties)
+          print(f'Verified official {filename} ({checksum})')
+          PY
       - name: Compile the Android app without release credentials
         run: npx tauri android build --debug --apk --target x86_64 --ci
       - name: Retain the debug APK and its source
