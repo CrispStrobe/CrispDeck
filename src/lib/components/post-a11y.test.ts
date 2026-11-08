@@ -204,6 +204,37 @@ describe('interactive elements are reachable by keyboard', () => {
   });
 });
 
+describe('post action disclosure', () => {
+  it('reveals secondary controls on demand and returns focus after Escape', () => {
+    const target = render();
+    const toggle = target.querySelector<HTMLButtonElement>('[aria-label="More post actions"]')!;
+    const panel = document.getElementById(toggle.getAttribute('aria-controls')!)!;
+    expect(panel.hidden).toBe(true);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+
+    toggle.click(); flushSync();
+    expect(panel.hidden).toBe(false);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    const translate = panel.querySelector<HTMLButtonElement>('[aria-label="Translate post"]')!;
+    translate.focus();
+    translate.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    flushSync();
+    expect(panel.hidden).toBe(true);
+    expect(document.activeElement).toBe(toggle);
+  });
+
+  it('gives repeated posts distinct disclosures and dismisses an open one when tapping elsewhere', () => {
+    const first = render();
+    const second = render();
+    const toggles = [first, second].map(target => target.querySelector<HTMLButtonElement>('[aria-label="More post actions"]')!);
+    expect(toggles[0].getAttribute('aria-controls')).not.toBe(toggles[1].getAttribute('aria-controls'));
+    toggles[0].click(); flushSync();
+    toggles[1].dispatchEvent(new Event('pointerdown', { bubbles: true })); flushSync();
+    expect(toggles[0].getAttribute('aria-expanded')).toBe('false');
+    expect(toggles[1].getAttribute('aria-expanded')).toBe('false');
+  });
+});
+
 describe('feed preview', () => {
   it('offers an explicit expansion when content exceeds its preview', () => {
     const originalObserver = globalThis.ResizeObserver;

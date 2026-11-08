@@ -79,6 +79,18 @@ jobs:
       - run: bash scripts/ci-apt.sh
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test --reporter=list
+      - name: Verify Android touch post layouts
+        run: node e2e/post-mobile.live.mjs
+      - name: Retain mobile layout screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-layout-screenshots
+          path: |
+            playwright-results/**/android-feed-*.png
+            playwright-results/post-mobile-*.png
+          retention-days: 7
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

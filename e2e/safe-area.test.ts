@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 
 // A narrow desktop viewport does not exercise (pointer: coarse), which was
 // enlarging the header controls without enlarging the content's top offset.
-test.use({ hasTouch: true, isMobile: true, serviceWorkers: 'block', reducedMotion: 'reduce' });
+test.use({ hasTouch: true, isMobile: true, serviceWorkers: 'block', contextOptions: { reducedMotion: 'reduce' } });
 
 type Insets = { width: number; height: number; top: number; bottom: number; side: number };
 
