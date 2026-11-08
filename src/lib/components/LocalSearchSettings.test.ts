@@ -66,6 +66,13 @@ function click(target: HTMLElement, name: string) {
 }
 
 describe('local cache settings UI', () => {
+  it('configures full Wallabag history and starts a sync on explicit request', async () => {
+    const target = await render();
+    click(target, 'Index all Wallabag history');
+    await vi.waitFor(() => expect(boundaries.update).toHaveBeenCalledWith(expect.objectContaining({ enabled: true, maxAgeDays: 0, maxItems: 500_000, wallabag: expect.objectContaining({ enabled: true, mode: 'full' }) })));
+    await vi.waitFor(() => expect(boundaries.wallabag).toHaveBeenCalled());
+  });
+
   it('requires opt-in and saves independent excerpt policies, age and capacity limits', async () => {
     const target = await render();
     const enabled = target.querySelector<HTMLInputElement>('input[type=checkbox]')!;
@@ -148,7 +155,7 @@ describe('local cache settings UI', () => {
     expect(target.querySelector('[role=alert]')).toBeNull();
   });
 
-  it('cancels an active import when the settings view is left', async () => {
+  it('keeps an active import running when the settings view is left', async () => {
     settings.enabled = true;
     let signal: AbortSignal | undefined;
     boundaries.wallabag.mockImplementation(({ signal: current }) => {
@@ -158,6 +165,6 @@ describe('local cache settings UI', () => {
     const target = await render();
     click(target, 'Sync Wallabag');
     await unmount(instance!); instance = undefined;
-    expect(signal?.aborted).toBe(true);
+    expect(signal?.aborted).toBe(false);
   });
 });

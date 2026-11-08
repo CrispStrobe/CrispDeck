@@ -2,9 +2,9 @@ import type { LocalSearchTranslations } from './en';
 
 export default {
   title: "Lokaler Cache & Suche",
-  description: "Speichere durchsuchbare Textauszüge auf diesem Gerät. Sobald Inhalte gespeichert sind, funktioniert die Suche auch offline.",
+  description: "Speichere ausgewählte durchsuchbare Texte auf diesem Gerät. Sobald Inhalte gespeichert sind, funktioniert die Suche auch offline.",
   enable: "Lokalen Cache und Suche aktivieren",
-  disableHint: "Beim Ausschalten wird der lokale Suchcache geleert. Textauszüge werden auf diesem Gerät im Klartext gespeichert.",
+  disableHint: "Beim Ausschalten wird der lokale Suchcache geleert. Die gespeicherten Texte liegen auf diesem Gerät im Klartext.",
   posts: "Beiträge & RSS",
   wallabag: "Wallabag",
   includeSource: "Diese Quelle einbeziehen",
@@ -28,7 +28,7 @@ export default {
   refresh: "Status aktualisieren",
   indexExisting: "Vorhandenen Cache indexieren",
   syncWallabag: "Wallabag synchronisieren",
-  syncHint: "Indexiere bereits in CrispDeck gespeicherte Inhalte oder lade Wallabag-Einträge innerhalb deiner Grenzen. Lass diese Seite während der Synchronisierung geöffnet.",
+  syncHint: "Indexiere bereits gespeicherte Inhalte oder lade Wallabag-Einträge innerhalb deiner Grenzen. Die Synchronisierung läuft während der Nutzung der App weiter.",
   stop: "Stoppen",
   stopped: "Indexierung gestoppt.",
   working: "Lokaler Index wird aktualisiert…",
@@ -53,5 +53,9 @@ export default {
   rss: "RSS",
   searchScope: "Suchbereich",
   syncProgress: "{processed} Einträge verarbeitet · {indexed} indexiert",
+  indexFullWallabag: "Gesamte Wallabag-Historie indexieren",
+  indexFullWallabagHint: "Setzt das Zeitfenster auf unbegrenzt, das Limit auf 500.000 Einträge und indexiert vollständige Wallabag-Texte. Dies kann viel Gerätespeicher benötigen.",
+  fullText: "Vollständiger Artikeltext (bis zu 1 Million Zeichen; benötigt mehr Speicher)",
+  syncDateLimited: "Das Zeitfenster beträgt {days} Tage. Setze es auf 0, um ältere Artikel einzubeziehen.",
   syncLimited: "Das Importlimit wurde erreicht. Erhöhe die maximale Anzahl gespeicherter Einträge, um weiter zurückzugehen.",
 } satisfies LocalSearchTranslations;

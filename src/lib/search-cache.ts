@@ -16,7 +16,7 @@ export const SEARCH_CACHE_SOURCES = ['bluesky', 'mastodon', 'threads', 'rss', 'w
 export type SearchCacheSource = typeof SEARCH_CACHE_SOURCES[number];
 export interface SearchCachePolicy {
   enabled: boolean;
-  mode: 'title' | 'paragraph' | 'characters';
+  mode: 'title' | 'paragraph' | 'characters' | 'full';
   maxChars: number;
 }
 export interface SearchCacheSettings {
@@ -99,7 +99,7 @@ function policy(value: unknown, fallback: SearchCachePolicy): SearchCachePolicy 
   const v = value && typeof value === 'object' ? value as Partial<SearchCachePolicy> : {};
   return {
     enabled: typeof v.enabled === 'boolean' ? v.enabled : fallback.enabled,
-    mode: ['title', 'paragraph', 'characters'].includes(v.mode ?? '') ? v.mode! : fallback.mode,
+    mode: ['title', 'paragraph', 'characters', 'full'].includes(v.mode ?? '') ? v.mode! : fallback.mode,
     maxChars: bounded(v.maxChars, fallback.maxChars, 100, 50_000),
   };
 }
@@ -110,7 +110,7 @@ function normalizeSettings(value: unknown): SearchCacheSettings {
     posts: policy(v.posts, DEFAULTS.posts),
     wallabag: policy(v.wallabag, DEFAULTS.wallabag),
     maxAgeDays: bounded(v.maxAgeDays, DEFAULTS.maxAgeDays, 0, 36_500),
-    maxItems: bounded(v.maxItems, DEFAULTS.maxItems, 100, 50_000),
+    maxItems: bounded(v.maxItems, DEFAULTS.maxItems, 100, 500_000),
   };
 }
 
@@ -290,7 +290,7 @@ function selectedPolicy(settings: SearchCacheSettings, source: SearchCacheSource
   return source === 'wallabag' ? settings.wallabag : settings.posts;
 }
 function retainedExcerpt(text: string, paragraph: string, config: SearchCachePolicy): string {
-  return config.mode === 'title' ? '' : clip(config.mode === 'paragraph' ? paragraph : text, config.maxChars);
+  return config.mode === 'title' ? '' : config.mode === 'full' ? text : clip(config.mode === 'paragraph' ? paragraph : text, config.maxChars);
 }
 function finishRecord(item: Omit<CachedItem, 'tokens' | 'bytes'>): CachedItem {
   const tokens = tokenizeSearchText(`${item.title}\n${item.excerpt}\n${item.author}`);
@@ -524,7 +524,7 @@ export async function getSearchCacheStats(): Promise<SearchCacheStats> {
 }
 
 /** AND words, with a prefix for the final word (2+ chars). No body scans. */
-export async function searchCache(query: string, options: { source?: SearchCacheSource; limit?: number } = {}): Promise<SearchCacheResult[]> {
+export async function searchCache(query: string, options: { source?: SearchCacheSource; scope?: string; limit?: number } = {}): Promise<SearchCacheResult[]> {
   const started = getSearchCacheGeneration();
   if (!getSearchCacheSettings().enabled) return [];
   if (query.length > 256) throw new Error('Local search queries must be 256 characters or fewer.');
@@ -535,6 +535,7 @@ export async function searchCache(query: string, options: { source?: SearchCache
     await serialized(() => maintenance());
     const db = await openDB();
     if (started !== getSearchCacheGeneration() || !getSearchCacheSettings().enabled) return [];
+    const querySettings = getSearchCacheSettings();
     const found = await transaction<SearchCacheResult[]>(db, 'readonly', (tx, result) => {
       const store = tx.objectStore(ITEMS);
       const index = store.index('tokens');
@@ -549,14 +550,29 @@ export async function searchCache(query: string, options: { source?: SearchCache
           const request = store.get(key);
           request.onsuccess = () => {
             const item = request.result as CachedItem | undefined;
-            if (!item || scopeRevoked(item.scope) || (options.source && item.source !== options.source)) return;
-            const settings = getSearchCacheSettings();
-            if (!settings.enabled || !selectedPolicy(settings, item.source).enabled || (settings.maxAgeDays && item.createdAtMs < Date.now() - settings.maxAgeDays * DAY)) return;
+            if (!item || scopeRevoked(item.scope) || (options.source && item.source !== options.source) || (options.scope && item.scope !== options.scope)) return;
+            if (!querySettings.enabled || !selectedPolicy(querySettings, item.source).enabled || (querySettings.maxAgeDays && item.createdAtMs < Date.now() - querySettings.maxAgeDays * DAY)) return;
             const title = normalized(item.title);
             const author = normalized(item.author);
             const score = terms.reduce((sum, term) => sum + (title.includes(term) ? 8 : 0) + (author.includes(term) ? 3 : 0) + 1, 0);
             const { tokens: _tokens, bytes: _bytes, createdAtMs: _date, ...view } = item;
-            matches.push({ ...view, score });
+            // Full-text indexes can contain hundreds of thousands of hits.
+            // Keep only the best requested matches instead of retaining every
+            // article body in memory until the transaction completes.
+            const compare = (a: SearchCacheResult, b: SearchCacheResult) => b.score - a.score || b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id);
+            const candidate = { ...view, score };
+            let low = 0, high = matches.length;
+            while (low < high) { const mid = (low + high) >>> 1; if (compare(candidate, matches[mid]) < 0) high = mid; else low = mid + 1; }
+            if (low < limit) {
+              if (candidate.excerpt.length > 4000) {
+                const lower = candidate.excerpt.toLowerCase();
+                const offsets = terms.map(term => lower.indexOf(term)).filter(offset => offset >= 0);
+                const start = Math.max(0, (offsets.length ? Math.min(...offsets) : 0) - 100);
+                candidate.excerpt = candidate.excerpt.slice(start, start + 4000);
+              }
+              matches.splice(low, 0, candidate);
+              if (matches.length > limit) matches.pop();
+            }
           };
         }
       };

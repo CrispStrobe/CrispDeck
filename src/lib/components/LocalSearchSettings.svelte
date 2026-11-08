@@ -95,25 +95,41 @@
         const action = source === 'wallabag' ? syncWallabagSearchCache : indexExistingSearchCache;
         result = await action({
           signal: controller.signal,
+          pauseOnAbort: source === 'wallabag',
           onProgress: value => { if (!disposed) progress = value; },
         });
         if (controller.signal.aborted) throw new DOMException('Indexing stopped.', 'AbortError');
-      }, () => `${localSearch.t.synced.replace('{count}', String(result?.indexed ?? 0))}${result?.stoppedEarly ? ` ${localSearch.t.syncLimited}` : ''}`);
+      }, () => `${localSearch.t.synced.replace('{count}', String(result?.indexed ?? 0))}${result?.stoppedEarly ? ` ${localSearch.t.syncLimited}` : ''}${result?.stoppedByDate ? ` ${localSearch.t.syncDateLimited.replace('{days}', String(saved.maxAgeDays))}` : ''}`);
     } finally {
       if (syncController === controller) syncController = null;
     }
   }
 
+  async function indexFullWallabagHistory() {
+    if (busy) return;
+    await runAction('configure-full', async () => {
+      const next = copy(draft);
+      next.enabled = true; next.wallabag.enabled = true;
+      next.wallabag.mode = 'full'; next.maxAgeDays = 0; next.maxItems = 500_000;
+      const persisted = await updateSearchCacheSettings(next);
+      saved = persisted; draft = copy(persisted);
+    }, () => localSearch.t.saved);
+    if (!error) await indexItems('wallabag');
+  }
+
   onMount(() => {
     void refreshStatus();
     const changed = () => {
+      // A Wallabag import emits one update per page; scanning the entire
+      // cache after each page would turn a large import into quadratic work.
+      if (busy) return;
       clearTimeout(statusTimer);
       statusTimer = setTimeout(() => { void refreshStatus(); }, 150);
     };
     window.addEventListener('search-cache-changed', changed);
     return () => {
       disposed = true;
-      syncController?.abort();
+      // Keep an explicit sync running while the user navigates the app.
       clearTimeout(statusTimer);
       window.removeEventListener('search-cache-changed', changed);
     };
@@ -149,9 +165,10 @@
                       <option value="title">{localSearch.t.titleOnly}</option>
                       <option value="paragraph">{localSearch.t.firstParagraph}</option>
                       <option value="characters">{localSearch.t.characters}</option>
+                      <option value="full">{localSearch.t.fullText}</option>
                     </select>
                   </div>
-                  {#if draft[source].mode !== 'title'}
+                  {#if draft[source].mode !== 'title' && draft[source].mode !== 'full'}
                     <div>
                       <label for="search-cache-{source}-chars" class="block text-xs text-[var(--color-text-muted)] mb-1">{localSearch.t.maxChars}</label>
                       <input id="search-cache-{source}-chars" type="number" min="100" max="50000" step="1" required bind:value={draft[source].maxChars}
@@ -171,7 +188,7 @@
             </div>
             <div>
               <label for="search-cache-count" class="block text-xs text-[var(--color-text-muted)] mb-1">{localSearch.t.maxItems}</label>
-              <input id="search-cache-count" type="number" min="100" max="50000" step="1" required bind:value={draft.maxItems}
+              <input id="search-cache-count" type="number" min="100" max="500000" step="1" required bind:value={draft.maxItems}
                 class="w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm" />
             </div>
           </div>
@@ -190,6 +207,7 @@
         {#if !stats.available}<p role="alert" class="text-xs text-[var(--color-danger)]">{localSearch.t.unavailable}</p>{/if}
         {#if stats.error && stats.available}<p role="alert" class="text-xs text-[var(--color-danger)]">{stats.error}</p>{/if}
       {/if}
+      <p class="text-xs text-[var(--color-text-muted)] mb-2">{localSearch.t.indexFullWallabagHint}</p>
       <div class="flex flex-wrap items-center gap-2">
         <button type="button" disabled={busy || dirty || !saved.enabled || !saved.posts.enabled || !stats?.available}
           onclick={() => { void indexItems('existing'); }}
@@ -197,6 +215,8 @@
         <button type="button" disabled={busy || dirty || !saved.enabled || !saved.wallabag.enabled || !stats?.available}
           onclick={() => { void indexItems('wallabag'); }}
           class="px-3 py-2 rounded-md border border-[var(--color-border)] text-xs disabled:opacity-50">{localSearch.t.syncWallabag}</button>
+        <button type="button" disabled={busy || dirty || !stats?.available} onclick={() => { void indexFullWallabagHistory(); }}
+          class="px-3 py-2 rounded-md border border-[var(--color-border)] text-xs disabled:opacity-50">{localSearch.t.indexFullWallabag}</button>
         <button type="button" disabled={busy || dirty || !saved.enabled || !stats?.available}
           onclick={() => runAction('rebuild', rebuildSearchCache, () => localSearch.t.rebuilt)}
           class="px-3 py-2 rounded-md border border-[var(--color-border)] text-xs disabled:opacity-50">{localSearch.t.rebuild}</button>

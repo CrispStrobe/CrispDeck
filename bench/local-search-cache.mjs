@@ -21,8 +21,8 @@ import { createServer } from 'vite';
 
 const ITEMS = Number(process.env.BENCH_ITEMS ?? 10_000);
 const REPEATS = Number(process.env.BENCH_REPEATS ?? 5);
-assert(Number.isSafeInteger(ITEMS) && ITEMS >= 100 && ITEMS <= 50_000,
-  'BENCH_ITEMS must be an integer between 100 and 50000');
+assert(Number.isSafeInteger(ITEMS) && ITEMS >= 100 && ITEMS <= 500_000,
+  'BENCH_ITEMS must be an integer between 100 and 500000');
 assert(Number.isSafeInteger(REPEATS) && REPEATS >= 1 && REPEATS <= 20,
   'BENCH_REPEATS must be an integer between 1 and 20');
 

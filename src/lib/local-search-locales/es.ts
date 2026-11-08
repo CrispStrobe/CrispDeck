@@ -28,7 +28,7 @@ export default {
   refresh: "Actualizar estado",
   indexExisting: "Indexar la caché existente",
   syncWallabag: "Sincronizar Wallabag",
-  syncHint: "Indexa elementos ya guardados en CrispDeck o descarga elementos de Wallabag dentro de tus límites. Mantén esta pantalla abierta durante la sincronización.",
+  syncHint: "Index cached items or sync Wallabag within your limits. Sync continues while you use the app.",
   stop: "Detener",
   stopped: "Indexación detenida.",
   working: "Actualizando el índice local…",
@@ -53,5 +53,9 @@ export default {
   rss: "RSS",
   searchScope: "Dónde buscar",
   syncProgress: "{processed} elementos procesados · {indexed} indexados",
+  indexFullWallabag: "Index all Wallabag history",
+  indexFullWallabagHint: "Sets unlimited history, a 500,000-item cap and full-text indexing for Wallabag. This can use substantial device storage.",
+  fullText: "Full article text (up to 1 million characters; uses more storage)",
+  syncDateLimited: "The history window is {days} days. Set it to 0 to include older articles.",
   syncLimited: "Se ha alcanzado el límite de importación. Aumenta el máximo de elementos en caché para incluir más historial.",
 } satisfies LocalSearchTranslations;

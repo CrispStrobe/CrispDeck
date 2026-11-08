@@ -9,7 +9,6 @@
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { Home, Rss, Columns3, PenSquare, Bell, MessageSquare, Bookmark, BookOpen, Users, Search, List, Shield, TrendingUp, Archive, BarChart3, Settings, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon, Smartphone } from '@lucide/svelte';
-  import KeyboardShortcuts from '$lib/components/KeyboardShortcuts.svelte';
   import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
   import ToastContainer from '$lib/components/ToastContainer.svelte';
   import { isTauri } from '@tauri-apps/api/core';
@@ -31,6 +30,12 @@
   import { startScheduler } from '$lib/publishing/scheduler';
   onMount(startScheduler);
   let wallabagReady = $state(false);
+  onMount(() => {
+    let active = true;
+    let stop: (() => void) | undefined;
+    void import('$lib/wallabag-index-auto').then(module => { if (active) stop = module.startWallabagIndexUpdates(); }).catch(error => swallow('layout.wallabagIndex', error));
+    return () => { active = false; stop?.(); };
+  });
   onMount(() => {
     let active = true;
     let stop: (() => void) | undefined;
@@ -80,6 +85,12 @@
     void syncSystemBars(theme);
   }
   let showShortcuts = $state(false);
+  let KeyboardShortcuts = $state<typeof import('$lib/components/KeyboardShortcuts.svelte').default>();
+  $effect(() => {
+    if (showShortcuts && !KeyboardShortcuts) {
+      void import('$lib/components/KeyboardShortcuts.svelte').then(module => { KeyboardShortcuts = module.default; }).catch(error => swallow('layout.shortcuts', error));
+    }
+  });
   let offline = $state(false);
   let pendingG = $state(false);
   let _postElsCache: NodeListOf<Element> | null = null;
@@ -335,7 +346,7 @@
 </script>
 
 <svelte:window onkeydown={handleGlobalKeydown} />
-<KeyboardShortcuts bind:show={showShortcuts} />
+{#if KeyboardShortcuts}<KeyboardShortcuts bind:show={showShortcuts} />{/if}
 
 <a href="#main-content" class="skip-to-content">{i18n.t.app.skipToContent}</a>
 

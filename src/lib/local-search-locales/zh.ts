@@ -28,7 +28,7 @@ export default {
   refresh: "刷新状态",
   indexExisting: "索引现有缓存",
   syncWallabag: "同步 Wallabag",
-  syncHint: "为已保存在 CrispDeck 中的内容建立索引，或在设置的限制内获取 Wallabag 内容。同步期间请保持此页面打开。",
+  syncHint: "Index cached items or sync Wallabag within your limits. Sync continues while you use the app.",
   stop: "停止",
   stopped: "索引已停止。",
   working: "正在更新本地索引…",
@@ -53,5 +53,9 @@ export default {
   rss: "RSS",
   searchScope: "搜索位置",
   syncProgress: "已处理 {processed} 项 · 已索引 {indexed} 项",
+  indexFullWallabag: "Index all Wallabag history",
+  indexFullWallabagHint: "Sets unlimited history, a 500,000-item cap and full-text indexing for Wallabag. This can use substantial device storage.",
+  fullText: "Full article text (up to 1 million characters; uses more storage)",
+  syncDateLimited: "The history window is {days} days. Set it to 0 to include older articles.",
   syncLimited: "已达到导入上限。请增大最大缓存项数，以包含更早的历史内容。",
 } satisfies LocalSearchTranslations;

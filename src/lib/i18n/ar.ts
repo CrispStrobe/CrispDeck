@@ -66,6 +66,8 @@ export default {
     },
 
     wallabagReader: {
+      localPartial: "Local excerpt results only; Wallabag could not be searched.",
+      localResults: "Local excerpt results; searching Wallabag for complete results…",
       search: 'Search all articles', searchButton: 'Search', thumbnails: 'Show article thumbnails', connectedStatus: 'Connected. Your saved session is kept for future launches.',
       unavailable: "تعذر التحقق من بيانات اعتماد Wallabag المحفوظة. تحقق من الاتصال في الإعدادات.",
       title: "قارئ Wallabag",

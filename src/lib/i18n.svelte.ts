@@ -72,6 +72,8 @@ export const translations = {
       retryAfterSignIn: "Reconnect this account in Settings, then retry the saved delivery."
     },
     wallabagReader: {
+      localPartial: "Local excerpt results only; Wallabag could not be searched.",
+      localResults: "Local excerpt results; searching Wallabag for complete results…",
       search: 'Search all articles', searchButton: 'Search', thumbnails: 'Show article thumbnails', connectedStatus: 'Connected. Your saved session is kept for future launches.',
       unavailable: "Saved Wallabag credentials could not be verified. Check the connection in Settings.",
       title: "Wallabag Reader",

@@ -127,13 +127,56 @@ describe('explicit backfill', () => {
     expect(retained).not.toContain('https://social.example/bookmark/119');
   });
 
+  it('syncs beyond the former 50,000-article page boundary', async () => {
+    mocks.settings.maxItems = 500_000; mocks.settings.maxAgeDays = 0;
+    mocks.listWallabag.mockImplementation(async (_server, options) => ({ scope: 'wallabag:connection-one', entries: [article(options.page)], hasMore: options.page < 1001 }));
+    const result = await syncWallabagSearchCache();
+    expect(result.pages).toBe(1001);
+    expect(result.stoppedEarly).toBe(false);
+  });
+
+  it('resumes a failed historical sync from the last committed page', async () => {
+    mocks.settings.maxAgeDays = 0;
+    mocks.listWallabag.mockResolvedValueOnce({ scope: 'wallabag:connection-one', entries: [article(1)], hasMore: true }).mockRejectedValueOnce(new Error('network'));
+    await expect(syncWallabagSearchCache()).rejects.toThrow('network');
+    mocks.listWallabag.mockReset().mockResolvedValue({ scope: 'wallabag:connection-one', entries: [article(2)], hasMore: false });
+    await syncWallabagSearchCache({ incremental: true });
+    expect(mocks.listWallabag.mock.calls[0][1]).toMatchObject({ page: 2, expectedScope: 'wallabag:connection-one' });
+  });
+
+  it('does not automatically resume a sync the user explicitly stopped', async () => {
+    mocks.settings.maxAgeDays = 0;
+    const controller = new AbortController();
+    mocks.listWallabag.mockResolvedValueOnce({ scope: 'wallabag:connection-one', entries: [article(1)], hasMore: true })
+      .mockImplementationOnce(async (_server, options) => {
+        controller.abort();
+        throw new DOMException('Stopped', 'AbortError');
+      });
+    await expect(syncWallabagSearchCache({ signal: controller.signal, pauseOnAbort: true })).rejects.toMatchObject({ name: 'AbortError' });
+    mocks.listWallabag.mockClear();
+    await syncWallabagSearchCache({ incremental: true });
+    expect(mocks.listWallabag).not.toHaveBeenCalled();
+  });
+
+  it('updates changed Wallabag items after an initial sync and invalidates its checkpoint on clear', async () => {
+    mocks.listWallabag.mockResolvedValue({ scope: 'wallabag:connection-one', entries: [article(1)], hasMore: false });
+    await syncWallabagSearchCache();
+    mocks.listWallabag.mockClear();
+    await syncWallabagSearchCache({ incremental: true });
+    expect(mocks.listWallabag.mock.calls[0][1].since).toEqual(expect.any(Number));
+    mocks.generation++;
+    mocks.listWallabag.mockClear();
+    await syncWallabagSearchCache({ incremental: true });
+    expect(mocks.listWallabag).not.toHaveBeenCalled();
+  });
+
   it('passes the generation and fixed scope to Wallabag pages, stopping at the date window', async () => {
     const old = new Date(Date.now() - 100 * 86400000).toISOString();
     mocks.listWallabag.mockResolvedValueOnce({ scope: 'wallabag:connection-one', entries: [article(1)], hasMore: true })
       .mockResolvedValueOnce({ scope: 'wallabag:connection-one', entries: [article(2, old)], hasMore: true });
     const progress = vi.fn();
     const result = await syncWallabagSearchCache({ onProgress: progress });
-    expect(result.pages).toBe(2); expect(mocks.listWallabag).toHaveBeenCalledTimes(2);
+    expect(result.pages).toBe(2); expect(result.stoppedByDate).toBe(true); expect(mocks.listWallabag).toHaveBeenCalledTimes(2);
     expect(mocks.listWallabag.mock.calls[1][1]).toMatchObject({ page: 2, perPage: 50, expectedScope: 'wallabag:connection-one' });
     expect(mocks.cache.mock.calls[0][1]).toEqual({ generation: mocks.generation, strict: true });
     expect(mocks.cache.mock.calls[0][0][0]).toMatchObject({ source: 'wallabag', scope: 'wallabag:connection-one', html: true });

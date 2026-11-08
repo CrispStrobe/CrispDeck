@@ -16,6 +16,7 @@
   let filter = $state<WallabagEntryFilter>('unread');
   let searchInput = $state('');
   let searchTerm = $state('');
+  let showingLocalResults = $state(false);
   let showThumbnails = $state(readString('crispdeck-wallabag-thumbnails', 'true') !== 'false');
   let entries = $state<WallabagEntry[]>([]);
   let currentPage = $state(1);
@@ -83,6 +84,7 @@
       const lastPage = Math.max(1, result.pages);
       if (requestedPage > lastPage) { void loadEntries(lastPage); return; }
       entries = result.items;
+      showingLocalResults = false;
       currentPage = result.page;
       pages = lastPage;
       total = result.total;
@@ -95,16 +97,45 @@
 
   function changeFilter(next: WallabagEntryFilter) {
     if ((next === filter && !searchTerm) || updating) return;
-    searchTerm = ''; searchInput = ''; filter = next;
+    searchTerm = ''; searchInput = ''; showingLocalResults = false; filter = next;
     entries = []; currentPage = 1; pages = 1; total = 0;
     void loadEntries(1);
   }
 
-  function searchArticles(event: SubmitEvent) {
+  async function searchArticles(event: SubmitEvent) {
     event.preventDefault();
     searchTerm = searchInput.trim();
     if (searchTerm) filter = 'all';
-    entries = []; currentPage = 1; pages = 1; total = 0;
+    entries = []; currentPage = 1; pages = 1; total = 0; showingLocalResults = false;
+    const connection = get(wallabagAvailability);
+    const request = ++listRequest;
+    const term = searchTerm;
+    if (connection.status !== 'ready') return;
+    loading = true; listError = false;
+    try {
+      if (term) {
+        const { getSearchCacheSettings, searchCache } = await import('$lib/search-cache');
+        const settings = getSearchCacheSettings();
+        if (settings.enabled && settings.wallabag.enabled) {
+          const { wallabagSearchScope } = await import('$lib/wallabag');
+          const scope = await wallabagSearchScope(connection.server);
+          const matches = await searchCache(term, { source: 'wallabag', scope, limit: 100 });
+          if (request !== listRequest || !sameConnection(connection.server, connection.revision)) return;
+          entries = matches.flatMap(item => {
+            try {
+              const parts: unknown = JSON.parse(item.id);
+              if (!Array.isArray(parts) || parts.length !== 3 || parts[0] !== 'wallabag' || parts[1] !== scope) return [];
+              const id = Number(parts[2]);
+              if (!Number.isSafeInteger(id) || id <= 0) return [];
+              return [{ id, title: item.title, url: item.url, content: '', created_at: item.createdAt, is_archived: false, is_starred: false, tags: [] }];
+            } catch { return []; }
+          });
+          total = entries.length; showingLocalResults = true;
+        }
+      }
+    } catch { /* Local indexing is optional: server search remains available. */ }
+    if (request !== listRequest || !sameConnection(connection.server, connection.revision)) return;
+    // Always search Wallabag as well: locally retained excerpts may be incomplete.
     void loadEntries(1);
   }
 
@@ -213,7 +244,7 @@
           <button class:active={filter === item} aria-pressed={filter === item} disabled={updating} onclick={() => changeFilter(item)}>{i18n.t.wallabagReader[item]}</button>
         {/each}
       </div>
-      <span class="text-xs text-[var(--color-text-muted)]" aria-live="polite">{i18n.t.wallabagReader.count.replace('{count}', String(total))}</span>
+      <span class="text-xs text-[var(--color-text-muted)]" aria-live="polite">{showingLocalResults ? (listError ? i18n.t.wallabagReader.localPartial : i18n.t.wallabagReader.localResults) : i18n.t.wallabagReader.count.replace('{count}', String(total))}</span>
       <form class="reader-search" onsubmit={searchArticles} role="search">
         <input type="search" bind:value={searchInput} placeholder={i18n.t.wallabagReader.search} aria-label={i18n.t.wallabagReader.search} />
         <button class="reader-button" type="submit" disabled={updating}>{i18n.t.wallabagReader.searchButton}</button>

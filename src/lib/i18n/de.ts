@@ -66,6 +66,8 @@ export default {
     },
 
     wallabagReader: {
+      localPartial: "Nur lokale Auszugstreffer; die Wallabag-Suche war nicht erreichbar.",
+      localResults: "Lokale Auszugstreffer; Wallabag wird nach vollständigen Ergebnissen durchsucht …",
       search: 'Alle Artikel durchsuchen', searchButton: 'Suchen', thumbnails: 'Artikelvorschaubilder anzeigen', connectedStatus: 'Verbunden. Deine gespeicherte Sitzung bleibt für künftige Starts erhalten.',
       unavailable: "Die gespeicherten Wallabag-Zugangsdaten konnten nicht überprüft werden. Prüfe die Verbindung in den Einstellungen.",
       title: "Wallabag Reader",

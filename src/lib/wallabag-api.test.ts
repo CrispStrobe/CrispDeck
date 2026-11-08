@@ -353,6 +353,16 @@ const articlePage = (items: unknown[], pages = 1) => new Response(JSON.stringify
 const article = { id: 1, title: 'A saved article', url: 'https://example.org/article', content: '<p>First paragraph</p><p>Later</p>', created_at: '2026-11-01T12:00:00Z', password: 'never project', annotations: ['omit'] };
 
 describe('Wallabag search-index reads', () => {
+  it('requests updated entries after a checkpoint without putting credentials in the URL', async () => {
+    mocks.fetch.mockResolvedValueOnce(token('access')).mockResolvedValueOnce(articlePage([article]));
+    await api.connectWallabag(credentials);
+    await api.listWallabagIndexEntries(credentials.server, { since: 123456 });
+    const url = new URL(mocks.fetch.mock.calls[1][0]);
+    expect(url.searchParams.get('since')).toBe('123456');
+    expect(url.searchParams.get('sort')).toBe('updated');
+    expect(url.href).not.toContain('access');
+  });
+
   it('lists a bounded page with no credential in the URL and returns only article fields', async () => {
     mocks.fetch.mockResolvedValueOnce(token('access')).mockResolvedValueOnce(articlePage([article], 3));
     await api.connectWallabag(credentials);

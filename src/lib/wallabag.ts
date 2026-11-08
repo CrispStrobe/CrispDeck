@@ -623,12 +623,14 @@ export async function listWallabagIndexEntries(server: string, options: {
   page?: number;
   perPage?: number;
   expectedScope?: string;
+  since?: number;
   signal?: AbortSignal;
 } = {}): Promise<WallabagIndexPage> {
   const page = options.page ?? 1;
   const perPage = options.perPage ?? 50;
   if (!Number.isSafeInteger(page) || page < 1 || page > 10000 ||
-      !Number.isSafeInteger(perPage) || perPage < 1 || perPage > 50) throw new WallabagError('Invalid Wallabag page size');
+      !Number.isSafeInteger(perPage) || perPage < 1 || perPage > 50 ||
+      (options.since !== undefined && (!Number.isSafeInteger(options.since) || options.since < 0))) throw new WallabagError('Invalid Wallabag page size');
   checkCancelled(options.signal);
   let saved = await searchSession(server);
   const scope = searchScope(saved.session)!;
@@ -637,7 +639,8 @@ export async function listWallabagIndexEntries(server: string, options: {
   const fetchPage = async (value: SavedSession) => {
     checkCancelled(options.signal);
     assertConnection(value, value.session);
-    const params = new URLSearchParams({ page: String(page), perPage: String(perPage), sort: 'created', order: 'desc' });
+    const params = new URLSearchParams({ page: String(page), perPage: String(perPage), sort: options.since === undefined ? 'created' : 'updated', order: 'desc' });
+    if (options.since !== undefined) params.set('since', String(options.since));
     return request(`${value.session.server}/api/entries.json?${params}`, {
       method: 'GET', headers: { Authorization: `Bearer ${value.session.accessToken}` }, signal: options.signal,
     }, async response => {

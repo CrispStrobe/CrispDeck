@@ -3,16 +3,18 @@ import type { UnifiedPost } from '$lib/types';
 import type { SearchCacheInput } from '$lib/search-cache';
 import { cacheSearchItems, getSearchCacheGeneration, getSearchCacheSettings } from '$lib/search-cache';
 import { swallow } from '$lib/debug-log';
-import { readJson } from '$lib/safe-storage';
+import { readJson, writeJson } from '$lib/safe-storage';
 
 /** Per-action bounds protect slow servers and mobile webviews. */
-export const WALLABAG_SYNC_PAGE_LIMIT = 1000;
+export const WALLABAG_SYNC_PAGE_LIMIT = 10000;
 export const WALLABAG_SYNC_PAGE_SIZE = 50;
 export interface SearchCacheSyncProgress { processed: number; indexed: number; pages: number }
-export interface SearchCacheSyncResult extends SearchCacheSyncProgress { stoppedEarly: boolean }
+export interface SearchCacheSyncResult extends SearchCacheSyncProgress { stoppedEarly: boolean; stoppedByDate?: boolean }
 export interface SearchCacheSyncOptions {
   signal?: AbortSignal;
+  pauseOnAbort?: boolean;
   onProgress?: (progress: SearchCacheSyncProgress) => void;
+  incremental?: boolean;
 }
 
 function record(value: unknown): Record<string, any> {
@@ -165,7 +167,22 @@ export async function indexExistingSearchCache(options: SearchCacheSyncOptions =
 }
 
 /** Explicit, cancellable Wallabag import; never runs from a search request. */
+let wallabagSyncRunning = false;
 export async function syncWallabagSearchCache(options: SearchCacheSyncOptions = {}): Promise<SearchCacheSyncResult> {
+  if (wallabagSyncRunning) throw new Error('A Wallabag index update is already running.');
+  wallabagSyncRunning = true;
+  try {
+    const run = () => syncWallabagSearchCacheImpl(options);
+    if (typeof navigator !== 'undefined' && navigator.locks) {
+      return await navigator.locks.request('crispdeck-wallabag-index-sync', { ifAvailable: true }, lock => {
+        if (!lock) throw new Error('A Wallabag index update is already running.');
+        return run();
+      });
+    }
+    return await run();
+  } finally { wallabagSyncRunning = false; }
+}
+async function syncWallabagSearchCacheImpl(options: SearchCacheSyncOptions): Promise<SearchCacheSyncResult> {
   const settings = getSearchCacheSettings();
   const progress: SearchCacheSyncResult = { processed: 0, indexed: 0, pages: 0, stoppedEarly: false };
   if (!settings.enabled || !settings.wallabag.enabled) return progress;
@@ -176,13 +193,32 @@ export async function syncWallabagSearchCache(options: SearchCacheSyncOptions = 
   const { listWallabagIndexEntries, wallabagSearchScope } = await import('$lib/wallabag');
   const scope = await wallabagSearchScope(server);
   checkActive(generation, options.signal);
+  let startedAt = Date.now();
+  let startPage = 1;
+  const checkpointKey = `crispdeck-wallabag-index-checkpoint:${scope}`;
+  const signature = JSON.stringify([settings.wallabag, settings.maxAgeDays, settings.maxItems]);
+  let since: number | undefined;
+  if (options.incremental) {
+    try {
+      const checkpoint = JSON.parse(localStorage.getItem(checkpointKey) ?? 'null');
+      if (checkpoint?.signature !== signature || checkpoint?.generation !== generation || checkpoint?.paused) return progress;
+      if (checkpoint.phase === 'full' && Number.isSafeInteger(checkpoint.nextPage) && checkpoint.nextPage >= 1 && Number.isFinite(checkpoint.startedAt)) {
+        startPage = checkpoint.nextPage; startedAt = checkpoint.startedAt;
+      } else if (Number.isSafeInteger(checkpoint?.since) && checkpoint.since >= 0) since = checkpoint.since;
+      else return progress;
+    } catch { return progress; }
+  }
+  if (!options.incremental) {
+    writeJson(checkpointKey, { signature, generation, phase: 'full', startedAt, nextPage: 1 });
+  }
   const cutoff = settings.maxAgeDays ? Date.now() - settings.maxAgeDays * 86_400_000 : -Infinity;
   const seen = new Set<number>();
   const pageLimit = Math.min(WALLABAG_SYNC_PAGE_LIMIT, Math.ceil(settings.maxItems / WALLABAG_SYNC_PAGE_SIZE));
-  for (let page = 1; page <= pageLimit; page++) {
+  try {
+  for (let page = startPage; page <= pageLimit; page++) {
     checkActive(generation, options.signal);
     const result = await listWallabagIndexEntries(server, {
-      page, perPage: WALLABAG_SYNC_PAGE_SIZE, expectedScope: scope, signal: options.signal,
+      page, perPage: WALLABAG_SYNC_PAGE_SIZE, expectedScope: scope, signal: options.signal, ...(since !== undefined ? { since } : {}),
     });
     checkActive(generation, options.signal);
     const inputs: SearchCacheInput[] = [];
@@ -198,9 +234,28 @@ export async function syncWallabagSearchCache(options: SearchCacheSyncOptions = 
     progress.pages++;
     options.onProgress?.({ ...progress });
     checkActive(generation, options.signal);
-    const allOlder = result.entries.length > 0 && result.entries.every(entry => Date.parse(entry.createdAt) < cutoff);
+    const allOlder = since === undefined && result.entries.length > 0 && result.entries.every(entry => Date.parse(entry.createdAt) < cutoff);
+    if (allOlder && settings.maxAgeDays) progress.stoppedByDate = true;
     if (!result.hasMore || allOlder || result.entries.length === 0 || inputs.length === 0 || progress.stoppedEarly) break;
     if (page === pageLimit || seen.size >= settings.maxItems) { progress.stoppedEarly = true; break; }
+    if (since === undefined) {
+      writeJson(checkpointKey, { signature, generation, phase: 'full', startedAt, nextPage: page + 1 });
+    }
+  }
+  } catch (error) {
+    if (options.signal?.aborted && options.pauseOnAbort) {
+      try {
+        const checkpoint = JSON.parse(localStorage.getItem(checkpointKey) ?? 'null');
+        if (checkpoint?.signature === signature && checkpoint?.generation === generation && checkpoint?.phase === 'full') {
+          checkpoint.paused = true; writeJson(checkpointKey, checkpoint);
+        }
+      } catch { /* Cancellation remains effective in this session. */ }
+    }
+    throw error;
+  }
+  if (!progress.stoppedEarly) {
+    // Overlap runs to cover edits made while pages were being read.
+    writeJson(checkpointKey, { signature, generation, since: Math.max(0, Math.floor((startedAt - 120_000) / 1000)) });
   }
   return progress;
 }

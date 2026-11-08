@@ -28,7 +28,7 @@ export default {
   refresh: "状態を更新",
   indexExisting: "既存のキャッシュをインデックスに登録",
   syncWallabag: "Wallabagを同期",
-  syncHint: "CrispDeckに保存済みの項目をインデックスに登録するか、設定した上限の範囲内でWallabagの項目を取得します。同期中はこの画面を開いたままにしてください。",
+  syncHint: "Index cached items or sync Wallabag within your limits. Sync continues while you use the app.",
   stop: "停止",
   stopped: "インデックスの登録を停止しました。",
   working: "ローカルインデックスを更新中…",
@@ -53,5 +53,9 @@ export default {
   rss: "RSS",
   searchScope: "検索先",
   syncProgress: "{processed} 件処理済み · {indexed} 件登録済み",
+  indexFullWallabag: "Index all Wallabag history",
+  indexFullWallabagHint: "Sets unlimited history, a 500,000-item cap and full-text indexing for Wallabag. This can use substantial device storage.",
+  fullText: "Full article text (up to 1 million characters; uses more storage)",
+  syncDateLimited: "The history window is {days} days. Set it to 0 to include older articles.",
   syncLimited: "読み込み上限に達しました。より古い項目を含めるには、キャッシュの最大項目数を増やしてください。",
 } satisfies LocalSearchTranslations;

@@ -1,8 +1,8 @@
 const en = {
   title: "Local cache & search",
-  description: "Keep searchable text excerpts on this device. Search works offline after items have been cached.",
+  description: "Keep selected searchable text on this device. Search works offline after items have been cached.",
   enable: "Enable local cache and search",
-  disableHint: "Turning this off clears the local search cache. Cached excerpts are stored as plain text on this device.",
+  disableHint: "Turning this off clears the local search cache. Cached text is stored as plain text on this device.",
   posts: "Posts & RSS",
   wallabag: "Wallabag",
   includeSource: "Include this source",
@@ -26,7 +26,7 @@ const en = {
   refresh: "Refresh status",
   indexExisting: "Index existing cache",
   syncWallabag: "Sync Wallabag",
-  syncHint: "Index items already saved in CrispDeck, or fetch Wallabag items within your limits. Keep this screen open while syncing.",
+  syncHint: "Index items already saved in CrispDeck, or fetch Wallabag items within your limits. Sync continues while you use the app.",
   stop: "Stop",
   stopped: "Indexing stopped.",
   working: "Updating the local index…",
@@ -51,6 +51,10 @@ const en = {
   rss: "RSS",
   searchScope: "Search location",
   syncProgress: "Processed {processed} items · indexed {indexed}",
+  indexFullWallabag: "Index all Wallabag history",
+  indexFullWallabagHint: "Sets unlimited history, a 500,000-item cap and full-text indexing for Wallabag. This can use substantial device storage.",
+  fullText: "Full article text (up to 1 million characters; uses more storage)",
+  syncDateLimited: "The history window is {days} days. Set it to 0 to include older articles.",
   syncLimited: "Reached the import limit. Increase the maximum cached items to include more history.",
 };
 

@@ -6,7 +6,7 @@ then choose **On this device** on the Search page. Local queries use the device'
 index and work offline; the existing network search continues to query social
 providers.
 
-The cache contains selected text and source links. It is useful for finding a
+The cache contains selected text and source links. The optional full-text mode stores up to one million characters per item in plaintext and can use substantial storage. It is useful for finding a
 post or saved article again, including when a provider's remote search cannot
 find it. It does not download article images or provide a complete offline
 copy of every timeline.
@@ -33,7 +33,7 @@ heading from their first line (up to 160 characters); supplied titles are capped
 at 512 characters. HTML is converted to plain text before it is stored or indexed.
 
 Character limits accept 100–50,000 characters, the history window accepts
-0–36,500 days, and the entry cap accepts 100–50,000 entries. The entry cap still
+0–36,500 days, and the entry cap accepts 100–500,000 entries. The entry cap still
 applies when all dates are allowed. These are text limits, not disk-space
 guarantees: the index and database metadata also occupy storage.
 
@@ -67,8 +67,8 @@ use **Sync Wallabag**. The import requests entries from the configured
 Wallabag server, newest first, and applies the same excerpt and retention rules.
 It requests up to 50 entries per page and stops when it reaches the configured
 item limit, passes the history window, or runs out of entries. The maximum
-setting permits up to 50,000 entries; the UI reports when a limit stops an
-import. A larger item limit allows a later sync to reach older entries.
+setting permits up to 500,000 entries; the UI reports when a limit stops an
+import. A larger item limit allows a later sync to reach older entries. The full-history action selects unlimited age, full Wallabag text, and a 500,000-item cap. Sync continues while navigating, and interrupted full imports resume after restart. After an initial sync, the app checks for newly updated items while running. Wallabag does not provide deletion tombstones: deleted remote items may remain until the cache is cleared and re-synced.
 
 An import can be cancelled, and leaving the Settings page cancels it. It does
 not run a background crawler while the app is closed. Excerpt limits control

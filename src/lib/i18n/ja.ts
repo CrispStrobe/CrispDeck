@@ -66,6 +66,8 @@ export default {
     },
 
     wallabagReader: {
+      localPartial: "Local excerpt results only; Wallabag could not be searched.",
+      localResults: "Local excerpt results; searching Wallabag for complete results…",
       search: 'Search all articles', searchButton: 'Search', thumbnails: 'Show article thumbnails', connectedStatus: 'Connected. Your saved session is kept for future launches.',
       unavailable: "保存済みの Wallabag 認証情報を確認できませんでした。設定で接続を確認してください。",
       title: "Wallabag リーダー",

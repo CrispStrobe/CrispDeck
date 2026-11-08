@@ -26,7 +26,7 @@ async function wallabagServer(page: Page) {
     preview_picture: index === 0 ? 'https://articles.example/preview.jpg' : null,
     tags: [{ id: 1, label: 'Reading', slug: 'reading' }],
   }));
-  const state = { rejectLogin: false, rejectReader: false, revoked: false, probeCount: 0, probeGate: undefined as Promise<void> | undefined, patchCount: 0 };
+  const state = { rejectLogin: false, rejectReader: false, revoked: false, probeCount: 0, probeGate: undefined as Promise<void> | undefined, searchGate: undefined as Promise<void> | undefined, patchCount: 0 };
   await page.context().route(`${SERVER}/**`, async route => {
     const request = route.request();
     const url = new URL(request.url());
@@ -46,8 +46,9 @@ async function wallabagServer(page: Page) {
     if (state.rejectReader) return reply({ error: 'access_denied' }, 403);
     if (request.headers().authorization !== 'Bearer test-reader-access-token') return reply({}, 401);
     if (url.pathname === '/api/search.json') {
+      await state.searchGate;
       const term = (url.searchParams.get('term') ?? '').toLowerCase();
-      const filtered = articles.filter(article => article.title.toLowerCase().includes(term));
+      const filtered = articles.filter(article => (article.title + ' ' + article.content).toLowerCase().includes(term));
       const pageNumber = Number(url.searchParams.get('page') ?? 1);
       const perPage = Number(url.searchParams.get('perPage') ?? 30);
       return reply({ _embedded: { items: filtered.slice((pageNumber - 1) * perPage, pageNumber * perPage) }, page: pageNumber, pages: Math.ceil(filtered.length / perPage), total: filtered.length });
@@ -62,7 +63,8 @@ async function wallabagServer(page: Page) {
       const filtered = articles.filter(article =>
         (!url.searchParams.has('archive') || article.is_archived === Number(url.searchParams.get('archive'))) &&
         (!url.searchParams.has('starred') || article.is_starred === Number(url.searchParams.get('starred'))));
-      const items = filtered.slice((pageNumber - 1) * perPage, pageNumber * perPage).map(({ content, ...metadata }) => metadata);
+      const pageItems = filtered.slice((pageNumber - 1) * perPage, pageNumber * perPage);
+      const items = url.searchParams.get('detail') === 'metadata' ? pageItems.map(({ content, ...metadata }) => metadata) : pageItems;
       return reply({ _embedded: { items }, page: pageNumber, pages: Math.ceil(filtered.length / perPage), limit: perPage, total: filtered.length });
     }
     const match = url.pathname.match(/^\/api\/entries\/(\d+)\.json$/);
@@ -248,4 +250,25 @@ test('article actions share the top row at desktop width', async ({ page }) => {
   const controls = await toolbar.locator('button, a').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().top));
   expect(controls.length).toBe(4);
   expect(Math.max(...controls) - Math.min(...controls)).toBeLessThan(3);
+});
+
+
+test('full local index surfaces Wallabag matches immediately while complete search runs', async ({ page }) => {
+  const server = await wallabagServer(page);
+  await connect(page);
+  await expect(page.locator('#wallabag-settings').getByRole('link', { name: 'Wallabag Reader' })).toBeVisible();
+  await page.goto('/settings?tab=content#local-search-cache');
+  const settings = page.locator('#local-search-cache');
+  await settings.getByRole('button', { name: 'Index all Wallabag history' }).click();
+  await expect(settings.getByText('Indexed 32 items.', { exact: false })).toBeVisible({ timeout: 30000 });
+  await page.goto('/wallabag');
+  await expect(page.locator('[data-wallabag-entry="1"]')).toBeVisible();
+  const pending = deferred(); server.searchGate = pending.promise;
+  try {
+    await page.getByRole('searchbox', { name: 'Search all articles' }).fill('useful');
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await expect(page.getByText('Local excerpt results; searching Wallabag for complete results…')).toBeVisible();
+    await expect(page.locator('[data-wallabag-entry="1"]')).toBeVisible();
+  } finally { pending.resolve(); }
+  await expect(page.getByText('Local excerpt results; searching Wallabag for complete results…')).toHaveCount(0);
 });

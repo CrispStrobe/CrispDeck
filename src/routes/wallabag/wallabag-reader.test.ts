@@ -7,9 +7,11 @@ import type { WallabagEntry, WallabagEntriesPage } from '$lib/wallabag';
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn(), get: vi.fn(), update: vi.fn(), refresh: vi.fn(), openExternal: vi.fn(),
+  localEnabled: false, localResults: vi.fn(), scope: vi.fn(),
   sanitizerReady: undefined as Promise<void> | undefined,
 }));
-vi.mock('$lib/wallabag', () => ({ listWallabagEntries: mocks.list, getWallabagEntry: mocks.get, updateWallabagEntry: mocks.update }));
+vi.mock('$lib/wallabag', () => ({ listWallabagEntries: mocks.list, getWallabagEntry: mocks.get, updateWallabagEntry: mocks.update, wallabagSearchScope: mocks.scope }));
+vi.mock('$lib/search-cache', () => ({ getSearchCacheSettings: () => ({ enabled: mocks.localEnabled, wallabag: { enabled: true } }), searchCache: mocks.localResults }));
 vi.mock('$lib/wallabag-availability', async () => {
   const { writable } = await import('svelte/store');
   return { wallabagAvailability: writable({ status: 'hidden', server: '', revision: 0 }), refreshWallabagAvailability: mocks.refresh };
@@ -43,7 +45,8 @@ function deferred<T>() {
 let instance: ReturnType<typeof createClassComponent> | undefined;
 beforeEach(() => {
   vi.resetAllMocks(); localStorage.clear();
-  mocks.sanitizerReady = undefined;
+  mocks.sanitizerReady = undefined; mocks.localEnabled = false;
+  mocks.scope.mockResolvedValue('wallabag:scope'); mocks.localResults.mockResolvedValue([]);
   availability.set(ready);
   mocks.refresh.mockResolvedValue(false);
   mocks.list.mockResolvedValue(page([entry(1), entry(2)]));
@@ -81,6 +84,20 @@ async function expectEntries(target: HTMLElement, ids: number[]) {
 }
 
 describe('Wallabag reader controls', () => {
+  it('shows scoped local hits immediately, then replaces them with complete server results', async () => {
+    const target = render(); await expectEntries(target, [1, 2]);
+    mocks.localEnabled = true;
+    mocks.localResults.mockResolvedValue([{ id: JSON.stringify(['wallabag', 'wallabag:scope', '9']), title: 'Local result', url: 'https://example.org/9', createdAt: '2026-01-01T00:00:00Z' }]);
+    const network = deferred<WallabagEntriesPage>(); mocks.list.mockReturnValueOnce(network.promise);
+    const input = target.querySelector<HTMLInputElement>('input[type=search]')!;
+    input.value = 'theology'; input.dispatchEvent(new Event('input', { bubbles: true })); flushSync();
+    input.form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await expectEntries(target, [9]);
+    expect(mocks.localResults).toHaveBeenCalledWith('theology', { source: 'wallabag', scope: 'wallabag:scope', limit: 100 });
+    expect(target.textContent).toContain('Local excerpt results');
+    network.resolve(page([entry(10)])); await expectEntries(target, [10]);
+  });
+
   it('places the back, reading, favorite and original controls together before the article title', async () => {
     const target = render(); await expectEntries(target, [1, 2]);
     select(target, 1); await expectArticle(target, 'Article 1');

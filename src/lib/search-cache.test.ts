@@ -57,7 +57,7 @@ describe('opt-in and normalized settings', () => {
     localStorage.setItem(settingsKey, '{broken');
     expect(cache.getSearchCacheSettings().enabled).toBe(false);
     localStorage.setItem(settingsKey, JSON.stringify({ enabled: 'true', maxAgeDays: -12, maxItems: 1e10, posts: { mode: 'unknown', maxChars: 0 } }));
-    expect(cache.getSearchCacheSettings()).toMatchObject({ enabled: false, maxAgeDays: 0, maxItems: 50_000, posts: { mode: 'paragraph', maxChars: 100 } });
+    expect(cache.getSearchCacheSettings()).toMatchObject({ enabled: false, maxAgeDays: 0, maxItems: 500_000, posts: { mode: 'paragraph', maxChars: 100 } });
     localStorage.setItem(settingsKey, JSON.stringify({ enabled: true, maxItems: '1000' }));
     expect(cache.getSearchCacheSettings().maxItems).toBe(10_000);
   });
@@ -84,6 +84,24 @@ describe('bounded text-only records', () => {
     expect(record).not.toHaveProperty('raw');
     expect(record).not.toHaveProperty('text');
     expect(JSON.stringify(record)).not.toMatch(/SECRETTAIL|HIDDENCSS|INJECTED|<p>/);
+  });
+
+  it('keeps ranked results bounded and shows context for matches deep in full text', async () => {
+    const cache = await enabled({ wallabag: { enabled: true, mode: 'full', maxChars: 100 } });
+    const text = `${'leading '.repeat(800)}deepneedle ${'trailing '.repeat(800)}`;
+    await cache.cacheSearchItems(Array.from({ length: 20 }, (_, n) => input(String(n), { source: 'wallabag', scope: 'wallabag:one', title: n === 0 ? 'deepneedle in title' : `Item ${n}`, text })));
+    const results = await cache.searchCache('deepneedle', { source: 'wallabag', limit: 3 });
+    expect(results).toHaveLength(3);
+    expect(results[0].title).toBe('deepneedle in title');
+    expect(results[0].excerpt.length).toBeLessThanOrEqual(4000);
+    expect(results[0].excerpt).toContain('deepneedle');
+  });
+
+  it('indexes the complete retained Wallabag text when explicitly selected', async () => {
+    const cache = await enabled({ wallabag: { enabled: true, mode: 'full', maxChars: 100 } });
+    await cache.cacheSearchItems([input('article', { source: 'wallabag', scope: 'wallabag:one', text: '<p>Introduction</p><p>uniquesecondparagraph</p>', html: true })]);
+    expect(await cache.searchCache('uniquesecondparagraph', { source: 'wallabag', scope: 'wallabag:one' })).toHaveLength(1);
+    expect(await cache.searchCache('uniquesecondparagraph', { source: 'wallabag', scope: 'wallabag:other' })).toHaveLength(0);
   });
 
   it('uses independent limits for social posts and Wallabag', async () => {
