@@ -1,0 +1,104 @@
+name: Android Layout Validation
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/android-layout.yml'
+      - 'src-tauri/android/**'
+      - 'src-tauri/gen/android/app/src/main/AndroidManifest.xml'
+      - 'src-tauri/tauri.conf.json'
+      - 'src-tauri/Cargo.*'
+      - 'src/app.css'
+      - 'src/app.html'
+      - 'src/routes/+layout.svelte'
+      - 'src/routes/feed/**'
+      - 'src/lib/components/**'
+      - 'package*.json'
+      - 'scripts/merge-android-manifest.py'
+      - 'tools/validation/android_layout_smoke.py'
+      - 'tools/validation/requirements-android.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-layout-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-layout:
+    name: Android debug build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+          cache-on-failure: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r26d
+      - name: Set Android NDK path
+        env:
+          ANDROID_LAYOUT_NDK: ${{ steps.ndk.outputs.ndk-path }}
+        run: echo "NDK_HOME=$ANDROID_LAYOUT_NDK" >> "$GITHUB_ENV"
+      - run: npm ci
+      - name: Initialize the real Tauri Android project
+        run: |
+          set -euo pipefail
+          MANIFEST=src-tauri/gen/android/app/src/main/AndroidManifest.xml
+          cp "$MANIFEST" "$RUNNER_TEMP/crispdeck-layout-manifest.xml"
+          # Generated Java/Gradle files belong only to this disposable runner.
+          rm -rf src-tauri/gen/android
+          npx tauri icon static/icon-1024.png
+          npx tauri android init --ci --skip-targets-install
+          python3 scripts/merge-android-manifest.py "$RUNNER_TEMP/crispdeck-layout-manifest.xml" "$MANIFEST"
+          ACTIVITY=src-tauri/gen/android/app/src/main/java/com/christianstrobele/crispdeck/MainActivity.kt
+          test -f "$ACTIVITY"
+          cp src-tauri/android/MainActivity.kt "$ACTIVITY"
+      - name: Compile the Android app without release credentials
+        run: npx tauri android build --debug --apk --target x86_64 --ci
+      - name: Retain the debug APK and its source
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import shutil
+          import subprocess
+          root = Path('src-tauri/gen/android')
+          packages = list(root.glob('**/build/outputs/apk/**/debug/*.apk'))
+          if len(packages) != 1:
+              raise SystemExit(f'Expected one debug APK, found {packages}')
+          output = Path('android-layout')
+          output.mkdir(exist_ok=True)
+          shutil.copyfile(packages[0], output / 'CrispDeck-android-layout-debug.apk')
+          (output / 'source.json').write_text(json.dumps({
+              'commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'variant': 'debug', 'target': 'x86_64-linux-android',
+              'release_signed': False, 'published': False,
+          }, indent=2) + '\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-layout-debug
+          path: android-layout/
+          if-no-files-found: ignore
+          retention-days: 7
