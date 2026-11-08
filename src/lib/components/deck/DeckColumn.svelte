@@ -732,6 +732,8 @@
    * auto` lets the browser remember each post's real height once rendered, so
    * scrollbars stay put and the reading position above still resolves.
    */
+  .deck-post :global(.post-footer) { min-width: 0; }
+  .deck-post :global(.post-actions) { min-width: 0; max-width: 100%; }
   .deck-post {
     content-visibility: auto;
     contain-intrinsic-size: auto 14rem;

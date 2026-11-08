@@ -56,7 +56,7 @@
         {/if}
       </div>
       {#if !collapsed}
-        <span class="text-[10px] text-[var(--color-text-muted)] truncate flex-1 text-left">{accounts.length} account{accounts.length !== 1 ? 's' : ''}</span>
+        <span class="text-[10px] text-[var(--color-text-muted)] truncate flex-1 text-left">{(accounts.length === 1 ? i18n.t.settings.accountCountOne : i18n.t.settings.accountCountMany).replace('{count}', String(accounts.length))}</span>
         <ChevronUp size={10} class="text-[var(--color-text-muted)] flex-shrink-0 {showPopover ? '' : 'rotate-180'}" />
       {/if}
     </button>
@@ -67,7 +67,7 @@
       <div class="fixed inset-0 z-40" onclick={() => showPopover = false} onkeydown={() => {}}></div>
       <div class="absolute bottom-full left-0 mb-1 w-56 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl z-50 py-1 max-h-64 overflow-y-auto">
         <div class="px-3 py-1.5 text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-medium border-b border-[var(--color-border)]">
-          Connected accounts
+          {i18n.t.settings.connectedAccountsLabel}
         </div>
         {#each accounts as acct}
           <a
@@ -97,7 +97,7 @@
           onclick={() => showPopover = false}
           class="flex items-center gap-2 px-3 py-2 text-[var(--color-primary-text)] hover:bg-[var(--color-surface-hover)] transition-colors text-xs"
         >
-          + Add account
+          + {i18n.t.settings.addAccount}
         </a>
       </div>
     {/if}

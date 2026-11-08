@@ -4,7 +4,7 @@
  */
 
 import { writeString } from './safe-storage';
-import { normalizeWallabagServer } from './wallabag';
+import { normalizeWallabagServer } from './wallabag-common';
 
 export interface SettingsExport {
   version: number;
@@ -16,6 +16,9 @@ export interface SettingsExport {
 const EXCLUDE_PATTERNS = [
   'crispdeck-oauth',     // OAuth state (transient)
   'crispdeck-threads-oauth', // Threads OAuth state (transient)
+  'crispdeck-search-cache-generation', // Local cancellation epoch, not a preference
+  'crispdeck-search-cache-revoked:', // Device-local account revocations
+  'crispdeck-wallabag-search-scope', // Device-local cleanup identity, not a preference
 ];
 
 /** Keys that contain encrypted credentials — never export */
@@ -109,6 +112,11 @@ export function importSettings(data: SettingsExport): number {
       if (safe === null) continue;
       if (!writeString(key, safe)) {
         throw new Error(`Could not import settings: storage failed after ${count} saved settings.`);
+      }
+      // The storage event only reaches other tabs. A restored address must
+      // invalidate this tab's verified reader, even if a later import fails.
+      if (key === 'crispdeck-wallabag-url' && typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('crispdeck:wallabag-server-changed'));
       }
       count++;
     }

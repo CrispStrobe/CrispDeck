@@ -1,9 +1,14 @@
 <script lang="ts">
+  import { useLocalSearchTranslations } from '$lib/local-search-i18n.svelte';
+  const localSearch = useLocalSearchTranslations();
   import ThreadsFeedSources from '$lib/components/ThreadsFeedSources.svelte';
+  import LocalSearchSettings from '$lib/components/LocalSearchSettings.svelte';
+  import { clearSearchCache } from '$lib/search-cache';
   import { getTtsEngine, setTtsEngine, getSttEngine, setSttEngine, getHomeMode, setHomeMode, type SpeechEngine, type HomeMode } from '$lib/settings';
   import { toast } from '$lib/toast.svelte';
   import { readString, removeKey, writeJson, writeString } from '$lib/safe-storage';
   import { connectWallabag, disconnectWallabag, normalizeWallabagServer } from '$lib/wallabag';
+  import { wallabagAvailability, hideWallabagReader, refreshWallabagAvailability } from '$lib/wallabag-availability';
   import { fetchOk, fetchJson } from '$lib/http';
   import { getCredentialBackend, setCredentialBackend, setMacosKeychain, type CredentialBackendInfo } from '$lib/db';
   import { apiUrl } from '$lib/api-origin';
@@ -289,36 +294,44 @@
   let wallabagUsername = $state('');
   let wallabagPassword = $state('');
   let wallabagBusy = $state(false);
+  let wallabagThumbnails = $state(readString('crispdeck-wallabag-thumbnails', 'true') !== 'false');
   function handleWallabagUrlChange() {
     try {
       const server = wallabagUrl.trim() ? normalizeWallabagServer(wallabagUrl) : '';
       if (!writeString('crispdeck-wallabag-url', server)) throw new Error('Could not save the Wallabag server address. Check browser storage and try again.');
       wallabagUrl = server;
+      void refreshWallabagAvailability();
     } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
   }
   async function connectWallabagAccount() {
     if (wallabagBusy) return;
     const credentials = { server: wallabagUrl, clientId: wallabagClientId, clientSecret: wallabagClientSecret, username: wallabagUsername, password: wallabagPassword };
     wallabagBusy = true;
+    hideWallabagReader();
     try {
       const server = normalizeWallabagServer(credentials.server);
       // Ensure the routing preference is writable before obtaining a session.
       if (!writeString('crispdeck-wallabag-url', server)) throw new Error('Could not save the Wallabag server address. Check browser storage and try again.');
       wallabagUrl = await connectWallabag({ ...credentials, server });
       wallabagPassword = ''; wallabagClientSecret = '';
-      toast.success(i18n.t.linkMenu.wallabagConnected);
+      if (await refreshWallabagAvailability()) toast.success(i18n.t.linkMenu.wallabagConnected);
+      else toast.warning(i18n.t.wallabagReader.unavailable);
     } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
     finally { wallabagBusy = false; }
   }
   async function disconnectWallabagAccount() {
     if (wallabagBusy) return;
     wallabagBusy = true;
+    hideWallabagReader();
     try {
       await disconnectWallabag();
       wallabagPassword = ''; wallabagClientSecret = '';
       toast.success(i18n.t.linkMenu.wallabagDisconnected);
     }
-    catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
+    catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+      void refreshWallabagAvailability();
+    }
     finally { wallabagBusy = false; }
   }
   let sideMedia = $state(localStorage.getItem('crispdeck-side-media') !== 'false');
@@ -387,6 +400,8 @@
   }
   async function purgeAllData() {
     if (!confirm(i18n.t.settings.purgeConfirm)) return;
+    try { await clearSearchCache(); }
+    catch (e) { swallow('settings.purgeSearchCache', e); toast.error(localSearch.t.operationFailed); }
     // Delete IndexedDB databases
     for (const name of ['crispdeck-archive', 'crispdeck-bookmarks', 'crispdeck-engagement', 'crispdeck-translations']) {
       try { indexedDB.deleteDatabase(name); } catch (e) { swallow('settings.purgeAllData', e); }
@@ -827,14 +842,14 @@
     <div class="flex items-center justify-between mb-3">
       <h2 class="text-lg font-semibold flex items-center gap-2">
         <div class="w-3 h-3 rounded-full bg-[var(--color-bluesky)]"></div>
-        Bluesky Accounts
+        {i18n.t.settings.blueskyAccounts}
       </h2>
       <button
         onclick={() => showBskyForm = !showBskyForm}
         class="flex items-center gap-1 px-3 py-1.5 text-sm bg-[var(--color-bluesky-strong)] hover:opacity-90 rounded-md transition-opacity"
       >
         <Plus size={14} />
-        Add
+        {i18n.t.settings.add}
       </button>
     </div>
 
@@ -980,14 +995,14 @@
     <div class="flex items-center justify-between mb-3">
       <h2 class="text-lg font-semibold flex items-center gap-2">
         <div class="w-3 h-3 rounded-full bg-[var(--color-mastodon)]"></div>
-        Mastodon Accounts
+        {i18n.t.settings.mastodonAccounts}
       </h2>
       <button
         onclick={() => showMastoForm = !showMastoForm}
         class="flex items-center gap-1 px-3 py-1.5 text-sm bg-[var(--color-mastodon-strong)] hover:opacity-90 rounded-md transition-opacity"
       >
         <Plus size={14} />
-        Add
+        {i18n.t.settings.add}
       </button>
     </div>
 
@@ -1080,14 +1095,14 @@
     <div class="flex items-center justify-between mb-3">
       <h2 class="text-lg font-semibold flex items-center gap-2">
         <div class="w-3 h-3 rounded-full bg-[var(--color-threads,#000)]"></div>
-        Threads Accounts
+        {i18n.t.settings.threadsAccounts}
       </h2>
       <button
         onclick={() => showThreadsForm = !showThreadsForm}
         class="flex items-center gap-1 px-3 py-1.5 text-sm bg-[var(--color-threads,#000)] hover:opacity-90 rounded-md transition-opacity"
       >
         <Plus size={14} />
-        Add
+        {i18n.t.settings.add}
       </button>
     </div>
 
@@ -1316,21 +1331,33 @@
         />
       </div>
 
-      <div>
+      <div id="wallabag-settings">
         <label for="wallabag-url" class="text-sm text-[var(--color-text-muted)]">{i18n.t.linkMenu.wallabagInstance}</label>
         <input id="wallabag-url" type="url" bind:value={wallabagUrl} disabled={wallabagBusy} onchange={handleWallabagUrlChange} placeholder="https://wallabag.example.com" class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm" />
         <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.linkMenu.wallabagHint}</p>
+        {#if $wallabagAvailability.status === 'ready'}
+          <p class="mt-2 text-sm" role="status">{i18n.t.wallabagReader.connectedStatus}</p>
+        {:else}
         <div class="grid gap-2 mt-2 sm:grid-cols-2">
           <label class="text-xs">{i18n.t.linkMenu.wallabagClientId}<input type="text" autocomplete="off" bind:value={wallabagClientId} disabled={wallabagBusy} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
           <label class="text-xs">{i18n.t.linkMenu.wallabagClientSecret}<input type="password" autocomplete="off" bind:value={wallabagClientSecret} disabled={wallabagBusy} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
           <label class="text-xs">{i18n.t.linkMenu.wallabagUsername}<input type="text" autocomplete="username" bind:value={wallabagUsername} disabled={wallabagBusy} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
           <label class="text-xs">{i18n.t.linkMenu.wallabagPassword}<input type="password" autocomplete="current-password" bind:value={wallabagPassword} disabled={wallabagBusy} class="mt-1 w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md" /></label>
         </div>
+        {/if}
         <div class="flex gap-2 mt-2">
-          <button disabled={wallabagBusy} onclick={connectWallabagAccount} class="px-3 py-2 rounded-md bg-[var(--color-primary)] text-white text-xs">{i18n.t.linkMenu.wallabagConnect}</button>
+          {#if $wallabagAvailability.status !== 'ready'}<button disabled={wallabagBusy} onclick={connectWallabagAccount} class="px-3 py-2 rounded-md bg-[var(--color-primary)] text-white text-xs">{i18n.t.linkMenu.wallabagConnect}</button>{/if}
           <button disabled={wallabagBusy} onclick={disconnectWallabagAccount} class="px-3 py-2 rounded-md border border-[var(--color-border)] text-xs">{i18n.t.linkMenu.wallabagDisconnect}</button>
+          {#if $wallabagAvailability.status === 'ready'}
+            <a href="{base}/wallabag" class="px-3 py-2 rounded-md border border-[var(--color-border)] text-xs">{i18n.t.nav.wallabag}</a>
+          {/if}
         </div>
       </div>
+
+      <label class="flex items-center gap-2 text-sm mt-3 mb-4">
+        <input type="checkbox" bind:checked={wallabagThumbnails} onchange={() => writeString('crispdeck-wallabag-thumbnails', String(wallabagThumbnails))} />
+        {i18n.t.wallabagReader.thumbnails}
+      </label>
 
       <!-- Media preview mode -->
       <div class="flex items-center justify-between">
@@ -1497,7 +1524,7 @@
                 <div class="flex items-center gap-2">
                   <span class="text-sm font-medium truncate">{filter.title}</span>
                   <span class="text-[9px] px-1 py-0.5 rounded {filter.filter_action === 'hide' ? 'bg-red-900/30 text-red-400' : 'bg-yellow-900/30 text-yellow-400'}">
-                    {filter.filter_action}
+                    {filter.filter_action === 'hide' ? i18n.t.settings.serverFilterActionHide : i18n.t.settings.serverFilterActionWarn}
                   </span>
                   {#if isFilterExpired(filter)}
                     <span class="text-[9px] px-1 py-0.5 bg-gray-800 text-gray-400 rounded">{i18n.t.settings.serverFilterExpired}</span>
@@ -1505,10 +1532,10 @@
                 </div>
                 <div class="flex gap-1 mt-0.5 flex-wrap">
                   {#each filter.context as ctx}
-                    <span class="text-[9px] px-1 py-0.5 bg-[var(--color-surface)] text-[var(--color-text-muted)] rounded">{ctx}</span>
+                    <span class="text-[9px] px-1 py-0.5 bg-[var(--color-surface)] text-[var(--color-text-muted)] rounded">{({ home: i18n.t.settings.serverFilterContextHome, notifications: i18n.t.settings.serverFilterContextNotifications, thread: i18n.t.settings.serverFilterContextThread, public: i18n.t.settings.serverFilterContextPublic, account: i18n.t.settings.serverFilterContextAccount } as Record<string, string>)[ctx] ?? ctx}</span>
                   {/each}
                   <span class="text-[9px] text-[var(--color-text-muted)]">
-                    {i18n.t.settings.serverFilterKeywordCount.replace('{count}', String(filter.keywords.length))}
+                    {(filter.keywords.length === 1 ? i18n.t.settings.serverFilterKeywordOne : i18n.t.settings.serverFilterKeywordCount).replace('{count}', String(filter.keywords.length))}
                   </span>
                   {#if filter.expires_at}
                     <span class="text-[9px] text-[var(--color-text-muted)]">
@@ -1683,7 +1710,10 @@
                 <span class="text-[10px] text-[var(--color-text-muted)] block truncate">{feed.url}</span>
               </div>
               <button
-                onclick={() => { removeFeed(feed.id); rssFeeds = listFeeds(); }}
+                onclick={async () => {
+                  try { await removeFeed(feed.id); rssFeeds = listFeeds(); }
+                  catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
+                }}
                 class="text-[var(--color-text-muted)] hover:text-[var(--color-danger)] p-1 flex-shrink-0"
                aria-label={i18n.t.common.remove}>
                 <Trash2 size={12} />
@@ -1735,6 +1765,8 @@
       </label>
     </div>
   </section>
+
+  <LocalSearchSettings />
 
   <!-- Feed cache size (Content tab) -->
   <section class="mb-8">
@@ -2763,6 +2795,8 @@
                     alert(`Imported ${count} settings. Reload to apply all changes.`);
                   } catch (err) {
                     alert(`Import failed: ${err}`);
+                  } finally {
+                    wallabagUrl = readString('crispdeck-wallabag-url', '');
                   }
                 };
                 reader.readAsText(file);

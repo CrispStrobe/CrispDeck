@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { listFeeds, addFeed, removeFeed, rssItemToPost } from './rss';
 
 const store: Record<string, string> = {};
@@ -13,6 +13,7 @@ Object.defineProperty(globalThis, 'localStorage', {
 beforeEach(() => {
   for (const key of Object.keys(store)) delete store[key];
 });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('RSS feed management', () => {
   it('returns empty list when no feeds saved', () => {
@@ -38,13 +39,21 @@ describe('RSS feed management', () => {
     expect(listFeeds()).toHaveLength(2);
   });
 
-  it('removes a feed', () => {
+  it('removes a feed', async () => {
     const f1 = addFeed('https://a.com/feed', 'A');
     addFeed('https://b.com/feed', 'B');
     expect(listFeeds()).toHaveLength(2);
-    removeFeed(f1.id);
+    await removeFeed(f1.id);
     expect(listFeeds()).toHaveLength(1);
     expect(listFeeds()[0].title).toBe('B');
+  });
+
+  it('retains the subscription if revocation cannot be made durable', async () => {
+    const feed = addFeed('https://a.com/feed', 'A');
+    vi.stubGlobal('indexedDB', undefined);
+    vi.spyOn(localStorage, 'setItem').mockImplementation(() => { throw new DOMException('Blocked', 'SecurityError'); });
+    await expect(removeFeed(feed.id)).rejects.toThrow('storage');
+    expect(listFeeds().map(saved => saved.id)).toContain(feed.id);
   });
 
   it('generates unique IDs', () => {

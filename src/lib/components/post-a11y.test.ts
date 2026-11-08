@@ -262,3 +262,19 @@ describe('feed preview', () => {
     }
   });
 });
+
+describe('deck action strip', () => {
+  it('keeps primary interactions together and secondary actions reachable', () => {
+    const target = render(basePost, { onreply: () => {}, onboost: () => {}, onquote: () => {} });
+    const strip = target.querySelector('.post-actions');
+    expect(strip).not.toBeNull();
+    expect(strip?.querySelector('[aria-label^="Reply"]')).not.toBeNull();
+    expect(strip?.querySelector('[aria-label^="Boost"]')).not.toBeNull();
+    expect(strip?.querySelector('[aria-label^="Like"]')).not.toBeNull();
+    const more = strip!.querySelector<HTMLButtonElement>('[aria-label="More post actions"]')!;
+    flushSync(() => more.click());
+    const secondary = target.querySelector<HTMLElement>('.post-secondary-actions')!;
+    expect(secondary.hidden).toBe(false);
+    expect(secondary.querySelector('[aria-label="Copy link to post"]')).not.toBeNull();
+  });
+});

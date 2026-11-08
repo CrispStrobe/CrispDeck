@@ -1,5 +1,8 @@
 <script lang="ts">
+  import { queuePostsForSearchCache } from '$lib/search-cache-lazy';
+  import { getSearchCacheGeneration } from '$lib/search-cache-lazy';
   import { buildThreadsFeed, getThreadsSources } from '$lib/threads-feed';
+  import { loadFeedFilterDefaults, saveFeedFilterDefaults, resetFeedFilterDefaults, factoryFeedFilters } from '$lib/feed-filter-defaults';
   import { base } from '$app/paths';
   import { goto } from '$app/navigation';
   import { onMount, onDestroy, tick } from 'svelte';
@@ -82,14 +85,7 @@
   let offlineBanner = $state(''); // "Offline — cached from 5 min ago"
   let stopWatchingConnection: (() => void) | undefined;
 
-  let filters: Filters = $state({
-    searchTerm: '',
-    sortBy: 'newest',
-    hasMedia: false,
-    hideReplies: false,
-    hideReposts: false,
-    minLikes: 0,
-  });
+  let filters: Filters = $state(loadFeedFilterDefaults());
 
   let clientEntries: Map<number, ClientEntry> = new Map();
   let identityPairs: Set<string> = $state(new Set());
@@ -480,7 +476,12 @@
     view: FeedView,
   ): Promise<{ posts: UnifiedPost[]; cursor?: string; degraded: boolean }> {
     const { limit, cursor } = opts;
-    const tag = (p: UnifiedPost) => { p.sourceAccount = acct.handle; p.sourceAccountId = acct.id; return p; };
+    const searchGeneration = getSearchCacheGeneration();
+    const tag = (p: UnifiedPost) => {
+      p.sourceAccount = acct.handle; p.sourceAccountId = acct.id;
+      queuePostsForSearchCache([p], searchGeneration);
+      return p;
+    };
     const wantsTimeline = view.mode === 'timeline' || view.mode === 'for-you';
 
     // A feed generator or list is Bluesky-only and account-independent: its
@@ -977,7 +978,7 @@
               onclick={() => showFeedMenu = !showFeedMenu}
               aria-haspopup="menu"
               aria-expanded={showFeedMenu}
-              class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] transition-colors max-w-[10rem] {feedMode === 'custom' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+              class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-[var(--color-border)] transition-colors max-w-[10rem] {feedMode === 'custom' ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
               title={i18n.t.feed.switchFeed}
             >
               <span class="truncate">{currentFeedLabel ?? i18n.t.feed.feeds}</span>
@@ -1124,11 +1125,11 @@
 
       <button
         onclick={() => showFilters = !showFilters}
-        aria-label={i18n.t.feed.filtersSort}
+        aria-label={i18n.t.settings.filterSortTitle}
         aria-expanded={showFilters}
         aria-controls="feed-filters"
         class="feed-filter-toggle flex shrink-0 items-center justify-center p-1.5 rounded-md transition-colors {showFilters ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary-text)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
-        title={i18n.t.feed.filtersSort}
+        title={i18n.t.settings.filterSortTitle}
       >
         <SlidersHorizontal size={16} />
       </button>
@@ -1180,7 +1181,9 @@
     </div>
   {:else}
     {#if showFilters}
-      <div id="feed-filters"><AdvancedFilters {filters} onchange={handleFilterChange} startOpen={true} /></div>
+      <div id="feed-filters" class="contents">
+        <AdvancedFilters {filters} onchange={handleFilterChange} onSaveDefault={() => saveFeedFilterDefaults(filters) ? toast.success(i18n.t.settings.filterSaved) : toast.error(i18n.t.settings.filterSaveFailed)} onReset={() => { if (resetFeedFilterDefaults()) filters = { ...factoryFeedFilters }; else toast.error(i18n.t.settings.filterSaveFailed); }} startOpen={true} />
+      </div>
     {/if}
 
     {#if loading && posts.length === 0}
