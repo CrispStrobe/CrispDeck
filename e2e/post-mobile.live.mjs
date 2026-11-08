@@ -15,7 +15,7 @@ try {
   created = true;
   await copyFile('e2e/fixtures/post-mobile.svelte', `${route}/+page.svelte`);
   await mkdir('playwright-results', { recursive: true });
-  server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--port', String(port), '--strictPort'], { stdio: 'ignore' });
+  server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], { stdio: 'ignore' });
   browser = await chromium.launch({
     headless: true,
     ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } : {}),
@@ -28,7 +28,7 @@ try {
     const landscape = width > height;
     const page = await browser.newPage({ viewport: { width, height }, hasTouch: true, isMobile: true, deviceScaleFactor: 2, reducedMotion: 'reduce' });
     for (let attempt = 0; ; attempt++) {
-      try { await page.goto(`http://localhost:${port}/__post_mobile_test`); break; }
+      try { await page.goto(`http://127.0.0.1:${port}/__post_mobile_test`); break; }
       catch (error) { if (attempt === 40) throw error; await new Promise(resolve => setTimeout(resolve, 250)); }
     }
     await page.waitForSelector('#mobile-post-fixture article');

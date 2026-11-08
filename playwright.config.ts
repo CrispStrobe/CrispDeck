@@ -8,7 +8,7 @@ export default defineConfig({
   reporter: [['list'], ['html', { outputFolder: 'playwright-report' }]],
   outputDir: 'playwright-results',
   use: {
-    baseURL: 'http://localhost:4173',
+    baseURL: 'http://127.0.0.1:4173',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -19,8 +19,10 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: process.env.PLAYWRIGHT_DEV_SERVER ? 'npm run dev -- --port 4173' : 'npm run preview',
-    port: 4173,
+    command: process.env.PLAYWRIGHT_DEV_SERVER
+      ? 'npm run dev -- --host 127.0.0.1 --port 4173 --strictPort'
+      : 'npm run preview -- --host 127.0.0.1 --port 4173 --strictPort',
+    url: 'http://127.0.0.1:4173',
     reuseExistingServer: true,
     timeout: 120000,
   },

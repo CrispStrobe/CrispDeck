@@ -32,7 +32,7 @@ class MainActivity : TauriActivity() {
     super.onCreate(savedInstanceState)
   }
 
-  override fun setContentView(view: View) {
+  override fun setContentView(view: View?) {
     if (view !is WebView) {
       super.setContentView(view)
       return

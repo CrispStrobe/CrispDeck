@@ -161,7 +161,7 @@ for (const width of [320, 360, 390, 430]) {
     for (const label of ['Timeline', 'For You', 'My Posts', 'Feeds', 'All', 'Bsky', 'Masto']) {
       await expectUsableControl(main.getByRole('button', { name: label, exact: true }), width);
     }
-    const filters = main.getByRole('button', { name: 'Filters & Sort', exact: true });
+    const filters = main.locator('.feed-toolbar').getByRole('button', { name: 'Filters & Sort', exact: true });
     const media = main.getByRole('button', { name: 'Hide media', exact: true });
     await expectUsableControl(filters, width);
     await expectUsableControl(media, width);

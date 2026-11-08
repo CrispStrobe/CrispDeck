@@ -15,12 +15,21 @@ async function applyInsets(page: Page, device: Insets) {
     style.setProperty('--safe-area-left', `${side}px`);
     style.setProperty('--safe-area-right', `${side}px`);
   }, device);
+  // Chromium's mobile viewport resize arrives on the renderer asynchronously.
+  // Wait for the new dimensions and inset geometry, then let a frame paint
+  // before comparing controls across portrait/landscape transitions.
+  await page.waitForFunction(({ width, height, top, bottom, side }) => {
+    const body = getComputedStyle(document.body);
+    return innerWidth === width && innerHeight === height
+      && parseFloat(body.paddingTop) === top && parseFloat(body.paddingBottom) === bottom
+      && parseFloat(body.paddingLeft) === side && parseFloat(body.paddingRight) === side;
+  }, device);
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
 }
 
 async function expectSafeShell(page: Page, device: Insets) {
   expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
   const header = page.locator('.mobile-top-bar');
-  const headerBounds = (await header.boundingBox())!;
   for (const control of await header.locator('button, a').all()) {
     const bounds = (await control.boundingBox())!;
     expect(bounds.y).toBeGreaterThanOrEqual(device.top);
@@ -32,9 +41,15 @@ async function expectSafeShell(page: Page, device: Insets) {
 
   const main = page.locator('#main-content');
   await main.evaluate(element => { element.scrollTop = 0; });
-  const heading = (await main.locator('h1').first().boundingBox())!;
-  expect(heading.y, 'the fixed header must not cover the page heading')
-    .toBeGreaterThanOrEqual(headerBounds.y + headerBounds.height);
+  // Read the moving surfaces together; separate protocol calls can straddle
+  // a resize and compare the old header with the newly laid-out page heading.
+  const headingAndHeader = await page.evaluate(() => {
+    const header = document.querySelector('.mobile-top-bar')!.getBoundingClientRect();
+    const heading = document.querySelector('#main-content h1')!.getBoundingClientRect();
+    return { headingTop: heading.top, headerBottom: header.bottom };
+  });
+  expect(headingAndHeader.headingTop, 'the fixed header must not cover the page heading')
+    .toBeGreaterThanOrEqual(headingAndHeader.headerBottom);
   const content = (await main.boundingBox())!;
   expect(content.y + content.height).toBeLessThanOrEqual(device.height - device.bottom);
   expect(content.x).toBeGreaterThanOrEqual(device.side);

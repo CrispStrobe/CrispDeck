@@ -78,8 +78,10 @@ jobs:
           node bench/check-budget.mjs bundle-size.json bench/bundle-budget.json
       - run: bash scripts/ci-apt.sh
       - run: npx playwright install --with-deps chromium
+        id: browser-install
       - run: npx playwright test --reporter=list
       - name: Verify Android touch post layouts
+        if: ${{ !cancelled() && steps.browser-install.outcome == 'success' }}
         run: node e2e/post-mobile.live.mjs
       - name: Retain mobile layout screenshots
         if: always()
