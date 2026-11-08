@@ -97,6 +97,7 @@ jobs:
           from pathlib import Path
           import re
           import subprocess
+          from zipfile import ZipFile
           wrapper = Path('src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties')
           properties = wrapper.read_text()
           distribution = re.search(
@@ -130,6 +131,27 @@ jobs:
               actual_checksum = hashlib.file_digest(file, 'sha256').hexdigest()
           if actual_checksum != checksum:
               raise SystemExit('Downloaded Gradle distribution checksum mismatch')
+          # Gradle reuses local Maven artifacts only after verifying their
+          # remote checksums. Its verified ZIP already contains the identical
+          # Kotlin compiler that the release-download endpoint cannot serve.
+          with ZipFile(archive) as contents:
+              compilers = [name for name in contents.namelist() if re.fullmatch(
+                  rf'gradle-{re.escape(version)}/lib/kotlin-compiler-embeddable-\d+(?:\.\d+){{1,2}}\.jar', name)]
+              if len(compilers) != 1:
+                  raise SystemExit('Expected one bundled Kotlin compiler')
+              compiler = contents.read(compilers[0])
+          compiler_name = Path(compilers[0]).name
+          compiler_version = compiler_name.removeprefix('kotlin-compiler-embeddable-').removesuffix('.jar')
+          compiler_path = f'org/jetbrains/kotlin/kotlin-compiler-embeddable/{compiler_version}/{compiler_name}'
+          compiler_checksum = subprocess.check_output(
+              [*curl, f'https://repo.maven.apache.org/maven2/{compiler_path}.sha1'], text=True).strip()
+          if (re.fullmatch(r'[a-f0-9]{40}', compiler_checksum) is None or
+                  hashlib.sha1(compiler).hexdigest() != compiler_checksum):
+              raise SystemExit('Bundled Kotlin compiler differs from the Maven release')
+          cached_compiler = Path.home() / '.m2/repository' / compiler_path
+          cached_compiler.parent.mkdir(parents=True, exist_ok=True)
+          cached_compiler.write_bytes(compiler)
+          print(f'Warmed verified {compiler_name} for Gradle checksum-based reuse')
           properties = re.sub(r'^distributionUrl=.+$', 'distributionUrl=' + archive.as_uri(),
                               properties, flags=re.MULTILINE)
           if existing_checksum is None:
