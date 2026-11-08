@@ -8,6 +8,8 @@ import type { MastodonClient } from './api/mastodon';
 import type { ThreadsClient, ThreadsPost } from './api/threads';
 import type { UnifiedNotification } from './notification-grouping';
 import { normalizePost } from './api/unified';
+import { queuePostsForSearchCache } from './search-cache-lazy';
+import { getSearchCacheGeneration } from './search-cache-lazy';
 import { columnAccounts } from './deck-accounts';
 import { requiresQuery } from './deck-columns';
 import { fetchJson, fetchOk, safeUrl } from './http';
@@ -68,6 +70,7 @@ export async function loadDeckPage(
   clients: Map<number, ClientEntry>,
   cursors?: DeckCursors,
 ): Promise<DeckPage> {
+  const searchGeneration = getSearchCacheGeneration();
   if (!supportsDeckLoader(column.type)) throw new Error(`Unsupported deck column: ${column.type}`);
 
   const selected = columnAccounts(column, accounts);
@@ -140,6 +143,7 @@ export async function loadDeckPage(
     }
   }
   page.hasMore = sources.some(source => page.cursors[source.key] !== null);
+  queuePostsForSearchCache(page.posts, searchGeneration);
   return page;
 }
 

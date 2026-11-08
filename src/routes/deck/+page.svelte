@@ -1,6 +1,8 @@
 <script lang="ts">
   import { swallow } from '$lib/debug-log';
   import { readJson, writeJson } from '$lib/safe-storage';
+  import { getCached, setCache } from '$lib/view-cache';
+  import { deckCacheKey } from '$lib/deck-cache';
   import { toast } from '$lib/toast.svelte';
   import { subscribeDeckColumn } from '$lib/deck-live';
   import { columnAccounts } from '$lib/deck-accounts';
@@ -203,6 +205,16 @@
   let columnPosts: Record<string, UnifiedPost[]> = $state({});
   let columnNotifGroups: Record<string, NotificationGroup[]> = $state({});
   let columnLoading: Record<string, boolean> = $state({});
+
+  function restoreDeckCache(col: DeckColumnConfig, sourceAccounts: Account[]) {
+    if (col.type === 'drafts' || col.type === 'scheduled' || col.type === 'bookmarks') return;
+    const data = getCached<{ posts: UnifiedPost[]; notifications: UnifiedNotification[] }>(deckCacheKey(col, sourceAccounts))?.data;
+    if (!data || !Array.isArray(data.posts) || !Array.isArray(data.notifications)) return;
+    columnPosts[col.id] = data.posts;
+    columnNotifications[col.id] = data.notifications;
+    columnNotifGroups[col.id] = groupNotifications(data.notifications);
+  }
+
 
   let clientEntries: Map<number, ClientEntry> = $state(new Map());
   let streamCleanups: Map<string, () => void> = new Map();
@@ -503,6 +515,7 @@
       if (disposed) return;
       accounts = storedAccounts;
       try { columns = parseDeckColumns(saved); } catch { columns = defaultColumns; }
+      for (const col of columns) restoreDeckCache(col, storedAccounts);
       refreshLayoutList();
       deckReady = true;
       loading = false;
@@ -741,6 +754,10 @@
         notifyColumn(current.notify, current.title, arrivals[0].text);
       }
       if (!errors.length || posts.length || notifications?.length) columnLoaded[col.id] = true;
+      if (!errors.length) setCache(deckCacheKey(current, accounts), {
+        posts: (columnPosts[col.id] ?? []).slice(0, 100),
+        notifications: (columnNotifications[col.id] ?? []).slice(0, 100),
+      });
       lastRefresh.set(col.id, Date.now());
       startColumnStream(current);
     } catch (error) {

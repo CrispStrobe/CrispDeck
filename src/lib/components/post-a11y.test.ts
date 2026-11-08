@@ -231,3 +231,15 @@ describe('feed preview', () => {
     }
   });
 });
+
+describe('deck action strip', () => {
+  it('keeps post interaction controls together in the scrollable action strip', () => {
+    const target = render(basePost, { onreply: () => {}, onboost: () => {}, onquote: () => {} });
+    const strip = target.querySelector('.post-action-buttons');
+    expect(strip).not.toBeNull();
+    expect(strip?.querySelector('[aria-label^="Reply"]')).not.toBeNull();
+    expect(strip?.querySelector('[aria-label^="Boost"]')).not.toBeNull();
+    expect(strip?.querySelector('[aria-label^="Like"]')).not.toBeNull();
+    expect(strip?.querySelector('[aria-label="Copy link to post"]')).not.toBeNull();
+  });
+});

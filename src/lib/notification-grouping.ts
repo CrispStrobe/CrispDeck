@@ -13,6 +13,8 @@ export interface UnifiedNotification {
   author: PostAuthor;
   text?: string;
   postUri?: string;
+  postId?: string;
+  sourceAccountId?: number;
 }
 
 export interface NotificationGroup {
@@ -24,6 +26,8 @@ export interface NotificationGroup {
   actors: (PostAuthor & { platform: Platform })[];
   /** The post this notification is about (undefined for follows) */
   postUri?: string;
+  postId?: string;
+  sourceAccountId?: number;
   /** Preview text of the post or notification */
   text?: string;
   /** Timestamp of the most recent notification in the group */
@@ -97,6 +101,8 @@ export function groupNotifications(notifications: UnifiedNotification[]): Notifi
         type: normType,
         actors: [{ ...notif.author, platform: notif.platform }],
         postUri: notif.postUri,
+        postId: notif.postId,
+        sourceAccountId: notif.sourceAccountId,
         text: notif.text,
         latestAt: notif.createdAt,
         platforms: new Set([notif.platform]),
@@ -108,4 +114,19 @@ export function groupNotifications(notifications: UnifiedNotification[]): Notifi
   return [...groups.values()].sort((a, b) =>
     new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime()
   );
+}
+
+/** Construct only in-app links for subjects whose platform identifier is known. */
+export function notificationPostHref(group: NotificationGroup, base = ''): string | null {
+  const platform = group.actors[0]?.platform;
+  if (!platform || !group.postUri) return null;
+  const value = platform === 'mastodon' ? group.postId : group.postUri;
+  if (!value || (platform === 'bluesky' && !value.startsWith('at://'))) return null;
+  const query = new URLSearchParams({ [platform === 'mastodon' ? 'id' : 'uri']: value, platform });
+  if (group.sourceAccountId !== undefined) query.set('account', String(group.sourceAccountId));
+  return `${base}/thread?${query}`;
+}
+export function notificationActorName(actor: PostAuthor): string {
+  const name = actor.displayName?.trim();
+  return name && /[\p{L}\p{N}]/u.test(name) ? name : actor.handle.replace(/^@+/, '') || '?';
 }

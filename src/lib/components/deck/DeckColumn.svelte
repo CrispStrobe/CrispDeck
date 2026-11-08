@@ -732,6 +732,9 @@
    * auto` lets the browser remember each post's real height once rendered, so
    * scrollbars stay put and the reading position above still resolves.
    */
+  .deck-post :global(.post-action-row) { min-width: 0; }
+  .deck-post :global(.post-action-buttons) { flex-wrap: nowrap; gap: .6rem; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+  .deck-post :global(.post-action-buttons > *) { flex-shrink: 0; }
   .deck-post {
     content-visibility: auto;
     contain-intrinsic-size: auto 14rem;

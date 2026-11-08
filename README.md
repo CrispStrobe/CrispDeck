@@ -12,7 +12,7 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 
 ## Features
 
-### Full Social Client (31 routes)
+### Full Social Client (32 routes)
 - **3-network client**: Bluesky + Mastodon + Threads
 - **Timeline feed**: Bluesky + Mastodon home timelines merged, Threads own posts (Threads API has no home timeline), infinite scroll, "new posts" indicator, multi-account merge
 - **Platform filter**: All / Bluesky / Mastodon / Threads toggle
@@ -79,6 +79,7 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **Bluesky Starter Packs**: browse, search, create from identity DB
 - **Trending**: unified Bluesky + Mastodon trending
 - **Universal search**: queries all 3 networks simultaneously with engagement/recency scoring (Threads: keyword search via official API)
+- **Optional local search cache**: keep titles and configurable text excerpts from encountered posts and Wallabag entries, then search them offline with an IndexedDB text index. Separate post/Wallabag limits, history window, entry cap, clear/rebuild controls, and explicit Wallabag import. Disabled by default; [setup and limits](docs/local-search-cache.md).
 - **Catch-up mode**: AI-ranked missed posts
 - **"For You" algorithm**: local engagement-based ranking
 - **RSS feeds**: subscribe + OPML import, RSS deck columns
@@ -97,6 +98,7 @@ Built with [Tauri 2](https://v2.tauri.app/) + [SvelteKit 2](https://svelte.dev/)
 - **Content calendar**: month/week view of past posts + scheduled drafts
 - **Media gallery**: masonry grid view for browsing media
 - **Reading lists**: themed post collections
+- **Wallabag Reader**: Unread / Archived / Starred / All views, full article reading, and read/star controls; appears only when saved credentials pass an authenticated API check
 - **Export**: JSON, CSV, Markdown + full settings export/import
 
 ### Threads Integration (API limitations)
@@ -187,11 +189,21 @@ Threads users' posts can also be read via **Mastodon federation** (`@user@thread
 For the current TweetDeck/X Pro and Deck.Blue comparison, including service and
 network limitations, see [Deck coverage](docs/deck-parity.md).
 
+## Wallabag Reader
+
+1. Create an API client in your Wallabag instance at `/developer/client/create` ([Wallabag's setup guide](https://doc.wallabag.org/developer/api/oauth/)).
+2. In CrispDeck, open **Settings > Appearance** and enter the Wallabag server URL, client ID, client secret, username, and password.
+3. Select **Connect Wallabag**. CrispDeck saves the session and verifies an authenticated article request. **Library > Wallabag Reader** appears only after the saved credentials pass this check, and hides again if the connection is removed or validation fails.
+
+Browse **Unread**, **Archived**, **Starred**, or **All** articles. Opening an article leaves its read status unchanged; use **Mark read / Mark unread** and **Star / Unstar** to update it in Wallabag.
+
+The reader works in web and native apps using CrispDeck's existing encrypted browser storage or native credential backend. The password is used for sign-in and is not saved. Browser connections require the Wallabag server to allow CrispDeck's origin through CORS for its OAuth and API endpoints.
+
 ## Architecture
 
 ```
 +-----------------------------------------------------------+
-|  SvelteKit Frontend (Svelte 5 runes, 29 pages)            |
+|  SvelteKit Frontend (Svelte 5 runes, 32 pages)            |
 |  +---------+---------+----------+---------+--------+      |
 |  | Feed    | Compose | Identity | Deck    | More...|      |
 |  +---------+---------+----------+---------+--------+      |
@@ -373,11 +385,12 @@ Frontend unit tests hit real Bluesky/Mastodon APIs. E2E tests use Playwright wit
 
 ```
 src/
-  routes/              29 pages: dashboard, feed, deck, compose, drafts, notifications,
+  routes/              32 pages: dashboard, feed, deck, compose, drafts, notifications,
                        messages, bookmarks, lists, feed-builder, starterpacks, identities,
-                       search, gallery, calendar, reading-lists, trending, archive,
+                       search, gallery, calendar, reading-lists, wallabag, trending, archive,
                        labelers, instance, moderation, analytics, settings, profile,
-                       thread, catchup, about, oauth/callback, oauth/bsky-callback
+                       thread, catchup, about, privacy, oauth/callback, oauth/bsky-callback,
+                       oauth/threads-callback
   lib/
     api/               bluesky.ts, bluesky-oauth.ts, mastodon.ts, threads.ts, unified.ts, client-factory.ts
     compose/           adapter.ts, thread.ts, mentions.ts, media.ts, ai.ts
@@ -392,6 +405,7 @@ src/
     keyword-monitor.ts Keyword matching + saved keyword sets for deck monitoring
     byok-providers.ts  10 BYOK provider presets with /models discovery
     universal-search.ts Cross-network search with merge/dedup
+    search-cache.ts    Optional bounded text cache + IndexedDB token index
     archive.ts         Local post archive (IndexedDB)
     bookmarks.ts       Cross-platform bookmarks (IndexedDB)
     templates.ts       Post templates with variables (localStorage)
@@ -506,7 +520,7 @@ only routes the scheme to a built `.app`, so test "System browser" with
 ## Stats
 
 - 2,300+ frontend unit and component tests, Playwright browser checks, and Rust tests on three operating systems
-- 31 routes, 23 deck column types
+- 32 routes, 23 deck column types
 - 3 networks: Bluesky (OAuth + app password), Mastodon (OAuth), Threads (OAuth with server proxy)
 - 8 UI languages (EN, DE, ES, FR, JA, PT, ZH, AR — all 100%) with RTL support
 - Dark + light + OLED dark themes

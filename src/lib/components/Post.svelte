@@ -1327,8 +1327,8 @@
   </div>
   </div>
 
-  <div class="flex items-center justify-between mt-3 pl-13">
-    <div class="flex items-center gap-4 flex-wrap">
+  <div class="post-action-row flex items-center justify-between mt-3 pl-13">
+    <div class="post-action-buttons flex items-center gap-4 flex-wrap">
       {#if feedPreview && (previewClipped || previewExpanded)}
         <button type="button" class="preview-toggle" onclick={() => { previewExpanded = !previewExpanded; }}>{previewExpanded ? i18n.t.post.showLessPost : i18n.t.post.showFullPost}</button>
       {/if}
