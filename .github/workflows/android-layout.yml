@@ -75,6 +75,19 @@ jobs:
           ACTIVITY=src-tauri/gen/android/app/src/main/java/com/christianstrobele/crispdeck/MainActivity.kt
           test -f "$ACTIVITY"
           cp src-tauri/android/MainActivity.kt "$ACTIVITY"
+          # Resolve buildSrc's unchanged Kotlin compiler from Maven Central;
+          # the plugin portal's GitHub release redirect returned HTTP 504.
+          test ! -e src-tauri/gen/android/buildSrc/settings.gradle
+          BUILDSRC_SETTINGS=src-tauri/gen/android/buildSrc/settings.gradle.kts
+          test ! -e "$BUILDSRC_SETTINGS"
+          cat > "$BUILDSRC_SETTINGS" <<'GRADLE'
+          pluginManagement {
+              repositories {
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          GRADLE
       - name: Download and verify the generated Gradle distribution
         run: |
           python3 - <<'PY'
