@@ -124,7 +124,12 @@ describe('feed reactions use the source account', () => {
     target.querySelector<HTMLButtonElement>('button[aria-label^="Reply ("]')!.click();
     let params = new URL(mocks.goto.mock.calls[0][0], 'https://crispdeck.example').searchParams;
     expect(params.get('account')).toBe('2'); expect(params.get('replyCid')).toBe(row.post.cid);
-    target.querySelector<HTMLButtonElement>('button[title="Quote"]')!.click();
+    const more = target.querySelector<HTMLButtonElement>('button[aria-label="More post actions"]')!;
+    more.click(); flushSync();
+    const quote = target.querySelector<HTMLButtonElement>('button[aria-label="Quote post"]')!;
+    expect(quote.closest<HTMLElement>('[role="group"]')!.hidden).toBe(false);
+    quote.click(); flushSync();
+    expect(more.getAttribute('aria-expanded')).toBe('false');
     params = new URL(mocks.goto.mock.calls[1][0], 'https://crispdeck.example').searchParams;
     expect(params.get('account')).toBe('2'); expect(params.get('quoteCid')).toBe(row.post.cid);
   });

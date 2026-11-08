@@ -406,19 +406,19 @@
   </nav>
 
   <!-- Mobile top bar (condensed single row) -->
-  <header class="mobile-top-bar md:hidden fixed top-0 left-0 right-0 z-50 bg-[var(--color-surface)] border-b border-[var(--color-border)] px-3 py-1.5 flex items-center justify-between">
+  <header class="mobile-top-bar md:hidden fixed top-0 left-0 right-0 z-50 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex items-center justify-between">
     <div class="flex items-center gap-2">
       <button onclick={() => mobileMenuOpen = !mobileMenuOpen} aria-label={i18n.t.app.mainNavigation} aria-expanded={mobileMenuOpen} aria-controls="mobile-navigation" class="p-1 text-[var(--color-text-muted)]">
-        {#if mobileMenuOpen}<X size={18} />{:else}<Menu size={18} />{/if}
+        {#if mobileMenuOpen}<X size={20} />{:else}<Menu size={20} />{/if}
       </button>
-      <a href={base || "/"} class="text-sm font-bold text-[var(--color-text)]">CrispDeck</a>
+      <a href={base || "/"} class="text-base font-bold text-[var(--color-text)]">CrispDeck</a>
     </div>
     <div class="flex items-center gap-1">
       <button onclick={toggleTheme} class="p-1.5 text-[var(--color-text-muted)]" aria-label={i18n.t.app.toggleTheme} title={i18n.t.app.toggleTheme}>
-        {#if theme === 'dark'}<Smartphone size={14} />{:else if theme === 'oled'}<Sun size={14} />{:else}<Moon size={14} />{/if}
+        {#if theme === 'dark'}<Smartphone size={20} />{:else if theme === 'oled'}<Sun size={20} />{:else}<Moon size={20} />{/if}
       </button>
-      <a href="{base}/notifications" class="p-1.5 text-[var(--color-text-muted)]">
-        <Bell size={14} />
+      <a href="{base}/notifications" aria-label={i18n.t.nav.notifications} class="p-1.5 text-[var(--color-text-muted)]">
+        <Bell size={20} />
       </a>
     </div>
   </header>
@@ -435,7 +435,7 @@
   {/if}
 
   <!-- Main content -->
-  <main id="main-content" class="flex-1 overflow-y-auto md:pt-0 pt-10 pb-14 md:pb-0">
+  <main id="main-content" class="min-w-0 flex-1 overflow-y-auto">
     {#if offline}
       <div class="bg-yellow-900/50 border-b border-yellow-700 px-4 py-2 text-center text-xs text-yellow-200 flex items-center justify-center gap-2">
         <span>{i18n.t.app.offlineBanner}</span>
@@ -458,13 +458,14 @@
     {#each mobileTabItems as item}
       <a
         href={`${base}${item.href}`.replace(/\/$/, "") || "/"}
-        class="flex flex-col items-center gap-0 px-1 py-1 rounded-lg transition-colors min-w-0 flex-1
+        aria-current={isActive(item.href) ? 'page' : undefined}
+        class="flex flex-col items-center gap-1 px-1 py-1 rounded-lg transition-colors min-w-0 flex-1
           {isActive(item.href)
             ? 'text-[var(--color-primary-text)]'
             : 'text-[var(--color-text-muted)]'}"
       >
-        <item.icon size={18} />
-        <span class="text-[8px] truncate leading-tight">{item.label}</span>
+        <item.icon size={20} />
+        <span class="text-[10px] max-w-full truncate leading-tight">{item.label}</span>
       </a>
     {/each}
   </nav>
