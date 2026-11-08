@@ -21,8 +21,11 @@ try {
     ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } : {}),
   });
 
-  for (const width of [320, 360, 393, 430]) {
-    const height = 844;
+  for (const { width, height } of [
+    ...[320, 360, 393, 430].map(width => ({ width, height: 844 })),
+    { width: 720, height: 390 },
+  ]) {
+    const landscape = width > height;
     const page = await browser.newPage({ viewport: { width, height }, hasTouch: true, isMobile: true, deviceScaleFactor: 2, reducedMotion: 'reduce' });
     for (let attempt = 0; ; attempt++) {
       try { await page.goto(`http://localhost:${port}/__post_mobile_test`); break; }
@@ -53,7 +56,9 @@ try {
       }
       assert.equal(metrics.actionsHeight, 44, 'hidden secondary actions must not reserve rows');
       assert.ok(metrics.bottomGap <= 18, `blank space remains below the actions: ${metrics.bottomGap}`);
-      assert.ok(metrics.height <= height / 2 + 1, `collapsed post is too tall: ${metrics.height}`);
+      // On short landscape screens the author/media minimum takes precedence
+      // over the portrait half-screen budget. Actions must still be reachable.
+      if (!landscape) assert.ok(metrics.height <= height / 2 + 1, `collapsed post is too tall: ${metrics.height}`);
       assert.ok(metrics.scrollWidth <= metrics.clientWidth + 1, `post overflows horizontally at ${width}px`);
       assert.equal(await card.locator('.post-secondary-actions').isVisible(), false);
     }
@@ -66,11 +71,21 @@ try {
       const author = element.querySelector('.post-author-name').getBoundingClientRect();
       const handle = element.querySelector('.post-author-handle').getBoundingClientRect();
       const time = element.querySelector('.post-time').getBoundingClientRect();
-      return { gap: image.top - header.bottom, imageWidth: image.width, contentWidth: element.clientWidth - 32, nameBottom: author.bottom, handleTop: handle.top, authorRight: author.right, timeLeft: time.left };
+      const preview = element.querySelector('.preview-wrap').getBoundingClientRect();
+      const photo = element.querySelector('.media-preview-image').getBoundingClientRect();
+      return {
+        gap: image.top - header.bottom, imageWidth: image.width, contentWidth: element.clientWidth - 32,
+        nameBottom: author.bottom, handleTop: handle.top, authorRight: author.right, timeLeft: time.left,
+        visiblePhotoHeight: Math.min(photo.bottom, preview.bottom) - Math.max(photo.top, preview.top), photoHeight: photo.height,
+      };
     });
     assert.ok(headerAndMedia.gap <= 20, `blank media gap remains at ${width}px: ${headerAndMedia.gap}`);
-    assert.ok(headerAndMedia.imageWidth >= headerAndMedia.contentWidth - 1, 'media must use the phone card width');
-    assert.ok(headerAndMedia.handleTop >= headerAndMedia.nameBottom - 1, 'the handle must have its own line on phones');
+    if (!landscape) {
+      assert.ok(headerAndMedia.imageWidth >= headerAndMedia.contentWidth - 1, 'media must use the phone card width');
+      assert.ok(headerAndMedia.handleTop >= headerAndMedia.nameBottom - 1, 'the handle must have its own line on phones');
+    }
+    assert.ok(headerAndMedia.visiblePhotoHeight >= 44, 'short viewports must retain a visible media preview');
+    assert.ok(headerAndMedia.visiblePhotoHeight >= headerAndMedia.photoHeight - 1, 'the media-only preview must show the whole photo');
     assert.ok(headerAndMedia.authorRight < headerAndMedia.timeLeft, 'the author must not overlap the timestamp');
     await page.screenshot({ path: `playwright-results/post-mobile-${width}.png` });
 
@@ -102,7 +117,7 @@ try {
     await long.getByRole('button', { name: 'Show full post', exact: true }).tap();
     assert.ok((await long.boundingBox()).height > before, 'long posts can still expand');
     await long.getByRole('button', { name: 'Show less', exact: true }).tap();
-    console.log(`Android touch post layout and action disclosure passed at ${width}px`);
+    console.log(`Android touch post layout and action disclosure passed at ${width}×${height}`);
     await page.close();
   }
 } finally {

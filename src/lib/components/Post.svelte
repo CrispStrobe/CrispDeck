@@ -1590,10 +1590,13 @@
   .reply-context-label { display: block; font-size: 0.7rem; }
   .reply-context-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; font-size: 0.75rem; white-space: pre-wrap; overflow-wrap: anywhere; }
   .preview-wrap { position: relative; }
-  .feed-preview { max-height: calc(50svh - 9rem); overflow: clip; --preview-media-limit: max(0px, calc(50svh - 10.5rem)); }
+  /* Half-screen previews work in portrait. In short landscape viewports keep
+     room for the author and an actual media preview instead of clipping the
+     whole post down to a single line. Expanded posts still have no cap. */
+  .feed-preview { max-height: max(8rem, calc(50svh - 9rem)); overflow: clip; --preview-media-limit: max(4.5rem, calc(50svh - 10.5rem)); }
   .preview-toggle { display: block; min-height: 44px; padding-inline: 0.25rem; color: var(--color-primary-text); font-size: 0.75rem; text-align: start; }
   .post-layout-container { container-type: inline-size; }
-  .feed-preview .media-preview-image, .feed-preview .link-preview-image { max-height: min(18rem, 22svh); }
+  .feed-preview .media-preview-image, .feed-preview .link-preview-image { max-height: min(18rem, 22svh, var(--preview-media-limit)); }
   .feed-preview .media-tile { height: min(22svh, 13rem); }
   /* Keep the title visible before spending the limited preview height on media. */
   .feed-preview .link-preview-card { display: flex; flex-direction: column; }
