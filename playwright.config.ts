@@ -17,6 +17,11 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'webkit-mobile',
+      testMatch: ['mobile-layout.test.ts', 'safe-area.test.ts'],
+      use: { ...devices['iPhone 13'] },
+    },
   ],
   webServer: {
     command: process.env.PLAYWRIGHT_DEV_SERVER

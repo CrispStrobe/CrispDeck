@@ -77,7 +77,7 @@ jobs:
           node bench/bundle-size.mjs build > bundle-size.json
           node bench/check-budget.mjs bundle-size.json bench/bundle-budget.json
       - run: bash scripts/ci-apt.sh
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium webkit
         id: browser-install
       - run: npx playwright test --reporter=list
       - name: Verify Android touch post layouts
