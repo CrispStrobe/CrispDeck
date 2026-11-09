@@ -411,9 +411,9 @@
       <button onclick={() => mobileMenuOpen = !mobileMenuOpen} aria-label={i18n.t.app.mainNavigation} aria-expanded={mobileMenuOpen} aria-controls="mobile-navigation" class="p-1 text-[var(--color-text-muted)]">
         {#if mobileMenuOpen}<X size={20} />{:else}<Menu size={20} />{/if}
       </button>
-      <a href={base || "/"} class="text-base font-bold text-[var(--color-text)]">CrispDeck</a>
+      {#if routePath(page.url?.pathname ?? '/') !== '/feed'}<a href={base || "/"} class="text-base font-bold text-[var(--color-text)]">CrispDeck</a>{/if}
     </div>
-    <div class="flex items-center gap-1">
+    <div class="flex items-center gap-1" class:hidden={routePath(page.url?.pathname ?? '/') === '/feed'}>
       <button onclick={toggleTheme} class="p-1.5 text-[var(--color-text-muted)]" aria-label={i18n.t.app.toggleTheme} title={i18n.t.app.toggleTheme}>
         {#if theme === 'dark'}<Smartphone size={20} />{:else if theme === 'oled'}<Sun size={20} />{:else}<Moon size={20} />{/if}
       </button>

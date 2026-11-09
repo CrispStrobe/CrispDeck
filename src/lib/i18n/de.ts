@@ -650,7 +650,7 @@ export default {
       noLicenses: 'Keine licenses.json gefunden. Führen Sie node scripts/generate-licenses.js aus.',
       generated: 'Erstellt',
     },
-    feed: { threadsInfoLabel: "Threads-Feed-Informationen", threadsTimelineLimited: "Hier erscheinen deine eigenen Threads-Beiträge und Reposts. Metas offizielle API bietet keine persönliche Startseiten-Timeline.", openThreads: "Threads öffnen",
+    feed: { filterPlatform: "Plattform", refreshNewPosts: "{count} neue Beiträge – aktualisieren", threadsInfoLabel: "Threads-Feed-Informationen", threadsTimelineLimited: "Hier erscheinen deine eigenen Threads-Beiträge und Reposts. Metas offizielle API bietet keine persönliche Startseiten-Timeline.", openThreads: "Threads öffnen",
       offlineCached: 'Offline — zwischengespeicherte Daten von {time}',
       reconnected: 'Wieder online — wird aktualisiert', savedFeedsFailed: 'Die gespeicherten Feeds konnten nicht geladen werden', pinFailed: 'Die angehefteten Feeds konnten nicht geändert werden',
       filterBsky: 'Bsky',

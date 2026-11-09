@@ -1354,7 +1354,7 @@
 
   <div class="post-footer">
     {#if feedPreview && (previewClipped || previewExpanded)}
-      <button type="button" class="preview-toggle" aria-expanded={previewExpanded} onclick={() => { previewExpanded = !previewExpanded; }}>{previewExpanded ? i18n.t.post.showLessPost : i18n.t.post.showFullPost}</button>
+      <button type="button" class="preview-toggle" title={previewExpanded ? i18n.t.post.showLessPost : i18n.t.post.showFullPost} aria-expanded={previewExpanded} onclick={() => { previewExpanded = !previewExpanded; }}>{previewExpanded ? i18n.t.post.showLessPost : i18n.t.post.showFullPost}</button>
     {/if}
     <div class="post-actions">
       {#if onreply}
@@ -1584,6 +1584,9 @@
     .post-footer, .post-extra-offset { margin-inline-start: 0; }
     .post-copy .reply-context { margin-inline-start: 0; }
     .post-actions { max-width: none; }
+    .post-footer:has(> .preview-toggle) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 2fr); align-items: start; }
+    .post-footer:has(> .preview-toggle) .preview-toggle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .post-footer:has(> .preview-toggle) .post-secondary-actions { grid-column: 1 / -1; }
   }
   .reply-context { display: block; margin: 0 0 0.45rem; margin-inline-start: var(--post-indent); padding: 0.25rem 0.55rem; border-left: 2px solid var(--color-border); color: var(--color-text-muted); }
   .reply-context:hover { color: var(--color-text); }

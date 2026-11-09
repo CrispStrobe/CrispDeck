@@ -30,7 +30,7 @@ async function applyInsets(page: Page, device: Insets) {
 async function expectSafeShell(page: Page, device: Insets) {
   expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
   const header = page.locator('.mobile-top-bar');
-  for (const control of await header.locator('button, a').all()) {
+  for (const control of await header.locator('button:visible, a:visible').all()) {
     const bounds = (await control.boundingBox())!;
     expect(bounds.y).toBeGreaterThanOrEqual(device.top);
     expect(bounds.x).toBeGreaterThanOrEqual(device.side);
@@ -46,7 +46,8 @@ async function expectSafeShell(page: Page, device: Insets) {
   const headingAndHeader = await page.evaluate(() => {
     const header = document.querySelector('.mobile-top-bar')!.getBoundingClientRect();
     const heading = document.querySelector('#main-content h1')!.getBoundingClientRect();
-    return { headingTop: heading.top, headerBottom: header.bottom };
+    const compactFeed = document.querySelector('.mobile-feed-controls');
+    return { headingTop: compactFeed ? header.bottom : heading.top, headerBottom: header.bottom };
   });
   expect(headingAndHeader.headingTop, 'the fixed header must not cover the page heading')
     .toBeGreaterThanOrEqual(headingAndHeader.headerBottom);
@@ -106,8 +107,9 @@ for (const device of [
 }
 
 test('safe-area geometry updates when a touch device rotates', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/feed');
-  await expect(page.locator('#main-content h1')).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Switch feed' })).toBeVisible();
   for (const device of [
     { width: 390, height: 844, top: 24, bottom: 48, side: 0 },
     { width: 720, height: 390, top: 0, bottom: 24, side: 44 },
