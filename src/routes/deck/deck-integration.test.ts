@@ -72,6 +72,23 @@ async function refresh(target: ParentNode) {
 }
 
 describe('deck integration boundaries', () => {
+  it('localizes the add-column selector and titles of newly added columns', async () => {
+    i18n.setLanguage('de');
+    try {
+      const target = await render([]);
+      const button = (name: string) => [...target.querySelectorAll<HTMLButtonElement>('button')].find(item => item.textContent?.trim() === name);
+      await vi.waitFor(() => expect(button('Spalte hinzufügen')).toBeDefined());
+      flushSync(() => button('Spalte hinzufügen')!.click());
+      expect(button('Zeitleiste')).toBeDefined();
+      expect(button('Meine Beiträge')).toBeDefined();
+      expect(button('Benachrichtigungen')).toBeDefined();
+      expect(button('Suche...')).toBeDefined();
+      expect(button('Home Timeline')).toBeUndefined();
+      flushSync(() => button('Meine Beiträge')!.click());
+      expect(target.querySelector('[role="region"][aria-label="Meine Beiträge"]')).not.toBeNull();
+    } finally { i18n.setLanguage('en'); }
+  });
+
   it('prevents workspace writes during local restore, then saves restored columns while network clients are still initializing', async () => {
     const saved: DeckColumnConfig[] = [{ id: 'restored', title: 'Saved column', type: 'timeline', accountIds: [2] }];
     createLayout('Existing', saved); setActiveLayoutName('Existing');

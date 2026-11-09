@@ -23,6 +23,7 @@
   import { initAllClients, invalidateClientCache, type ClientEntry } from '$lib/api/client-factory';
   import { Columns3, Plus, Loader2, Pencil } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
+  import { deckColumnLabels } from '$lib/deck-column-labels';
   import StarterWorkspaces from '$lib/components/StarterWorkspaces.svelte';
   import { STARTER_WORKSPACES, type WorkspaceId } from '$lib/starter-workspaces';
   function layoutLabel(name: string) {
@@ -380,31 +381,7 @@
     { id: 'mentions', title: 'Mentions', type: 'mentions' },
   ];
 
-  const availableColumns: { type: ColumnType; label: string }[] = [
-    { type: 'timeline', label: 'Home Timeline' },
-    { type: 'my-posts', label: 'My Posts' },
-    { type: 'mentions', label: 'Mentions' },
-    { type: 'notifications', label: 'Notifications' },
-    { type: 'local', label: 'Local (Mastodon)' },
-    { type: 'federated', label: 'Federated (Mastodon)' },
-    { type: 'search', label: 'Search...' },
-    { type: 'hashtag', label: 'Hashtag...' },
-    { type: 'user', label: 'User Feed...' },
-    { type: 'list', label: 'List...' },
-    { type: 'feed', label: 'Bluesky Feed...' },
-    { type: 'tag-group', label: 'Tag Group...' },
-    { type: 'rss', label: 'RSS Feed...' },
-    { type: 'keyword-monitor', label: 'Monitor Keywords...' },
-    { type: 'threads-search', label: 'Threads Search...' },
-    { type: 'messages', label: 'Messages / DMs' },
-    { type: 'trending', label: 'Trending' },
-    { type: 'activity', label: 'Activity (Engagement)' },
-    { type: 'likes', label: 'Liked Posts' },
-    { type: 'followers', label: 'New Followers' },
-    { type: 'bookmarks', label: i18n.t.nav.bookmarks },
-    { type: 'drafts', label: i18n.t.nav.drafts },
-    { type: 'scheduled', label: i18n.t.drafts.scheduled },
-  ];
+  const availableColumns = $derived(deckColumnLabels(i18n.lang));
 
   // Saved layouts (using deck-layouts.ts module)
   let savedLayoutNames: string[] = $state([]);
@@ -1116,7 +1093,7 @@
         onclick={() => showAddMenu = !showAddMenu}
         class="flex items-center gap-1 px-3 py-1.5 text-xs bg-[var(--color-primary)] text-white rounded-md disabled:opacity-50"
       >
-        <Plus size={12} /> Add Column
+        <Plus size={12} /> {i18n.t.deck.addColumn}
       </button>
       {#if showAddMenu}
         <div class="absolute right-0 top-full mt-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl z-50 py-1 min-w-[160px]">
