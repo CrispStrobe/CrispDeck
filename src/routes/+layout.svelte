@@ -5,6 +5,7 @@
   import { isNavItemActive } from '$lib/nav-active';
   import { base } from '$app/paths';
   import { routePath } from '$lib/routes';
+  import { recordDetailOrigin } from '$lib/deck-navigation';
   import '../app.css';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
@@ -138,6 +139,7 @@
 
   // Page transitions via View Transitions API (progressive enhancement)
   onNavigate((navigation) => {
+    if (navigation.from && navigation.to) recordDetailOrigin(routePath(navigation.from.url.pathname), routePath(navigation.to.url.pathname));
     if (!document.startViewTransition) return;
     // Determine navigation direction for slide animation
     const fromDepth = routePath(window.location.pathname).split('/').filter(Boolean).length;

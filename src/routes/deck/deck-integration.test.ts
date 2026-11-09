@@ -126,6 +126,15 @@ describe('deck integration boundaries', () => {
     expect(loadDeckPage).not.toHaveBeenCalled();
   });
 
+  it('closes the add-column menu on an outside click', async () => {
+    const target = await render([]);
+    const add = [...target.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.trim() === i18n.t.deck.addColumn)!;
+    flushSync(() => add.click());
+    expect(target.textContent).toContain('Home Timeline');
+    flushSync(() => document.body.click());
+    expect(target.textContent).not.toContain('Home Timeline');
+  });
+
   it('keeps setup controls protected after initialization fails instead of saving the initial empty array', async () => {
     const saved: DeckColumnConfig[] = [{ id: 'restored', title: 'Saved column', type: 'timeline', accountIds: [2] }];
     createLayout('Existing', saved); setActiveLayoutName('Existing');

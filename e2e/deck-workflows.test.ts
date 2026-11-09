@@ -160,6 +160,7 @@ test('empty account selection stays empty and paused columns show their state', 
   await network(page); await seedDeck(page);
   const column = page.getByRole('region', { name: 'Following two', exact: true });
   await expect(column.getByText('Account two newest', { exact: true })).toBeVisible();
+  await column.locator('summary').first().click();
   await column.getByRole('button', { name: 'Pause updates', exact: true }).click();
   await expect(column.getByText('Paused', { exact: true })).toBeVisible();
   await column.getByRole('button', { name: 'Column settings', exact: true }).click();
@@ -170,4 +171,37 @@ test('empty account selection stays empty and paused columns show their state', 
   await page.reload();
   await expect(column.getByText(/No compatible account selected/)).toBeVisible();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('crispdeck-deck-columns')!)[0].accountIds)).toEqual([]);
+});
+
+test('Deck details return to the originating Deck', async ({ page }) => {
+  await network(page); await seedDeck(page);
+  const column = page.getByRole('region', { name: 'Following two', exact: true });
+  await expect(column.locator('.post-card').first()).toBeVisible();
+  await column.locator('.post-card').first().getByRole('link').first().click();
+  await expect(page).toHaveURL(/\/(thread|profile)\?/);
+  const back = page.getByRole('button', { name: 'Back to Deck' });
+  await expect(back).toBeVisible();
+  await back.click();
+  await expect(page).toHaveURL(/\/deck$/);
+  const restored = page.getByRole('region', { name: 'Following two', exact: true });
+  await expect(restored).toBeVisible();
+  await restored.locator('.post-card').first().locator('.post-body').click();
+  await expect(page).toHaveURL(/\/thread\?/);
+  await expect(page.getByRole('button', { name: 'Back to Deck' })).toBeVisible();
+  await page.getByRole('button', { name: 'Back to Deck' }).click();
+  await expect(page).toHaveURL(/\/deck$/);
+});
+
+test('column header keeps controls on one row and accounts beside search', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 700 });
+  await network(page); await seedDeck(page);
+  const column = page.getByRole('region', { name: 'Following two', exact: true });
+  const title = column.getByText('Following two', { exact: true });
+  const menu = column.locator('summary').first();
+  await expect(title).toBeVisible();
+  const titleBox = (await title.boundingBox())!;
+  const menuBox = (await menu.boundingBox())!;
+  expect(Math.abs(titleBox.y + titleBox.height / 2 - (menuBox.y + menuBox.height / 2))).toBeLessThan(4);
+  await menu.click();
+  await expect(column.getByTitle('Auto-scroll off (click to enable)')).toBeVisible();
 });

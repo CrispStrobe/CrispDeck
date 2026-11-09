@@ -3,7 +3,7 @@
   import { saveReadPosition, getReadPosition, flushReadPositions } from '$lib/read-position';
   import { onMount, onDestroy, tick, untrack, type Snippet } from 'svelte';
   import { base } from '$app/paths';
-  import { X, RefreshCw, Loader2, GripVertical, Heart, Repeat, UserPlus, MessageCircle, AtSign, Bell, BellOff, BellRing, Quote, ChevronDown, ChevronUp, Radio, Lock, Unlock, Pin, PinOff, Trash2, Minimize2, Maximize2, Palette, Columns3, Settings2, Pause, Play, Copy, ArrowLeft, ArrowRight } from '@lucide/svelte';
+  import { X, RefreshCw, Loader2, GripVertical, Heart, Repeat, UserPlus, MessageCircle, AtSign, Bell, BellOff, BellRing, Quote, ChevronDown, ChevronUp, Radio, Lock, Unlock, Pin, PinOff, Trash2, Minimize2, Maximize2, Palette, Columns3, Settings2, Pause, Play, Copy, ArrowLeft, ArrowRight, MoreHorizontal } from '@lucide/svelte';
   import type { ColumnNotifyMode } from '$lib/deck-layouts';
   import { COLUMN_WIDTH_PRESETS, type ColumnWidthPreset } from '$lib/deck-layouts';
   import Post from '$lib/components/Post.svelte';
@@ -11,6 +11,7 @@
   import type { DeckColumnFilters } from '$lib/deck-filters';
   import { notificationActorName, notificationPostHref, type NotificationGroup } from '$lib/notification-grouping';
   import { i18n } from '$lib/i18n.svelte';
+  import { deckUi } from '$lib/deck-ui-copy';
   import { playColumnSound } from '$lib/column-notify';
   import { swallow } from '$lib/debug-log';
   import { needsAccountAttribution } from '$lib/feed-account-attribution';
@@ -406,8 +407,8 @@
     <div class="h-0.5 flex-shrink-0" style="background: {color}"></div>
   {/if}
   <!-- Column header -->
-  <div class="flex flex-wrap items-center justify-between gap-y-2 px-3 py-2 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex-shrink-0">
-    <div class="flex items-center gap-2 w-full min-w-0">
+  <div class="flex items-center justify-between gap-1 px-2 py-1 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex-shrink-0">
+    <div class="flex items-center gap-2 min-w-0">
       <button type="button" class="drag-handle text-[var(--color-text-muted)] cursor-grab active:cursor-grabbing" draggable={false} ondragstart={pinned ? undefined : onDragStart} ondragend={onDragEnd} onkeydown={(e) => {
         if (pinned) return;
         if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
@@ -427,8 +428,12 @@
         </span>
       {/if}
     </div>
-    <div class="column-actions flex items-center flex-nowrap w-full">
-      <button onclick={onsettings} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)]" title={i18n.t.deck.columnSettings} aria-label={i18n.t.deck.columnSettings}><Settings2 size={13} /></button>
+    <div class="flex items-center shrink-0">
+      <button onclick={onsettings} class="p-1 text-[var(--color-text-muted)]" title={i18n.t.deck.columnSettings} aria-label={i18n.t.deck.columnSettings}><Settings2 size={14} /></button>
+      {#if onrefresh}<button onclick={onrefresh} disabled={loading} aria-label={i18n.t.common.refreshColumn} title={i18n.t.common.refreshColumn} class="p-1 text-[var(--color-text-muted)]"><RefreshCw size={14} class={loading ? 'animate-spin' : ''} /></button>{/if}
+      <details class="relative">
+        <summary class="list-none cursor-pointer p-1 text-[var(--color-text-muted)]" aria-label={i18n.t.common.more} title={i18n.t.common.more}><MoreHorizontal size={16} /></summary>
+    <div class="column-actions absolute right-0 top-full z-30 flex flex-wrap w-44 p-1 rounded border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl">
       <button onclick={onpause} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)]" title={paused ? i18n.t.deck.resumeColumn : i18n.t.deck.pauseColumn} aria-label={paused ? i18n.t.deck.resumeColumn : i18n.t.deck.pauseColumn}>{#if paused}<Play size={13} />{:else}<Pause size={13} />{/if}</button>
       <button onclick={onduplicate} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)]" title={i18n.t.deck.duplicateColumn} aria-label={i18n.t.deck.duplicateColumn}><Copy size={13} /></button>
       {#if !pinned}
@@ -440,7 +445,7 @@
       <button
         onclick={() => onscrolllockchange?.(!scrollLock)}
         class="p-1 transition-colors {scrollLock ? 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]' : 'text-green-400'}"
-        title={scrollLock ? 'Auto-scroll off (click to enable)' : 'Auto-scroll on (click to lock)'}
+        title={scrollLock ? deckUi(i18n.lang).scrollOff : deckUi(i18n.lang).scrollOn} aria-label={scrollLock ? deckUi(i18n.lang).scrollOff : deckUi(i18n.lang).scrollOn}
       >
         {#if scrollLock}
           <Lock size={12} />
@@ -453,7 +458,7 @@
         <button
           onclick={cycleNotify}
           class="p-1 transition-colors {notify !== 'off' ? 'text-[var(--color-primary-text)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
-          title="Notifications: {notify}"
+          title={i18n.t.nav.notifications} aria-label={i18n.t.nav.notifications}
         >
           {#if notify === 'off'}
             <BellOff size={12} />
@@ -469,7 +474,7 @@
       <button
         onclick={() => onpinnedchange?.(!pinned)}
         class="p-1 transition-colors {pinned ? 'text-[var(--color-primary-text)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
-        title={pinned ? 'Unpin column' : 'Pin column'}
+        title={pinned ? deckUi(i18n.lang).unpin : deckUi(i18n.lang).pin} aria-label={pinned ? deckUi(i18n.lang).unpin : deckUi(i18n.lang).pin}
       >
         {#if pinned}<Pin size={12} />{:else}<PinOff size={12} />{/if}
       </button>
@@ -535,11 +540,6 @@
           </div>
         {/if}
       </div>
-      {#if onrefresh}
-        <button onclick={onrefresh} disabled={loading} aria-label={i18n.t.common.refreshColumn} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
-          <RefreshCw size={12} class={loading ? 'animate-spin' : ''} />
-        </button>
-      {/if}
       <!-- Clear column -->
       {#if onclear}
         <button onclick={onclear} class="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors" title={i18n.t.deck.clearColumn}>
@@ -552,14 +552,9 @@
         </button>
       {/if}
     </div>
+      </details>
+    </div>
   </div>
-
-  {#if accounts.length}
-    <button onclick={onsettings} class="flex items-center gap-1 px-3 py-1 text-[10px] text-[var(--color-text-muted)] text-left" aria-label={i18n.t.deck.columnAccounts}>
-      {#each accounts.slice(0, 3) as account}{#if account.avatar_url}<img src={account.avatar_url} alt="" class="w-4 h-4 rounded-full" />{/if}{/each}
-      <span class="truncate">{accounts.map(account => `@${account.handle.replace(/^@+/, '')}`).join(', ')}</span>
-    </button>
-  {/if}
   {#if errors.length}
     <div role="status" class="border-b border-[var(--color-border)] p-2 text-xs text-amber-500 break-words">
       {#each errors as error}<p>{error}</p>{/each}
@@ -570,7 +565,8 @@
     <button onclick={() => { onmarkread?.(); contentEl?.scrollTo({ top: 0, behavior: 'smooth' }); }} class="w-full py-1.5 text-xs bg-[var(--color-primary)]/15 text-[var(--color-primary-text)]">{i18n.t.deck.newPosts.replace('{count}', String(unread))}</button>
   {/if}
   <!-- Inline filter -->
-  <div class="px-2 py-1 border-b border-[var(--color-border)]">
+  <div class="px-2 py-1 border-b border-[var(--color-border)] flex items-center gap-1">
+    {#if accounts.length}<button onclick={onsettings} class="flex shrink-0" aria-label={i18n.t.deck.columnAccounts} title={accounts.map(account => `@${account.handle.replace(/^@+/, '')}`).join(', ')}>{#each accounts.slice(0, 3) as account}{#if account.avatar_url}<img src={account.avatar_url} alt="" class="w-4 h-4 rounded-full" />{:else}<span aria-hidden="true" class="w-4 h-4 text-[10px] text-[var(--color-text-muted)]">@</span>{/if}{/each}</button>{/if}
     <input
       type="text"
       value={filterText}

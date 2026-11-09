@@ -10,6 +10,7 @@
   import { toast } from '$lib/toast.svelte';
   import { BlueskyClient } from '$lib/api/bluesky';
   import { MastodonClient } from '$lib/api/mastodon';
+  import { listMastodonModeration } from '$lib/mastodon-moderation';
   import type { Account, Platform } from '$lib/types';
 
   interface BlockedAccount {
@@ -22,6 +23,7 @@
     /** at:// URI of the block record — what actually removes a Bluesky block. */
     blockUri?: string;
     type: 'block' | 'mute';
+    sourceAccountId: number;
   }
 
   interface ModList {
@@ -74,33 +76,25 @@
           for (const b of blocks.data.blocks) {
             // viewer.blocking is the block record's URI — the only handle on
             // the record that unblocking can use.
-            allBlocked.push({ platform: 'bluesky', handle: b.handle, displayName: b.displayName, avatar: b.avatar, did: b.did, blockUri: b.viewer?.blocking, type: 'block' });
+            allBlocked.push({ platform: 'bluesky', sourceAccountId: id, handle: b.handle, displayName: b.displayName, avatar: b.avatar, did: b.did, blockUri: b.viewer?.blocking, type: 'block' });
           }
           // Mutes
           const mutes = await agent.api.app.bsky.graph.getMutes({ limit: 100 });
           for (const m of mutes.data.mutes) {
-            allMuted.push({ platform: 'bluesky', handle: m.handle, displayName: m.displayName, avatar: m.avatar, did: m.did, type: 'mute' });
+            allMuted.push({ platform: 'bluesky', sourceAccountId: id, handle: m.handle, displayName: m.displayName, avatar: m.avatar, did: m.did, type: 'mute' });
           }
         } catch (e) { swallow('moderation.load', e); toast.error(i18n.t.moderation.loadFailed); }
       } else if (acct.platform === 'mastodon') {
         const masto = entry.client as MastodonClient;
         const token = masto.getAccessToken();
         if (!token) continue;
-        const inst = masto.getInstanceUrl();
-        const headers = { Authorization: `Bearer ${token}` };
         try {
-          const bResp = await fetch(`${inst}/api/v1/blocks?limit=80`, { headers });
-          if (bResp.ok) {
-            for (const a of await bResp.json()) {
-              allBlocked.push({ platform: 'mastodon', handle: `@${a.acct}`, displayName: a.display_name, avatar: a.avatar, id: a.id, type: 'block' });
-            }
-          }
-          const mResp = await fetch(`${inst}/api/v1/mutes?limit=80`, { headers });
-          if (mResp.ok) {
-            for (const a of await mResp.json()) {
-              allMuted.push({ platform: 'mastodon', handle: `@${a.acct}`, displayName: a.display_name, avatar: a.avatar, id: a.id, type: 'mute' });
-            }
-          }
+          const [blocks, mutes] = await Promise.all([
+            listMastodonModeration(masto.getInstanceUrl(), token, 'blocks'),
+            listMastodonModeration(masto.getInstanceUrl(), token, 'mutes'),
+          ]);
+          for (const a of blocks) allBlocked.push({ platform: 'mastodon', sourceAccountId: id, handle: `@${a.acct}`, displayName: a.display_name, avatar: a.avatar, id: a.id, type: 'block' });
+          for (const a of mutes) allMuted.push({ platform: 'mastodon', sourceAccountId: id, handle: `@${a.acct}`, displayName: a.display_name, avatar: a.avatar, id: a.id, type: 'mute' });
         } catch (e) { swallow('moderation.load', e); toast.error(i18n.t.moderation.loadFailed); }
       }
     }
@@ -137,7 +131,7 @@
   async function unblock(item: BlockedAccount) {
     for (const [id, entry] of clientEntries) {
       const acct = accounts.find(a => a.id === id);
-      if (acct?.platform !== item.platform) continue;
+      if (acct?.id !== item.sourceAccountId || acct.platform !== item.platform) continue;
       try {
         if (item.platform === 'bluesky' && item.did) {
           const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
@@ -191,7 +185,7 @@
   async function unmute(item: BlockedAccount) {
     for (const [id, entry] of clientEntries) {
       const acct = accounts.find(a => a.id === id);
-      if (acct?.platform !== item.platform) continue;
+      if (acct?.id !== item.sourceAccountId || acct.platform !== item.platform) continue;
       try {
         if (item.platform === 'bluesky' && item.did) {
           const agent = entry.oauthAgent ?? (entry.client as BlueskyClient).getAgent();
@@ -205,6 +199,8 @@
             { method: 'POST', headers: { Authorization: `Bearer ${token}` } },
             'unmute account',
           );
+        } else {
+          throw new Error('This account cannot be unmuted from here');
         }
         muted = muted.filter(m => m !== item);
       } catch (e) {
@@ -299,7 +295,7 @@
               {/if}
               <div>
                 <p class="text-sm font-medium">{item.displayName || item.handle}</p>
-                <p class="text-xs text-[var(--color-text-muted)]">{item.handle}</p>
+                <p class="text-xs text-[var(--color-text-muted)]">{item.handle} · {item.platform} · @{accounts.find(account => account.id === item.sourceAccountId)?.handle?.replace(/^@+/, '')}</p>
               </div>
             </div>
             <button

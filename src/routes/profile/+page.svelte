@@ -4,6 +4,8 @@
   import { swallow } from '$lib/debug-log';
   import { hrefOrHash } from '$lib/safe-url';
   import { base } from '$app/paths';
+  import { goto } from '$app/navigation';
+  import { backToDeckLabel, detailCameFromDeck } from '$lib/deck-navigation';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { User, Loader2, UserPlus, UserMinus, Ban, ArrowLeft } from '@lucide/svelte';
@@ -372,6 +374,8 @@
 <svelte:head><title>CrispDeck — Profile</title></svelte:head>
 
 <div class="p-6 max-w-3xl mx-auto">
+  <button onclick={() => detailCameFromDeck() ? goto(`${base}/deck`) : history.back()} class="flex items-center gap-1 text-sm text-[var(--color-primary-text)] mb-4"><ArrowLeft size={14} />{detailCameFromDeck() ? backToDeckLabel(i18n.lang) : i18n.t.profile.backToFeed}</button>
+
   {#if loading}
     <!-- Profile skeleton -->
     <div class="animate-pulse">
@@ -393,7 +397,6 @@
     </div>
   {:else if error}
     <div class="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">{error}</div>
-    <button onclick={() => history.back()} class="flex items-center gap-1 text-sm text-[var(--color-primary-text)]"><ArrowLeft size={14} />{i18n.t.profile.backToFeed}</button>
   {:else if profile}
     <!-- Banner -->
     {#if profile.banner}

@@ -19,10 +19,11 @@
   import { isColumnLocked } from '$lib/deck-scroll';
   import * as deckFocus from '$lib/deck-focus';
   import { base } from '$app/paths';
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import { initAllClients, invalidateClientCache, type ClientEntry } from '$lib/api/client-factory';
   import { Columns3, Plus, Loader2, Pencil } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
+  import { deckColumnCount } from '$lib/deck-navigation';
   import { deckColumnLabels } from '$lib/deck-column-labels';
   import StarterWorkspaces from '$lib/components/StarterWorkspaces.svelte';
   import { STARTER_WORKSPACES, type WorkspaceId } from '$lib/starter-workspaces';
@@ -200,6 +201,10 @@
   // configuration and resolved account identities make workspace writes safe.
   let deckReady = $state(false);
   let showAddMenu = $state(false);
+  let addMenuContainer: HTMLDivElement;
+  function closeAddMenuOutside(event: MouseEvent) {
+    if (showAddMenu && !addMenuContainer?.contains(event.target as Node)) showAddMenu = false;
+  }
   let showWorkspaces = $state(false);
   let editingColumn: DeckColumnConfig | null = $state(null);
   let columns: DeckColumnConfig[] = $state([]);
@@ -496,6 +501,8 @@
       refreshLayoutList();
       deckReady = true;
       loading = false;
+      await tick();
+      try { if (deckContainerEl) deckContainerEl.scrollLeft = Number(sessionStorage.getItem('crispdeck-deck-scroll-x') || 0); } catch { /* storage unavailable */ }
       for (const col of columns) columnLoading[col.id] = true;
 
       await refreshAccountClients(true);
@@ -503,6 +510,8 @@
       swallow('deck.init', e);
       toast.error(i18n.t.deck.initFailed);
       loading = false;
+      await tick();
+      try { if (deckContainerEl) deckContainerEl.scrollLeft = Number(sessionStorage.getItem('crispdeck-deck-scroll-x') || 0); } catch { /* storage unavailable */ }
       for (const col of columns) columnLoading[col.id] = false;
     }
 
@@ -529,6 +538,7 @@
 
   onDestroy(() => {
     disposed = true;
+    try { if (deckContainerEl) sessionStorage.setItem('crispdeck-deck-scroll-x', String(deckContainerEl.scrollLeft)); } catch { /* storage unavailable */ }
     if (touchLongPressTimer) clearTimeout(touchLongPressTimer);
     for (const col of columns) clearColumnRuntime(col.id);
     if (refreshInterval) clearInterval(refreshInterval);
@@ -1053,7 +1063,7 @@
   }
 </script>
 
-<svelte:window onkeydown={handleKeydown} onpointermove={movePointerDrag} onpointerup={endPointerDrag} onpointercancel={endPointerDrag} />
+<svelte:window onclick={closeAddMenuOutside} onkeydown={handleKeydown} onpointermove={movePointerDrag} onpointerup={endPointerDrag} onpointercancel={endPointerDrag} />
 <svelte:head><title>CrispDeck — Deck</title><meta name="description" content="Multi-column deck view" /></svelte:head>
 
 <div class="h-full flex flex-col">
@@ -1068,7 +1078,7 @@
       <div class="flex items-center gap-2">
         <Columns3 size={20} />
         <h1 class="text-lg font-bold">{i18n.t.nav.deck}</h1>
-        <span class="text-xs text-[var(--color-text-muted)]">{columns.length} col</span>
+        <span class="text-xs text-[var(--color-text-muted)]"><span class="sm:hidden">{i18n.t.deck.col.replace('{count}', String(columns.length))}</span><span class="hidden sm:inline">{deckColumnCount(i18n.lang, columns.length)}</span></span>
       </div>
       <button disabled={!deckReady} onclick={() => showStarters = !showStarters} class="px-2 py-1 text-xs border border-[var(--color-border)] rounded-lg disabled:opacity-50">{i18n.t.workflow.starterWorkspaces}</button>
       <!-- Saved layouts -->
@@ -1087,7 +1097,7 @@
       <button disabled={!deckReady} onclick={() => showWorkspaces = true} class="px-2 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] rounded disabled:opacity-50">{i18n.t.deck.manageWorkspaces}</button>
       <button onclick={() => openCompose()} class="flex items-center gap-1 px-2 py-1 text-xs border border-[var(--color-border)] rounded"><Pencil size={12} />{i18n.t.nav.compose}</button>
     </div>
-    <div class="relative">
+    <div class="relative" bind:this={addMenuContainer}>
       <button
         disabled={!deckReady}
         onclick={() => showAddMenu = !showAddMenu}
