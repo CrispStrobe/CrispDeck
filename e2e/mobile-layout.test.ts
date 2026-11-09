@@ -160,6 +160,12 @@ for (const width of [320, 360, 390, 430]) {
     expect(bounds.y).toBeGreaterThanOrEqual(header.y);
     expect(bounds.y + bounds.height).toBeLessThanOrEqual(header.y + header.height + 1);
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+    const theme = page.locator('.mobile-top-bar').getByRole('button', { name: 'Toggle theme' });
+    await expect(theme).toBeVisible();
+    const themeBounds = (await theme.boundingBox())!;
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(themeBounds.x + 1);
+    const menuBounds = (await page.locator('.mobile-top-bar').getByRole('button', { name: 'Main navigation' }).boundingBox())!;
+    expect(bounds.x).toBeGreaterThanOrEqual(menuBounds.x + menuBounds.width - 1);
     expect(await main.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 
     const mode = page.getByRole('combobox', { name: 'Switch feed' });
@@ -172,12 +178,12 @@ for (const width of [320, 360, 390, 430]) {
     await mode.selectOption('discover');
     const menu = main.getByRole('menu');
     await expect(menu).toBeVisible();
-    const menuBounds = (await menu.boundingBox())!;
+    const feedMenuBounds = (await menu.boundingBox())!;
     const tabs = (await page.locator('.mobile-tab-bar').boundingBox())!;
-    expect(menuBounds.x).toBeGreaterThanOrEqual(0);
-    expect(menuBounds.x + menuBounds.width).toBeLessThanOrEqual(width);
-    expect(menuBounds.y).toBeGreaterThanOrEqual(header.y + header.height);
-    expect(menuBounds.y + menuBounds.height).toBeLessThanOrEqual(tabs.y);
+    expect(feedMenuBounds.x).toBeGreaterThanOrEqual(0);
+    expect(feedMenuBounds.x + feedMenuBounds.width).toBeLessThanOrEqual(width);
+    expect(feedMenuBounds.y).toBeGreaterThanOrEqual(header.y + header.height);
+    expect(feedMenuBounds.y + feedMenuBounds.height).toBeLessThanOrEqual(tabs.y);
     await menu.getByRole('menuitem', { name: /^Mobile test feed/ }).tap();
     await expect(menu).toHaveCount(0);
     await mode.selectOption('timeline');

@@ -1345,7 +1345,7 @@
     .feed-toolbar > :not(.feed-picker) { display: none; }
     .feed-picker { position: static; }
     .feed-picker > button { display: none; }
-    .mobile-feed-controls { position: fixed; z-index: 51; top: var(--safe-area-top); left: calc(var(--safe-area-left) + 3.25rem); right: calc(var(--safe-area-right) + 0.35rem); height: var(--mobile-header-height); display: flex; align-items: center; gap: 0.25rem; min-width: 0; }
+    .mobile-feed-controls { position: fixed; z-index: 51; top: var(--safe-area-top); left: calc(var(--safe-area-left) + 3.5rem); right: calc(var(--safe-area-right) + 3.5rem); height: var(--mobile-header-height); display: flex; align-items: center; gap: 0.25rem; min-width: 0; }
     .mobile-feed-controls select { flex: 1 1 0; width: 0; min-width: 0; height: 44px; padding: 0 1.2rem 0 0.4rem; color: var(--color-text); background-color: var(--color-surface); border: 1px solid var(--color-border); border-radius: 0.375rem; font-size: 0.75rem; }
     .mobile-feed-controls select:first-child { flex-grow: 1.4; }
     .mobile-refresh, .mobile-feed-options summary { display: flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; color: var(--color-text-muted); cursor: pointer; }
