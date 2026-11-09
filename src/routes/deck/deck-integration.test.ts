@@ -7,6 +7,8 @@ import { loadPublishingEntries } from '$lib/deck-publishing';
 import { loadConversationInbox } from '$lib/messages';
 import { notifyColumn } from '$lib/column-notify';
 import { i18n } from '$lib/i18n.svelte';
+import { setCache, clearAllCache } from '$lib/view-cache';
+import { deckCacheKey } from '$lib/deck-cache';
 import type { DeckColumnConfig } from '$lib/deck-layouts';
 import type { Account, UnifiedPost } from '$lib/types';
 import type { ClientEntry } from '$lib/api/client-factory';
@@ -39,6 +41,7 @@ const row = (uri: string, patch: Partial<UnifiedPost> = {}): UnifiedPost => ({ u
 const page = (patch: Partial<LoadedPage> = {}): LoadedPage => ({ posts: [], cursors: { '1': null }, errors: [], hasMore: false, ...patch });
 const notification = (id: string, type = 'mention', text = id) => ({ id, type, text, createdAt: '2026-11-06', platform: 'bluesky' as const, author: { handle: 'friend.test' }, sourceAccount: accounts[0].handle, sourceAccountId: 1 });
 let instance: ReturnType<typeof mount> | undefined;
+const originalSetItem = Storage.prototype.setItem;
 
 beforeEach(() => {
   vi.clearAllMocks(); localStorage.clear();
@@ -124,6 +127,19 @@ describe('deck integration boundaries', () => {
     expect(getLayout('Monitoring')?.columns).toEqual(saved);
     expect(getLayout('Monitoring')?.columns[0].accountIds).toEqual([2]);
     expect(loadDeckPage).not.toHaveBeenCalled();
+  });
+
+  it('restores My Posts before a slow account connection, even when storage is full', async () => {
+    const col: DeckColumnConfig = { id: 'mine', title: 'My Posts', type: 'my-posts' };
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function(this: Storage, key, value) {
+      if (key.startsWith('crispdeck-vc-')) throw new DOMException('Full', 'QuotaExceededError');
+      return originalSetItem.call(this, key, value);
+    });
+    setCache(deckCacheKey(col, accounts), { posts: [row('cached-mine')], notifications: [] });
+    vi.mocked(initAllClients).mockImplementationOnce(() => new Promise(() => {}));
+    const target = await render([col]);
+    expect(target.textContent).toContain('Post cached-mine');
+    clearAllCache();
   });
 
   it('closes the add-column menu on an outside click', async () => {

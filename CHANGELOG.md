@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.3.4 — 2026-11-09
+
+- Preserve Deck reading positions and cached columns when switching views.
+- Compact Deck and feed layouts, localize column labels, and improve navigation.
+- Fix profile crashes, Wallabag feedback, and Mastodon moderation account handling.
+
 ## v1.3.3 — 2026-11-08
 
 - Add the Wallabag Reader and optional local search with full-history indexing.

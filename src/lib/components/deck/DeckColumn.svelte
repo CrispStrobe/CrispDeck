@@ -11,7 +11,8 @@
   import type { DeckColumnFilters } from '$lib/deck-filters';
   import { notificationActorName, notificationPostHref, type NotificationGroup } from '$lib/notification-grouping';
   import { i18n } from '$lib/i18n.svelte';
-  import { deckUi } from '$lib/deck-ui-copy';
+  let uiCopy = $state<typeof import('$lib/deck-ui-copy')>();
+  onMount(() => { void import('$lib/deck-ui-copy').then(copy => { uiCopy = copy; }); });
   import { playColumnSound } from '$lib/column-notify';
   import { swallow } from '$lib/debug-log';
   import { needsAccountAttribution } from '$lib/feed-account-attribution';
@@ -445,7 +446,7 @@
       <button
         onclick={() => onscrolllockchange?.(!scrollLock)}
         class="p-1 transition-colors {scrollLock ? 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]' : 'text-green-400'}"
-        title={scrollLock ? deckUi(i18n.lang).scrollOff : deckUi(i18n.lang).scrollOn} aria-label={scrollLock ? deckUi(i18n.lang).scrollOff : deckUi(i18n.lang).scrollOn}
+        title={scrollLock ? (uiCopy?.deckUi(i18n.lang).scrollOff ?? 'Auto-scroll off (click to enable)') : (uiCopy?.deckUi(i18n.lang).scrollOn ?? 'Auto-scroll on (click to lock)')} aria-label={scrollLock ? (uiCopy?.deckUi(i18n.lang).scrollOff ?? 'Auto-scroll off (click to enable)') : (uiCopy?.deckUi(i18n.lang).scrollOn ?? 'Auto-scroll on (click to lock)')}
       >
         {#if scrollLock}
           <Lock size={12} />
@@ -458,7 +459,7 @@
         <button
           onclick={cycleNotify}
           class="p-1 transition-colors {notify !== 'off' ? 'text-[var(--color-primary-text)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
-          title={i18n.t.nav.notifications} aria-label={i18n.t.nav.notifications}
+          title={`${i18n.t.nav.notifications}: ${notify}`} aria-label={`${i18n.t.nav.notifications}: ${notify}`}
         >
           {#if notify === 'off'}
             <BellOff size={12} />
@@ -474,7 +475,7 @@
       <button
         onclick={() => onpinnedchange?.(!pinned)}
         class="p-1 transition-colors {pinned ? 'text-[var(--color-primary-text)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
-        title={pinned ? deckUi(i18n.lang).unpin : deckUi(i18n.lang).pin} aria-label={pinned ? deckUi(i18n.lang).unpin : deckUi(i18n.lang).pin}
+        title={pinned ? (uiCopy?.deckUi(i18n.lang).unpin ?? 'Unpin column') : (uiCopy?.deckUi(i18n.lang).pin ?? 'Pin column')} aria-label={pinned ? (uiCopy?.deckUi(i18n.lang).unpin ?? 'Unpin column') : (uiCopy?.deckUi(i18n.lang).pin ?? 'Pin column')}
       >
         {#if pinned}<Pin size={12} />{:else}<PinOff size={12} />{/if}
       </button>

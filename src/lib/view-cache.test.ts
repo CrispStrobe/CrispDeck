@@ -18,6 +18,15 @@ describe('setCache and getCached', () => {
     expect(entry!.data.posts).toEqual([1, 2, 3]);
   });
 
+  it('retains the newest view in memory when persistent storage is full', () => {
+    setCache('quota', 'old');
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Full', 'QuotaExceededError'); });
+    setCache('quota', 'fresh');
+    expect(getCached('quota')?.data).toBe('fresh');
+    clearCache('quota');
+    expect(getCached('quota')).toBeNull();
+  });
+
   it('stores timestamp', () => {
     const before = Date.now();
     setCache('t', 'data');

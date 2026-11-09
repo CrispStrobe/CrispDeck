@@ -24,7 +24,7 @@
   import { Columns3, Plus, Loader2, Pencil } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { deckColumnCount } from '$lib/deck-navigation';
-  import { deckColumnLabels } from '$lib/deck-column-labels';
+  import { deckColumnLabels, displayDeckColumnTitle } from '$lib/deck-column-labels';
   import StarterWorkspaces from '$lib/components/StarterWorkspaces.svelte';
   import { STARTER_WORKSPACES, type WorkspaceId } from '$lib/starter-workspaces';
   function layoutLabel(name: string) {
@@ -503,7 +503,10 @@
       loading = false;
       await tick();
       try { if (deckContainerEl) deckContainerEl.scrollLeft = Number(sessionStorage.getItem('crispdeck-deck-scroll-x') || 0); } catch { /* storage unavailable */ }
-      for (const col of columns) columnLoading[col.id] = true;
+      for (const col of columns) {
+        if (needsAccountClients(col)) columnLoading[col.id] = true;
+        else if (col.type === 'bookmarks' || col.type === 'rss') void loadColumn(col);
+      }
 
       await refreshAccountClients(true);
     } catch (e) {
@@ -741,7 +744,7 @@
         notifyColumn(current.notify, current.title, arrivals[0].text);
       }
       if (!errors.length || posts.length || notifications?.length) columnLoaded[col.id] = true;
-      if (!errors.length) setCache(deckCacheKey(current, accounts), {
+      if (!errors.length || posts.length || notifications?.length) setCache(deckCacheKey(current, accounts), {
         posts: (columnPosts[col.id] ?? []).slice(0, 100),
         notifications: (columnNotifications[col.id] ?? []).slice(0, 100),
       });
@@ -1154,7 +1157,7 @@
         >
           <DeckColumn
             id={col.id}
-            title={col.title}
+            title={displayDeckColumnTitle(col.type, col.title, i18n.lang)}
             type={col.type}
             posts={displayedPosts(col)}
             notificationGroups={displayedNotificationGroups(col)}

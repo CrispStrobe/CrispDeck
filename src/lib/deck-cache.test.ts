@@ -11,5 +11,7 @@ describe('deck cache isolation', () => {
     expect(deckCacheKey(column, [{ ...account, did: 'did:plc:two' }])).not.toBe(original);
     expect(deckCacheKey({ ...column, type: 'mentions' }, [account])).not.toBe(original);
     expect(deckCacheKey(column, [])).not.toBe(original);
+    expect(deckCacheKey({ ...column, width: 450, color: 'red', paused: true, title: 'Renamed' }, [account])).toBe(original);
+    expect(deckCacheKey({ ...column, accountIds: [] }, [account])).not.toBe(original);
   });
 });
