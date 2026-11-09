@@ -1,6 +1,5 @@
 <script lang="ts">
   import { getTheme, setTheme, nextTheme } from '$lib/settings';
-  import { syncSystemBars } from '$lib/system-bars';
   import { readJson, readString, writeJson, writeString } from '$lib/safe-storage';
   import { isNavItemActive } from '$lib/nav-active';
   import { base } from '$app/paths';
@@ -78,6 +77,11 @@
   }
   let theme = $state<'dark' | 'oled' | 'light'>('dark');
 
+  function syncSystemBars(theme: 'dark' | 'oled' | 'light') {
+    if (!isTauri() || !/Android/i.test(navigator.userAgent)) return;
+    void import('$lib/system-bars').then(module => module.syncSystemBars(theme)).catch(error => swallow('layout.systemBars', error));
+  }
+
   function toggleTheme() {
     theme = nextTheme(theme);
     document.documentElement.setAttribute('data-theme', theme);
@@ -85,6 +89,14 @@
     void syncSystemBars(theme);
   }
   let showShortcuts = $state(false);
+  let KeyboardShortcuts = $state<typeof import('$lib/components/KeyboardShortcuts.svelte').default>();
+  let shortcutsLoadFailed = $state(false);
+  $effect(() => {
+    if (!showShortcuts) { shortcutsLoadFailed = false; return; }
+    if (showShortcuts && !KeyboardShortcuts && !shortcutsLoadFailed) {
+      void import('$lib/components/KeyboardShortcuts.svelte').then(module => { KeyboardShortcuts = module.default; }).catch(() => { shortcutsLoadFailed = true; });
+    }
+  });
   function focusShortcutsFallback(button: HTMLButtonElement) { button.focus(); }
   let offline = $state(false);
   let pendingG = $state(false);
@@ -348,24 +360,15 @@
 </script>
 
 <svelte:window onkeydown={handleGlobalKeydown} />
-{#snippet shortcutsFallback(failed: boolean)}
-  <div data-native-webview-overlay role="dialog" aria-modal="true" aria-label={i18n.t.app.keyboardShortcutsLabel} class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
-    <div class="w-full max-w-sm space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl">
-      <h2 class="text-lg font-bold">{i18n.t.app.keyboardShortcuts}</h2>
-      <p role={failed ? 'alert' : 'status'} class="text-sm text-[var(--color-text-muted)]">{failed ? i18n.t.common.somethingWentWrong : i18n.t.common.loading}</p>
-      <button type="button" use:focusShortcutsFallback onclick={() => showShortcuts = false} onkeydown={(event) => { if (event.key === 'Tab') event.preventDefault(); }} class="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-sm">{i18n.t.common.close}</button>
-    </div>
-  </div>
-{/snippet}
 {#if showShortcuts}
-  <!-- Import only on first use; closing while it loads cannot reopen the modal. -->
-  {#await import('$lib/components/KeyboardShortcuts.svelte')}
-    {@render shortcutsFallback(false)}
-  {:then { default: KeyboardShortcuts }}
+  {#if KeyboardShortcuts}
     <KeyboardShortcuts bind:show={showShortcuts} />
-  {:catch}
-    {@render shortcutsFallback(true)}
-  {/await}
+  {:else}
+    <div data-native-webview-overlay role="dialog" aria-modal="true" aria-label={i18n.t.app.keyboardShortcutsLabel} class="fixed inset-0 z-[100] bg-[var(--color-surface)] p-6">
+      <p role={shortcutsLoadFailed ? 'alert' : 'status'}>{shortcutsLoadFailed ? i18n.t.common.somethingWentWrong : i18n.t.common.loading}</p>
+      <button type="button" use:focusShortcutsFallback onclick={() => showShortcuts = false} onkeydown={(event) => { if (event.key === 'Tab') event.preventDefault(); }}>{i18n.t.common.close}</button>
+    </div>
+  {/if}
 {/if}
 
 <a href="#main-content" class="skip-to-content">{i18n.t.app.skipToContent}</a>
