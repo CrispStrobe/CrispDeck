@@ -1057,11 +1057,6 @@
       {#if context.text}<span class="reply-context-text">{context.text}</span>{/if}
     </a>
   {/if}
-  {#if post.isRepost && post.repostAuthor}
-    <div class="post-repost flex items-center gap-1 mb-1 text-[10px] text-[var(--color-text-muted)]" title="Reposted by {post.repostAuthor.displayName || post.repostAuthor.handle}">
-      <Repeat size={12} /> <span class="truncate">Reposted by {post.repostAuthor.displayName || post.repostAuthor.handle}</span>
-    </div>
-  {/if}
   <div class="post-main" class:compact>
     <a class="post-avatar" href={getProfileUrl(post)} aria-label={post.author.displayName || post.author.handle}>
       {#if post.author.avatar}
@@ -1080,6 +1075,11 @@
         <span class="post-author-handle text-[var(--color-text-muted)] text-xs truncate">{post.author.handle}</span>
         <span class="post-platform w-2 h-2 rounded-full flex-shrink-0" style="background: {platformColor}" title={post.platform}></span>
       </a>
+      {#if post.isRepost && post.repostAuthor}
+        <span class="post-repost text-[10px] text-[var(--color-text-muted)]" title="{i18n.t.post.repostedBy} {post.repostAuthor.displayName || post.repostAuthor.handle}">
+          <Repeat size={12} /><span class="truncate">{i18n.t.post.repostedBy} {post.repostAuthor.displayName || post.repostAuthor.handle}</span>
+        </span>
+      {/if}
       <a href={getThreadUrl(post)} class="post-time text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:underline flex-shrink-0 ml-auto" title={formatDate(post.createdAt)}>
         <time datetime={post.createdAt}>{relAge}</time>
         {#if post.platform === 'mastodon' && (post.raw as any)?.edited_at}
@@ -1591,7 +1591,11 @@
   .post-main { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr); column-gap: 0.75rem; align-items: start; }
   .post-main.compact { grid-template-columns: 1.75rem minmax(0, 1fr); column-gap: 0.5rem; }
   .post-avatar { grid-row: 1 / span 2; display: flex; align-items: start; justify-content: center; }
-  .post-heading { grid-column: 2; min-height: 1.5rem; }
+  .post-heading { grid-column: 2; min-height: 1.5rem; align-items: center; }
+  .post-author { flex: 0 1 auto; overflow: hidden; }
+  .post-author-name, .post-author-handle { min-width: 0; }
+  .post-repost { display: flex; align-items: center; gap: 0.25rem; min-width: 0; overflow: hidden; white-space: nowrap; }
+  .post-repost :global(svg) { flex-shrink: 0; }
   .post-body { grid-column: 2; overflow-wrap: anywhere; }
   .post-media { padding-inline-start: var(--post-indent); min-width: 0; }
   .post-media:empty { display: none; }
@@ -1628,11 +1632,9 @@
   .post-reading-lists > button, .post-reading-lists > a { width: 100%; }
   @container post (max-width: 36rem) {
     .post-avatar { grid-row: 1; }
-    .post-heading { align-items: start; min-height: 2.5rem; }
-    .post-author { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 0.4rem; }
-    .post-author-name { grid-column: 1; grid-row: 1; }
-    .post-author-handle { grid-column: 1; grid-row: 2; }
-    .post-platform { grid-column: 2; grid-row: 1; align-self: center; }
+    .post-heading { align-items: center; min-height: 2.5rem; }
+    .post-author { gap: 0.35rem; flex: 0 1 55%; }
+    .post-repost { flex: 1 1 0; }
     .post-body { grid-column: 1 / -1; margin-top: 0.5rem; }
     .post-media { padding-inline-start: 0; }
     .post-footer, .post-extra-offset { margin-inline-start: 0; }

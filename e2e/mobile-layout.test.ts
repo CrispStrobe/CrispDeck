@@ -14,6 +14,7 @@ const IMAGE = 'data:image/svg+xml,' + encodeURIComponent(
 const feed = [
   {
     ...BSKY_FEED[0],
+    reason: { $type: 'app.bsky.feed.defs#reasonRepost', by: { did: 'did:plc:reposter', handle: 'reposter.bsky.social', displayName: 'Reposter' }, indexedAt: new Date().toISOString() },
     post: {
       ...BSKY_FEED[0].post,
       embed: {
@@ -189,23 +190,34 @@ for (const width of [320, 360, 390, 430]) {
     const options = page.locator('.mobile-options-menu');
     const media = options.getByRole('button', { name: 'Hide media', exact: true });
     await media.tap();
-    await expect(media).toHaveAttribute('aria-pressed', 'true');
+    await expect(options).toBeHidden();
     await expect(main.getByAltText(IMAGE_ALT)).toHaveCount(0);
+    await page.locator('.mobile-feed-options summary').click();
     await media.tap();
     await expect(main.getByAltText(IMAGE_ALT)).toBeVisible();
+    await page.locator('.mobile-feed-options summary').click();
     const filters = options.getByRole('button', { name: 'Filters & Sort', exact: true });
     await filters.tap();
-    await expect(filters).toHaveAttribute('aria-expanded', 'true');
+    await expect(options).toBeHidden();
     await expect(main.getByPlaceholder('Search in posts...')).toBeVisible();
+    await page.locator('.mobile-feed-options summary').click();
     await filters.tap();
     await expect(main.getByPlaceholder('Search in posts...')).toHaveCount(0);
-    await page.locator('.mobile-feed-options summary').click();
     await expect(main.locator('.feed-item').first().locator('.post-card')).toHaveCSS('border-radius', '0px');
     await expect(main.locator('.feed-item').first().locator('[class*="account-attribution"]')).toHaveCount(0);
     const separation = await main.locator('.feed-item').evaluateAll(items => items[1].getBoundingClientRect().top - items[0].getBoundingClientRect().bottom);
     expect(separation, 'compact posts have no empty gap between them').toBeLessThanOrEqual(1);
 
     const post = main.locator('article').first();
+    const headerRows = await post.evaluate(element => {
+      const author = element.querySelector('.post-author')!.getBoundingClientRect();
+      const repost = element.querySelector('.post-repost')!.getBoundingClientRect();
+      const time = element.querySelector('.post-time')!.getBoundingClientRect();
+      return { authorY: author.top + author.height / 2, repostY: repost.top + repost.height / 2, timeY: time.top + time.height / 2, repostWidth: repost.width };
+    });
+    expect(headerRows.repostWidth).toBeGreaterThan(12);
+    expect(Math.abs(headerRows.authorY - headerRows.repostY)).toBeLessThanOrEqual(2);
+    expect(Math.abs(headerRows.authorY - headerRows.timeY)).toBeLessThanOrEqual(2);
     const actionLayout = await post.evaluate(element => {
       const card = element.getBoundingClientRect();
       const actions = element.querySelector('.post-actions')!;

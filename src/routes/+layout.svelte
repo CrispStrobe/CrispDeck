@@ -8,7 +8,7 @@
   import '../app.css';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import { Home, Rss, Columns3, PenSquare, Bell, MessageSquare, Bookmark, BookOpen, Users, Search, List, Shield, TrendingUp, Archive, BarChart3, Settings, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon, Smartphone } from '@lucide/svelte';
+  import { Home, Rss, Columns3, PenSquare, Bell, MessageSquare, Bookmark, BookOpen, Users, Search, List, Shield, TrendingUp, Archive, BarChart3, Settings, PanelLeft, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon, Smartphone } from '@lucide/svelte';
   import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
   import ToastContainer from '$lib/components/ToastContainer.svelte';
   import { isTauri } from '@tauri-apps/api/core';
@@ -392,8 +392,8 @@
     {#if !collapsed}
       <div class="px-3 py-2 border-t border-[var(--color-border)] flex items-center justify-between">
         <span class="text-[10px] text-[var(--color-text-muted)]">v{__VERSION__}</span>
-        <button onclick={() => showNavCustomize = !showNavCustomize} class="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)]" title={i18n.t.app.customizeSidebar}>
-          <Settings size={12} />
+        <button onclick={() => showNavCustomize = !showNavCustomize} aria-label={i18n.t.app.customizeSidebar} aria-expanded={showNavCustomize} class="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)]" title={i18n.t.app.customizeSidebar}>
+          <PanelLeft size={14} />
         </button>
       </div>
       {#if showNavCustomize}

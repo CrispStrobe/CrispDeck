@@ -4,7 +4,7 @@
   import { base } from '$app/paths';
   import { goto } from '$app/navigation';
   import { i18n } from '$lib/i18n.svelte';
-  import { toast } from '$lib/toast.svelte';
+  import { dismissToast, toast } from '$lib/toast.svelte';
   import { readString } from '$lib/safe-storage';
   let wallabagClient: Promise<typeof import('$lib/wallabag')> | undefined;
   function loadWallabag() {
@@ -80,6 +80,7 @@
     const url = menu.url;
     const server = wallabag;
     menu = null;
+    let pendingToast: number | undefined;
     try {
       let connected = false;
       let client: Awaited<ReturnType<typeof loadWallabag>> | undefined;
@@ -93,10 +94,12 @@
         await goto(`${base}/settings?tab=appearance#wallabag-url`);
         return;
       }
+      pendingToast = toast.info(i18n.t.linkMenu.wallabagSaving, 0);
       await client.saveToWallabag(server, url);
       toast.success(i18n.t.linkMenu.wallabagSaved);
     }
     catch (e) { toast.error(e instanceof Error && e.message === 'Connect Wallabag in Settings first' ? i18n.t.settings.wallabagConnectFirst : e instanceof Error ? e.message : i18n.t.linkMenu.wallabagFailed); }
+    finally { if (pendingToast !== undefined) dismissToast(pendingToast); }
   }
 </script>
 {#if menu}

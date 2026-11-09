@@ -58,6 +58,7 @@
   let platformFilter: 'all' | Platform = $state('all');
   let showThreadsInfo = $state(false);
   let showFilters = $state(false);
+  let mobileFeedOptionsOpen = $state(false);
   let compactFeedControls = $state(readString('crispdeck-compact-feed-controls') === 'true');
   function updateCompactFeedControls() { compactFeedControls = readString('crispdeck-compact-feed-controls') === 'true'; }
   const connectedPlatforms = $derived(new Set(accounts.map(a => a.platform)));
@@ -976,11 +977,11 @@
       </select>
     {/if}
     {#if newPostsAvailable > 0}<button type="button" class="mobile-refresh" onclick={loadNewPosts} aria-label={i18n.t.feed.refreshNewPosts.replace('{count}', String(newPostsAvailable))}><RefreshCw size={16} /><span>{newPostsAvailable}</span></button>{/if}
-    <details class="mobile-feed-options">
+    <details class="mobile-feed-options" bind:open={mobileFeedOptionsOpen}>
       <summary aria-label={i18n.t.settings.filterSortTitle}><SlidersHorizontal size={18} /></summary>
       <div class="mobile-options-menu">
-        <button onclick={() => showFilters = !showFilters} aria-expanded={showFilters} aria-controls="feed-filters">{i18n.t.settings.filterSortTitle}</button>
-        <button onclick={() => hideMedia = !hideMedia} aria-pressed={hideMedia}>{i18n.t.feed.hideMediaLabel}</button>
+        <button onclick={() => { showFilters = !showFilters; mobileFeedOptionsOpen = false; }} aria-expanded={showFilters} aria-controls="feed-filters">{i18n.t.settings.filterSortTitle}</button>
+        <button onclick={() => { hideMedia = !hideMedia; mobileFeedOptionsOpen = false; }} aria-pressed={hideMedia}>{i18n.t.feed.hideMediaLabel}</button>
         {#if connectedPlatforms.has('threads')}<button onclick={() => showThreadsInfo = !showThreadsInfo} aria-expanded={showThreadsInfo}>{i18n.t.feed.threadsInfoLabel}</button>{/if}
         {#if showThreadsInfo}<p role="note">{i18n.t.feed.threadsTimelineLimited} <a href="https://www.threads.net/" target="_blank" rel="noopener noreferrer">{i18n.t.feed.openThreads}</a></p>{/if}
       </div>

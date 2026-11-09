@@ -546,7 +546,7 @@
     {:else}
       <!-- Posts -->
       <div class="space-y-3">
-        {#each filteredPosts as post (post.uri)}
+        {#each filteredPosts as post, index (post.uri + ':' + index)}
           <Post {post} />
         {/each}
         {#if filteredPosts.length === 0}
