@@ -165,6 +165,9 @@ for (const width of [320, 360, 390, 430]) {
     const platform = page.getByRole('combobox', { name: 'Platform' });
     await expect(mode).toBeVisible();
     await expect(platform).toBeVisible();
+    await expect(mode.locator('optgroup[label="Views"]')).toHaveCount(1);
+    await expect(mode.locator('optgroup[label="Pinned feeds"]')).toHaveCount(1);
+    await expect(mode.locator('optgroup[label="Discover"]')).toHaveCount(1);
     await mode.selectOption('discover');
     const menu = main.getByRole('menu');
     await expect(menu).toBeVisible();
@@ -229,6 +232,9 @@ for (const width of [320, 360, 390, 430]) {
     if (await previewToggle.count()) {
       const toggleBounds = (await previewToggle.boundingBox())!;
       expect(Math.abs(toggleBounds.y - actionLayout.controls[0].y)).toBeLessThan(1);
+      await expect(previewToggle.locator('.preview-toggle-short')).toHaveText('More');
+      await expect(previewToggle.locator('.preview-toggle-short')).toBeVisible();
+      await expect(previewToggle).toHaveAccessibleName('Show full post');
     }
     const more = post.getByRole('button', { name: 'More post actions', exact: true });
     await more.tap();
@@ -242,5 +248,11 @@ for (const width of [320, 360, 390, 430]) {
     await expect(actions).toBeHidden();
     await main.evaluate(element => { element.scrollTop = 0; });
     await page.screenshot({ path: testInfo.outputPath(`android-feed-${width}.png`) });
+    if (width === 390) {
+      await page.setViewportSize({ width: 1024, height: 844 });
+      await expect(main.locator('.feed-item').first().locator('.post-card')).toHaveCSS('border-radius', '0px');
+      const desktopGap = await main.locator('.feed-item').evaluateAll(items => items[1].getBoundingClientRect().top - items[0].getBoundingClientRect().bottom);
+      expect(desktopGap).toBeLessThanOrEqual(1);
+    }
   });
 }

@@ -1354,7 +1354,7 @@
 
   <div class="post-footer">
     {#if feedPreview && (previewClipped || previewExpanded)}
-      <button type="button" class="preview-toggle" title={previewExpanded ? i18n.t.post.showLessPost : i18n.t.post.showFullPost} aria-expanded={previewExpanded} onclick={() => { previewExpanded = !previewExpanded; }}>{previewExpanded ? i18n.t.post.showLessPost : i18n.t.post.showFullPost}</button>
+      <button type="button" class="preview-toggle" aria-label={previewExpanded ? i18n.t.post.showLessPost : i18n.t.post.showFullPost} title={previewExpanded ? i18n.t.post.showLessPost : i18n.t.post.showFullPost} aria-expanded={previewExpanded} onclick={() => { previewExpanded = !previewExpanded; }}><span class="preview-toggle-long">{previewExpanded ? i18n.t.post.showLessPost : i18n.t.post.showFullPost}</span><span class="preview-toggle-short" aria-hidden="true">{previewExpanded ? i18n.t.post.lessShort : i18n.t.post.moreShort}</span></button>
     {/if}
     <div class="post-actions">
       {#if onreply}
@@ -1586,6 +1586,8 @@
     .post-actions { max-width: none; }
     .post-footer:has(> .preview-toggle) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 2fr); align-items: start; }
     .post-footer:has(> .preview-toggle) .preview-toggle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .preview-toggle-long { display: none; }
+    .post-footer .preview-toggle-short { display: inline; }
     .post-footer:has(> .preview-toggle) .post-secondary-actions { grid-column: 1 / -1; }
   }
   .reply-context { display: block; margin: 0 0 0.45rem; margin-inline-start: var(--post-indent); padding: 0.25rem 0.55rem; border-left: 2px solid var(--color-border); color: var(--color-text-muted); }
@@ -1598,6 +1600,7 @@
      whole post down to a single line. Expanded posts still have no cap. */
   .feed-preview { max-height: max(8rem, calc(50svh - 9rem)); overflow: clip; --preview-media-limit: max(4.5rem, calc(50svh - 10.5rem)); }
   .preview-toggle { display: block; min-height: 44px; padding-inline: 0.25rem; color: var(--color-primary-text); font-size: 0.75rem; text-align: start; }
+  .preview-toggle-short { display: none; }
   .post-layout-container { container-type: inline-size; }
   .feed-preview .media-preview-image, .feed-preview .link-preview-image { max-height: min(18rem, 22svh, var(--preview-media-limit)); }
   .feed-preview .media-tile { height: min(22svh, 13rem); }

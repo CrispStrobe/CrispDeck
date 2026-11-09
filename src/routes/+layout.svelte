@@ -70,6 +70,17 @@
 
   let collapsed = $state(false);
   let mobileMenuOpen = $state(false);
+  let mobileTabIconsOnly = $state(readString('crispdeck-mobile-tab-icons-only') === 'true');
+  onMount(() => {
+    const syncMobileTabs = () => {
+      mobileTabIconsOnly = readString('crispdeck-mobile-tab-icons-only') === 'true';
+      document.documentElement.dataset.mobileTabIconsOnly = String(mobileTabIconsOnly);
+    };
+    syncMobileTabs();
+    window.addEventListener('crispdeck:prefs-changed', syncMobileTabs);
+    window.addEventListener('storage', syncMobileTabs);
+    return () => { window.removeEventListener('crispdeck:prefs-changed', syncMobileTabs); window.removeEventListener('storage', syncMobileTabs); delete document.documentElement.dataset.mobileTabIconsOnly; };
+  });
   let sidebarAccounts: Account[] = $state([]);
   let mobileMenuClosing = $state(false);
   function closeMobileMenu() {
@@ -458,6 +469,7 @@
     {#each mobileTabItems as item}
       <a
         href={`${base}${item.href}`.replace(/\/$/, "") || "/"}
+        aria-label={item.label}
         aria-current={isActive(item.href) ? 'page' : undefined}
         class="flex flex-col items-center gap-1 px-1 py-1 rounded-lg transition-colors min-w-0 flex-1
           {isActive(item.href)
@@ -465,7 +477,7 @@
             : 'text-[var(--color-text-muted)]'}"
       >
         <item.icon size={20} />
-        <span class="text-[10px] max-w-full truncate leading-tight">{item.label}</span>
+        <span class="text-[10px] max-w-full truncate leading-tight" class:sr-only={mobileTabIconsOnly}>{item.label}</span>
       </a>
     {/each}
   </nav>

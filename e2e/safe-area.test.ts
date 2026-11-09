@@ -119,3 +119,20 @@ test('safe-area geometry updates when a touch device rotates', async ({ page }) 
     await expectSafeShell(page, device);
   }
 });
+
+test('bottom navigation icon-only setting persists and keeps accessible names', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/settings?tab=appearance');
+  const setting = page.getByLabel('Show only icons in bottom navigation');
+  await expect(setting).not.toBeChecked();
+  await setting.check();
+  const tabs = page.locator('.mobile-tab-bar');
+  await expect(tabs).toHaveCSS('height', '48px');
+  await expect(tabs.getByRole('link', { name: 'Feed', exact: true })).toBeVisible();
+  await expect(tabs.getByRole('link', { name: 'Feed', exact: true }).locator('span')).toHaveClass(/sr-only/);
+  await page.reload();
+  await expect(setting).toBeChecked();
+  await expect(tabs).toHaveCSS('height', '48px');
+  await setting.uncheck();
+  await expect(tabs).toHaveCSS('height', '56px');
+});

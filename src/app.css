@@ -116,6 +116,7 @@ html, body {
   --mobile-header-height: 3.5rem;
   --mobile-tab-height: 3.5rem;
 }
+:root[data-mobile-tab-icons-only="true"] { --mobile-tab-height: 3rem; }
 
 body {
   padding: var(--safe-area-top) var(--safe-area-right) var(--safe-area-bottom) var(--safe-area-left);

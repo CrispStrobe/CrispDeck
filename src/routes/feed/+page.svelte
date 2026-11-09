@@ -942,11 +942,22 @@
   <h1 class="sr-only">{i18n.t.feed.title}</h1>
   <div class="mobile-feed-controls md:hidden">
     <select aria-label={i18n.t.feed.switchFeed} value={feedMode === 'custom' && customFeed ? 'custom:' + customFeed.key : feedMode} onchange={changeMobileFeed}>
-      <option value="timeline">{i18n.t.feed.timeline}</option>
-      <option value="for-you">{i18n.t.feed.forYou}</option>
-      <option value="my-posts">{i18n.t.feed.myPosts}</option>
-      {#each savedFeeds as choice (choice.key)}<option value={'custom:' + choice.key}>{choice.title}</option>{/each}
-      {#if savedFeeds.length}<option value="discover">{i18n.t.feed.discoverFeeds}</option>{/if}
+      <optgroup label={i18n.t.feed.feedViews}>
+        <option value="timeline">{i18n.t.feed.timeline}</option>
+        <option value="for-you">{i18n.t.feed.forYou}</option>
+        <option value="my-posts">{i18n.t.feed.myPosts}</option>
+      </optgroup>
+      {#if pinnedFeeds.some(choice => choice.kind !== 'timeline')}
+        <optgroup label={i18n.t.feed.pinnedFeedGroup}>
+          {#each pinnedFeeds.filter(choice => choice.kind !== 'timeline') as choice (choice.key)}<option value={'custom:' + choice.key}>{choice.title}</option>{/each}
+        </optgroup>
+      {/if}
+      {#if unpinnedFeeds.some(choice => choice.kind !== 'timeline')}
+        <optgroup label={i18n.t.feed.savedNotPinned}>
+          {#each unpinnedFeeds.filter(choice => choice.kind !== 'timeline') as choice (choice.key)}<option value={'custom:' + choice.key}>{choice.title}</option>{/each}
+        </optgroup>
+      {/if}
+      {#if savedFeeds.length}<optgroup label={i18n.t.feed.discoverGroup}><option value="discover">{i18n.t.feed.discoverFeeds}</option></optgroup>{/if}
     </select>
     {#if multiPlatform}
       <select aria-label={i18n.t.feed.filterPlatform} bind:value={platformFilter}>
@@ -1287,7 +1298,8 @@
 </div>
 
 <style>
-  @media (width >= 48rem) { .feed-items > .feed-item + .feed-item { margin-top: 0.75rem; } }
+  .feed-items :global(.post-card) { border: 0; border-bottom: 1px solid var(--color-border); border-radius: 0; }
+  .feed-items :global(.crosspost-group) { border: 0; border-bottom: 1px solid var(--color-border); border-radius: 0; }
   /* The picker becomes a bounded sheet on phones. Its contents can scroll
      without putting feed rows or search controls under either fixed bar. */
   @media (width < 48rem) {
@@ -1309,7 +1321,8 @@
     .mobile-options-menu button, .mobile-options-menu p { display: block; width: 100%; min-height: 44px; padding: 0.6rem; text-align: start; font-size: 0.8rem; }
     .feed-items { margin-inline: -0.75rem; }
     .feed-items > :global(.feed-item) { margin-top: 0; }
-    .feed-items :global(.post-card) { border: 0; border-bottom: 1px solid var(--color-border); border-radius: 0; padding: 0.6rem 0.75rem; }
+    .feed-items :global(.post-card) { border: 0; border-bottom: 1px solid var(--color-border); border-radius: 0; padding: 0.4rem 0.75rem; }
+    .feed-items :global(.post-footer) { margin-top: 0; }
     .feed-picker-menu {
       position: fixed;
       top: auto;
