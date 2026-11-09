@@ -1,3 +1,4 @@
+import { IDBFactory, IDBKeyRange } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -12,6 +13,7 @@ let api: typeof import('./wallabag');
 
 const credentials = { server: 'https://wallabag.example', clientId: 'client', clientSecret: 'secret', username: 'reader', password: 'password' };
 const sessionKey = 'crispdeck-wallabag-session';
+const searchScopeKey = 'crispdeck-wallabag-search-scope';
 const token = (access: string, refresh = 'refresh', expires = 3600) => new Response(JSON.stringify({ access_token: access, refresh_token: refresh, expires_in: expires }), { status: 200 });
 const saved = () => new Response('{}', { status: 200 });
 function deferred<T>() {
@@ -264,7 +266,12 @@ describe('Wallabag account and refresh lifecycle', () => {
   it('propagates failed native deletion and keeps the session available for a retry', async () => {
     mocks.fetch.mockResolvedValueOnce(token('access'));
     await api.connectWallabag(credentials);
-    mocks.invoke.mockRejectedValueOnce(new Error('Keychain deletion failed'));
+    const original = mocks.invoke.getMockImplementation()!;
+    let failDelete = true;
+    mocks.invoke.mockImplementation(async (command, args) => {
+      if (command === 'wallabag_session_delete' && failDelete) { failDelete = false; throw new Error('Keychain deletion failed'); }
+      return original(command, args);
+    });
     await expect(api.disconnectWallabag()).rejects.toThrow('Keychain deletion failed');
     expect(await api.wallabagConnected(credentials.server)).toBe(true);
     await api.disconnectWallabag();
@@ -304,7 +311,34 @@ describe('Wallabag browser persistence', () => {
   it('does not report successful removal when browser storage cannot be accessed', async () => {
     vi.spyOn(Object.getPrototypeOf(localStorage), 'removeItem').mockImplementation(() => { throw new Error('Storage blocked'); });
     vi.spyOn(Object.getPrototypeOf(localStorage), 'getItem').mockImplementation(() => { throw new Error('Storage blocked'); });
-    await expect(api.disconnectWallabag()).rejects.toThrow('Could not remove Wallabag credentials');
+    await expect(api.disconnectWallabag()).rejects.toThrow('storage');
+  });
+
+  it('keeps the connected session if neither local-search revocation store is writable', async () => {
+    mocks.native = true;
+    mocks.fetch.mockResolvedValueOnce(token('original'));
+    await api.connectWallabag(credentials);
+    const previous = mocks.stored;
+    vi.spyOn(Object.getPrototypeOf(localStorage), 'setItem').mockImplementation(() => {
+      throw new DOMException('Storage blocked', 'SecurityError');
+    });
+    await expect(api.disconnectWallabag()).rejects.toThrow('storage');
+    expect(mocks.stored).toBe(previous);
+    expect(mocks.invoke).not.toHaveBeenCalledWith('wallabag_session_delete', expect.anything());
+  });
+
+  it('revokes the old connection after new authentication but before replacing its session', async () => {
+    mocks.native = true;
+    mocks.fetch.mockResolvedValueOnce(token('original')).mockResolvedValueOnce(token('replacement'));
+    await api.connectWallabag(credentials);
+    const previous = mocks.stored;
+    vi.spyOn(Object.getPrototypeOf(localStorage), 'setItem').mockImplementation(() => {
+      throw new DOMException('Storage blocked', 'SecurityError');
+    });
+    await expect(api.connectWallabag({ ...credentials, username: 'another-reader' })).rejects.toThrow('storage');
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+    expect(mocks.stored).toBe(previous);
+    expect(mocks.invoke.mock.calls.filter(([command]) => command === 'wallabag_session_set')).toHaveLength(1);
   });
 
   it('reports browser connectivity/CORS failures without echoing transport secrets', async () => {
@@ -312,5 +346,180 @@ describe('Wallabag browser persistence', () => {
     const error = await api.connectWallabag(credentials).catch(error => error);
     expect(error.message).toContain('browser CORS settings');
     expect(error.message).not.toContain('private-test-sentinel');
+  });
+});
+
+const articlePage = (items: unknown[], pages = 1) => new Response(JSON.stringify({ _embedded: { items }, pages }), { status: 200 });
+const article = { id: 1, title: 'A saved article', url: 'https://example.org/article', content: '<p>First paragraph</p><p>Later</p>', created_at: '2026-11-01T12:00:00Z', password: 'never project', annotations: ['omit'] };
+
+describe('Wallabag search-index reads', () => {
+  it('requests updated entries after a checkpoint without putting credentials in the URL', async () => {
+    mocks.fetch.mockResolvedValueOnce(token('access')).mockResolvedValueOnce(articlePage([article]));
+    await api.connectWallabag(credentials);
+    await api.listWallabagIndexEntries(credentials.server, { since: 123456 });
+    const url = new URL(mocks.fetch.mock.calls[1][0]);
+    expect(url.searchParams.get('since')).toBe('123456');
+    expect(url.searchParams.get('sort')).toBe('updated');
+    expect(url.href).not.toContain('access');
+  });
+
+  it('lists a bounded page with no credential in the URL and returns only article fields', async () => {
+    mocks.fetch.mockResolvedValueOnce(token('access')).mockResolvedValueOnce(articlePage([article], 3));
+    await api.connectWallabag(credentials);
+    const scope = await api.wallabagSearchScope(credentials.server);
+    const result = await api.listWallabagIndexEntries(credentials.server, { page: 2, perPage: 25, expectedScope: scope });
+    expect(result).toEqual({ scope, entries: [{ id: 1, title: article.title, url: article.url, content: article.content, createdAt: article.created_at }], hasMore: true });
+    expect(mocks.fetch.mock.calls[1][0]).toBe('https://wallabag.example/api/entries.json?page=2&perPage=25&sort=created&order=desc');
+    expect(mocks.fetch.mock.calls[1][1]).toMatchObject({ method: 'GET', headers: { Authorization: 'Bearer access' }, redirect: 'error', maxRedirections: 0 });
+    expect(scope).not.toContain('access'); expect(JSON.stringify(result)).not.toContain('never project');
+  });
+
+  it('uses browser CORS transport and refreshes once after unauthorized', async () => {
+    mocks.native = false;
+    mocks.browserFetch.mockResolvedValueOnce(token('old')).mockResolvedValueOnce(new Response('', { status: 401 }))
+      .mockResolvedValueOnce(token('new')).mockResolvedValueOnce(articlePage([article]));
+    await api.connectWallabag(credentials);
+    const result = await api.listWallabagIndexEntries(credentials.server);
+    expect(result.entries).toHaveLength(1);
+    expect(mocks.browserFetch.mock.calls[3][1].headers.Authorization).toBe('Bearer new');
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it('pins an import to its connection, including reconnects on the same server', async () => {
+    mocks.fetch.mockResolvedValueOnce(token('first')).mockResolvedValueOnce(token('second'));
+    await api.connectWallabag(credentials);
+    const oldScope = await api.wallabagSearchScope(credentials.server);
+    await api.connectWallabag(credentials);
+    expect(await api.wallabagSearchScope(credentials.server)).not.toBe(oldScope);
+    await expect(api.listWallabagIndexEntries(credentials.server, { expectedScope: oldScope })).rejects.toThrow('connection changed');
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects a response from a connection replaced while the page was being read', async () => {
+    const pending = deferred<Response>();
+    mocks.fetch.mockResolvedValueOnce(token('first')).mockImplementationOnce(() => pending.promise).mockResolvedValueOnce(token('second'));
+    await api.connectWallabag(credentials);
+    const reading = api.listWallabagIndexEntries(credentials.server);
+    const checked = expect(reading).rejects.toThrow('connection changed');
+    await vi.waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(2));
+    await api.connectWallabag(credentials);
+    pending.resolve(articlePage([article]));
+    await checked;
+  });
+
+  it('cancels a page request through the supplied AbortSignal', async () => {
+    const controller = new AbortController();
+    mocks.fetch.mockResolvedValueOnce(token('first')).mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
+      init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
+    }));
+    await api.connectWallabag(credentials);
+    const reading = api.listWallabagIndexEntries(credentials.server, { signal: controller.signal });
+    const checked = expect(reading).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(2));
+    controller.abort(); await checked;
+  });
+
+  it('rejects invalid bounds and malformed pages without following next links', async () => {
+    await expect(api.listWallabagIndexEntries(credentials.server, { perPage: 51 })).rejects.toThrow('page size');
+    mocks.fetch.mockResolvedValueOnce(token('access')).mockResolvedValueOnce(new Response(JSON.stringify({ _embedded: { items: [{}] }, _links: { next: { href: 'https://other.example' } } }), { status: 200 }));
+    await api.connectWallabag(credentials);
+    await expect(api.listWallabagIndexEntries(credentials.server)).rejects.toThrow('invalid article');
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  });
+});
+
+
+async function seedIndexedWallabag(scope: string) {
+  const cache = await import('./search-cache');
+  await cache.updateSearchCacheSettings({ ...cache.getSearchCacheSettings(), enabled: true, maxAgeDays: 0 });
+  await cache.cacheSearchItems([{
+    source: 'wallabag', scope, id: '1', url: 'https://example.org/private-article',
+    title: 'Private breadcrumb', text: 'A cached article.', createdAt: new Date().toISOString(),
+  }], { strict: true });
+  return cache;
+}
+
+describe('Wallabag durable cache cleanup marker', () => {
+  it.each([true, false])('cleans a corrupt saved session using its independent marker (native=%s)', async native => {
+    mocks.native = native;
+    vi.stubGlobal('indexedDB', new IDBFactory()); vi.stubGlobal('IDBKeyRange', IDBKeyRange);
+    const transport = native ? mocks.fetch : mocks.browserFetch;
+    transport.mockResolvedValueOnce(token('access'));
+    await api.connectWallabag(credentials);
+    const scope = await api.wallabagSearchScope(credentials.server);
+    expect(localStorage.getItem(searchScopeKey)).toBe(scope);
+    const cache = await seedIndexedWallabag(scope);
+    if (native) mocks.stored = '{broken session';
+    else localStorage.setItem(sessionKey, 'not encrypted JSON');
+    await api.disconnectWallabag();
+    expect(await cache.searchCache('breadcrumb')).toEqual([]);
+    expect(localStorage.getItem(searchScopeKey)).toBeNull();
+    expect(native ? mocks.stored : localStorage.getItem(sessionKey)).toBe(native ? '' : null);
+    expect(await cache.cacheSearchItems([{
+      source: 'wallabag', scope, id: 'late', url: article.url,
+      title: 'Late breadcrumb', text: 'A stale callback.', createdAt: new Date().toISOString(),
+    }])).toBe(0);
+  });
+
+  it.each([true, false])('revokes the corrupt prior connection before reconnecting (native=%s)', async native => {
+    mocks.native = native;
+    vi.stubGlobal('indexedDB', new IDBFactory()); vi.stubGlobal('IDBKeyRange', IDBKeyRange);
+    const transport = native ? mocks.fetch : mocks.browserFetch;
+    transport.mockResolvedValueOnce(token('old')).mockResolvedValueOnce(token('new'));
+    await api.connectWallabag(credentials);
+    const oldScope = await api.wallabagSearchScope(credentials.server);
+    const cache = await seedIndexedWallabag(oldScope);
+    if (native) mocks.stored = '{broken session';
+    else localStorage.setItem(sessionKey, 'not encrypted JSON');
+    await api.connectWallabag({ ...credentials, username: 'another-reader' });
+    expect(localStorage.getItem(searchScopeKey)).toBeNull();
+    expect(await cache.searchCache('breadcrumb')).toEqual([]);
+    const newScope = await api.wallabagSearchScope(credentials.server);
+    expect(newScope).not.toBe(oldScope);
+    expect(localStorage.getItem(searchScopeKey)).toBe(newScope);
+  });
+
+  it.each([true, false])('refuses article reads when a new cleanup marker cannot be saved (native=%s)', async native => {
+    mocks.native = native;
+    const transport = native ? mocks.fetch : mocks.browserFetch;
+    transport.mockResolvedValueOnce(token('access'));
+    await api.connectWallabag(credentials);
+    const original = Object.getPrototypeOf(localStorage).setItem;
+    vi.spyOn(Object.getPrototypeOf(localStorage) as Storage, 'setItem').mockImplementation(function (this: Storage, key: string, value: string) {
+      if (key === searchScopeKey) throw new DOMException('Storage full', 'QuotaExceededError');
+      return original.call(this, key, value);
+    });
+    await expect(api.wallabagSearchScope(credentials.server)).rejects.toThrow('Could not save the Wallabag cache marker');
+    await expect(api.listWallabagIndexEntries(credentials.server)).rejects.toThrow('Could not save the Wallabag cache marker');
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem(searchScopeKey)).toBeNull();
+    expect(await api.wallabagConnected(credentials.server)).toBe(true);
+  });
+
+  it('revokes both a readable session and a different valid marker without touching unrelated scopes', async () => {
+    vi.stubGlobal('indexedDB', new IDBFactory()); vi.stubGlobal('IDBKeyRange', IDBKeyRange);
+    mocks.fetch.mockResolvedValueOnce(token('access'));
+    await api.connectWallabag(credentials);
+    const scope = await api.wallabagSearchScope(credentials.server);
+    const markedScope = `wallabag:${crypto.randomUUID()}`;
+    const cache = await seedIndexedWallabag(scope);
+    await cache.cacheSearchItems([
+      { source: 'wallabag', scope: markedScope, id: '2', url: article.url, title: 'Marker breadcrumb', text: '', createdAt: new Date().toISOString() },
+      { source: 'mastodon', scope: 'account:7', id: '3', url: article.url, title: 'Other breadcrumb', text: '', createdAt: new Date().toISOString() },
+    ]);
+    localStorage.setItem(searchScopeKey, markedScope);
+    await api.disconnectWallabag();
+    expect((await cache.searchCache('breadcrumb')).map(hit => hit.scope)).toEqual(['account:7']);
+    expect(localStorage.getItem(searchScopeKey)).toBeNull();
+  });
+
+  it('does not let an invalid marker revoke an unrelated scope', async () => {
+    vi.stubGlobal('indexedDB', new IDBFactory()); vi.stubGlobal('IDBKeyRange', IDBKeyRange);
+    const cache = await import('./search-cache');
+    await cache.updateSearchCacheSettings({ ...cache.getSearchCacheSettings(), enabled: true });
+    await cache.cacheSearchItems([{ source: 'mastodon', scope: 'account:7', id: '3', url: article.url, title: 'Other breadcrumb', text: '', createdAt: new Date().toISOString() }]);
+    localStorage.setItem(searchScopeKey, 'account:7');
+    await api.disconnectWallabag();
+    expect((await cache.searchCache('breadcrumb')).map(hit => hit.scope)).toEqual(['account:7']);
   });
 });

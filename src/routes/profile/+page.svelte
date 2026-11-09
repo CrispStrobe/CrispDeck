@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { queuePostsForSearchCache } from '$lib/search-cache-lazy';
+  import { getSearchCacheGeneration } from '$lib/search-cache-lazy';
   import { swallow } from '$lib/debug-log';
   import { hrefOrHash } from '$lib/safe-url';
   import { base } from '$app/paths';
@@ -86,13 +88,21 @@
   }
 
   async function loadProfile() {
-    const client = getClient();
+    const searchGeneration = getSearchCacheGeneration();
+    const entry = getEntry();
+    const client = entry?.client ?? null;
+    const scoped = (post: UnifiedPost): UnifiedPost => {
+      if (!entry) return post;
+      const result = { ...post, sourceAccountId: entry.accountId, sourceAccount: entry.handle };
+      queuePostsForSearchCache([result], searchGeneration);
+      return result;
+    };
     if (!client && platform === 'bluesky') {
       // Use read-only client for public profiles
       const readOnly = BlueskyClient.readOnly(handle);
       profile = await readOnly.getProfile(handle);
       const { feed } = await readOnly.getAuthorFeed(handle);
-      posts = sortPosts(feed.map(p => normalizePost(p, 'bluesky')), 'newest');
+      posts = sortPosts(feed.map(p => scoped(normalizePost(p, 'bluesky'))), 'newest');
       return;
     }
     if (!client) {
@@ -110,7 +120,7 @@
       blocked = !!blockedUri;
       muted = !!profile.viewer?.muted;
       const { feed } = await bsky.getAuthorFeed(handle);
-      posts = sortPosts(feed.map(p => normalizePost(p, 'bluesky')), 'newest');
+      posts = sortPosts(feed.map(p => scoped(normalizePost(p, 'bluesky'))), 'newest');
     } else {
       const masto = client as MastodonClient;
       const account = await masto.getAccountByHandle(handle);
@@ -126,7 +136,7 @@
         _mastodonId: account.id,
       };
       const statuses = await masto.getAccountStatuses(account.id);
-      posts = sortPosts(statuses.map(s => normalizePost(s, 'mastodon')), 'newest');
+      posts = sortPosts(statuses.map(s => scoped(normalizePost(s, 'mastodon'))), 'newest');
       // Check "follows you" via relationships API
       const token = masto.getAccessToken();
       if (token) {

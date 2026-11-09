@@ -16,6 +16,12 @@
 - Document that this is a separate web session, not a merged Instagram API
   feed or crossposting account. Live signed-in native validation is pending.
 
+## v1.3.3 — 2026-11-08
+
+- Add the Wallabag Reader and optional local search with full-history indexing.
+- Improve mobile feed layouts, touch actions and Android system-bar spacing.
+- Improve Deck caching, feed controls, notifications and German translations.
+
 ## v1.3.2 — 2026-11-07
 
 Includes the improvements and fixes from the 1.3.1 prerelease.

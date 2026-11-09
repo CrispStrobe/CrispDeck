@@ -8,7 +8,7 @@
   import '../app.css';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import { Home, Rss, Columns3, Camera, PenSquare, Bell, MessageSquare, Bookmark, Users, Search, List, Shield, TrendingUp, Archive, BarChart3, Settings, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon, Smartphone } from '@lucide/svelte';
+  import { Home, Rss, Columns3, Camera, PenSquare, Bell, MessageSquare, Bookmark, BookOpen, Users, Search, List, Shield, TrendingUp, Archive, BarChart3, Settings, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon, Smartphone } from '@lucide/svelte';
   import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
   import ToastContainer from '$lib/components/ToastContainer.svelte';
   import { isTauri } from '@tauri-apps/api/core';
@@ -29,6 +29,28 @@
   import { onMount, onDestroy } from 'svelte';
   import { startScheduler } from '$lib/publishing/scheduler';
   onMount(startScheduler);
+  let wallabagReady = $state(false);
+  onMount(() => {
+    let active = true;
+    let stop: (() => void) | undefined;
+    void import('$lib/wallabag-index-auto').then(module => { if (active) stop = module.startWallabagIndexUpdates(); }).catch(error => swallow('layout.wallabagIndex', error));
+    return () => { active = false; stop?.(); };
+  });
+  onMount(() => {
+    let active = true;
+    let stop: (() => void) | undefined;
+    let unsubscribe: (() => void) | undefined;
+    // Keep the optional reader's connection watcher off the startup path.
+    // Navigation stays hidden until the loaded watcher verifies saved access.
+    void import('$lib/wallabag-availability').then(module => {
+      if (!active) return;
+      unsubscribe = module.wallabagAvailability.subscribe(connection => {
+        wallabagReady = connection.status === 'ready';
+      });
+      stop = module.startWallabagAvailability();
+    }).catch(error => swallow('layout.wallabag', error));
+    return () => { active = false; unsubscribe?.(); stop?.(); };
+  });
   let NativeLinkMenu = $state<typeof import('$lib/components/LinkContextMenu.svelte').default>();
   onMount(() => {
     let active = true;
@@ -292,6 +314,7 @@
     { href: '/messages', icon: MessageSquare, label: i18n.t.nav.messages, badge: () => unreadMessages > 0 ? unreadMessages : 0 },
     { href: '/search', icon: Search, label: i18n.t.nav.search },
     { href: '/bookmarks', icon: Bookmark, label: i18n.t.nav.bookmarks, badge: () => bookmarkCount > 0 ? bookmarkCount : 0 },
+    ...(wallabagReady ? [{ href: '/wallabag', icon: BookOpen, label: i18n.t.nav.wallabag }] : []),
     { href: '/lists', icon: List, label: 'Lists & Feeds' },
     { href: '/trending', icon: TrendingUp, label: 'Discover' },
     { href: '/identities', icon: Users, label: i18n.t.nav.identities },
@@ -299,7 +322,7 @@
     { href: '/analytics', icon: BarChart3, label: i18n.t.nav.analytics },
     { href: '/moderation', icon: Shield, label: i18n.t.nav.moderation },
     { href: '/settings', icon: Settings, label: i18n.t.nav.settings },
-    { href: '/about', icon: Info, label: 'About' },
+    { href: '/about', icon: Info, label: i18n.t.nav.about },
   ]);
 
   // Filtered nav items (respects simple mode / custom hidden items)
@@ -403,19 +426,19 @@
   </nav>
 
   <!-- Mobile top bar (condensed single row) -->
-  <header class="mobile-top-bar md:hidden fixed top-0 left-0 right-0 z-50 bg-[var(--color-surface)] border-b border-[var(--color-border)] px-3 py-1.5 flex items-center justify-between">
+  <header class="mobile-top-bar md:hidden fixed top-0 left-0 right-0 z-50 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex items-center justify-between">
     <div class="flex items-center gap-2">
       <button onclick={() => mobileMenuOpen = !mobileMenuOpen} aria-label={i18n.t.app.mainNavigation} aria-expanded={mobileMenuOpen} aria-controls="mobile-navigation" class="p-1 text-[var(--color-text-muted)]">
-        {#if mobileMenuOpen}<X size={18} />{:else}<Menu size={18} />{/if}
+        {#if mobileMenuOpen}<X size={20} />{:else}<Menu size={20} />{/if}
       </button>
-      <a href={base || "/"} class="text-sm font-bold text-[var(--color-text)]">CrispDeck</a>
+      <a href={base || "/"} class="text-base font-bold text-[var(--color-text)]">CrispDeck</a>
     </div>
     <div class="flex items-center gap-1">
       <button onclick={toggleTheme} class="p-1.5 text-[var(--color-text-muted)]" aria-label={i18n.t.app.toggleTheme} title={i18n.t.app.toggleTheme}>
-        {#if theme === 'dark'}<Smartphone size={14} />{:else if theme === 'oled'}<Sun size={14} />{:else}<Moon size={14} />{/if}
+        {#if theme === 'dark'}<Smartphone size={20} />{:else if theme === 'oled'}<Sun size={20} />{:else}<Moon size={20} />{/if}
       </button>
-      <a href="{base}/notifications" class="p-1.5 text-[var(--color-text-muted)]">
-        <Bell size={14} />
+      <a href="{base}/notifications" aria-label={i18n.t.nav.notifications} class="p-1.5 text-[var(--color-text-muted)]">
+        <Bell size={20} />
       </a>
     </div>
   </header>
@@ -432,7 +455,7 @@
   {/if}
 
   <!-- Main content -->
-  <main id="main-content" class="flex-1 overflow-y-auto md:pt-0 pt-10 pb-14 md:pb-0">
+  <main id="main-content" class="min-w-0 flex-1 overflow-y-auto">
     {#if offline}
       <div class="bg-yellow-900/50 border-b border-yellow-700 px-4 py-2 text-center text-xs text-yellow-200 flex items-center justify-center gap-2">
         <span>{i18n.t.app.offlineBanner}</span>
@@ -455,13 +478,14 @@
     {#each mobileTabItems as item}
       <a
         href={`${base}${item.href}`.replace(/\/$/, "") || "/"}
-        class="flex flex-col items-center gap-0 px-1 py-1 rounded-lg transition-colors min-w-0 flex-1
+        aria-current={isActive(item.href) ? 'page' : undefined}
+        class="flex flex-col items-center gap-1 px-1 py-1 rounded-lg transition-colors min-w-0 flex-1
           {isActive(item.href)
             ? 'text-[var(--color-primary-text)]'
             : 'text-[var(--color-text-muted)]'}"
       >
-        <item.icon size={18} />
-        <span class="text-[8px] truncate leading-tight">{item.label}</span>
+        <item.icon size={20} />
+        <span class="text-[10px] max-w-full truncate leading-tight">{item.label}</span>
       </a>
     {/each}
   </nav>

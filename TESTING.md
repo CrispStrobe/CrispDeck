@@ -123,6 +123,7 @@ a route only findable by typing the URL is a route nobody uses.
 - [ ] `/starterpacks`
 - [ ] `/thread`
 - [ ] `/trending`
+- [ ] `/wallabag`
 
 ## Flows that cross pages
 

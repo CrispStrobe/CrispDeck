@@ -137,6 +137,7 @@ describe('post actions use their source account', () => {
     const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ content: '<p>Translated by source instance</p>', detected_source_language: 'de' }) });
     vi.stubGlobal('fetch', fetch);
     const { target } = await render(value);
+    target.querySelector<HTMLButtonElement>('[aria-label="More post actions"]')!.click(); flushSync();
     target.querySelector<HTMLButtonElement>('[aria-label="Translate post"]')!.click(); flushSync();
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     expect(fetch).toHaveBeenCalledWith('https://work.example/api/v1/statuses/local-original-id/translate', {

@@ -1,6 +1,8 @@
 import { isTauri, invoke } from '@tauri-apps/api/core';
 import { getCredentialBackend } from '$lib/db';
 import { removeKey, writeString } from '$lib/safe-storage';
+import { normalizeWallabagServer, WallabagError, WALLABAG_CONNECTION_CHANGED } from '$lib/wallabag-common';
+export { normalizeWallabagServer, WALLABAG_CONNECTION_CHANGED } from '$lib/wallabag-common';
 
 /** Wallabag's bookmarklet uses the browser's own sign-in session. */
 export function wallabagBookmarklet(instance: string, link: string): string | null {
@@ -26,25 +28,92 @@ interface Session {
   connectionId?: string;
 }
 export interface WallabagCredentials { server: string; clientId: string; clientSecret: string; username: string; password: string }
+export interface WallabagEntry {
+  id: number;
+  title: string;
+  url: string;
+  /** Empty for list metadata; fetch the entry before displaying its article. */
+  content: string;
+  is_archived: boolean;
+  is_starred: boolean;
+  created_at: string;
+  reading_time?: number;
+  domain_name?: string;
+  preview_picture?: string;
+  tags: Array<{ id?: number; label: string; slug?: string }>;
+}
+export interface WallabagEntriesPage { items: WallabagEntry[]; page: number; pages: number; total: number }
+export type WallabagEntryFilter = 'unread' | 'archived' | 'starred' | 'all';
+export interface WallabagEntriesOptions { filter?: WallabagEntryFilter; page?: number; perPage?: number; search?: string }
+
 type Store = { kind: 'browser' } | { kind: 'native'; args: { backend: string; keychain: string } };
 interface SavedSession { store: Store; session: Session; generation: number }
 interface Token { access_token: string; refresh_token: string; expires_in: number }
 
 const browserKey = 'crispdeck-wallabag-session';
+// Non-secret and device-local: retained separately so broken credentials do
+// not prevent removing the articles indexed through that connection.
+const searchScopeKey = 'crispdeck-wallabag-search-scope';
 const maxSessionBytes = 64 * 1024;
+const maxArticleBytes = 5 * 1024 * 1024;
 const requestTimeoutMs = 30_000;
 let generation = 0;
 let sessionQueue: Promise<unknown> = Promise.resolve();
 let nativeTransport: Promise<typeof import('@tauri-apps/plugin-http')> | undefined;
 const requests = new Set<AbortController>();
 
-class WallabagError extends Error {}
-const connectionChanged = () => new WallabagError('The Wallabag connection changed. Try saving the link again.');
+const connectionChanged = () => new WallabagError('The Wallabag connection changed. Try again.');
+const searchScope = (session: Session): string | undefined => session.connectionId ? `wallabag:${session.connectionId}` : undefined;
+
+function validSearchScope(value: string | null): value is string {
+  return value !== null && /^wallabag:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+function readSearchScopeMarker(): string | null {
+  try { return localStorage.getItem(searchScopeKey); }
+  catch { throw new WallabagError('Could not read the Wallabag cache marker. Check browser storage and try again.'); }
+}
+
+async function clearConnectionSearchCache(session: Session | null): Promise<void> {
+  const marker = readSearchScopeMarker();
+  const scopes = new Set<string>();
+  const current = session && searchScope(session);
+  if (current) scopes.add(current);
+  // Never interpret a corrupt marker as an account/RSS scope or arbitrary key.
+  if (validSearchScope(marker)) scopes.add(marker);
+  if (scopes.size) {
+    const { removeSearchCacheScope } = await import('$lib/search-cache');
+    for (const scope of scopes) await removeSearchCacheScope(scope);
+  }
+  // Revoke durably first, and do not erase a marker another tab replaced.
+  if (validSearchScope(marker) && readSearchScopeMarker() === marker) {
+    removeKey(searchScopeKey);
+    if (readSearchScopeMarker() === marker) throw new WallabagError('Could not clear the Wallabag cache marker. Check browser storage and try again.');
+  }
+}
+
+async function rememberSearchScope(session: Session): Promise<void> {
+  const scope = searchScope(session);
+  if (!scope || !validSearchScope(scope)) throw new WallabagError('The saved Wallabag connection identity is invalid. Reconnect in Settings.');
+  const previous = readSearchScopeMarker();
+  if (previous === scope) return;
+  // Also cover native credential changes made outside this module. Keep the
+  // old marker until its scope has been revoked, before saving a replacement.
+  if (validSearchScope(previous)) await clearConnectionSearchCache(null);
+  if (!writeString(searchScopeKey, scope) || readSearchScopeMarker() !== scope) {
+    throw new WallabagError('Could not save the Wallabag cache marker. Check browser storage and try indexing again.');
+  }
+}
+
+function notifyConnectionChanged(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(WALLABAG_CONNECTION_CHANGED));
+}
 
 /** Only an explicit new connection may replace or rebind saved credentials. */
 function changeConnection(): number {
   generation++;
   for (const request of requests) request.abort();
+  notifyConnectionChanged();
   return generation;
 }
 
@@ -56,20 +125,6 @@ function withSessionLock<T>(action: () => Promise<T>): Promise<T> {
   const pending = sessionQueue.then(run, run);
   sessionQueue = pending.catch(() => undefined);
   return pending;
-}
-
-export function normalizeWallabagServer(value: string): string {
-  try {
-    const trimmed = value.trim();
-    if (trimmed.length > 2048 || /[\u0000-\u001f\u007f]/.test(trimmed)) throw new Error();
-    const url = new URL(trimmed);
-    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error();
-    if (url.protocol !== 'https:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) throw new WallabagError('Wallabag requires HTTPS');
-    return url.href.replace(/\/+$/, '');
-  } catch (error) {
-    if (error instanceof WallabagError) throw error;
-    throw new WallabagError('Invalid Wallabag server URL');
-  }
 }
 
 function nonemptyString(value: unknown): value is string {
@@ -142,6 +197,8 @@ export async function disconnectWallabag(): Promise<void> {
   changeConnection();
   await withSessionLock(async () => {
     const store = await selectedStore();
+    const previous = await readSession(store).catch(() => null);
+    await clearConnectionSearchCache(previous);
     if (store.kind === 'native') {
       await invoke('wallabag_session_delete', store.args);
     } else {
@@ -156,13 +213,17 @@ export async function disconnectWallabag(): Promise<void> {
 }
 
 /** Keep the deadline active until the response body is consumed or discarded. */
-async function request<T>(url: string, init: RequestInit, consume: (response: Response) => Promise<T> | T): Promise<T> {
+async function request<T>(url: string, init: RequestInit, consume: (response: Response, signal: AbortSignal) => Promise<T> | T): Promise<T> {
   const controller = new AbortController();
+  const abort = () => controller.abort();
+  init.signal?.addEventListener('abort', abort, { once: true });
+  if (init.signal?.aborted) controller.abort();
   let timedOut = false;
   const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, requestTimeoutMs);
   requests.add(controller);
   let response: Response | undefined;
   try {
+    if (controller.signal.aborted) throw new Error();
     const options: RequestInit = { ...init, redirect: 'error', credentials: 'omit', cache: 'no-store', signal: controller.signal };
     if (isTauri()) {
       const { fetch: nativeFetch } = await (nativeTransport ??= import('@tauri-apps/plugin-http').catch(error => {
@@ -175,8 +236,11 @@ async function request<T>(url: string, init: RequestInit, consume: (response: Re
       response = await fetch(url, options);
     }
     if (controller.signal.aborted) throw new Error();
-    return await consume(response);
+    const result = await consume(response, controller.signal)
+    if (controller.signal.aborted) throw new Error();
+    return result;
   } catch (error) {
+    if (init.signal?.aborted) throw new DOMException('Wallabag sync cancelled.', 'AbortError');
     if (timedOut) throw new WallabagError('The Wallabag request timed out. Try again.');
     if (controller.signal.aborted) throw connectionChanged();
     if (error instanceof WallabagError) throw error;
@@ -185,38 +249,55 @@ async function request<T>(url: string, init: RequestInit, consume: (response: Re
       : 'Could not reach Wallabag. Check the server URL, connection, and browser CORS settings.');
   } finally {
     clearTimeout(timeout);
+    init.signal?.removeEventListener('abort', abort);
     requests.delete(controller);
     if (response?.body && !response.body.locked) void response.body.cancel().catch(() => {});
   }
 }
 
+async function boundedJson(response: Response, maxBytes: number, message: string, signal: AbortSignal): Promise<unknown> {
+  if (Number(response.headers.get('Content-Length')) > maxBytes) throw new WallabagError(message);
+  const reader = response.body?.getReader();
+  if (!reader) throw new WallabagError(message);
+  // Cancel a body that stalls after its headers arrive, including transports
+  // whose fetch AbortSignal stops only the initial network request.
+  const cancel = () => { void reader.cancel().catch(() => {}); };
+  signal.addEventListener('abort', cancel, { once: true });
+  if (signal.aborted) cancel();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) throw new WallabagError(message);
+      chunks.push(value);
+    }
+  } finally {
+    signal.removeEventListener('abort', cancel);
+    reader.releaseLock();
+  }
+  try {
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    // JSON parser errors can quote remote content, including credentials.
+    throw new WallabagError(message);
+  }
+}
+
+function record(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 async function token(server: string, fields: Record<string, string>): Promise<Token> {
-  return request(`${server}/oauth/v2/token`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) }, async response => {
-    if (!response.ok) throw new WallabagError(`Wallabag authentication failed (${response.status})`);
-    const reader = response.body?.getReader();
-    if (!reader) throw new WallabagError('Wallabag returned an invalid token');
-    const chunks: Uint8Array[] = [];
-    let size = 0;
-    try {
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        size += value.byteLength;
-        if (size > maxSessionBytes) throw new WallabagError('Wallabag returned an invalid token');
-        chunks.push(value);
-      }
-    } finally {
-      reader.releaseLock();
-    }
-    let value: Record<string, unknown>;
-    try {
-      const bytes = new Uint8Array(size);
-      let offset = 0;
-      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-      value = JSON.parse(new TextDecoder().decode(bytes));
-    } catch {
-      throw new WallabagError('Wallabag returned an invalid token');
-    }
+  return request(`${server}/oauth/v2/token`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) }, async (response, signal) => {
+    if (!response.ok) throw new WallabagError(`Wallabag authentication failed (${response.status})`, [400, 401, 403].includes(response.status));
+    const value = await boundedJson(response, maxSessionBytes, 'Wallabag returned an invalid token', signal);
+    if (!record(value)) throw new WallabagError('Wallabag returned an invalid token');
     const expiresIn = typeof value?.expires_in === 'number' || (typeof value?.expires_in === 'string' && /^\d+$/.test(value.expires_in)) ? Number(value.expires_in) : NaN;
     if (!bearerToken(value?.access_token) || !nonemptyString(value?.refresh_token) ||
         !Number.isSafeInteger(expiresIn) || expiresIn <= 0 || !Number.isSafeInteger(Date.now() + expiresIn * 1000) ||
@@ -237,8 +318,13 @@ export async function connectWallabag(credentials: WallabagCredentials): Promise
   return withSessionLock(async () => {
     if (started !== generation) throw connectionChanged();
     const store = await selectedStore();
+    const previous = await readSession(store).catch(() => null);
     if (started !== generation) throw connectionChanged();
     const result = await token(server, { grant_type: 'password', client_id: clientId, client_secret: clientSecret, username, password: credentials.password });
+    if (started !== generation) throw connectionChanged();
+    // Authenticate first, then revoke the previous connection before replacing
+    // its credentials. A failed cleanup must leave a connection we can retry.
+    await clearConnectionSearchCache(previous);
     if (started !== generation) throw connectionChanged();
     await writeSession(store, { server, clientId, clientSecret, accessToken: result.access_token, refreshToken: result.refresh_token, expiresAt: Date.now() + result.expires_in * 1000, connectionId: crypto.randomUUID() });
     if (started !== generation) throw connectionChanged();
@@ -277,25 +363,309 @@ async function usableSession(saved: SavedSession, afterUnauthorized = false): Pr
   });
 }
 
+async function savedSession(server: string): Promise<SavedSession> {
+  const normalized = normalizeWallabagServer(server);
+  const started = generation;
+  return withSessionLock(async () => {
+    if (started !== generation) throw connectionChanged();
+    const store = await selectedStore();
+    const session = await readSession(store);
+    if (started !== generation) throw connectionChanged();
+    if (!session || session.server !== normalized) throw new WallabagError('Connect Wallabag in Settings first');
+    return { store, session, generation: started };
+  });
+}
+
+/** A response from an old account must never become the current article list. */
+async function assertSavedSessionCurrent(saved: SavedSession): Promise<void> {
+  await withSessionLock(async () => {
+    assertConnection(saved, saved.session);
+    const currentStore = await selectedStore();
+    if (currentStore.kind !== saved.store.kind || (currentStore.kind === 'native' && saved.store.kind === 'native' &&
+        (currentStore.args.backend !== saved.store.args.backend || currentStore.args.keychain !== saved.store.args.keychain))) throw connectionChanged();
+    assertConnection(saved, await readSession(saved.store));
+  });
+}
+
+async function authenticatedRequest<T>(server: string, path: string, init: RequestInit, consume: (response: Response, signal: AbortSignal) => Promise<T> | T, message: string): Promise<T> {
+  let saved: SavedSession | undefined;
+  try {
+    saved = await savedSession(server);
+    saved = await usableSession(saved);
+    const send = async (value: SavedSession): Promise<{ status: number; data?: T }> => {
+      await assertSavedSessionCurrent(value);
+      return request(`${value.session.server}${path}`, {
+        ...init,
+        headers: { ...init.headers, Authorization: `Bearer ${value.session.accessToken}` },
+      }, async (response, signal) => ({ status: response.status, ...(response.ok ? { data: await consume(response, signal) } : {}) }));
+    };
+    let result = await send(saved);
+    if (result.status === 401) {
+      saved = await usableSession(saved, true);
+      result = await send(saved);
+    }
+    // Includes changes made by another browser tab or to the native backend.
+    await assertSavedSessionCurrent(saved);
+    if (result.status < 200 || result.status >= 300) throw new WallabagError(`${message} (${result.status})`, result.status === 401 || result.status === 403);
+    return result.data as T;
+  } catch (error) {
+    if (saved && error instanceof WallabagError && error.authenticationFailed) {
+      try {
+        await assertSavedSessionCurrent(saved);
+        notifyConnectionChanged();
+      } catch {
+        // A late failure from a replaced account cannot invalidate its successor.
+      }
+    }
+    if (error instanceof WallabagError) throw error;
+    throw new WallabagError('Could not access saved Wallabag credentials. Reconnect in Settings.');
+  }
+}
+
 export async function saveToWallabag(server: string, link: string): Promise<void> {
   let target: URL;
   try {
     target = new URL(link);
     if (!['http:', 'https:'].includes(target.protocol) || target.username || target.password) throw new Error();
   } catch { throw new WallabagError('Invalid article URL'); }
+  await authenticatedRequest(server, '/api/entries.json', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: target.href }),
+  }, () => undefined, 'Wallabag could not save the link');
+}
+
+function positiveInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+}
+
+function entryFlag(value: unknown): boolean {
+  if (value === true || value === 1) return true;
+  if (value === false || value === 0) return false;
+  throw new WallabagError('Wallabag returned an invalid article');
+}
+
+function parseEntry(value: unknown): WallabagEntry {
+  if (!record(value) || !positiveInteger(value.id) ||
+      (value.title != null && typeof value.title !== 'string') ||
+      (value.url != null && typeof value.url !== 'string') ||
+      (value.content != null && typeof value.content !== 'string')) throw new WallabagError('Wallabag returned an invalid article');
+  const tags: WallabagEntry['tags'] = [];
+  if (Array.isArray(value.tags)) {
+    for (const tag of value.tags) {
+      if (typeof tag === 'string') tags.push({ label: tag });
+      else if (record(tag) && typeof tag.label === 'string') tags.push({
+        label: tag.label,
+        ...(positiveInteger(tag.id) ? { id: tag.id } : {}),
+        ...(typeof tag.slug === 'string' ? { slug: tag.slug } : {}),
+      });
+    }
+  }
+  return {
+    id: value.id,
+    title: typeof value.title === 'string' ? value.title : '',
+    url: typeof value.url === 'string' ? value.url : '',
+    content: typeof value.content === 'string' ? value.content : '',
+    is_archived: entryFlag(value.is_archived),
+    is_starred: entryFlag(value.is_starred),
+    created_at: typeof value.created_at === 'string' ? value.created_at : '',
+    ...(typeof value.reading_time === 'number' && Number.isSafeInteger(value.reading_time) && value.reading_time >= 0 ? { reading_time: value.reading_time } : {}),
+    ...(typeof value.domain_name === 'string' ? { domain_name: value.domain_name } : {}),
+    ...(typeof value.preview_picture === 'string' ? { preview_picture: value.preview_picture } : {}),
+    tags,
+  };
+}
+
+function parseEntriesPage(value: unknown): WallabagEntriesPage {
+  if (!record(value) || !record(value._embedded) || !Array.isArray(value._embedded.items) || value._embedded.items.length > 100 ||
+      !positiveInteger(value.page) || typeof value.pages !== 'number' || !Number.isSafeInteger(value.pages) || value.pages < 0 ||
+      typeof value.total !== 'number' || !Number.isSafeInteger(value.total) || value.total < 0 ||
+      (value._embedded.items.length > 0 && (value.page > value.pages || value.total < value._embedded.items.length))) {
+    throw new WallabagError('Wallabag returned an invalid article list');
+  }
+  return { items: value._embedded.items.map(parseEntry), page: value.page, pages: Math.max(1, value.pages), total: value.total };
+}
+
+/** Fetch metadata only; individual article content is loaded when opened. */
+export async function listWallabagEntries(server: string, options: WallabagEntriesOptions = {}): Promise<WallabagEntriesPage> {
+  const { filter = 'unread', page = 1, perPage = 30, search = '' } = options;
+  if (!positiveInteger(page) || !positiveInteger(perPage) || perPage > 100 || !['unread', 'archived', 'starred', 'all'].includes(filter)) {
+    throw new WallabagError('Invalid Wallabag article list options');
+  }
+  const query = new URLSearchParams({ page: String(page), perPage: String(perPage), sort: 'created', order: 'desc', detail: 'metadata' });
+  if (filter === 'unread') query.set('archive', '0');
+  if (filter === 'archived') query.set('archive', '1');
+  if (filter === 'starred') query.set('starred', '1');
+  if (search.trim()) {
+    const searchQuery = new URLSearchParams({ term: search.trim(), page: String(page), perPage: String(perPage) });
+    return authenticatedRequest(server, `/api/search.json?${searchQuery}`, { method: 'GET' }, async (response, signal) =>
+      parseEntriesPage(await boundedJson(response, maxArticleBytes, 'Wallabag returned an invalid article list', signal)), 'Wallabag could not search articles');
+  }
+  return authenticatedRequest(server, `/api/entries.json?${query}`, { method: 'GET' }, async (response, signal) =>
+    parseEntriesPage(await boundedJson(response, maxArticleBytes, 'Wallabag returned an invalid article list', signal)), 'Wallabag could not load articles');
+}
+
+/** A saved token alone is insufficient: the server must accept a reader request. */
+export async function validateWallabagConnection(server: string): Promise<boolean> {
+  try {
+    await listWallabagEntries(server, { filter: 'all', perPage: 1 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function getWallabagEntry(server: string, id: number): Promise<WallabagEntry> {
+  if (!positiveInteger(id)) throw new WallabagError('Invalid Wallabag article ID');
+  return authenticatedRequest(server, `/api/entries/${id}.json`, { method: 'GET' }, async (response, signal) => {
+    const entry = parseEntry(await boundedJson(response, maxArticleBytes, 'Wallabag returned an invalid article', signal));
+    if (entry.id !== id) throw new WallabagError('Wallabag returned an invalid article');
+    return entry;
+  }, 'Wallabag could not load the article');
+}
+
+export async function updateWallabagEntry(server: string, id: number, changes: { archive?: boolean; starred?: boolean }): Promise<WallabagEntry> {
+  if (!positiveInteger(id)) throw new WallabagError('Invalid Wallabag article ID');
+  if (!record(changes) || (changes.archive === undefined && changes.starred === undefined) ||
+      (changes.archive !== undefined && typeof changes.archive !== 'boolean') ||
+      (changes.starred !== undefined && typeof changes.starred !== 'boolean')) throw new WallabagError('Invalid Wallabag article update');
+  // Wallabag expects 0/1; strings such as "false" cast to true on its PHP API.
+  const body = {
+    ...(changes.archive !== undefined ? { archive: Number(changes.archive) } : {}),
+    ...(changes.starred !== undefined ? { starred: Number(changes.starred) } : {}),
+  };
+  return authenticatedRequest(server, `/api/entries/${id}.json`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  }, async (response, signal) => {
+    const entry = parseEntry(await boundedJson(response, maxArticleBytes, 'Wallabag returned an invalid article', signal));
+    if (entry.id !== id) throw new WallabagError('Wallabag returned an invalid article');
+    return entry;
+  }, 'Wallabag could not update the article');
+}
+
+/** A credential-free article projection used by the optional local index. */
+export interface WallabagIndexEntry {
+  id: number;
+  title: string;
+  url: string;
+  content: string;
+  createdAt: string;
+}
+export interface WallabagIndexPage {
+  scope: string;
+  entries: WallabagIndexEntry[];
+  hasMore: boolean;
+}
+
+async function searchSession(server: string): Promise<SavedSession> {
   const normalized = normalizeWallabagServer(server);
-  let saved = await withSessionLock(async () => {
+  return withSessionLock(async () => {
     const store = await selectedStore();
-    const session = await readSession(store);
+    let session = await readSession(store);
     if (!session || session.server !== normalized) throw new WallabagError('Connect Wallabag in Settings first');
+    // Older connections predate connectionId. Assign it once under the same
+    // lock used for token rotation so subsequent imports use one stable scope.
+    if (!session.connectionId) {
+      session = { ...session, connectionId: crypto.randomUUID() };
+      await writeSession(store, session);
+    }
+    // Every indexed article read goes through this function. Refuse the read
+    // if its independent cleanup identity cannot be saved durably.
+    await rememberSearchScope(session);
     return { store, session, generation };
   });
+}
+
+/** Read an opaque, non-secret connection identity; never return the session. */
+export async function wallabagSearchScope(server: string): Promise<string> {
+  return searchScope((await searchSession(server)).session)!;
+}
+
+function checkCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new DOMException('Wallabag sync cancelled.', 'AbortError');
+}
+
+async function readEntryResponse(response: Response): Promise<Record<string, unknown>> {
+  // Article HTML is much larger than a token response. Bound the entire page
+  // before parsing it so a broken server cannot exhaust a mobile webview.
+  const maxBytes = 16 * 1024 * 1024;
+  const reader = response.body?.getReader();
+  if (!reader) throw new WallabagError('Wallabag returned an invalid article page');
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) throw new WallabagError('The Wallabag article page is too large. Try again with fewer items.');
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  try {
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    const data: unknown = JSON.parse(new TextDecoder().decode(bytes));
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error();
+    return data as Record<string, unknown>;
+  } catch {
+    throw new WallabagError('Wallabag returned an invalid article page');
+  }
+}
+
+/**
+ * Read a bounded page, newest saved first, using the existing encrypted
+ * session and native/browser transport. expectedScope pins a multi-page
+ * import to its original connection, including reconnections to one server.
+ */
+export async function listWallabagIndexEntries(server: string, options: {
+  page?: number;
+  perPage?: number;
+  expectedScope?: string;
+  since?: number;
+  signal?: AbortSignal;
+} = {}): Promise<WallabagIndexPage> {
+  const page = options.page ?? 1;
+  const perPage = options.perPage ?? 50;
+  if (!Number.isSafeInteger(page) || page < 1 || page > 10000 ||
+      !Number.isSafeInteger(perPage) || perPage < 1 || perPage > 50 ||
+      (options.since !== undefined && (!Number.isSafeInteger(options.since) || options.since < 0))) throw new WallabagError('Invalid Wallabag page size');
+  checkCancelled(options.signal);
+  let saved = await searchSession(server);
+  const scope = searchScope(saved.session)!;
+  if (options.expectedScope && options.expectedScope !== scope) throw connectionChanged();
   saved = await usableSession(saved);
-  const save = (value: SavedSession) => {
+  const fetchPage = async (value: SavedSession) => {
+    checkCancelled(options.signal);
     assertConnection(value, value.session);
-    return request(`${value.session.server}/api/entries.json`, { method: 'POST', headers: { Authorization: `Bearer ${value.session.accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ url: target.href }) }, response => response.status);
+    const params = new URLSearchParams({ page: String(page), perPage: String(perPage), sort: options.since === undefined ? 'created' : 'updated', order: 'desc' });
+    if (options.since !== undefined) params.set('since', String(options.since));
+    return request(`${value.session.server}/api/entries.json?${params}`, {
+      method: 'GET', headers: { Authorization: `Bearer ${value.session.accessToken}` }, signal: options.signal,
+    }, async response => {
+      if (response.status === 401) return null;
+      if (!response.ok) throw new WallabagError(`Wallabag could not load articles (${response.status})`);
+      return readEntryResponse(response);
+    });
   };
-  let status = await save(saved);
-  if (status === 401) { saved = await usableSession(saved, true); status = await save(saved); }
-  if (status < 200 || status >= 300) throw new WallabagError(`Wallabag could not save the link (${status})`);
+  let data = await fetchPage(saved);
+  if (data === null) { saved = await usableSession(saved, true); data = await fetchPage(saved); }
+  if (data === null) throw new WallabagError('Wallabag could not load articles (401)');
+  checkCancelled(options.signal);
+  await withSessionLock(async () => assertConnection(saved, await readSession(saved.store)));
+  const embedded = data._embedded as { items?: unknown } | undefined;
+  if (!embedded || !Array.isArray(embedded.items) || embedded.items.length > perPage) throw new WallabagError('Wallabag returned an invalid article page');
+  const entries = embedded.items.map((item: unknown): WallabagIndexEntry => {
+    if (!item || typeof item !== 'object') throw new WallabagError('Wallabag returned an invalid article');
+    const entry = item as Record<string, unknown>;
+    if (!Number.isSafeInteger(entry.id) || Number(entry.id) <= 0 || typeof entry.title !== 'string' ||
+        typeof entry.url !== 'string' || typeof entry.created_at !== 'string' || !Number.isFinite(Date.parse(entry.created_at)) ||
+        (entry.content !== undefined && typeof entry.content !== 'string')) throw new WallabagError('Wallabag returned an invalid article');
+    return { id: Number(entry.id), title: entry.title, url: entry.url, content: entry.content as string ?? '', createdAt: entry.created_at };
+  });
+  const pages = Number(data.pages);
+  // Never follow a server-supplied next URL: it could cross origins with auth.
+  const hasMore = entries.length > 0 && (Number.isSafeInteger(pages) && pages >= page ? page < pages : entries.length === perPage);
+  return { scope, entries, hasMore };
 }

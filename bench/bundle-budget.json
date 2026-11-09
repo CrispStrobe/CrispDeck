@@ -38,7 +38,9 @@
 
   "//maxEntryGzip": [
     "Ceiling on the entry every visitor pays before anything renders.",
-    "Measured at 66.3 KB when this was set."
+    "Measured at 90.6 KB with the verified Wallabag navigation and reader",
+    "translations. The reader API, watcher, and sanitizer remain lazy; allow",
+    "one additional KB for the localized shell and route-manifest overhead."
   ],
-  "maxEntryGzip": 92160
+  "maxEntryGzip": 93184
 }

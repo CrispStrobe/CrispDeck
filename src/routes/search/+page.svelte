@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { useLocalSearchTranslations } from '$lib/local-search-i18n.svelte';
+  const localSearch = useLocalSearchTranslations();
   import { appendOperator as append, fromMeOperator, pastWeekOperator } from '$lib/search-operators';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
@@ -12,13 +14,20 @@
   import { normalizePost } from '$lib/api/unified';
   import { searchMastodon, searchThreads, mergeSearchResults } from '$lib/universal-search';
   import Post from '$lib/components/Post.svelte';
+  import LocalSearch from '$lib/components/LocalSearch.svelte';
+  import { getSearchCacheGeneration } from '$lib/search-cache-lazy';
+  import { queuePostsForSearchCache } from '$lib/search-cache-lazy';
   import type { UnifiedPost, Account, Platform } from '$lib/types';
 
   let accounts: Account[] = $state([]);
   let loading = $state(true);
   let searching = $state(false);
   let error = $state('');
-  let query = $state('');
+  const initialParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+  let query = $state(initialParams.get('q') ?? '');
+  let searchScope = $state<'networks' | 'local'>(initialParams.get('scope') === 'local' ? 'local' : 'networks');
+  let remoteInitialized = false;
+  let disposed = false;
   let results: UnifiedPost[] = $state([]);
   let actors: SearchActor[] = $state([]);
   let searchSequence = 0;
@@ -54,24 +63,32 @@
     query = append(query, op);
   }
 
-  onMount(async () => {
+  async function initializeRemoteSearch() {
+    if (remoteInitialized) return;
+    remoteInitialized = true;
     try {
       const result = await initAllClients();
+      if (disposed) return;
       accounts = result.accounts;
       clientEntries = result.clients;
-      // Auto-search from URL params (e.g. /search?q=%23hashtag)
-      const params = new URLSearchParams(window.location.search);
-      const q = params.get('q');
-      if (q) {
-        query = q;
-        await handleSearch();
-      }
+      if (query.trim() && searchScope === 'networks') await handleSearch();
     } catch (e) {
-      error = String(e);
+      if (!disposed) error = String(e);
     } finally {
-      loading = false;
-      refreshSavedSearches();
+      if (!disposed) loading = false;
     }
+  }
+
+  function changeSearchScope(scope: 'networks' | 'local') {
+    searchScope = scope;
+    if (scope === 'networks') void initializeRemoteSearch();
+  }
+
+  onMount(() => {
+    refreshSavedSearches();
+    // Opening local search must not require a network connection or token refresh.
+    if (searchScope === 'networks') void initializeRemoteSearch();
+    return () => { disposed = true; searchSequence++; };
   });
 
   async function handleSearch() {
@@ -85,26 +102,28 @@
 
     const resultsByPlatform = new Map<Platform, UnifiedPost[]>();
     const q = query.trim();
+    const cacheGeneration = getSearchCacheGeneration();
 
     const searchResults = await Promise.allSettled(accounts.map(async (acct) => {
       const entry = clientEntries.get(acct.id);
       if (!entry) return { platform: acct.platform, posts: [] as UnifiedPost[] };
+      const scopedPosts = (posts: UnifiedPost[]) => posts.map(post => ({ ...post, sourceAccountId: acct.id, sourceAccount: acct.handle }));
 
       if (acct.platform === 'bluesky') {
         const found = await searchBlueskyAccount(entry, q);
-        return { platform: acct.platform, ...found };
+        return { platform: acct.platform, ...found, posts: scopedPosts(found.posts) };
       } else if (acct.platform === 'mastodon') {
         const masto = entry.client as MastodonClient;
         const token = masto.getAccessToken();
         if (!token) return { platform: acct.platform, posts: [] };
         const statuses = await searchMastodon(q, masto.getInstanceUrl(), token, 40);
-        return { platform: acct.platform, posts: statuses.map((s: any) => normalizePost(s, 'mastodon')) };
+        return { platform: acct.platform, posts: scopedPosts(statuses.map((s: any) => normalizePost(s, 'mastodon'))) };
       } else if (acct.platform === 'threads') {
         const threads = entry.client as ThreadsClient;
         const token = threads.getAccessToken?.();
         if (!token) return { platform: acct.platform, posts: [] };
         const threadsPosts = await searchThreads(q, token, 25);
-        return { platform: acct.platform, posts: threadsPosts.map((p: any) => threads.normalizePost(p)) };
+        return { platform: acct.platform, posts: scopedPosts(threadsPosts.map((p: any) => threads.normalizePost(p))) };
       }
       return { platform: acct.platform, posts: [] as UnifiedPost[] };
     }));
@@ -119,6 +138,7 @@
         if (result.value.postFailed || result.value.actorFailed) failed++;
       }
       if (result.value.posts.length > 0) {
+        queuePostsForSearchCache(result.value.posts, cacheGeneration);
         const p = result.value.platform;
         resultsByPlatform.set(p, [...(resultsByPlatform.get(p) ?? []), ...result.value.posts]);
       }
@@ -140,6 +160,21 @@
     <Search size={24} />
     <h1 class="text-2xl font-bold">{i18n.t.search.title}</h1>
   </div>
+
+  <div role="group" aria-label={localSearch.t.searchScope} class="flex flex-wrap gap-2 mb-5">
+    <button type="button" aria-pressed={searchScope === 'networks'} onclick={() => changeSearchScope('networks')}
+      class="px-4 py-2 rounded-lg border text-sm transition-colors {searchScope === 'networks' ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white' : 'border-[var(--color-border)] bg-[var(--color-surface)]'}">
+      {localSearch.t.networks}
+    </button>
+    <button type="button" aria-pressed={searchScope === 'local'} onclick={() => changeSearchScope('local')}
+      class="px-4 py-2 rounded-lg border text-sm transition-colors {searchScope === 'local' ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white' : 'border-[var(--color-border)] bg-[var(--color-surface)]'}">
+      {localSearch.t.onDevice}
+    </button>
+  </div>
+
+  {#if searchScope === 'local'}
+    <LocalSearch bind:query />
+  {:else}
 
   {#if error}
     <div class="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">{error}</div>
@@ -307,5 +342,6 @@
         {/each}
       </div>
     </div>
+  {/if}
   {/if}
 </div>
