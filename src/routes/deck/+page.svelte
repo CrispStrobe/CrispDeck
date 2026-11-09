@@ -23,7 +23,7 @@
   import { initAllClients, invalidateClientCache, type ClientEntry } from '$lib/api/client-factory';
   import { Columns3, Plus, Loader2, Pencil } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
-  import { deckColumnCount } from '$lib/deck-navigation';
+  import { deckColumnCount } from '$lib/deck-navigation-copy';
   import { deckColumnLabels, displayDeckColumnTitle } from '$lib/deck-column-labels';
   import StarterWorkspaces from '$lib/components/StarterWorkspaces.svelte';
   import { STARTER_WORKSPACES, type WorkspaceId } from '$lib/starter-workspaces';

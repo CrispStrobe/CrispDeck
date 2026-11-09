@@ -5,7 +5,8 @@
   import { hrefOrHash } from '$lib/safe-url';
   import { base } from '$app/paths';
   import { goto } from '$app/navigation';
-  import { backToDeckLabel, detailCameFromDeck } from '$lib/deck-navigation';
+  import { detailCameFromDeck } from '$lib/deck-navigation';
+  import { backToDeckLabel } from '$lib/deck-navigation-copy';
   import { onMount } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { User, Loader2, UserPlus, UserMinus, Ban, ArrowLeft } from '@lucide/svelte';

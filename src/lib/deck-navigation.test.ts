@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { backToDeckLabel, deckColumnCount, detailCameFromDeck, recordDetailOrigin } from './deck-navigation';
+import { detailCameFromDeck, recordDetailOrigin } from './deck-navigation';
+import { backToDeckLabel, deckColumnCount } from './deck-navigation-copy';
 
 describe('Deck detail navigation', () => {
   beforeEach(() => sessionStorage.clear());

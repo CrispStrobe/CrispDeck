@@ -5,7 +5,8 @@
   import { ArrowLeft, BookOpen, Share2 } from '@lucide/svelte';
   import { afterNavigate, goto } from '$app/navigation';
   import { i18n } from '$lib/i18n.svelte';
-  import { backToDeckLabel, detailCameFromDeck } from '$lib/deck-navigation';
+  import { detailCameFromDeck } from '$lib/deck-navigation';
+  import { backToDeckLabel } from '$lib/deck-navigation-copy';
   import { loadThreadPage, parseThreadRequest, threadErrorMessage } from '$lib/thread-loader';
   import { partitionThreadReplies } from '$lib/thread-continuation';
   import { sameThreadAuthor, threadRows } from '$lib/thread-tree';

@@ -1,6 +1,8 @@
 <script lang="ts">
   import { getTheme, setTheme, nextTheme } from '$lib/settings';
-  import { syncSystemBars } from '$lib/system-bars';
+  async function syncSystemBars(theme: import('$lib/settings').Theme) {
+    if (/Android/i.test(navigator.userAgent)) await (await import('$lib/system-bars')).syncSystemBars(theme);
+  }
   import { readJson, readString, writeJson, writeString } from '$lib/safe-storage';
   import { isNavItemActive } from '$lib/nav-active';
   import { base } from '$app/paths';
