@@ -164,7 +164,7 @@ export default {
       posts: '{count}件の投稿', filtersSort: 'フィルター＆並べ替え', hideMedia: 'メディアを非表示',
       newPosts: '{count}件の新しい投稿 — クリックで更新',
     },
-    settings: { mobileTabIconsOnly: "下部ナビゲーションにアイコンのみ表示", serverFilterKeywordOne: '{count} keyword', filterSortTitle: 'Filters & Sort', filterSortNewest: 'Sort: Newest', filterSortOldest: 'Sort: Oldest', filterSaveDefault: 'Save as default', filterReset: 'Reset filters and default', filterSaved: 'Default filters saved', filterSaveFailed: 'Could not save default filters',
+    settings: { compactFeedControls: "大画面でもコンパクトなフィード操作を使う", mobileTabIconsOnly: "下部ナビゲーションにアイコンのみ表示", serverFilterKeywordOne: '{count} keyword', filterSortTitle: 'Filters & Sort', filterSortNewest: 'Sort: Newest', filterSortOldest: 'Sort: Oldest', filterSaveDefault: 'Save as default', filterReset: 'Reset filters and default', filterSaved: 'Default filters saved', filterSaveFailed: 'Could not save default filters',
       threadsSourcesTitle: 'Threads feed sources for {account}',
       threadsSourcesImport: 'Import following list (Meta JSON export)',
       threadsSourcesLimit: 'Use at most 50 profiles and 10 keywords.',

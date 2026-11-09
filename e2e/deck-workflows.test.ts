@@ -87,6 +87,38 @@ test('like and unlike use the row source account on a shared instance', async ({
   expect(remote.calls.filter(call => /\/(un)?favourite$/.test(call.path)).map(call => call.token)).toEqual(['Bearer deck-token-2', 'Bearer deck-token-2']);
 });
 
+test('Deck post rows use separators and actions stay visible near the bottom', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 600 });
+  await network(page); await seedDeck(page);
+  const column = page.getByRole('region', { name: 'Following two', exact: true });
+  const cards = column.locator('.post-card');
+  await expect(cards).toHaveCount(2);
+  await expect(cards.first()).toHaveCSS('border-radius', '0px');
+  const more = cards.last().getByRole('button', { name: 'More post actions', exact: true });
+  await more.scrollIntoViewIfNeeded();
+  await more.click();
+  const dialog = page.getByRole('dialog', { name: 'More post actions' });
+  await expect(dialog).toBeVisible();
+  const bounds = (await dialog.boundingBox())!;
+  expect(bounds.y).toBeGreaterThanOrEqual(0);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(600);
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+});
+
+test('Deck notifications link the actor and the actual liked post', async ({ page }) => {
+  await network(page); await seedDeck(page);
+  await page.route('https://social.test/api/v1/notifications**', async route => {
+    await route.fulfill({ json: [{ id: '17', type: 'favourite', created_at: '2026-11-06T10:00:00Z', account: { id: '7', acct: 'author', username: 'author', display_name: '•', avatar: '', url: 'https://social.test/@author' }, status: status('100', 'This was liked') }] });
+  });
+  await page.evaluate(() => localStorage.setItem('crispdeck-deck-columns', JSON.stringify([{ id: 'notifications-test', title: 'Notifications test', type: 'notifications', accountIds: [2], streaming: false }])));
+  await page.reload();
+  const column = page.getByRole('region', { name: 'Notifications test', exact: true });
+  const actor = column.getByRole('link', { name: /author@social.test/ });
+  await expect(actor).toHaveAttribute('href', /profile\?handle=/);
+  const post = column.getByRole('link', { name: 'This was liked', exact: true });
+  await expect(post).toHaveAttribute('href', /thread\?id=100&platform=mastodon&account=2/);
+});
+
 test('workspaces export/import safely, retain account identity and stay usable on mobile', async ({ page }, testInfo) => {
   await network(page); await seedDeck(page);
   await page.setViewportSize({ width: 390, height: 844 });

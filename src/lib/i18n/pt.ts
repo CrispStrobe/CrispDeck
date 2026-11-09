@@ -163,7 +163,7 @@ export default {
       posts: '{count} posts', filtersSort: 'Filtros & Ordem', hideMedia: 'Ocultar mídia',
       newPosts: '{count} novo(s) post(s) — clique para atualizar',
     },
-    settings: { mobileTabIconsOnly: "Mostrar apenas ícones na navegação inferior", serverFilterKeywordOne: '{count} keyword', filterSortTitle: 'Filters & Sort', filterSortNewest: 'Sort: Newest', filterSortOldest: 'Sort: Oldest', filterSaveDefault: 'Save as default', filterReset: 'Reset filters and default', filterSaved: 'Default filters saved', filterSaveFailed: 'Could not save default filters',
+    settings: { compactFeedControls: "Usar controlos compactos do feed em ecrãs grandes", mobileTabIconsOnly: "Mostrar apenas ícones na navegação inferior", serverFilterKeywordOne: '{count} keyword', filterSortTitle: 'Filters & Sort', filterSortNewest: 'Sort: Newest', filterSortOldest: 'Sort: Oldest', filterSaveDefault: 'Save as default', filterReset: 'Reset filters and default', filterSaved: 'Default filters saved', filterSaveFailed: 'Could not save default filters',
       threadsSourcesTitle: 'Threads feed sources for {account}',
       threadsSourcesImport: 'Import following list (Meta JSON export)',
       threadsSourcesLimit: 'Use at most 50 profiles and 10 keywords.',

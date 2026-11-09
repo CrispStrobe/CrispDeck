@@ -270,6 +270,25 @@ describe('Bluesky authentication and post representations', () => {
     expect(result.notifications?.[1]).toMatchObject({ sourceAccountId: 2 });
   });
 
+  it('loads the liked post text for Deck notifications and keeps the source account', async () => {
+    const acct = account(1), fixture = bskyFixture(acct);
+    const event = bskyNotification('like', 'like');
+    fixture.listNotifications.mockResolvedValue({ data: { notifications: [event] } });
+    fixture.getPosts.mockResolvedValue({ data: { posts: [{ ...postView('parent', 'The liked post'), uri: event.reasonSubject }] } });
+    const result = await loadDeckPage(column('notifications'), [acct], new Map([[1, fixture.entry]]));
+    expect(fixture.getPosts).toHaveBeenCalledWith({ uris: [event.reasonSubject] });
+    expect(result.notifications?.[0]).toMatchObject({ text: 'The liked post', postUri: event.reasonSubject, sourceAccountId: 1 });
+  });
+
+  it('keeps notifications usable when fetching the liked post fails', async () => {
+    const acct = account(1), fixture = bskyFixture(acct);
+    const event = bskyNotification('like', 'like');
+    fixture.listNotifications.mockResolvedValue({ data: { notifications: [event] } });
+    fixture.getPosts.mockRejectedValue(new Error('network'));
+    const result = await loadDeckPage(column('notifications'), [acct], new Map([[1, fixture.entry]]));
+    expect(result.notifications?.[0].postUri).toBe(event.reasonSubject);
+  });
+
   it.each([['activity', 'like'], ['followers', 'follow']] as const)('returns both grouped-notification input and account-aware rows for %s', async (type, reason) => {
     const acct = account(1), fixture = bskyFixture(acct);
     fixture.listNotifications.mockResolvedValue({ data: { notifications: [bskyNotification('event', reason), bskyNotification('mention', 'mention')], cursor: 'next' } });
@@ -383,7 +402,7 @@ describe('Mastodon wire normalization and secure pagination', () => {
     const mention = { id: '500', type: 'mention', created_at: '2026-06-02T00:00:00.000Z', account: status('90').account, status: status('90', { media_attachments: [{ type: 'image', preview_url: 'https://cdn.example/thumb' }] }) };
     fetchMock.mockResolvedValueOnce(response([mention], '<https://social.example/api/v1/notifications?max_id=400>; rel="next"'));
     const notifications = await loadDeckPage(column('notifications'), [acct], new Map([[2, networkEntry(acct)]]));
-    expect(notifications.notifications?.[0]).toMatchObject({ author: { accountId: '44', displayName: 'Author' }, postUri: mention.status.uri, sourceAccountId: 2 });
+    expect(notifications.notifications?.[0]).toMatchObject({ author: { accountId: '44', displayName: 'Author' }, postUri: mention.status.uri, postId: mention.status.id, sourceAccountId: 2 });
     fetchMock.mockResolvedValueOnce(response([mention], ''));
     const mentions = await loadDeckPage(column('mentions'), [acct], new Map([[2, networkEntry(acct)]]));
     expect(new URL(String(fetchMock.mock.calls[1][0])).searchParams.getAll('types[]')).toEqual(['mention']);

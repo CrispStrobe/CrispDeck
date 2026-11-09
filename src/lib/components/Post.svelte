@@ -174,12 +174,47 @@
   const actionsId = $props.id();
   let showMoreActions = $state(false);
   let actionsToggle: HTMLButtonElement | undefined = $state();
+  let actionsDialog: HTMLDialogElement | undefined = $state();
   const countFormatter = $derived(new Intl.NumberFormat(i18n.lang, { notation: 'compact', maximumFractionDigits: 1 }));
 
   function closePostActions(restoreFocus = false) {
     showMoreActions = false;
     showListPicker = false;
+    if (actionsDialog?.open) {
+      if (typeof actionsDialog.close === 'function') actionsDialog.close();
+      else actionsDialog.removeAttribute('open');
+    }
     if (restoreFocus) actionsToggle?.focus();
+  }
+
+  function positionPostActions() {
+    if (!actionsToggle || !actionsDialog?.open) return;
+    const anchor = actionsToggle.getBoundingClientRect();
+    const viewport = window.visualViewport;
+    const leftEdge = viewport?.offsetLeft ?? 0;
+    const topEdge = viewport?.offsetTop ?? 0;
+    const width = viewport?.width ?? window.innerWidth;
+    const height = viewport?.height ?? window.innerHeight;
+    const bar = document.querySelector<HTMLElement>('.mobile-tab-bar');
+    const barRect = bar?.getBoundingClientRect();
+    const bottom = barRect && barRect.height ? Math.min(topEdge + height, barRect.top) : topEdge + height;
+    const menu = actionsDialog.getBoundingClientRect();
+    const left = Math.max(leftEdge + 8, Math.min(anchor.right - menu.width, leftEdge + width - menu.width - 8));
+    const below = anchor.bottom + 4;
+    const top = below + menu.height <= bottom - 8 ? below : Math.max(topEdge + 8, Math.min(anchor.top - menu.height - 4, bottom - menu.height - 8));
+    actionsDialog.style.left = `${left}px`;
+    actionsDialog.style.top = `${top}px`;
+    actionsDialog.style.maxHeight = `${Math.max(44, bottom - topEdge - 16)}px`;
+  }
+
+  async function togglePostActions() {
+    if (showMoreActions) { closePostActions(); return; }
+    showMoreActions = true;
+    await tick();
+    if (!showMoreActions || !actionsDialog?.isConnected) return;
+    if (typeof actionsDialog.showModal === 'function') actionsDialog.showModal();
+    else actionsDialog.setAttribute('open', '');
+    positionPostActions();
   }
 
   // Only expanded disclosures listen for dismissal. They remain ordinary
@@ -197,9 +232,20 @@
     };
     document.addEventListener('keydown', onKeydown);
     document.addEventListener('pointerdown', onPointerdown);
+    window.addEventListener('resize', positionPostActions);
+    window.addEventListener('scroll', positionPostActions, true);
+    window.visualViewport?.addEventListener('resize', positionPostActions);
+    window.visualViewport?.addEventListener('scroll', positionPostActions);
+    const observer = typeof ResizeObserver === 'undefined' || !actionsDialog ? undefined : new ResizeObserver(positionPostActions);
+    if (actionsDialog) observer?.observe(actionsDialog);
     return () => {
       document.removeEventListener('keydown', onKeydown);
       document.removeEventListener('pointerdown', onPointerdown);
+      window.removeEventListener('resize', positionPostActions);
+      window.removeEventListener('scroll', positionPostActions, true);
+      window.visualViewport?.removeEventListener('resize', positionPostActions);
+      window.visualViewport?.removeEventListener('scroll', positionPostActions);
+      observer?.disconnect();
     };
   });
 
@@ -1418,7 +1464,7 @@
       <button
         type="button"
         bind:this={actionsToggle}
-        onclick={() => { if (showMoreActions) closePostActions(); else showMoreActions = true; }}
+        onclick={togglePostActions}
         class="transition-colors {showMoreActions ? 'text-[var(--color-primary-text)] bg-[var(--color-surface-hover)]' : 'text-[var(--color-text-muted)]'} hover:text-[var(--color-text)]"
         title={i18n.t.post.moreActions}
         aria-label={i18n.t.post.moreActions}
@@ -1431,6 +1477,7 @@
 
     <!-- Secondary actions take space only after an explicit tap. Keeping
          visible labels also makes the same controls usable without hover. -->
+    <dialog bind:this={actionsDialog} class="post-action-dialog" aria-label={i18n.t.post.moreActions} oncancel={() => closePostActions(true)} onclose={() => { showMoreActions = false; showListPicker = false; }} onclick={(event) => { if (event.target === actionsDialog) closePostActions(true); }}>
     <div id={actionsId} class="post-secondary-actions" hidden={!showMoreActions} role="group" aria-label={i18n.t.post.moreActions}>
       {#if onquote}
         <button type="button" onclick={() => { closePostActions(true); onquote?.(post); }} aria-label={i18n.t.post.quotePost}>
@@ -1487,6 +1534,7 @@
         <XIcon size={18} /><span>{i18n.t.common.close}</span>
       </button>
     </div>
+    </dialog>
     {#if shareError}
       <p class="mt-2 text-xs text-red-400" role="status">{shareError}</p>
     {/if}
@@ -1557,9 +1605,15 @@
   .post-actions :global(svg), .post-secondary-actions :global(svg) { flex-shrink: 0; }
   .post-action-count { min-width: 0; max-width: 4ch; overflow: hidden; text-overflow: ellipsis; font-size: 0.7rem; }
   .post-actions > :hover { background: var(--color-surface-hover); }
+  @media (hover: hover) and (pointer: fine) {
+    .post-footer { margin-top: 0.125rem; }
+    .post-actions > button, .post-actions > a { min-width: 36px; min-height: 32px; }
+    .preview-toggle { min-height: 32px; }
+  }
+  .post-action-dialog { position: fixed; inset: auto; margin: 0; width: min(24rem, calc(100vw - 1rem)); max-width: none; overflow: auto; padding: 0.4rem; color: var(--color-text); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 0.6rem; box-shadow: 0 0.6rem 2rem #0008; }
+  .post-action-dialog::backdrop { background: transparent; }
   .post-secondary-actions {
     display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.25rem;
-    margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--color-border);
   }
   .post-secondary-actions[hidden], .post-reading-lists[hidden] { display: none; }
   .post-secondary-actions button, .post-secondary-actions a {

@@ -163,7 +163,7 @@ export default {
       posts: '{count}条帖子', filtersSort: '筛选与排序', hideMedia: '隐藏媒体',
       newPosts: '{count}条新帖子 — 点击刷新',
     },
-    settings: { mobileTabIconsOnly: "底部导航仅显示图标", serverFilterKeywordOne: '{count} keyword', filterSortTitle: 'Filters & Sort', filterSortNewest: 'Sort: Newest', filterSortOldest: 'Sort: Oldest', filterSaveDefault: 'Save as default', filterReset: 'Reset filters and default', filterSaved: 'Default filters saved', filterSaveFailed: 'Could not save default filters',
+    settings: { compactFeedControls: "在大屏幕上使用紧凑动态控制", mobileTabIconsOnly: "底部导航仅显示图标", serverFilterKeywordOne: '{count} keyword', filterSortTitle: 'Filters & Sort', filterSortNewest: 'Sort: Newest', filterSortOldest: 'Sort: Oldest', filterSaveDefault: 'Save as default', filterReset: 'Reset filters and default', filterSaved: 'Default filters saved', filterSaveFailed: 'Could not save default filters',
       threadsSourcesTitle: 'Threads feed sources for {account}',
       threadsSourcesImport: 'Import following list (Meta JSON export)',
       threadsSourcesLimit: 'Use at most 50 profiles and 10 keywords.',

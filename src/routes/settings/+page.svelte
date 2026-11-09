@@ -348,6 +348,7 @@
   let homeMode = $state<HomeMode>(getHomeMode());
   let density = $state<DensityMode>(getDensity());
   let mobileTabIconsOnly = $state(readString('crispdeck-mobile-tab-icons-only') === 'true');
+  let compactFeedControls = $state(readString('crispdeck-compact-feed-controls') === 'true');
 
   const fontMap: Record<FontFamily, string> = {
     system: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif",
@@ -1306,6 +1307,12 @@
       </div>
 
       <!-- Hide engagement counts -->
+      <div class="flex items-center justify-between">
+        <label for="compact-feed-controls" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.compactFeedControls}</label>
+        <input id="compact-feed-controls" type="checkbox" bind:checked={compactFeedControls}
+          onchange={() => { writeString('crispdeck-compact-feed-controls', String(compactFeedControls)); window.dispatchEvent(new Event('crispdeck:prefs-changed')); }}
+          class="w-4 h-4 accent-[var(--color-primary)]" />
+      </div>
       <div class="flex items-center justify-between">
         <label for="mobile-tab-icons-only" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.mobileTabIconsOnly}</label>
         <input id="mobile-tab-icons-only" type="checkbox" bind:checked={mobileTabIconsOnly}

@@ -105,6 +105,22 @@ describe('deck column rendering and continuous reading', () => {
     expect([...target.querySelectorAll('a')].some(element => element.textContent === 'Notification text')).toBe(false);
   });
 
+  it('links both grouped actors and the liked post in the notification column', async () => {
+    const uri = 'at://did:plc:reader/app.bsky.feed.post/parent';
+    const groups = groupNotifications([
+      { id: '1', platform: 'bluesky', type: 'like', createdAt: '2026-11-06', author: { handle: 'alice.test', displayName: '•' }, postUri: uri, sourceAccountId: 7, text: 'The liked post' },
+      { id: '2', platform: 'bluesky', type: 'like', createdAt: '2026-11-06', author: { handle: 'bob.test' }, postUri: uri, sourceAccountId: 7 },
+    ]);
+    const target = await render({ type: 'notifications', notificationGroups: groups });
+    expect([...target.querySelectorAll('a')].find(a => a.textContent === 'alice.test')?.getAttribute('href')).toContain('handle=alice.test');
+    const postLink = [...target.querySelectorAll('a')].find(a => a.textContent === 'The liked post');
+    expect(postLink?.getAttribute('href')).toContain('account=7');
+    const toggle = target.querySelector<HTMLButtonElement>('[data-feed-key="notification:1"] [aria-expanded="false"]');
+    expect(toggle).not.toBeNull();
+    flushSync(() => toggle!.click());
+    expect([...target.querySelectorAll('a')].some(a => a.textContent === 'bob.test' && a.getAttribute('href')?.includes('handle=bob.test'))).toBe(true);
+  });
+
   it('does not jump to the head when older posts append to an unlocked column', async () => {
     const rows = [post('a'), post('b')];
     const target = await render({ posts: rows, scrollLock: false });

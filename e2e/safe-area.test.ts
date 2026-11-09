@@ -136,3 +136,24 @@ test('bottom navigation icon-only setting persists and keeps accessible names', 
   await setting.uncheck();
   await expect(tabs).toHaveCSS('height', '56px');
 });
+
+test('compact feed controls can be set as the wide-screen default', async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 800 });
+  await page.goto('/settings?tab=appearance');
+  const setting = page.getByLabel('Use compact feed controls on wide screens');
+  await setting.check();
+  await page.goto('/feed');
+  const controls = page.locator('.mobile-feed-controls');
+  await expect(controls).toBeVisible();
+  const mode = controls.getByRole('combobox', { name: 'Switch feed' });
+  await expect(mode).toBeVisible();
+  const rect = (await controls.boundingBox())!;
+  expect(rect.x + rect.width).toBeLessThanOrEqual(1500);
+  await page.reload();
+  await expect(mode).toBeVisible();
+  await page.goto('/settings?tab=appearance');
+  await expect(setting).toBeChecked();
+  await setting.uncheck();
+  await page.goto('/feed');
+  await expect(controls).toBeHidden();
+});

@@ -240,6 +240,12 @@ for (const width of [320, 360, 390, 430]) {
     await more.tap();
     await expect(more).toHaveAttribute('aria-expanded', 'true');
     const actions = post.getByRole('group', { name: 'More post actions', exact: true });
+    const dialog = post.getByRole('dialog', { name: 'More post actions', exact: true });
+    const dialogBounds = (await dialog.boundingBox())!;
+    expect(dialogBounds.y).toBeGreaterThanOrEqual(0);
+    expect(dialogBounds.y + dialogBounds.height).toBeLessThanOrEqual(tabs.y + 1);
+    expect(dialogBounds.x).toBeGreaterThanOrEqual(0);
+    expect(dialogBounds.x + dialogBounds.width).toBeLessThanOrEqual(width);
     for (const name of ['Quote post', 'Copy link to post', 'Translate post', 'Report post']) {
       await expect(actions.getByRole('button', { name, exact: true })).toBeVisible();
     }
@@ -256,3 +262,22 @@ for (const width of [320, 360, 390, 430]) {
     }
   });
 }
+
+test('post actions open above a trigger near the viewport bottom', async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 390, height: 600 });
+  await seedFeed(page, baseURL!);
+  const main = page.locator('#main-content');
+  const more = main.locator('article').last().getByRole('button', { name: 'More post actions', exact: true });
+  await more.scrollIntoViewIfNeeded();
+  const trigger = (await more.boundingBox())!;
+  await more.tap();
+  const dialog = page.getByRole('dialog', { name: 'More post actions' });
+  await expect(dialog).toBeVisible();
+  const panel = (await dialog.boundingBox())!;
+  const tabs = (await page.locator('.mobile-tab-bar').boundingBox())!;
+  expect(panel.y).toBeGreaterThanOrEqual(0);
+  expect(panel.y + panel.height).toBeLessThanOrEqual(tabs.y + 1);
+  expect(panel.y).toBeLessThan(trigger.y);
+  await dialog.getByRole('button', { name: 'Close', exact: true }).tap();
+  await expect(dialog).not.toBeVisible();
+});
