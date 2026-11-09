@@ -6,6 +6,28 @@ const RTL_LANGUAGES: Language[] = ['ar'];
 
 export const translations = {
   en: {
+    instagram: {
+      title: 'Instagram',
+      subtitle: 'Instagram website · signed-in feed',
+      sessionNote: 'Instagram uses its own sign-in and keeps this feed separate from your CrispDeck accounts.',
+      followingHint: 'For a chronological feed, choose Following in Instagram’s own menu when available.',
+      home: 'Home',
+      reload: 'Reload',
+      popout: 'Open in a window',
+      openBrowser: 'Open in browser',
+      retry: 'Try again',
+      loading: 'Loading Instagram…',
+      hidden: 'Instagram will return when this view is fully visible.',
+      externalTitle: 'Open your Instagram feed',
+      externalHint: 'Use the Windows or macOS desktop app for an embedded timeline. On this device, open Instagram in your browser to use its full feed.',
+      windowTitle: 'Instagram alongside CrispDeck',
+      windowHint: 'Use an Instagram window alongside CrispDeck on this desktop. Sign in on Instagram to browse your full feed.',
+      loadFailed: 'Instagram could not be loaded here. Try again or open it in your browser.',
+      browserFailed: 'Could not open Instagram in your browser.',
+      popoutFailed: 'Could not open the Instagram window. Try opening it in your browser.',
+      timelineLabel: 'Instagram timeline',
+      originLabel: 'Current website',
+    },
     workflow: {
       loadMore: "Load more",
       samplePost: "Sharing a small project update with the community today. What have you been working on?",

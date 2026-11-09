@@ -41,6 +41,7 @@ const ROUTES = [
   '/gallery',
   '/identities',
   '/instance',
+  '/instagram',
   '/labelers',
   '/lists',
   '/messages',

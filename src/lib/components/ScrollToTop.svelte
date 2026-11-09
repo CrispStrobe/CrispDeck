@@ -25,6 +25,7 @@
 
 {#if visible}
   <button
+    data-native-webview-overlay
     onclick={scrollToTop}
     class="fixed bottom-20 md:bottom-6 right-16 md:right-6 z-40 p-2.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-full shadow-lg text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-all scroll-top-enter"
     aria-label={i18n.t.common.scrollToTop}

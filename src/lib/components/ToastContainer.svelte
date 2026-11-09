@@ -27,6 +27,7 @@
 
 {#if getToasts().length > 0}
   <div
+    data-native-webview-overlay
     class="fixed bottom-16 md:bottom-4 right-4 z-[100] flex flex-col gap-2 max-w-sm w-full pointer-events-none"
     aria-live="polite"
     aria-label={i18n.t.nav.notifications}

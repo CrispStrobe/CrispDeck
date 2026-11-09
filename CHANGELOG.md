@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Instagram
+
+- Add a dedicated Instagram website timeline, inline on Windows/macOS and in a
+  native window on Linux, with sidebar and Deck links, Home/Reload controls for
+  the inline view, and a popout window for reading beside the Deck. Web and mobile
+  builds link to the official website.
+- Keep login and session cookies in the native browser; restrict remote
+  navigation, grant no native API access to Instagram, and hide/close the
+  embedded view for app overlays and route changes.
+- Translate the new UI into all eight languages and cover native policy,
+  geometry, asynchronous teardown, recovery, and browser fallback behavior.
+- Document that this is a separate web session, not a merged Instagram API
+  feed or crossposting account. Live signed-in native validation is pending.
+
 ## v1.3.3 — 2026-11-08
 
 - Add the Wallabag Reader and optional local search with full-history indexing.

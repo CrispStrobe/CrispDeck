@@ -75,7 +75,7 @@
 </script>
 
 {#if show}
-  <div bind:this={dialogEl} class="fixed inset-0 z-[100] flex items-center justify-center" role="dialog" aria-modal="true" aria-label={i18n.t.app.keyboardShortcutsLabel} tabindex="-1" onkeydown={(e) => { if (e.key === 'Escape') show = false; }}>
+  <div bind:this={dialogEl} data-native-webview-overlay class="fixed inset-0 z-[100] flex items-center justify-center" role="dialog" aria-modal="true" aria-label={i18n.t.app.keyboardShortcutsLabel} tabindex="-1" onkeydown={(e) => { if (e.key === 'Escape') show = false; }}>
     <!-- The scrim is the click-outside target. As a button it is focusable and
          Enter/Space-operable, so dismissing no longer depends on a container
          click handler that inner elements had to stop from bubbling. -->

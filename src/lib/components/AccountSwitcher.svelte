@@ -64,7 +64,7 @@
     <!-- Popover: full account list -->
     {#if showPopover}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="fixed inset-0 z-40" onclick={() => showPopover = false} onkeydown={() => {}}></div>
+      <div data-native-webview-overlay class="fixed inset-0 z-40" onclick={() => showPopover = false} onkeydown={() => {}}></div>
       <div class="absolute bottom-full left-0 mb-1 w-56 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl z-50 py-1 max-h-64 overflow-y-auto">
         <div class="px-3 py-1.5 text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-medium border-b border-[var(--color-border)]">
           {i18n.t.settings.connectedAccountsLabel}

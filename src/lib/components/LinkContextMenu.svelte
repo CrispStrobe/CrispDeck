@@ -100,7 +100,7 @@
   }
 </script>
 {#if menu}
-  <div bind:this={menuElement} role="menu" aria-label={i18n.t.linkMenu.title} class="link-menu" style:left="{menu.x}px" style:top="{menu.y}px">
+  <div bind:this={menuElement} data-native-webview-overlay role="menu" aria-label={i18n.t.linkMenu.title} class="link-menu" style:left="{menu.x}px" style:top="{menu.y}px">
     <button role="menuitem" onclick={() => menu && open(menu.url)}>{i18n.t.linkMenu.open}</button>
     <button role="menuitem" onclick={copy}>{i18n.t.linkMenu.copy}</button>
     {#if canShare}<button role="menuitem" onclick={share}>{i18n.t.linkMenu.share}</button>{/if}

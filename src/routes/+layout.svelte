@@ -1,6 +1,5 @@
 <script lang="ts">
   import { getTheme, setTheme, nextTheme } from '$lib/settings';
-  import { syncSystemBars } from '$lib/system-bars';
   import { readJson, readString, writeJson, writeString } from '$lib/safe-storage';
   import { isNavItemActive } from '$lib/nav-active';
   import { base } from '$app/paths';
@@ -8,7 +7,7 @@
   import '../app.css';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import { Home, Rss, Columns3, PenSquare, Bell, MessageSquare, Bookmark, BookOpen, Users, Search, List, Shield, TrendingUp, Archive, BarChart3, Settings, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon, Smartphone } from '@lucide/svelte';
+  import { Home, Rss, Columns3, Camera, PenSquare, Bell, MessageSquare, Bookmark, BookOpen, Users, Search, List, Shield, TrendingUp, Archive, BarChart3, Settings, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon, Smartphone } from '@lucide/svelte';
   import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
   import ToastContainer from '$lib/components/ToastContainer.svelte';
   import { isTauri } from '@tauri-apps/api/core';
@@ -78,6 +77,11 @@
   }
   let theme = $state<'dark' | 'oled' | 'light'>('dark');
 
+  function syncSystemBars(theme: 'dark' | 'oled' | 'light') {
+    if (!isTauri() || !/Android/i.test(navigator.userAgent)) return;
+    void import('$lib/system-bars').then(module => module.syncSystemBars(theme)).catch(error => swallow('layout.systemBars', error));
+  }
+
   function toggleTheme() {
     theme = nextTheme(theme);
     document.documentElement.setAttribute('data-theme', theme);
@@ -86,11 +90,14 @@
   }
   let showShortcuts = $state(false);
   let KeyboardShortcuts = $state<typeof import('$lib/components/KeyboardShortcuts.svelte').default>();
+  let shortcutsLoadFailed = $state(false);
   $effect(() => {
-    if (showShortcuts && !KeyboardShortcuts) {
-      void import('$lib/components/KeyboardShortcuts.svelte').then(module => { KeyboardShortcuts = module.default; }).catch(error => swallow('layout.shortcuts', error));
+    if (!showShortcuts) { shortcutsLoadFailed = false; return; }
+    if (showShortcuts && !KeyboardShortcuts && !shortcutsLoadFailed) {
+      void import('$lib/components/KeyboardShortcuts.svelte').then(module => { KeyboardShortcuts = module.default; }).catch(() => { shortcutsLoadFailed = true; });
     }
   });
+  function focusShortcutsFallback(button: HTMLButtonElement) { button.focus(); }
   let offline = $state(false);
   let pendingG = $state(false);
   let _postElsCache: NodeListOf<Element> | null = null;
@@ -128,6 +135,12 @@
   // Page transitions via View Transitions API (progressive enhancement)
   onNavigate((navigation) => {
     if (!document.startViewTransition) return;
+    // A native Instagram browser is a separate surface: it cannot be captured
+    // in DOM transition snapshots, whose overlay also prevents hit-testing the
+    // incoming viewport. Keep navigation to and from this route immediate.
+    const fromPath = navigation.from ? routePath(navigation.from.url.pathname).replace(/\/$/, '') : '';
+    const toPath = navigation.to ? routePath(navigation.to.url.pathname).replace(/\/$/, '') : '';
+    if (fromPath === '/instagram' || toPath === '/instagram') return;
     // Determine navigation direction for slide animation
     const fromDepth = routePath(window.location.pathname).split('/').filter(Boolean).length;
     const toDepth = navigation.to ? routePath(navigation.to.url.pathname).split('/').filter(Boolean).length : fromDepth;
@@ -304,6 +317,7 @@
     { href: '/', icon: Home, label: i18n.t.nav.dashboard },
     { href: '/feed', icon: Rss, label: i18n.t.nav.feed },
     { href: '/deck', icon: Columns3, label: i18n.t.nav.deck },
+    { href: '/instagram', icon: Camera, label: i18n.t.instagram.title },
     { href: '/compose', icon: PenSquare, label: i18n.t.nav.compose },
     { href: '/drafts', icon: PenSquare, label: i18n.t.nav.drafts },
     { href: '/calendar', icon: BarChart3, label: i18n.t.nav.calendar },
@@ -346,7 +360,16 @@
 </script>
 
 <svelte:window onkeydown={handleGlobalKeydown} />
-{#if KeyboardShortcuts}<KeyboardShortcuts bind:show={showShortcuts} />{/if}
+{#if showShortcuts}
+  {#if KeyboardShortcuts}
+    <KeyboardShortcuts bind:show={showShortcuts} />
+  {:else}
+    <div data-native-webview-overlay role="dialog" aria-modal="true" aria-label={i18n.t.app.keyboardShortcutsLabel} class="fixed inset-0 z-[100] bg-[var(--color-surface)] p-6">
+      <p role={shortcutsLoadFailed ? 'alert' : 'status'}>{shortcutsLoadFailed ? i18n.t.common.somethingWentWrong : i18n.t.common.loading}</p>
+      <button type="button" use:focusShortcutsFallback onclick={() => showShortcuts = false} onkeydown={(event) => { if (event.key === 'Tab') event.preventDefault(); }}>{i18n.t.common.close}</button>
+    </div>
+  {/if}
+{/if}
 
 <a href="#main-content" class="skip-to-content">{i18n.t.app.skipToContent}</a>
 
@@ -425,7 +448,7 @@
 
   <!-- Mobile slide-out menu -->
   {#if mobileMenuOpen}
-    <div class="md:hidden fixed inset-0 z-40 flex {mobileMenuClosing ? 'mobile-menu-backdrop-out' : 'mobile-menu-backdrop'}">
+    <div data-native-webview-overlay class="md:hidden fixed inset-0 z-40 flex {mobileMenuClosing ? 'mobile-menu-backdrop-out' : 'mobile-menu-backdrop'}">
       <div id="mobile-navigation" class="mobile-menu-panel w-64 bg-[var(--color-surface)] border-r border-[var(--color-border)] pt-14 overflow-y-auto {mobileMenuClosing ? 'mobile-menu-slide-out' : 'mobile-menu-slide'}">
         <a href="{base}/compose" onclick={closeMobileMenu} class="block mx-3 mt-3 px-4 py-2.5 text-center rounded-lg bg-[var(--color-primary)] text-white">{i18n.t.nav.compose}</a>
         <AppNavigation items={visibleNavItems} simple={simpleMode} path={routePath(page.url?.pathname ?? '/')} onnavigate={closeMobileMenu} />

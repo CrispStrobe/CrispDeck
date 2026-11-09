@@ -105,6 +105,7 @@ a route only findable by typing the URL is a route nobody uses.
 - [ ] `/feed-builder`
 - [ ] `/gallery`
 - [ ] `/identities`
+- [ ] `/instagram`
 - [ ] `/instance`
 - [ ] `/labelers`
 - [ ] `/lists`
