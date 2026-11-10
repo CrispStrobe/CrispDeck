@@ -3,6 +3,7 @@
   const localSearch = useLocalSearchTranslations();
   import { appendOperator as append, fromMeOperator, pastWeekOperator } from '$lib/search-operators';
   import { base } from '$app/paths';
+  import { beforeNavigate } from '$app/navigation';
   import { onMount, tick } from 'svelte';
   import { listAccounts } from '$lib/db';
   import { getSearchReturn, saveSearchReturn, clearSearchReturn, searchAccountIdentity, canRestoreSearch } from '$lib/search-return';
@@ -38,6 +39,8 @@
   let hasSearched = $state(false);
   let lastCompletedQuery = '';
   let restoredSearch = false;
+  let departingScrollTop: number | undefined;
+  beforeNavigate(() => { departingScrollTop = document.getElementById('main-content')?.scrollTop; });
 
   let showSearchHelp = $state(false);
   let savedSearches: SavedSearch[] = $state([]);
@@ -113,7 +116,7 @@
       cancelled = true;
       if (searchScope === 'networks' && hasSearched && !searching && query.trim() === lastCompletedQuery) {
         saveSearchReturn({ query: lastCompletedQuery, posts: $state.snapshot(results), actors: $state.snapshot(actors),
-          accountIdentity: searchAccountIdentity(accounts), scrollTop: document.getElementById('main-content')?.scrollTop ?? 0 });
+          accountIdentity: searchAccountIdentity(accounts), scrollTop: departingScrollTop ?? document.getElementById('main-content')?.scrollTop ?? 0 });
       }
       disposed = true; searchSequence++;
     };
