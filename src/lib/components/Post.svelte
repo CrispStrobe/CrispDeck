@@ -711,7 +711,8 @@
 
   function getProfileUrl(p: UnifiedPost): string {
     const h = encodeURIComponent(p.author.handle);
-    return `${base}/profile?handle=${h}&platform=${p.platform}`;
+    const account = p.sourceAccountId === undefined ? '' : `&account=${p.sourceAccountId}`;
+    return `${base}/profile?handle=${h}&platform=${p.platform}${account}`;
   }
 
   function getExternalProfileUrl(p: UnifiedPost): string {

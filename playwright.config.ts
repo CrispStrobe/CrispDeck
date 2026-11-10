@@ -18,6 +18,11 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
     {
+      name: 'webkit-desktop',
+      testMatch: ['mastodon-people-search.test.ts'],
+      use: { ...devices['Desktop Safari'] },
+    },
+    {
       name: 'webkit-mobile',
       testMatch: ['mobile-layout.test.ts', 'safe-area.test.ts'],
       use: { ...devices['iPhone 13'] },

@@ -3,13 +3,18 @@
   const localSearch = useLocalSearchTranslations();
   import { appendOperator as append, fromMeOperator, pastWeekOperator } from '$lib/search-operators';
   import { base } from '$app/paths';
-  import { onMount } from 'svelte';
+  import { beforeNavigate } from '$app/navigation';
+  import { onMount, tick } from 'svelte';
+  import { listAccounts } from '$lib/db';
+  import { getSearchReturn, saveSearchReturn, clearSearchReturn, searchAccountIdentity, canRestoreSearch } from '$lib/search-return';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Search, Loader2, Inbox, HelpCircle, Image, User, Calendar, Bookmark, BookmarkCheck, X } from '@lucide/svelte';
   import { listSavedSearches, saveSearch, deleteSavedSearch, isSaved, type SavedSearch } from '$lib/saved-searches';
   import { i18n } from '$lib/i18n.svelte';
   import { searchBlueskyAccount, type SearchActor } from '$lib/api/bluesky-search';
   import { MastodonClient } from '$lib/api/mastodon';
+  import { searchMastodonAccounts } from '$lib/api/mastodon-search';
+  import { isMastodonHandle } from '$lib/search-account';
   import { ThreadsClient } from '$lib/api/threads';
   import { normalizePost } from '$lib/api/unified';
   import { searchMastodon, searchThreads, mergeSearchResults } from '$lib/universal-search';
@@ -32,6 +37,10 @@
   let actors: SearchActor[] = $state([]);
   let searchSequence = 0;
   let hasSearched = $state(false);
+  let lastCompletedQuery = '';
+  let restoredSearch = false;
+  let departingScrollTop: number | undefined;
+  beforeNavigate(() => { departingScrollTop = document.getElementById('main-content')?.scrollTop; });
 
   let showSearchHelp = $state(false);
   let savedSearches: SavedSearch[] = $state([]);
@@ -71,7 +80,7 @@
       if (disposed) return;
       accounts = result.accounts;
       clientEntries = result.clients;
-      if (query.trim() && searchScope === 'networks') await handleSearch();
+      if (query.trim() && searchScope === 'networks' && !restoredSearch) await handleSearch();
     } catch (e) {
       if (!disposed) error = String(e);
     } finally {
@@ -86,9 +95,31 @@
 
   onMount(() => {
     refreshSavedSearches();
-    // Opening local search must not require a network connection or token refresh.
-    if (searchScope === 'networks') void initializeRemoteSearch();
-    return () => { disposed = true; searchSequence++; };
+    let cancelled = false;
+    void (async () => {
+      const saved = getSearchReturn();
+      if (saved && canRestoreSearch(saved, searchScope, query)) {
+        try {
+          const stored = await listAccounts();
+          if (cancelled) return;
+          if (searchAccountIdentity(stored) === saved.accountIdentity) {
+            accounts = stored; query = saved.query; results = saved.posts; actors = saved.actors;
+            hasSearched = true; lastCompletedQuery = saved.query; restoredSearch = true; loading = false;
+            await tick();
+            if (!cancelled) document.getElementById('main-content')?.scrollTo({ top: saved.scrollTop });
+          } else clearSearchReturn();
+        } catch { clearSearchReturn(); }
+      }
+      if (!cancelled && searchScope === 'networks') void initializeRemoteSearch();
+    })();
+    return () => {
+      cancelled = true;
+      if (searchScope === 'networks' && hasSearched && !searching && query.trim() === lastCompletedQuery) {
+        saveSearchReturn({ query: lastCompletedQuery, posts: $state.snapshot(results), actors: $state.snapshot(actors),
+          accountIdentity: searchAccountIdentity(accounts), scrollTop: departingScrollTop ?? document.getElementById('main-content')?.scrollTop ?? 0 });
+      }
+      disposed = true; searchSequence++;
+    };
   });
 
   async function handleSearch() {
@@ -110,14 +141,21 @@
       const scopedPosts = (posts: UnifiedPost[]) => posts.map(post => ({ ...post, sourceAccountId: acct.id, sourceAccount: acct.handle }));
 
       if (acct.platform === 'bluesky') {
+        if (isMastodonHandle(q)) return { platform: acct.platform, posts: [] as UnifiedPost[] };
         const found = await searchBlueskyAccount(entry, q);
         return { platform: acct.platform, ...found, posts: scopedPosts(found.posts) };
       } else if (acct.platform === 'mastodon') {
         const masto = entry.client as MastodonClient;
         const token = masto.getAccessToken();
         if (!token) return { platform: acct.platform, posts: [] };
-        const statuses = await searchMastodon(q, masto.getInstanceUrl(), token, 40);
-        return { platform: acct.platform, posts: scopedPosts(statuses.map((s: any) => normalizePost(s, 'mastodon'))) };
+        const [postResult, actorResult] = await Promise.allSettled([
+          searchMastodon(q, masto.getInstanceUrl(), token, 40),
+          searchMastodonAccounts(q, masto.getInstanceUrl(), token),
+        ]);
+        const statuses = postResult.status === 'fulfilled' ? postResult.value : [];
+        return { platform: acct.platform, posts: scopedPosts(statuses.map((s: any) => normalizePost(s, 'mastodon'))),
+          actors: actorResult.status === 'fulfilled' ? actorResult.value.map(actor => ({ ...actor, sourceAccountId: acct.id })) : [],
+          postFailed: postResult.status === 'rejected', actorFailed: actorResult.status === 'rejected' };
       } else if (acct.platform === 'threads') {
         const threads = entry.client as ThreadsClient;
         const token = threads.getAccessToken?.();
@@ -133,7 +171,7 @@
     let failed = 0;
     for (const result of searchResults) {
       if (result.status === 'rejected') { failed++; continue; }
-      if ('actors' in result.value) {
+      if ('actors' in result.value && result.value.actors) {
         for (const actor of result.value.actors) actorMap.set(actor.did, actor);
         if (result.value.postFailed || result.value.actorFailed) failed++;
       }
@@ -148,6 +186,7 @@
     const merged = mergeSearchResults(resultsByPlatform);
     results = merged.posts;
     actors = [...actorMap.values()];
+    lastCompletedQuery = q;
     if (failed) error = i18n.t.search.partialFailure;
     searching = false;
   }
@@ -305,7 +344,7 @@
       <h2 class="text-sm font-semibold mb-2">{i18n.t.search.people}</h2>
       <div class="space-y-2 mb-5">
         {#each actors as actor (actor.did)}
-          <a href="{base}/profile?handle={encodeURIComponent(actor.handle)}&platform=bluesky" class="flex items-center gap-3 p-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg hover:border-[var(--color-primary)]">
+          <a href="{base}/profile?handle={encodeURIComponent(actor.handle)}&platform={actor.platform ?? 'bluesky'}{actor.sourceAccountId === undefined ? '' : `&account=${actor.sourceAccountId}`}" class="flex items-center gap-3 p-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg hover:border-[var(--color-primary)]">
             {#if actor.avatar}<img src={actor.avatar} alt="" class="w-10 h-10 rounded-full" />{:else}<span class="w-10 h-10 rounded-full bg-[var(--color-surface-hover)]"></span>{/if}
             <span class="min-w-0"><span class="block font-semibold text-sm">{actor.displayName || actor.handle}</span><span class="block text-xs text-[var(--color-text-muted)]">@{actor.handle}</span></span>
           </a>

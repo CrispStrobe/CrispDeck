@@ -46,7 +46,7 @@ export class MastodonClient {
 
   async getAccountByHandle(handle: string): Promise<mastodon.v1.Account> {
     const acct = handle.trim().replace(/^@/, '');
-    return this.fetchPublic<mastodon.v1.Account>(`/api/v1/accounts/lookup?acct=${acct}`);
+    return this.fetchPublic<mastodon.v1.Account>(`/api/v1/accounts/lookup?acct=${encodeURIComponent(acct)}`);
   }
 
   async getAccountStatuses(

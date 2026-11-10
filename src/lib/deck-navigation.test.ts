@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { detailCameFromDeck, recordDetailOrigin } from './deck-navigation';
+import { detailCameFromDeck, detailCameFromSearch, recordDetailOrigin } from './deck-navigation';
 import { backToDeckLabel, deckColumnCount } from './deck-navigation-copy';
 
 describe('Deck detail navigation', () => {
@@ -13,6 +13,14 @@ describe('Deck detail navigation', () => {
     expect(detailCameFromDeck()).toBe(false);
     recordDetailOrigin('/feed', '/thread');
     expect(detailCameFromDeck()).toBe(false);
+  });
+  it('keeps search as the origin across nested details', () => {
+    recordDetailOrigin('/search', '/profile');
+    expect(detailCameFromSearch()).toBe(true);
+    recordDetailOrigin('/profile', '/thread');
+    expect(detailCameFromSearch()).toBe(true);
+    recordDetailOrigin('/thread', '/search');
+    expect(detailCameFromSearch()).toBe(false);
   });
   it('uses German destination and column count labels', () => {
     expect(backToDeckLabel('de')).toBe('Zurück zum Deck');

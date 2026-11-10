@@ -4,10 +4,11 @@
   import { swallow } from '$lib/debug-log';
   import { hrefOrHash } from '$lib/safe-url';
   import { base } from '$app/paths';
-  import { goto } from '$app/navigation';
-  import { detailCameFromDeck } from '$lib/deck-navigation';
-  import { backToDeckLabel } from '$lib/deck-navigation-copy';
-  import { onMount } from 'svelte';
+  import { isMastodonHandle } from '$lib/search-account';
+  import { afterNavigate, goto } from '$app/navigation';
+  import { detailCameFromDeck, detailCameFromSearch } from '$lib/deck-navigation';
+  import { backToDeckLabel, backToSearchLabel } from '$lib/deck-navigation-copy';
+  import { onDestroy } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { User, Loader2, UserPlus, UserMinus, Ban, ArrowLeft } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
@@ -26,6 +27,7 @@
   let profile: any = $state(null);
   let posts: UnifiedPost[] = $state([]);
   let platform: Platform = $state('bluesky');
+  let sourceAccountId: number | undefined;
   let handle = $state('');
   let activeTab: 'posts' | 'replies' | 'media' | 'followers' | 'following' = $state('posts');
   let followersList: Array<{ handle: string; displayName?: string; avatar?: string }> = $state([]);
@@ -44,41 +46,45 @@
   let accounts: Account[] = $state([]);
   let clientEntries: Map<number, ClientEntry> = new Map();
 
-  onMount(async () => {
-    const params = new URLSearchParams(window.location.search);
+  let profileRequest = 0;
+  let disposed = false;
+  async function loadCurrentProfile(url: URL) {
+    const sequence = ++profileRequest;
+    const params = url.searchParams;
     handle = params.get('handle') ?? '';
-    platform = (params.get('platform') as Platform) ?? 'bluesky';
-
-    if (!handle) {
-      error = 'No handle specified. Use ?handle=user.bsky.social&platform=bluesky';
-      loading = false;
-      return;
-    }
-
-    // Show cached profile instantly while refreshing
-    const cacheKey = `profile-${platform}-${handle}`;
+    platform = isMastodonHandle(handle) ? 'mastodon' : (params.get('platform') as Platform) ?? 'bluesky';
+    const account = Number(params.get('account'));
+    sourceAccountId = Number.isSafeInteger(account) && account > 0 ? account : undefined;
+    profile = null; posts = []; error = ''; loading = true;
+    following = false; followsYou = false; blocked = false; muted = false; blockedUri = null;
+    activeTab = 'posts'; followersList = []; followingList = [];
+    if (!handle) { error = 'No handle specified. Use ?handle=user.bsky.social&platform=bluesky'; loading = false; return; }
+    const cacheKey = `profile-${platform}-${handle}-${sourceAccountId ?? "default"}`;
     const cached = getCached<{ profile: any; posts: UnifiedPost[] }>(cacheKey);
-    if (cached) {
-      profile = cached.data.profile;
-      posts = cached.data.posts;
-      if (!isStale(cached, 5 * 60 * 1000)) { loading = false; return; }
-      loading = false; // show cached while refreshing
-    }
-
+    if (cached) { profile = cached.data.profile; posts = cached.data.posts; loading = false; }
     try {
       const result = await initAllClients();
-      accounts = result.accounts;
-      clientEntries = result.clients;
-      await loadProfile();
-      setCache(cacheKey, { profile, posts });
+      if (disposed || sequence !== profileRequest) return;
+      accounts = result.accounts; clientEntries = result.clients;
+      if (!cached || isStale(cached, 5 * 60 * 1000)) {
+        await loadProfile(sequence);
+        if (disposed || sequence !== profileRequest) return;
+        setCache(cacheKey, { profile, posts });
+      }
     } catch (e) {
-      error = String(e);
+      if (!disposed && sequence === profileRequest) error = String(e);
     } finally {
-      loading = false;
+      if (!disposed && sequence === profileRequest) loading = false;
     }
-  });
+  }
+  afterNavigate(({ to }) => { if (to) void loadCurrentProfile(to.url); });
+  onDestroy(() => { disposed = true; profileRequest++; });
 
   function getEntry(): ClientEntry | null {
+    if (sourceAccountId !== undefined) {
+      const account = accounts.find(a => a.id === sourceAccountId && a.platform === platform);
+      return account ? clientEntries.get(account.id) ?? null : null;
+    }
     for (const [id, entry] of clientEntries) {
       const acct = accounts.find(a => a.id === id);
       if (acct?.platform === platform) return entry;
@@ -90,7 +96,10 @@
     return getEntry()?.client ?? null;
   }
 
-  async function loadProfile() {
+  async function loadProfile(sequence: number) {
+    const current = () => !disposed && sequence === profileRequest;
+    const targetHandle = handle;
+    const targetPlatform = platform;
     const searchGeneration = getSearchCacheGeneration();
     const entry = getEntry();
     const client = entry?.client ?? null;
@@ -100,59 +109,40 @@
       queuePostsForSearchCache([result], searchGeneration);
       return result;
     };
-    if (!client && platform === 'bluesky') {
-      // Use read-only client for public profiles
-      const readOnly = BlueskyClient.readOnly(handle);
-      profile = await readOnly.getProfile(handle);
-      const { feed } = await readOnly.getAuthorFeed(handle);
-      posts = sortPosts(feed.map(p => scoped(normalizePost(p, 'bluesky'))), 'newest');
+    if (!client && targetPlatform === 'bluesky') {
+      const readOnly = BlueskyClient.readOnly(targetHandle);
+      const [nextProfile, { feed }] = await Promise.all([readOnly.getProfile(targetHandle), readOnly.getAuthorFeed(targetHandle)]);
+      if (!current()) return;
+      profile = nextProfile; posts = sortPosts(feed.map(p => scoped(normalizePost(p, 'bluesky'))), 'newest');
       return;
     }
-    if (!client) {
-      error = `No ${platform} account connected`;
-      return;
-    }
-
-    if (platform === 'bluesky') {
+    if (!client) { if (current()) error = `No ${targetPlatform} account connected`; return; }
+    if (targetPlatform === 'bluesky') {
       const bsky = client as BlueskyClient;
-      profile = await bsky.getProfile(handle);
-      following = !!profile.viewer?.following;
-      followsYou = !!profile.viewer?.followedBy;
-      // viewer.blocking is the block record's URI; viewer.muted is a flag.
-      blockedUri = profile.viewer?.blocking ?? null;
-      blocked = !!blockedUri;
-      muted = !!profile.viewer?.muted;
-      const { feed } = await bsky.getAuthorFeed(handle);
+      const [nextProfile, { feed }] = await Promise.all([bsky.getProfile(targetHandle), bsky.getAuthorFeed(targetHandle)]);
+      if (!current()) return;
+      profile = nextProfile;
+      following = !!profile.viewer?.following; followsYou = !!profile.viewer?.followedBy;
+      blockedUri = profile.viewer?.blocking ?? null; blocked = !!blockedUri; muted = !!profile.viewer?.muted;
       posts = sortPosts(feed.map(p => scoped(normalizePost(p, 'bluesky'))), 'newest');
     } else {
       const masto = client as MastodonClient;
-      const account = await masto.getAccountByHandle(handle);
-      profile = {
-        handle: `@${account.acct}`,
-        displayName: account.displayName,
-        avatar: account.avatar,
-        banner: account.header,
-        description: account.note?.replace(/<[^>]*>?/gm, ''),
-        followersCount: account.followersCount,
-        followsCount: account.followingCount,
-        postsCount: account.statusesCount,
-        _mastodonId: account.id,
-      };
+      const account = await masto.getAccountByHandle(targetHandle);
+      if (!current()) return;
       const statuses = await masto.getAccountStatuses(account.id);
+      if (!current()) return;
+      profile = { handle: `@${account.acct}`, displayName: account.displayName, avatar: account.avatar,
+        banner: account.header, description: account.note?.replace(/<[^>]*>?/gm, ''),
+        followersCount: account.followersCount, followsCount: account.followingCount,
+        postsCount: account.statusesCount, _mastodonId: account.id };
       posts = sortPosts(statuses.map(s => scoped(normalizePost(s, 'mastodon'))), 'newest');
-      // Check "follows you" via relationships API
       const token = masto.getAccessToken();
       if (token) {
         try {
           const relResp = await fetch(`${masto.getInstanceUrl()}/api/v1/accounts/relationships?id[]=${account.id}`, { headers: { Authorization: `Bearer ${token}` } });
           if (relResp.ok) {
             const rels = await relResp.json();
-            if (rels[0]) {
-              following = rels[0].following;
-              followsYou = rels[0].followed_by;
-              blocked = !!rels[0].blocking;
-              muted = !!rels[0].muting;
-            }
+            if (current() && rels[0]) { following = rels[0].following; followsYou = rels[0].followed_by; blocked = !!rels[0].blocking; muted = !!rels[0].muting; }
           }
         } catch (e) { swallow('profile.loadProfile', e); }
       }
@@ -375,7 +365,7 @@
 <svelte:head><title>CrispDeck — Profile</title></svelte:head>
 
 <div class="p-6 max-w-3xl mx-auto">
-  <button onclick={() => detailCameFromDeck() ? goto(`${base}/deck`) : history.back()} class="flex items-center gap-1 text-sm text-[var(--color-primary-text)] mb-4"><ArrowLeft size={14} />{detailCameFromDeck() ? backToDeckLabel(i18n.lang) : i18n.t.profile.backToFeed}</button>
+  <button onclick={() => detailCameFromDeck() ? goto(`${base}/deck`) : detailCameFromSearch() ? goto(`${base}/search`) : history.back()} class="flex items-center gap-1 text-sm text-[var(--color-primary-text)] mb-4"><ArrowLeft size={14} />{detailCameFromDeck() ? backToDeckLabel(i18n.lang) : detailCameFromSearch() ? backToSearchLabel(i18n.lang) : i18n.t.profile.backToFeed}</button>
 
   {#if loading}
     <!-- Profile skeleton -->

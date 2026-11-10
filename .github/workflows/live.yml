@@ -42,6 +42,7 @@ jobs:
           set -o pipefail
           npx vitest run \
             src/lib/api/bluesky.live.test.ts \
+            src/lib/api/bluesky-search.live.test.ts \
             src/lib/api/bluesky.integration.test.ts \
             src/lib/api/bluesky-moderation.live.test.ts \
             src/lib/api/bluesky-pds.test.ts \
