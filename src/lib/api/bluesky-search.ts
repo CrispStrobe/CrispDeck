@@ -14,7 +14,14 @@ export async function searchBlueskyAccount(entry: ClientEntry, query: string) {
       : client.searchPosts(query).then(r => r.posts),
     plain ? client.searchActors(query.replace(/^@/, '')) : Promise.resolve([]),
   ]);
-  const actors: SearchActor[] = actorResult.status === 'fulfilled' ? actorResult.value : [];
+  const terms = query.trim().replace(/^@/, '').toLocaleLowerCase().normalize('NFKC').split(/\s+/);
+  const returnedActors: SearchActor[] = actorResult.status === 'fulfilled' ? actorResult.value : [];
+  // The provider may return loosely related accounts for a full name. Keep
+  // only results containing every word, including matches in the handle.
+  const actors = terms.length > 1 ? returnedActors.filter(actor => {
+    const text = `${actor.displayName ?? ''} ${actor.handle}`.toLocaleLowerCase().normalize('NFKC');
+    return terms.every(term => text.includes(term));
+  }) : returnedActors;
   const posts: UnifiedPost[] = postResult.status === 'fulfilled'
     ? postResult.value.map(post => normalizePost({ post, reason: undefined } as any, 'bluesky')) : [];
   // A person's posts need not mention their own name. Include recent posts

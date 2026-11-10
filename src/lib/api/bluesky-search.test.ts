@@ -32,6 +32,19 @@ describe('Bluesky account search', () => {
     expect(e.client.getAuthorFeed).toHaveBeenCalledWith(dirk.did, undefined, 'posts_no_replies');
     expect(found.posts).toHaveLength(1);
   });
+  it('filters unrelated accounts returned for a multiword name', async () => {
+    const e = entry();
+    const dirk = { did: 'did:plc:dirk', handle: 'dirksuckow.bsky.social', displayName: 'Dirk Suckow 🇺🇦' };
+    const unrelated = [
+      { did: 'did:plc:james', handle: 'jamestylerespn.bsky.social', displayName: 'James Tyler' },
+      { did: 'did:plc:otherdirk', handle: 'dirkmaggs.bsky.social', displayName: 'Dirk Maggs' },
+      { did: 'did:plc:othername', handle: 'suckow.bsky.social', displayName: 'Someone Suckow' },
+    ];
+    e.client.searchActors.mockResolvedValue([dirk, ...unrelated]);
+    const found = await searchBlueskyAccount(e.value, 'dirk suckow');
+    expect(found.actors).toEqual([dirk]);
+    expect(e.client.getAuthorFeed).toHaveBeenCalledTimes(1);
+  });
   it('does not search people when an operator follows a multiword query', async () => {
     const e = entry();
     await searchBlueskyAccount(e.value, 'dirk suckow since:2026-01-01');
