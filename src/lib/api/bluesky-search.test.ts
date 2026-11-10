@@ -22,6 +22,21 @@ describe('Bluesky account search', () => {
     const found=await searchBlueskyAccount(e.value,'Polenz');
     expect(found.postFailed).toBe(true); expect(found.actors).toEqual([person]); expect(found.posts).toHaveLength(1);
   });
+  it('searches multiword names and includes the matching account’s posts', async () => {
+    const e = entry();
+    const dirk = { did: 'did:plc:dirk', handle: 'dirksuckow.bsky.social', displayName: 'Dirk Suckow 🇺🇦' };
+    e.client.searchActors.mockResolvedValue([dirk]);
+    const found = await searchBlueskyAccount(e.value, 'dirk suckow');
+    expect(e.client.searchActors).toHaveBeenCalledWith('dirk suckow');
+    expect(found.actors).toEqual([dirk]);
+    expect(e.client.getAuthorFeed).toHaveBeenCalledWith(dirk.did, undefined, 'posts_no_replies');
+    expect(found.posts).toHaveLength(1);
+  });
+  it('does not search people when an operator follows a multiword query', async () => {
+    const e = entry();
+    await searchBlueskyAccount(e.value, 'dirk suckow since:2026-01-01');
+    expect(e.client.searchActors).not.toHaveBeenCalled();
+  });
   it('does not treat search operators as a person name', async () => {
     const e=entry(); await searchBlueskyAccount(e.value,'from:polenz.bsky.social');
     expect(e.client.searchActors).not.toHaveBeenCalled(); expect(e.client.getAuthorFeed).not.toHaveBeenCalled();

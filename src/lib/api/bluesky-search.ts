@@ -7,7 +7,7 @@ export interface SearchActor { did: string; handle: string; displayName?: string
 /** Search independently so a failed post index does not hide matching people. */
 export async function searchBlueskyAccount(entry: ClientEntry, query: string) {
   const client = entry.client as BlueskyClient;
-  const plain = !/\s|(?:^|\s)[\w-]+:/.test(query);
+  const plain = !/(?:^|\s)[\w-]+:/.test(query);
   const [postResult, actorResult] = await Promise.allSettled([
     entry.oauthAgent
       ? entry.oauthAgent.api.app.bsky.feed.searchPosts({ q: query, limit: 50 }).then(r => r.data.posts)
@@ -20,7 +20,13 @@ export async function searchBlueskyAccount(entry: ClientEntry, query: string) {
   // A person's posts need not mention their own name. Include recent posts
   // when the query exactly matches a handle or a name component.
   const term = query.replace(/^@/, '').toLocaleLowerCase();
-  const matching = actors.filter(a => a.handle.toLocaleLowerCase() === term || a.handle.split('.')[0].toLocaleLowerCase() === term || a.displayName?.toLocaleLowerCase().split(/\s+/).includes(term)).slice(0, 2);
+  const matching = actors.filter(a => {
+    const handle = a.handle.toLocaleLowerCase();
+    const displayName = a.displayName?.toLocaleLowerCase().trim().replace(/\s+/g, ' ') ?? '';
+    const name = term.trim().replace(/\s+/g, ' ');
+    return handle === name || handle.split('.')[0] === name || displayName === name ||
+      displayName.startsWith(name + ' ') || (!name.includes(' ') && displayName.split(' ').includes(name));
+  }).slice(0, 2);
   const feeds = await Promise.allSettled(matching.map(a => client.getAuthorFeed(a.did, undefined, 'posts_no_replies')));
   for (const feed of feeds) if (feed.status === 'fulfilled') posts.push(...feed.value.feed.map(item => normalizePost(item, 'bluesky')));
   return { posts, actors, postFailed: postResult.status === 'rejected', actorFailed: actorResult.status === 'rejected' };
