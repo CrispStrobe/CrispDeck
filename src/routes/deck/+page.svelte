@@ -24,7 +24,7 @@
   import { Columns3, Plus, Loader2, Pencil } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
   import { deckColumnCount } from '$lib/deck-navigation-copy';
-  import { deckColumnLabels, displayDeckColumnTitle } from '$lib/deck-column-labels';
+  let columnCopy = $state<typeof import('$lib/deck-column-labels')>();
   import StarterWorkspaces from '$lib/components/StarterWorkspaces.svelte';
   import { STARTER_WORKSPACES, type WorkspaceId } from '$lib/starter-workspaces';
   function layoutLabel(name: string) {
@@ -386,7 +386,7 @@
     { id: 'mentions', title: 'Mentions', type: 'mentions' },
   ];
 
-  const availableColumns = $derived(deckColumnLabels(i18n.lang));
+  const availableColumns = $derived(columnCopy?.deckColumnLabels(i18n.lang) ?? []);
 
   // Saved layouts (using deck-layouts.ts module)
   let savedLayoutNames: string[] = $state([]);
@@ -489,6 +489,7 @@
       // or provider requests. Account metadata is needed for portable exports.
       const saved = readJson('crispdeck-deck-columns', defaultColumns, Array.isArray);
       let restoredRevision = accountRevision;
+      void import('$lib/deck-column-labels').then(copy => { if (!disposed) columnCopy = copy; }).catch(error => swallow('deck.columnLabels', error));
       let storedAccounts = await listAccounts();
       while (!disposed && restoredRevision !== accountRevision) {
         restoredRevision = accountRevision;
@@ -879,7 +880,7 @@
 
   function addColumn(type: ColumnType) {
     showAddMenu = false;
-    if (!deckReady) return;
+    if (!deckReady || !columnCopy) return;
     if (type === 'feed') { showFeedPicker = true; return; }
     const next: DeckColumnConfig = { id: crypto.randomUUID(), title: availableColumns.find(column => column.type === type)?.label.replace(/\.\.\.$/, '') ?? type, type };
     if (requiresQuery(type)) { editingColumn = next; return; }
@@ -1102,7 +1103,7 @@
     </div>
     <div class="relative" bind:this={addMenuContainer}>
       <button
-        disabled={!deckReady}
+        disabled={!deckReady || !columnCopy}
         onclick={() => showAddMenu = !showAddMenu}
         class="flex items-center gap-1 px-3 py-1.5 text-xs bg-[var(--color-primary)] text-white rounded-md disabled:opacity-50"
       >
@@ -1157,7 +1158,7 @@
         >
           <DeckColumn
             id={col.id}
-            title={displayDeckColumnTitle(col.type, col.title, i18n.lang)}
+            title={columnCopy?.displayDeckColumnTitle(col.type, col.title, i18n.lang) ?? col.title}
             type={col.type}
             posts={displayedPosts(col)}
             notificationGroups={displayedNotificationGroups(col)}

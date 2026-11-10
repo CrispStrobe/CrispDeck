@@ -63,6 +63,7 @@ afterEach(async () => {
 
 async function settle() { for (let index = 0; index < 6; index++) await tick(); }
 async function render(column: Partial<DeckColumnConfig> | DeckColumnConfig[] = {}) {
+  await import('$lib/deck-column-labels');
   const columns = Array.isArray(column) ? column : [{ id: 'column', title: 'Test column', type: 'timeline', ...column }];
   localStorage.setItem('crispdeck-deck-columns', JSON.stringify(columns));
   const target = document.createElement('div'); document.body.appendChild(target);
@@ -145,6 +146,7 @@ describe('deck integration boundaries', () => {
   it('closes the add-column menu on an outside click', async () => {
     const target = await render([]);
     const add = [...target.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.trim() === i18n.t.deck.addColumn)!;
+    await vi.waitFor(() => expect(add.disabled).toBe(false));
     flushSync(() => add.click());
     expect(target.textContent).toContain('Home Timeline');
     flushSync(() => document.body.click());
