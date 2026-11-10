@@ -3,9 +3,10 @@ import { expect, test } from '@playwright/test';
 test.use({ serviceWorkers: 'block' });
 test('search finds a Mastodon account by name and address and opens its profile', async ({ page }) => {
   const person = { id: '55', username: 'BlumeEvolution', acct: 'BlumeEvolution@sueden.social', display_name: 'Michael Blume', avatar: '', header: '', note: '', followers_count: 20, following_count: 10, statuses_count: 2, url: 'https://sueden.social/@BlumeEvolution' };
+  let searches = 0;
   await page.route('https://mastodon.social/**', async route => {
     const url = new URL(route.request().url());
-    if (url.pathname === '/api/v2/search') return route.fulfill({ json: url.searchParams.get('type') === 'accounts' ? { accounts: [person] } : { statuses: [] } });
+    if (url.pathname === '/api/v2/search') { searches++; return route.fulfill({ json: url.searchParams.get('type') === 'accounts' ? { accounts: [person] } : { statuses: [] } }); }
     if (url.pathname === '/api/v1/accounts/lookup') return route.fulfill({ json: person });
     if (url.pathname === '/api/v1/accounts/55/statuses') return route.fulfill({ json: [] });
     if (url.pathname === '/api/v1/accounts/relationships') return route.fulfill({ json: [{ following: true }] });
@@ -27,7 +28,9 @@ test('search finds a Mastodon account by name and address and opens its profile'
   await page.goto('/search');
   const input = page.locator('input[type="text"], input[type="search"]').first();
   for (const query of ['michael blume', '@BlumeEvolution@sueden.social']) {
-    await input.fill(query); await input.press('Enter');
+    await input.fill(query);
+    await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeEnabled({ timeout: 30000 });
+    await input.press('Enter');
     const actor = page.getByRole('link', { name: /Michael Blume/ });
     await expect(actor).toBeVisible();
     await expect(actor).toHaveAttribute('href', /platform=mastodon/);
@@ -35,6 +38,12 @@ test('search finds a Mastodon account by name and address and opens its profile'
   await page.getByRole('link', { name: /Michael Blume/ }).click();
   await expect(page.getByRole('heading', { name: 'Michael Blume' })).toBeVisible();
   await expect(page.getByText(/Invalid AT identifier/)).toHaveCount(0);
+  const count = searches;
+  await page.getByRole('button', { name: 'Back to search' }).click();
+  await expect(page).toHaveURL(/\/search$/);
+  await expect(page.locator('input[type="text"], input[type="search"]').first()).toHaveValue('@BlumeEvolution@sueden.social');
+  await expect(page.getByRole('link', { name: /Michael Blume/ })).toBeVisible();
+  expect(searches).toBe(count);
   await page.goto('/profile?handle=BlumeEvolution%40digitalcourage.social&platform=bluesky');
   await expect(page.getByRole('heading', { name: 'Michael Blume' })).toBeVisible();
   await expect(page.getByText(/Invalid AT identifier/)).toHaveCount(0);

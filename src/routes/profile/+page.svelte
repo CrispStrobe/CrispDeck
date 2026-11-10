@@ -6,8 +6,8 @@
   import { base } from '$app/paths';
   import { isMastodonHandle } from '$lib/search-account';
   import { afterNavigate, goto } from '$app/navigation';
-  import { detailCameFromDeck } from '$lib/deck-navigation';
-  import { backToDeckLabel } from '$lib/deck-navigation-copy';
+  import { detailCameFromDeck, detailCameFromSearch } from '$lib/deck-navigation';
+  import { backToDeckLabel, backToSearchLabel } from '$lib/deck-navigation-copy';
   import { onDestroy } from 'svelte';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { User, Loader2, UserPlus, UserMinus, Ban, ArrowLeft } from '@lucide/svelte';
@@ -365,7 +365,7 @@
 <svelte:head><title>CrispDeck — Profile</title></svelte:head>
 
 <div class="p-6 max-w-3xl mx-auto">
-  <button onclick={() => detailCameFromDeck() ? goto(`${base}/deck`) : history.back()} class="flex items-center gap-1 text-sm text-[var(--color-primary-text)] mb-4"><ArrowLeft size={14} />{detailCameFromDeck() ? backToDeckLabel(i18n.lang) : i18n.t.profile.backToFeed}</button>
+  <button onclick={() => detailCameFromDeck() ? goto(`${base}/deck`) : detailCameFromSearch() ? goto(`${base}/search`) : history.back()} class="flex items-center gap-1 text-sm text-[var(--color-primary-text)] mb-4"><ArrowLeft size={14} />{detailCameFromDeck() ? backToDeckLabel(i18n.lang) : detailCameFromSearch() ? backToSearchLabel(i18n.lang) : i18n.t.profile.backToFeed}</button>
 
   {#if loading}
     <!-- Profile skeleton -->

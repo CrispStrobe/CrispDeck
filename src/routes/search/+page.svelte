@@ -3,7 +3,9 @@
   const localSearch = useLocalSearchTranslations();
   import { appendOperator as append, fromMeOperator, pastWeekOperator } from '$lib/search-operators';
   import { base } from '$app/paths';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
+  import { listAccounts } from '$lib/db';
+  import { getSearchReturn, saveSearchReturn, clearSearchReturn, searchAccountIdentity, canRestoreSearch } from '$lib/search-return';
   import { initAllClients, type ClientEntry } from '$lib/api/client-factory';
   import { Search, Loader2, Inbox, HelpCircle, Image, User, Calendar, Bookmark, BookmarkCheck, X } from '@lucide/svelte';
   import { listSavedSearches, saveSearch, deleteSavedSearch, isSaved, type SavedSearch } from '$lib/saved-searches';
@@ -34,6 +36,8 @@
   let actors: SearchActor[] = $state([]);
   let searchSequence = 0;
   let hasSearched = $state(false);
+  let lastCompletedQuery = '';
+  let restoredSearch = false;
 
   let showSearchHelp = $state(false);
   let savedSearches: SavedSearch[] = $state([]);
@@ -73,7 +77,7 @@
       if (disposed) return;
       accounts = result.accounts;
       clientEntries = result.clients;
-      if (query.trim() && searchScope === 'networks') await handleSearch();
+      if (query.trim() && searchScope === 'networks' && !restoredSearch) await handleSearch();
     } catch (e) {
       if (!disposed) error = String(e);
     } finally {
@@ -88,9 +92,31 @@
 
   onMount(() => {
     refreshSavedSearches();
-    // Opening local search must not require a network connection or token refresh.
-    if (searchScope === 'networks') void initializeRemoteSearch();
-    return () => { disposed = true; searchSequence++; };
+    let cancelled = false;
+    void (async () => {
+      const saved = getSearchReturn();
+      if (saved && canRestoreSearch(saved, searchScope, query)) {
+        try {
+          const stored = await listAccounts();
+          if (cancelled) return;
+          if (searchAccountIdentity(stored) === saved.accountIdentity) {
+            accounts = stored; query = saved.query; results = saved.posts; actors = saved.actors;
+            hasSearched = true; lastCompletedQuery = saved.query; restoredSearch = true; loading = false;
+            await tick();
+            if (!cancelled) document.getElementById('main-content')?.scrollTo({ top: saved.scrollTop });
+          } else clearSearchReturn();
+        } catch { clearSearchReturn(); }
+      }
+      if (!cancelled && searchScope === 'networks') void initializeRemoteSearch();
+    })();
+    return () => {
+      cancelled = true;
+      if (searchScope === 'networks' && hasSearched && !searching && query.trim() === lastCompletedQuery) {
+        saveSearchReturn({ query: lastCompletedQuery, posts: $state.snapshot(results), actors: $state.snapshot(actors),
+          accountIdentity: searchAccountIdentity(accounts), scrollTop: document.getElementById('main-content')?.scrollTop ?? 0 });
+      }
+      disposed = true; searchSequence++;
+    };
   });
 
   async function handleSearch() {
@@ -157,6 +183,7 @@
     const merged = mergeSearchResults(resultsByPlatform);
     results = merged.posts;
     actors = [...actorMap.values()];
+    lastCompletedQuery = q;
     if (failed) error = i18n.t.search.partialFailure;
     searching = false;
   }
