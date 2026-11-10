@@ -3,7 +3,7 @@ import { BlueskyClient } from '$lib/api/bluesky';
 import { normalizePost } from '$lib/api/unified';
 import type { UnifiedPost } from '$lib/types';
 
-export interface SearchActor { did: string; handle: string; displayName?: string; avatar?: string }
+export interface SearchActor { did: string; handle: string; displayName?: string; avatar?: string; platform?: 'bluesky' | 'mastodon'; sourceAccountId?: number }
 /** Search independently so a failed post index does not hide matching people. */
 export async function searchBlueskyAccount(entry: ClientEntry, query: string) {
   const client = entry.client as BlueskyClient;

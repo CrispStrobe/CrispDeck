@@ -10,6 +10,8 @@
   import { i18n } from '$lib/i18n.svelte';
   import { searchBlueskyAccount, type SearchActor } from '$lib/api/bluesky-search';
   import { MastodonClient } from '$lib/api/mastodon';
+  import { searchMastodonAccounts } from '$lib/api/mastodon-search';
+  import { isMastodonHandle } from '$lib/search-account';
   import { ThreadsClient } from '$lib/api/threads';
   import { normalizePost } from '$lib/api/unified';
   import { searchMastodon, searchThreads, mergeSearchResults } from '$lib/universal-search';
@@ -110,14 +112,21 @@
       const scopedPosts = (posts: UnifiedPost[]) => posts.map(post => ({ ...post, sourceAccountId: acct.id, sourceAccount: acct.handle }));
 
       if (acct.platform === 'bluesky') {
+        if (isMastodonHandle(q)) return { platform: acct.platform, posts: [] as UnifiedPost[] };
         const found = await searchBlueskyAccount(entry, q);
         return { platform: acct.platform, ...found, posts: scopedPosts(found.posts) };
       } else if (acct.platform === 'mastodon') {
         const masto = entry.client as MastodonClient;
         const token = masto.getAccessToken();
         if (!token) return { platform: acct.platform, posts: [] };
-        const statuses = await searchMastodon(q, masto.getInstanceUrl(), token, 40);
-        return { platform: acct.platform, posts: scopedPosts(statuses.map((s: any) => normalizePost(s, 'mastodon'))) };
+        const [postResult, actorResult] = await Promise.allSettled([
+          searchMastodon(q, masto.getInstanceUrl(), token, 40),
+          searchMastodonAccounts(q, masto.getInstanceUrl(), token),
+        ]);
+        const statuses = postResult.status === 'fulfilled' ? postResult.value : [];
+        return { platform: acct.platform, posts: scopedPosts(statuses.map((s: any) => normalizePost(s, 'mastodon'))),
+          actors: actorResult.status === 'fulfilled' ? actorResult.value.map(actor => ({ ...actor, sourceAccountId: acct.id })) : [],
+          postFailed: postResult.status === 'rejected', actorFailed: actorResult.status === 'rejected' };
       } else if (acct.platform === 'threads') {
         const threads = entry.client as ThreadsClient;
         const token = threads.getAccessToken?.();
@@ -133,7 +142,7 @@
     let failed = 0;
     for (const result of searchResults) {
       if (result.status === 'rejected') { failed++; continue; }
-      if ('actors' in result.value) {
+      if ('actors' in result.value && result.value.actors) {
         for (const actor of result.value.actors) actorMap.set(actor.did, actor);
         if (result.value.postFailed || result.value.actorFailed) failed++;
       }
@@ -305,7 +314,7 @@
       <h2 class="text-sm font-semibold mb-2">{i18n.t.search.people}</h2>
       <div class="space-y-2 mb-5">
         {#each actors as actor (actor.did)}
-          <a href="{base}/profile?handle={encodeURIComponent(actor.handle)}&platform=bluesky" class="flex items-center gap-3 p-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg hover:border-[var(--color-primary)]">
+          <a href="{base}/profile?handle={encodeURIComponent(actor.handle)}&platform={actor.platform ?? 'bluesky'}{actor.sourceAccountId === undefined ? '' : `&account=${actor.sourceAccountId}`}" class="flex items-center gap-3 p-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg hover:border-[var(--color-primary)]">
             {#if actor.avatar}<img src={actor.avatar} alt="" class="w-10 h-10 rounded-full" />{:else}<span class="w-10 h-10 rounded-full bg-[var(--color-surface-hover)]"></span>{/if}
             <span class="min-w-0"><span class="block font-semibold text-sm">{actor.displayName || actor.handle}</span><span class="block text-xs text-[var(--color-text-muted)]">@{actor.handle}</span></span>
           </a>

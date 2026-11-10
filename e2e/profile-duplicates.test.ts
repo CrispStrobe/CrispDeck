@@ -17,3 +17,23 @@ test('a profile renders repeated appearances of a post without a duplicate-key c
   await expect(page.locator('[data-post-uri]')).toHaveCount(2);
   await expect(page.getByText('Something went wrong', { exact: true })).toHaveCount(0);
 });
+
+test('opening another author from a profile loads that author', async ({ page }) => {
+  const post = BSKY_FEED[0];
+  const author = post.post.author;
+  await page.route('**/xrpc/**', async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/app.bsky.actor.getProfile')) {
+      return route.fulfill({ json: url.searchParams.get('actor') === author.handle
+        ? { ...BSKY_PROFILE, ...author }
+        : BSKY_PROFILE });
+    }
+    if (url.pathname.endsWith('/app.bsky.feed.getAuthorFeed')) return route.fulfill({ json: { feed: [post] } });
+    return route.fulfill({ json: {} });
+  });
+  await page.goto(`/profile?handle=${encodeURIComponent(BSKY_PROFILE.handle)}&platform=bluesky`);
+  await expect(page.getByRole('heading', { name: BSKY_PROFILE.displayName })).toBeVisible();
+  await page.locator('.post-author').first().click();
+  await expect(page).toHaveURL(new RegExp(`handle=${encodeURIComponent(author.handle)}`));
+  await expect(page.getByRole('heading', { name: author.displayName })).toBeVisible();
+});
