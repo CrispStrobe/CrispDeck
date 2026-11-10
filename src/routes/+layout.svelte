@@ -1,14 +1,17 @@
 <script lang="ts">
   import { getTheme, setTheme, nextTheme } from '$lib/settings';
-  import { syncSystemBars } from '$lib/system-bars';
+  async function syncSystemBars(theme: import('$lib/settings').Theme) {
+    if (/Android/i.test(navigator.userAgent)) await (await import('$lib/system-bars')).syncSystemBars(theme);
+  }
   import { readJson, readString, writeJson, writeString } from '$lib/safe-storage';
   import { isNavItemActive } from '$lib/nav-active';
   import { base } from '$app/paths';
   import { routePath } from '$lib/routes';
+  import { recordDetailOrigin } from '$lib/deck-navigation';
   import '../app.css';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import { Home, Rss, Columns3, PenSquare, Bell, MessageSquare, Bookmark, BookOpen, Users, Search, List, Shield, TrendingUp, Archive, BarChart3, Settings, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon, Smartphone } from '@lucide/svelte';
+  import { Home, Rss, Columns3, PenSquare, Bell, MessageSquare, Bookmark, BookOpen, Users, Search, List, Shield, TrendingUp, Archive, BarChart3, Settings, PanelLeft, Info, ChevronsLeft, ChevronsRight, Menu, X, Sun, Moon, Smartphone } from '@lucide/svelte';
   import ErrorBoundary from '$lib/components/ErrorBoundary.svelte';
   import ToastContainer from '$lib/components/ToastContainer.svelte';
   import { isTauri } from '@tauri-apps/api/core';
@@ -70,6 +73,17 @@
 
   let collapsed = $state(false);
   let mobileMenuOpen = $state(false);
+  let mobileTabIconsOnly = $state(readString('crispdeck-mobile-tab-icons-only') === 'true');
+  onMount(() => {
+    const syncMobileTabs = () => {
+      mobileTabIconsOnly = readString('crispdeck-mobile-tab-icons-only') === 'true';
+      document.documentElement.dataset.mobileTabIconsOnly = String(mobileTabIconsOnly);
+    };
+    syncMobileTabs();
+    window.addEventListener('crispdeck:prefs-changed', syncMobileTabs);
+    window.addEventListener('storage', syncMobileTabs);
+    return () => { window.removeEventListener('crispdeck:prefs-changed', syncMobileTabs); window.removeEventListener('storage', syncMobileTabs); delete document.documentElement.dataset.mobileTabIconsOnly; };
+  });
   let sidebarAccounts: Account[] = $state([]);
   let mobileMenuClosing = $state(false);
   function closeMobileMenu() {
@@ -127,6 +141,7 @@
 
   // Page transitions via View Transitions API (progressive enhancement)
   onNavigate((navigation) => {
+    if (navigation.from && navigation.to) recordDetailOrigin(routePath(navigation.from.url.pathname), routePath(navigation.to.url.pathname));
     if (!document.startViewTransition) return;
     // Determine navigation direction for slide animation
     const fromDepth = routePath(window.location.pathname).split('/').filter(Boolean).length;
@@ -381,8 +396,8 @@
     {#if !collapsed}
       <div class="px-3 py-2 border-t border-[var(--color-border)] flex items-center justify-between">
         <span class="text-[10px] text-[var(--color-text-muted)]">v{__VERSION__}</span>
-        <button onclick={() => showNavCustomize = !showNavCustomize} class="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)]" title={i18n.t.app.customizeSidebar}>
-          <Settings size={12} />
+        <button onclick={() => showNavCustomize = !showNavCustomize} aria-label={i18n.t.app.customizeSidebar} aria-expanded={showNavCustomize} class="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)]" title={i18n.t.app.customizeSidebar}>
+          <PanelLeft size={14} />
         </button>
       </div>
       {#if showNavCustomize}
@@ -411,15 +426,15 @@
       <button onclick={() => mobileMenuOpen = !mobileMenuOpen} aria-label={i18n.t.app.mainNavigation} aria-expanded={mobileMenuOpen} aria-controls="mobile-navigation" class="p-1 text-[var(--color-text-muted)]">
         {#if mobileMenuOpen}<X size={20} />{:else}<Menu size={20} />{/if}
       </button>
-      <a href={base || "/"} class="text-base font-bold text-[var(--color-text)]">CrispDeck</a>
+      {#if routePath(page.url?.pathname ?? '/') !== '/feed'}<a href={base || "/"} class="text-base font-bold text-[var(--color-text)]">CrispDeck</a>{/if}
     </div>
     <div class="flex items-center gap-1">
       <button onclick={toggleTheme} class="p-1.5 text-[var(--color-text-muted)]" aria-label={i18n.t.app.toggleTheme} title={i18n.t.app.toggleTheme}>
         {#if theme === 'dark'}<Smartphone size={20} />{:else if theme === 'oled'}<Sun size={20} />{:else}<Moon size={20} />{/if}
       </button>
-      <a href="{base}/notifications" aria-label={i18n.t.nav.notifications} class="p-1.5 text-[var(--color-text-muted)]">
+      {#if routePath(page.url?.pathname ?? '/') !== '/feed'}<a href="{base}/notifications" aria-label={i18n.t.nav.notifications} class="p-1.5 text-[var(--color-text-muted)]">
         <Bell size={20} />
-      </a>
+      </a>{/if}
     </div>
   </header>
 
@@ -458,6 +473,7 @@
     {#each mobileTabItems as item}
       <a
         href={`${base}${item.href}`.replace(/\/$/, "") || "/"}
+        aria-label={item.label}
         aria-current={isActive(item.href) ? 'page' : undefined}
         class="flex flex-col items-center gap-1 px-1 py-1 rounded-lg transition-colors min-w-0 flex-1
           {isActive(item.href)
@@ -465,7 +481,7 @@
             : 'text-[var(--color-text-muted)]'}"
       >
         <item.icon size={20} />
-        <span class="text-[10px] max-w-full truncate leading-tight">{item.label}</span>
+        <span class="text-[10px] max-w-full truncate leading-tight" class:sr-only={mobileTabIconsOnly}>{item.label}</span>
       </a>
     {/each}
   </nav>

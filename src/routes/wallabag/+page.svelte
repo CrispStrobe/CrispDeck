@@ -295,23 +295,26 @@
       </section>
 
       <section class="article-panel" aria-label={i18n.t.wallabagReader.title} aria-busy={loadingArticle || updating}>
-        {#if selectedId !== null}
+        {#snippet articleActions()}
           <div class="article-actions" role="group" aria-label={i18n.t.wallabagReader.articleActions}>
-            <button class="reader-button" onclick={closeArticle}><ArrowLeft size={16} aria-hidden="true" />{i18n.t.wallabagReader.backToArticles}</button>
+            <button class="reader-button" onclick={closeArticle} title={i18n.t.wallabagReader.backToArticles} aria-label={i18n.t.wallabagReader.backToArticles}><ArrowLeft size={16} aria-hidden="true" /></button>
             {#if selected}
-              <button class="reader-button" disabled={updating} onclick={() => selected && updateArticle({ archive: !selected.is_archived })}>
-                <Archive size={16} aria-hidden="true" />{selected.is_archived ? i18n.t.wallabagReader.markUnread : i18n.t.wallabagReader.markRead}
+              <button class="reader-button" disabled={updating} title={selected.is_archived ? i18n.t.wallabagReader.markUnread : i18n.t.wallabagReader.markRead} aria-label={selected.is_archived ? i18n.t.wallabagReader.markUnread : i18n.t.wallabagReader.markRead} onclick={() => selected && updateArticle({ archive: !selected.is_archived })}>
+                <Archive size={16} aria-hidden="true" />
               </button>
-              <button class="reader-button" aria-pressed={selected.is_starred} disabled={updating} onclick={() => selected && updateArticle({ starred: !selected.is_starred })}>
-                <Star size={16} fill={selected.is_starred ? 'currentColor' : 'none'} aria-hidden="true" />{selected.is_starred ? i18n.t.wallabagReader.unstar : i18n.t.wallabagReader.star}
+              <button class="reader-button" aria-pressed={selected.is_starred} disabled={updating} title={selected.is_starred ? i18n.t.wallabagReader.unstar : i18n.t.wallabagReader.star} aria-label={selected.is_starred ? i18n.t.wallabagReader.unstar : i18n.t.wallabagReader.star} onclick={() => selected && updateArticle({ starred: !selected.is_starred })}>
+                <Star size={16} fill={selected.is_starred ? 'currentColor' : 'none'} aria-hidden="true" />
               </button>
               {#if originalUrl}
-                <a class="reader-button" href={originalUrl} target="_blank" rel="noopener noreferrer" onclick={event => openExternalLink(event, originalUrl, () => toast.error(i18n.t.post.openLinkFailed))}>
-                  <ExternalLink size={16} aria-hidden="true" />{i18n.t.wallabagReader.openOriginal}
+                <a class="reader-button" href={originalUrl} target="_blank" rel="noopener noreferrer" title={i18n.t.wallabagReader.openOriginal} aria-label={i18n.t.wallabagReader.openOriginal} onclick={event => openExternalLink(event, originalUrl, () => toast.error(i18n.t.post.openLinkFailed))}>
+                  <ExternalLink size={16} aria-hidden="true" />
                 </a>
               {/if}
             {/if}
           </div>
+        {/snippet}
+        {#if selectedId !== null}
+          {@render articleActions()}
         {/if}
         {#if loadingArticle}
           <div class="reader-placeholder" role="status"><Loader2 size={24} class="animate-spin" aria-hidden="true" /><p>{i18n.t.common.loading}</p></div>
@@ -336,6 +339,8 @@
             {:else}
               <p class="reader-placeholder">{i18n.t.wallabagReader.noContent}</p>
             {/if}
+            {#if actionError}<p class="reader-error" role="alert">{i18n.t.wallabagReader.updateFailed}</p>{/if}
+            {@render articleActions()}
           </article>
         {:else}
           <div class="reader-placeholder"><BookOpen size={36} aria-hidden="true" /><p>{i18n.t.wallabagReader.chooseArticle}</p></div>
@@ -368,8 +373,8 @@
   .article-panel { min-width: 0; padding: 1.5rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: .75rem; }
   .article-title { font-size: clamp(1.4rem, 2.5vw, 2rem); line-height: 1.25; font-weight: 700; overflow-wrap: anywhere; }
   .article-actions { display: flex; flex-wrap: nowrap; gap: .4rem; margin-bottom: 1.2rem; padding-bottom: .75rem; border-bottom: 1px solid var(--color-border); overflow-x: auto; }
-  .article-actions .reader-button { white-space: nowrap; flex-shrink: 0; }
-  @media (max-width: 700px) { .article-actions .reader-button { font-size: .7rem; gap: .2rem; padding: .35rem .4rem; min-height: 2rem; } }
+  .article-actions .reader-button { white-space: nowrap; flex-shrink: 0; min-width: 44px; min-height: 44px; padding: .5rem; }
+  article .article-actions { margin-top: 1.5rem; margin-bottom: 0; padding-top: .75rem; border-top: 1px solid var(--color-border); border-bottom: 0; }
   .reader-button { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 2.5rem; padding: .5rem .7rem; border: 1px solid var(--color-border); border-radius: .5rem; font-size: .8rem; line-height: 1.35; }
   .reader-button:hover:not(:disabled) { background: var(--color-surface-hover); }
   .reader-button.primary { background: var(--color-primary); color: white; }

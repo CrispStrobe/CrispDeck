@@ -138,23 +138,23 @@ test('requires a successful saved-session probe, then reads, pages, stars and ar
   await page.locator('[data-wallabag-entry="1"]').click();
   await expect(page.getByRole('heading', { name: 'Read at your own pace' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Related article' })).toHaveAttribute('href', 'https://articles.example/related');
-  await expect(page.getByRole('link', { name: 'Open original' })).toHaveAttribute('href', 'https://articles.example/stories/1');
+  await expect(page.getByRole('link', { name: 'Open original' }).first()).toHaveAttribute('href', 'https://articles.example/stories/1');
   await expect(page.locator('article script, article [onerror], article img[src^="javascript:"]')).toHaveCount(0);
   expect(await page.evaluate(() => (window as Window & { wallabagUnsafe?: boolean }).wallabagUnsafe)).toBeUndefined();
   expect(server.patchCount).toBe(0); // Opening alone must not mark read.
 
-  await page.getByRole('button', { name: 'Star article', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Unstar article', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Mark as read', exact: true }).click();
+  await page.getByRole('button', { name: 'Star article', exact: true }).first().click();
+  await expect(page.getByRole('button', { name: 'Unstar article', exact: true }).first()).toBeVisible();
+  await page.getByRole('button', { name: 'Mark as read', exact: true }).first().click();
   await page.getByRole('button', { name: 'Archived', exact: true }).click();
   await expect(page.locator('[data-wallabag-entry="1"]')).toBeVisible();
   await page.locator('[data-wallabag-entry="1"]').click();
-  await expect(page.getByRole('button', { name: 'Mark as unread', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Mark as unread', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Mark as unread', exact: true }).first()).toBeVisible();
+  await page.getByRole('button', { name: 'Mark as unread', exact: true }).first().click();
   await page.getByRole('button', { name: 'Starred', exact: true }).click();
   await expect(page.locator('[data-wallabag-entry="1"]')).toBeVisible();
   await page.locator('[data-wallabag-entry="1"]').click();
-  await page.getByRole('button', { name: 'Unstar article', exact: true }).click();
+  await page.getByRole('button', { name: 'Unstar article', exact: true }).first().click();
   await expect(page.locator('[data-wallabag-entry="1"]')).toHaveCount(0);
   expect(server.patchCount).toBe(4);
 });
@@ -212,10 +212,10 @@ test('offers the verified reader in mobile navigation with a usable article layo
   await navigation.getByRole('link', { name: 'Wallabag Reader' }).click();
   await page.locator('[data-wallabag-entry="1"]').click();
   await expect(page.getByRole('heading', { name: 'Read at your own pace' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Back to articles' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Back to articles' }).first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('wallabag-reader-mobile.png'), fullPage: true });
-  await page.getByRole('button', { name: 'Back to articles' }).click();
+  await page.getByRole('button', { name: 'Back to articles' }).first().click();
   await expect(page.locator('[data-wallabag-entry="1"]')).toBeVisible();
 });
 
@@ -245,8 +245,12 @@ test('article actions share the top row at desktop width', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 900 });
   await wallabagServer(page); await connect(page); await openReader(page);
   await page.locator('[data-wallabag-entry="1"]').click();
-  const toolbar = page.getByRole('group', { name: 'Article actions' });
+  const toolbar = page.getByRole('group', { name: 'Article actions' }).first();
   await expect(toolbar.getByRole('button', { name: 'Mark as read' })).toBeVisible();
+  const bottom = page.locator('article').getByRole('group', { name: 'Article actions' });
+  await expect(bottom.getByRole('button', { name: 'Mark as read' })).toBeVisible();
+  await expect(bottom.getByRole('link', { name: 'Open original' })).toHaveAttribute('title', 'Open original');
+  await expect(bottom.getByRole('button', { name: 'Star article' })).toHaveText('');
   const controls = await toolbar.locator('button, a').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().top));
   expect(controls.length).toBe(4);
   expect(Math.max(...controls) - Math.min(...controls)).toBeLessThan(3);

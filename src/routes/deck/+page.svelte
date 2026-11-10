@@ -19,10 +19,12 @@
   import { isColumnLocked } from '$lib/deck-scroll';
   import * as deckFocus from '$lib/deck-focus';
   import { base } from '$app/paths';
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import { initAllClients, invalidateClientCache, type ClientEntry } from '$lib/api/client-factory';
   import { Columns3, Plus, Loader2, Pencil } from '@lucide/svelte';
   import { i18n } from '$lib/i18n.svelte';
+  import { deckColumnCount } from '$lib/deck-navigation-copy';
+  let columnCopy = $state<typeof import('$lib/deck-column-labels')>();
   import StarterWorkspaces from '$lib/components/StarterWorkspaces.svelte';
   import { STARTER_WORKSPACES, type WorkspaceId } from '$lib/starter-workspaces';
   function layoutLabel(name: string) {
@@ -199,6 +201,10 @@
   // configuration and resolved account identities make workspace writes safe.
   let deckReady = $state(false);
   let showAddMenu = $state(false);
+  let addMenuContainer: HTMLDivElement;
+  function closeAddMenuOutside(event: MouseEvent) {
+    if (showAddMenu && !addMenuContainer?.contains(event.target as Node)) showAddMenu = false;
+  }
   let showWorkspaces = $state(false);
   let editingColumn: DeckColumnConfig | null = $state(null);
   let columns: DeckColumnConfig[] = $state([]);
@@ -380,31 +386,7 @@
     { id: 'mentions', title: 'Mentions', type: 'mentions' },
   ];
 
-  const availableColumns: { type: ColumnType; label: string }[] = [
-    { type: 'timeline', label: 'Home Timeline' },
-    { type: 'my-posts', label: 'My Posts' },
-    { type: 'mentions', label: 'Mentions' },
-    { type: 'notifications', label: 'Notifications' },
-    { type: 'local', label: 'Local (Mastodon)' },
-    { type: 'federated', label: 'Federated (Mastodon)' },
-    { type: 'search', label: 'Search...' },
-    { type: 'hashtag', label: 'Hashtag...' },
-    { type: 'user', label: 'User Feed...' },
-    { type: 'list', label: 'List...' },
-    { type: 'feed', label: 'Bluesky Feed...' },
-    { type: 'tag-group', label: 'Tag Group...' },
-    { type: 'rss', label: 'RSS Feed...' },
-    { type: 'keyword-monitor', label: 'Monitor Keywords...' },
-    { type: 'threads-search', label: 'Threads Search...' },
-    { type: 'messages', label: 'Messages / DMs' },
-    { type: 'trending', label: 'Trending' },
-    { type: 'activity', label: 'Activity (Engagement)' },
-    { type: 'likes', label: 'Liked Posts' },
-    { type: 'followers', label: 'New Followers' },
-    { type: 'bookmarks', label: i18n.t.nav.bookmarks },
-    { type: 'drafts', label: i18n.t.nav.drafts },
-    { type: 'scheduled', label: i18n.t.drafts.scheduled },
-  ];
+  const availableColumns = $derived(columnCopy?.deckColumnLabels(i18n.lang) ?? []);
 
   // Saved layouts (using deck-layouts.ts module)
   let savedLayoutNames: string[] = $state([]);
@@ -507,6 +489,7 @@
       // or provider requests. Account metadata is needed for portable exports.
       const saved = readJson('crispdeck-deck-columns', defaultColumns, Array.isArray);
       let restoredRevision = accountRevision;
+      void import('$lib/deck-column-labels').then(copy => { if (!disposed) columnCopy = copy; }).catch(error => swallow('deck.columnLabels', error));
       let storedAccounts = await listAccounts();
       while (!disposed && restoredRevision !== accountRevision) {
         restoredRevision = accountRevision;
@@ -519,13 +502,20 @@
       refreshLayoutList();
       deckReady = true;
       loading = false;
-      for (const col of columns) columnLoading[col.id] = true;
+      await tick();
+      try { if (deckContainerEl) deckContainerEl.scrollLeft = Number(sessionStorage.getItem('crispdeck-deck-scroll-x') || 0); } catch { /* storage unavailable */ }
+      for (const col of columns) {
+        if (needsAccountClients(col)) columnLoading[col.id] = true;
+        else if (col.type === 'bookmarks' || col.type === 'rss') void loadColumn(col);
+      }
 
       await refreshAccountClients(true);
     } catch (e) {
       swallow('deck.init', e);
       toast.error(i18n.t.deck.initFailed);
       loading = false;
+      await tick();
+      try { if (deckContainerEl) deckContainerEl.scrollLeft = Number(sessionStorage.getItem('crispdeck-deck-scroll-x') || 0); } catch { /* storage unavailable */ }
       for (const col of columns) columnLoading[col.id] = false;
     }
 
@@ -552,6 +542,7 @@
 
   onDestroy(() => {
     disposed = true;
+    try { if (deckContainerEl) sessionStorage.setItem('crispdeck-deck-scroll-x', String(deckContainerEl.scrollLeft)); } catch { /* storage unavailable */ }
     if (touchLongPressTimer) clearTimeout(touchLongPressTimer);
     for (const col of columns) clearColumnRuntime(col.id);
     if (refreshInterval) clearInterval(refreshInterval);
@@ -754,7 +745,7 @@
         notifyColumn(current.notify, current.title, arrivals[0].text);
       }
       if (!errors.length || posts.length || notifications?.length) columnLoaded[col.id] = true;
-      if (!errors.length) setCache(deckCacheKey(current, accounts), {
+      if (!errors.length || posts.length || notifications?.length) setCache(deckCacheKey(current, accounts), {
         posts: (columnPosts[col.id] ?? []).slice(0, 100),
         notifications: (columnNotifications[col.id] ?? []).slice(0, 100),
       });
@@ -889,7 +880,7 @@
 
   function addColumn(type: ColumnType) {
     showAddMenu = false;
-    if (!deckReady) return;
+    if (!deckReady || !columnCopy) return;
     if (type === 'feed') { showFeedPicker = true; return; }
     const next: DeckColumnConfig = { id: crypto.randomUUID(), title: availableColumns.find(column => column.type === type)?.label.replace(/\.\.\.$/, '') ?? type, type };
     if (requiresQuery(type)) { editingColumn = next; return; }
@@ -1076,7 +1067,7 @@
   }
 </script>
 
-<svelte:window onkeydown={handleKeydown} onpointermove={movePointerDrag} onpointerup={endPointerDrag} onpointercancel={endPointerDrag} />
+<svelte:window onclick={closeAddMenuOutside} onkeydown={handleKeydown} onpointermove={movePointerDrag} onpointerup={endPointerDrag} onpointercancel={endPointerDrag} />
 <svelte:head><title>CrispDeck — Deck</title><meta name="description" content="Multi-column deck view" /></svelte:head>
 
 <div class="h-full flex flex-col">
@@ -1091,7 +1082,7 @@
       <div class="flex items-center gap-2">
         <Columns3 size={20} />
         <h1 class="text-lg font-bold">{i18n.t.nav.deck}</h1>
-        <span class="text-xs text-[var(--color-text-muted)]">{columns.length} col</span>
+        <span class="text-xs text-[var(--color-text-muted)]"><span class="sm:hidden">{i18n.t.deck.col.replace('{count}', String(columns.length))}</span><span class="hidden sm:inline">{deckColumnCount(i18n.lang, columns.length)}</span></span>
       </div>
       <button disabled={!deckReady} onclick={() => showStarters = !showStarters} class="px-2 py-1 text-xs border border-[var(--color-border)] rounded-lg disabled:opacity-50">{i18n.t.workflow.starterWorkspaces}</button>
       <!-- Saved layouts -->
@@ -1110,13 +1101,13 @@
       <button disabled={!deckReady} onclick={() => showWorkspaces = true} class="px-2 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] border border-[var(--color-border)] rounded disabled:opacity-50">{i18n.t.deck.manageWorkspaces}</button>
       <button onclick={() => openCompose()} class="flex items-center gap-1 px-2 py-1 text-xs border border-[var(--color-border)] rounded"><Pencil size={12} />{i18n.t.nav.compose}</button>
     </div>
-    <div class="relative">
+    <div class="relative" bind:this={addMenuContainer}>
       <button
-        disabled={!deckReady}
+        disabled={!deckReady || !columnCopy}
         onclick={() => showAddMenu = !showAddMenu}
         class="flex items-center gap-1 px-3 py-1.5 text-xs bg-[var(--color-primary)] text-white rounded-md disabled:opacity-50"
       >
-        <Plus size={12} /> Add Column
+        <Plus size={12} /> {i18n.t.deck.addColumn}
       </button>
       {#if showAddMenu}
         <div class="absolute right-0 top-full mt-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl z-50 py-1 min-w-[160px]">
@@ -1167,7 +1158,7 @@
         >
           <DeckColumn
             id={col.id}
-            title={col.title}
+            title={columnCopy?.displayDeckColumnTitle(col.type, col.title, i18n.lang) ?? col.title}
             type={col.type}
             posts={displayedPosts(col)}
             notificationGroups={displayedNotificationGroups(col)}

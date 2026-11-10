@@ -102,10 +102,11 @@ describe('Wallabag reader controls', () => {
     const target = render(); await expectEntries(target, [1, 2]);
     select(target, 1); await expectArticle(target, 'Article 1');
     const toolbar = target.querySelector('.article-actions')!;
-    expect(toolbar.textContent).toContain('Back to articles');
-    expect(toolbar.textContent).toContain('Mark as read');
-    expect(toolbar.textContent).toContain('Star article');
-    expect(toolbar.textContent).toContain('Open original');
+    for (const label of ['Back to articles', 'Mark as read', 'Star article', 'Open original']) {
+      expect(toolbar.querySelector(`[aria-label="${label}"]`)?.getAttribute('title')).toBe(label);
+      expect(target.querySelector(`article .article-actions [aria-label="${label}"]`)).not.toBeNull();
+    }
+    expect(toolbar.textContent?.trim()).toBe('');
     expect(toolbar.compareDocumentPosition(target.querySelector('article h2')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 

@@ -248,7 +248,7 @@ describe('feed preview', () => {
     Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => 200 });
     try {
       const target = render({ ...basePost, text: 'Long post\n'.repeat(50) } as UnifiedPost, { feedPreview: true });
-      const expand = [...target.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Show full post');
+      const expand = [...target.querySelectorAll('button')].find(b => b.getAttribute('aria-label') === 'Show full post');
       expect(expand).toBeDefined();
       expect(target.querySelector('.feed-preview')).not.toBeNull();
       expand!.click();

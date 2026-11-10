@@ -7,6 +7,8 @@
   import { getTtsEngine, setTtsEngine, getSttEngine, setSttEngine, getHomeMode, setHomeMode, type SpeechEngine, type HomeMode } from '$lib/settings';
   import { toast } from '$lib/toast.svelte';
   import { readString, removeKey, writeJson, writeString } from '$lib/safe-storage';
+  import { settingsText } from '$lib/settings-copy';
+  const settingsCopy = $derived(settingsText(i18n.lang));
   import { connectWallabag, disconnectWallabag, normalizeWallabagServer } from '$lib/wallabag';
   import { wallabagAvailability, hideWallabagReader, refreshWallabagAvailability } from '$lib/wallabag-availability';
   import { fetchOk, fetchJson } from '$lib/http';
@@ -347,6 +349,8 @@
   let contentWidth = $state(parseInt(localStorage.getItem('crispdeck-content-width') ?? '0')); // 0 = auto
   let homeMode = $state<HomeMode>(getHomeMode());
   let density = $state<DensityMode>(getDensity());
+  let mobileTabIconsOnly = $state(readString('crispdeck-mobile-tab-icons-only') === 'true');
+  let compactFeedControls = $state(readString('crispdeck-compact-feed-controls') === 'true');
 
   const fontMap: Record<FontFamily, string> = {
     system: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif",
@@ -1306,6 +1310,19 @@
 
       <!-- Hide engagement counts -->
       <div class="flex items-center justify-between">
+        <label for="compact-feed-controls" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.compactFeedControls}</label>
+        <input id="compact-feed-controls" type="checkbox" bind:checked={compactFeedControls}
+          onchange={() => { writeString('crispdeck-compact-feed-controls', String(compactFeedControls)); window.dispatchEvent(new Event('crispdeck:prefs-changed')); }}
+          class="w-4 h-4 accent-[var(--color-primary)]" />
+      </div>
+      <div class="flex items-center justify-between">
+        <label for="mobile-tab-icons-only" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.mobileTabIconsOnly}</label>
+        <input id="mobile-tab-icons-only" type="checkbox" bind:checked={mobileTabIconsOnly}
+          onchange={() => { writeString('crispdeck-mobile-tab-icons-only', String(mobileTabIconsOnly)); window.dispatchEvent(new Event('crispdeck:prefs-changed')); }}
+          class="w-4 h-4 accent-[var(--color-primary)]" />
+      </div>
+
+      <div class="flex items-center justify-between">
         <label for="hide-engagement" class="text-sm text-[var(--color-text-muted)]">{i18n.t.settings.hideEngagement}</label>
         <input
           id="hide-engagement"
@@ -1420,17 +1437,17 @@
           </div>
 
           <div class="flex items-center justify-between">
-            <label for="font-size" class="text-xs text-[var(--color-text-muted)]">Font size: {fontSize}px</label>
+            <label for="font-size" class="text-xs text-[var(--color-text-muted)]">{settingsCopy.fontSizeValue.replace('{value}', String(fontSize))}</label>
             <input id="font-size" type="range" min="11" max="20" step="1" bind:value={fontSize} oninput={applyDisplaySettings} class="w-28 accent-[var(--color-primary)]" />
           </div>
 
           <div class="flex items-center justify-between">
-            <label for="line-spacing" class="text-xs text-[var(--color-text-muted)]">Line spacing: {lineSpacing.toFixed(1)}</label>
+            <label for="line-spacing" class="text-xs text-[var(--color-text-muted)]">{settingsCopy.lineSpacingValue.replace('{value}', lineSpacing.toFixed(1))}</label>
             <input id="line-spacing" type="range" min="1.0" max="2.2" step="0.1" bind:value={lineSpacing} oninput={applyDisplaySettings} class="w-28 accent-[var(--color-primary)]" />
           </div>
 
           <div class="flex items-center justify-between">
-            <label for="content-width" class="text-xs text-[var(--color-text-muted)]">{contentWidth > 0 ? `Max width: ${contentWidth}px` : 'Max width: auto'}</label>
+            <label for="content-width" class="text-xs text-[var(--color-text-muted)]">{contentWidth > 0 ? settingsCopy.maxWidthValue.replace('{value}', String(contentWidth)) : settingsCopy.maxWidthAuto}</label>
             <input id="content-width" type="range" min="0" max="1200" step="100" bind:value={contentWidth} oninput={applyDisplaySettings} class="w-28 accent-[var(--color-primary)]" />
           </div>
         </div>
@@ -1522,7 +1539,7 @@
             <div class="flex items-center justify-between p-2 bg-[var(--color-bg)] rounded-md {isFilterExpired(filter) ? 'opacity-50' : ''}">
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2">
-                  <span class="text-sm font-medium truncate">{filter.title}</span>
+                  <span class="text-sm font-medium truncate" title={filter.title}>{filter.title === 'Graze filtered hashtags' ? settingsCopy.grazeFilteredHashtags : filter.title}</span>
                   <span class="text-[9px] px-1 py-0.5 rounded {filter.filter_action === 'hide' ? 'bg-red-900/30 text-red-400' : 'bg-yellow-900/30 text-yellow-400'}">
                     {filter.filter_action === 'hide' ? i18n.t.settings.serverFilterActionHide : i18n.t.settings.serverFilterActionWarn}
                   </span>
@@ -1774,7 +1791,7 @@
     <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
       <div class="flex items-center justify-between">
         <div>
-          <label for="feed-cache-size" class="text-xs text-[var(--color-text-muted)]">Feed cache size: {feedCacheSize} posts</label>
+          <label for="feed-cache-size" class="text-xs text-[var(--color-text-muted)]">{settingsCopy.feedCacheSizeValue.replace('{count}', String(feedCacheSize))}</label>
           <p class="text-[10px] text-[var(--color-text-muted)]">{i18n.t.settings.feedCacheDesc}</p>
         </div>
         <input id="feed-cache-size" type="range" min="50" max="500" step="50" bind:value={feedCacheSize}
@@ -1875,8 +1892,7 @@
       {#if translateProvider === 'lingva'}
         <div class="space-y-2">
           <p class="text-xs text-[var(--color-text-muted)]">
-            Free Google Translate proxy. No API key, no commercial restriction.
-            Uses public instances by default. You can self-host or use any <a href="https://github.com/thedaviddelta/lingva-translate" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary-text)] hover:underline">{i18n.t.settings.lingvaInstance}</a>.
+            {settingsCopy.lingvaHintBefore} <a href="https://github.com/thedaviddelta/lingva-translate" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary-text)] hover:underline">{i18n.t.settings.lingvaInstance}</a>.
           </p>
           <div>
             <label for="lingva-instance" class="block text-xs text-[var(--color-text-muted)] mb-1">{i18n.t.settings.instanceUrlOptional}</label>
@@ -2143,7 +2159,7 @@
               class="w-full px-3 py-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-xs text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]" />
           {/if}
           <p class="text-[10px] text-[var(--color-text-muted)] mt-1">
-            Used for image alt-text generation. Leave empty to use the text model.
+            {settingsCopy.imageAltModelHint}
           </p>
         </div>
       {:else}
@@ -2646,7 +2662,7 @@
     <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
       {#if !isTauri}
         <p class="text-xs text-[var(--color-text-muted)]">
-          Model management is available in the desktop app only. The web version uses BYOK OpenAI or MyMemory for translation, and browser APIs for TTS/STT.
+          {settingsCopy.webModelManagementHint}
         </p>
       {:else if !crispasrAvailable}
         <p class="text-xs text-[var(--color-text-muted)]">
@@ -2684,14 +2700,14 @@
     <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
       <div class="flex items-center justify-between">
         <p class="text-[11px] text-[var(--color-text-muted)]">
-          Recent errors and warnings ({getLogCount()} entries). Useful for diagnosing issues.
+          {settingsCopy.debugLogHint.replace('{count}', String(getLogCount()))}
         </p>
         {#if getLogCount() > 0}
           <button onclick={() => { clearLogs(); debugLogs = []; }} class="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-danger)]">{i18n.t.settings.clear}</button>
         {/if}
       </div>
       <button onclick={() => { debugLogs = getLogs(); showDebugLog = !showDebugLog; }} class="text-xs text-[var(--color-primary-text)] hover:underline">
-        {showDebugLog ? 'Hide log' : `Show log (${getLogCount()} entries)`}
+        {showDebugLog ? settingsCopy.hideLog : settingsCopy.showLogCount.replace('{count}', String(getLogCount()))}
       </button>
       {#if showDebugLog}
         <div class="max-h-64 overflow-y-auto bg-[var(--color-bg)] rounded-md border border-[var(--color-border)] p-2 font-mono text-[10px] space-y-1">
@@ -2713,11 +2729,11 @@
 
   <!-- Cache & Storage -->
   <section class="mb-8">
-    <h2 class="text-lg font-semibold mb-3">Cache & Storage</h2>
+    <h2 class="text-lg font-semibold mb-3">{settingsCopy.cacheStorage}</h2>
     <div class="space-y-3 p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
       <div class="text-[10px] text-[var(--color-text-muted)] space-y-1 mb-2">
-        <p>localStorage: {formatBytes(cacheStats.localStorage * 2)}</p>
-        {#if cacheStats.indexedDB}<p>IndexedDB (archive, bookmarks, translations): {cacheStats.indexedDB}</p>{/if}
+        <p>{settingsCopy.localStorageSize.replace('{size}', formatBytes(cacheStats.localStorage * 2))}</p>
+        {#if cacheStats.indexedDB}<p>{settingsCopy.indexedDbSize.replace('{size}', cacheStats.indexedDB)}</p>{/if}
       </div>
       <div class="flex gap-2">
         <button onclick={purgeViewCache} class="px-2 py-1 text-[10px] bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
@@ -2727,7 +2743,7 @@
           {i18n.t.settings.purgeAllCached}
         </button>
         <button onclick={calcCacheStats} class="px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
-          Refresh
+          {i18n.t.notifications.refresh}
         </button>
       </div>
     </div>

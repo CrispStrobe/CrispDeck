@@ -10,7 +10,7 @@ import { writeString, removeKey } from './safe-storage';
 
 const PREFIX = 'crispdeck-vc-';
 const DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes
-const memory = new Map<string, { raw: string; entry: CacheEntry<unknown> }>();
+const memory = new Map<string, { raw: string | null; entry: CacheEntry<unknown> }>();
 if (typeof window !== 'undefined') window.addEventListener('storage', (event) => {
   if (event.key === null) memory.clear();
   else if (event.key.startsWith(PREFIX)) memory.delete(event.key.slice(PREFIX.length));
@@ -26,6 +26,8 @@ export interface CacheEntry<T> {
  */
 export function getCached<T>(key: string): CacheEntry<T> | null {
   try {
+    const inMemory = memory.get(key);
+    if (inMemory?.raw === null) return inMemory.entry as CacheEntry<T>;
     const raw = localStorage.getItem(PREFIX + key);
     if (!raw) { memory.delete(key); return null; }
     const found = memory.get(key);
@@ -39,7 +41,7 @@ export function getCached<T>(key: string): CacheEntry<T> | null {
     memory.set(key, { raw, entry });
     return entry;
   } catch {
-    return null;
+    return (memory.get(key)?.entry as CacheEntry<T>) ?? null;
   }
 }
 
@@ -52,7 +54,7 @@ export function setCache<T>(key: string, data: T): void {
     // Feeds include large raw provider responses. Serialize once for both
     // persistent storage and the in-memory comparison.
     const raw = JSON.stringify(entry);
-    if (writeString(PREFIX + key, raw)) memory.set(key, { raw, entry });
+    memory.set(key, { raw: writeString(PREFIX + key, raw) ? raw : null, entry });
   } catch {
     // localStorage full or quota exceeded — silently skip
   }

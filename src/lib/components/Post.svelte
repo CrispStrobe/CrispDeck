@@ -174,12 +174,47 @@
   const actionsId = $props.id();
   let showMoreActions = $state(false);
   let actionsToggle: HTMLButtonElement | undefined = $state();
+  let actionsDialog: HTMLDialogElement | undefined = $state();
   const countFormatter = $derived(new Intl.NumberFormat(i18n.lang, { notation: 'compact', maximumFractionDigits: 1 }));
 
   function closePostActions(restoreFocus = false) {
     showMoreActions = false;
     showListPicker = false;
+    if (actionsDialog?.open) {
+      if (typeof actionsDialog.close === 'function') actionsDialog.close();
+      else actionsDialog.removeAttribute('open');
+    }
     if (restoreFocus) actionsToggle?.focus();
+  }
+
+  function positionPostActions() {
+    if (!actionsToggle || !actionsDialog?.open) return;
+    const anchor = actionsToggle.getBoundingClientRect();
+    const viewport = window.visualViewport;
+    const leftEdge = viewport?.offsetLeft ?? 0;
+    const topEdge = viewport?.offsetTop ?? 0;
+    const width = viewport?.width ?? window.innerWidth;
+    const height = viewport?.height ?? window.innerHeight;
+    const bar = document.querySelector<HTMLElement>('.mobile-tab-bar');
+    const barRect = bar?.getBoundingClientRect();
+    const bottom = barRect && barRect.height ? Math.min(topEdge + height, barRect.top) : topEdge + height;
+    const menu = actionsDialog.getBoundingClientRect();
+    const left = Math.max(leftEdge + 8, Math.min(anchor.right - menu.width, leftEdge + width - menu.width - 8));
+    const below = anchor.bottom + 4;
+    const top = below + menu.height <= bottom - 8 ? below : Math.max(topEdge + 8, Math.min(anchor.top - menu.height - 4, bottom - menu.height - 8));
+    actionsDialog.style.left = `${left}px`;
+    actionsDialog.style.top = `${top}px`;
+    actionsDialog.style.maxHeight = `${Math.max(44, bottom - topEdge - 16)}px`;
+  }
+
+  async function togglePostActions() {
+    if (showMoreActions) { closePostActions(); return; }
+    showMoreActions = true;
+    await tick();
+    if (!showMoreActions || !actionsDialog?.isConnected) return;
+    if (typeof actionsDialog.showModal === 'function') actionsDialog.showModal();
+    else actionsDialog.setAttribute('open', '');
+    positionPostActions();
   }
 
   // Only expanded disclosures listen for dismissal. They remain ordinary
@@ -197,9 +232,20 @@
     };
     document.addEventListener('keydown', onKeydown);
     document.addEventListener('pointerdown', onPointerdown);
+    window.addEventListener('resize', positionPostActions);
+    window.addEventListener('scroll', positionPostActions, true);
+    window.visualViewport?.addEventListener('resize', positionPostActions);
+    window.visualViewport?.addEventListener('scroll', positionPostActions);
+    const observer = typeof ResizeObserver === 'undefined' || !actionsDialog ? undefined : new ResizeObserver(positionPostActions);
+    if (actionsDialog) observer?.observe(actionsDialog);
     return () => {
       document.removeEventListener('keydown', onKeydown);
       document.removeEventListener('pointerdown', onPointerdown);
+      window.removeEventListener('resize', positionPostActions);
+      window.removeEventListener('scroll', positionPostActions, true);
+      window.visualViewport?.removeEventListener('resize', positionPostActions);
+      window.visualViewport?.removeEventListener('scroll', positionPostActions);
+      observer?.disconnect();
     };
   });
 
@@ -1011,11 +1057,6 @@
       {#if context.text}<span class="reply-context-text">{context.text}</span>{/if}
     </a>
   {/if}
-  {#if post.isRepost && post.repostAuthor}
-    <div class="post-repost flex items-center gap-1 mb-1 text-[10px] text-[var(--color-text-muted)]" title="Reposted by {post.repostAuthor.displayName || post.repostAuthor.handle}">
-      <Repeat size={12} /> <span class="truncate">Reposted by {post.repostAuthor.displayName || post.repostAuthor.handle}</span>
-    </div>
-  {/if}
   <div class="post-main" class:compact>
     <a class="post-avatar" href={getProfileUrl(post)} aria-label={post.author.displayName || post.author.handle}>
       {#if post.author.avatar}
@@ -1034,6 +1075,11 @@
         <span class="post-author-handle text-[var(--color-text-muted)] text-xs truncate">{post.author.handle}</span>
         <span class="post-platform w-2 h-2 rounded-full flex-shrink-0" style="background: {platformColor}" title={post.platform}></span>
       </a>
+      {#if post.isRepost && post.repostAuthor}
+        <span class="post-repost text-[10px] text-[var(--color-text-muted)]" title="{i18n.t.post.repostedBy} {post.repostAuthor.displayName || post.repostAuthor.handle}">
+          <Repeat size={12} /><span class="truncate">{i18n.t.post.repostedBy} {post.repostAuthor.displayName || post.repostAuthor.handle}</span>
+        </span>
+      {/if}
       <a href={getThreadUrl(post)} class="post-time text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:underline flex-shrink-0 ml-auto" title={formatDate(post.createdAt)}>
         <time datetime={post.createdAt}>{relAge}</time>
         {#if post.platform === 'mastodon' && (post.raw as any)?.edited_at}
@@ -1354,7 +1400,7 @@
 
   <div class="post-footer">
     {#if feedPreview && (previewClipped || previewExpanded)}
-      <button type="button" class="preview-toggle" aria-expanded={previewExpanded} onclick={() => { previewExpanded = !previewExpanded; }}>{previewExpanded ? i18n.t.post.showLessPost : i18n.t.post.showFullPost}</button>
+      <button type="button" class="preview-toggle" aria-label={previewExpanded ? i18n.t.post.showLessPost : i18n.t.post.showFullPost} title={previewExpanded ? i18n.t.post.showLessPost : i18n.t.post.showFullPost} aria-expanded={previewExpanded} onclick={() => { previewExpanded = !previewExpanded; }}><span class="preview-toggle-long">{previewExpanded ? i18n.t.post.showLessPost : i18n.t.post.showFullPost}</span><span class="preview-toggle-short" aria-hidden="true">{previewExpanded ? i18n.t.post.lessShort : i18n.t.post.moreShort}</span></button>
     {/if}
     <div class="post-actions">
       {#if onreply}
@@ -1418,7 +1464,7 @@
       <button
         type="button"
         bind:this={actionsToggle}
-        onclick={() => { if (showMoreActions) closePostActions(); else showMoreActions = true; }}
+        onclick={togglePostActions}
         class="transition-colors {showMoreActions ? 'text-[var(--color-primary-text)] bg-[var(--color-surface-hover)]' : 'text-[var(--color-text-muted)]'} hover:text-[var(--color-text)]"
         title={i18n.t.post.moreActions}
         aria-label={i18n.t.post.moreActions}
@@ -1431,6 +1477,7 @@
 
     <!-- Secondary actions take space only after an explicit tap. Keeping
          visible labels also makes the same controls usable without hover. -->
+    <dialog bind:this={actionsDialog} class="post-action-dialog" aria-label={i18n.t.post.moreActions} oncancel={() => closePostActions(true)} onclose={() => { showMoreActions = false; showListPicker = false; }} onclick={(event) => { if (event.target === actionsDialog) closePostActions(true); }}>
     <div id={actionsId} class="post-secondary-actions" hidden={!showMoreActions} role="group" aria-label={i18n.t.post.moreActions}>
       {#if onquote}
         <button type="button" onclick={() => { closePostActions(true); onquote?.(post); }} aria-label={i18n.t.post.quotePost}>
@@ -1487,6 +1534,7 @@
         <XIcon size={18} /><span>{i18n.t.common.close}</span>
       </button>
     </div>
+    </dialog>
     {#if shareError}
       <p class="mt-2 text-xs text-red-400" role="status">{shareError}</p>
     {/if}
@@ -1543,7 +1591,11 @@
   .post-main { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr); column-gap: 0.75rem; align-items: start; }
   .post-main.compact { grid-template-columns: 1.75rem minmax(0, 1fr); column-gap: 0.5rem; }
   .post-avatar { grid-row: 1 / span 2; display: flex; align-items: start; justify-content: center; }
-  .post-heading { grid-column: 2; min-height: 1.5rem; }
+  .post-heading { grid-column: 2; min-height: 1.5rem; align-items: center; }
+  .post-author { flex: 0 1 auto; overflow: hidden; }
+  .post-author-name, .post-author-handle { min-width: 0; }
+  .post-repost { display: flex; align-items: center; gap: 0.25rem; min-width: 0; overflow: hidden; white-space: nowrap; }
+  .post-repost :global(svg) { flex-shrink: 0; }
   .post-body { grid-column: 2; overflow-wrap: anywhere; }
   .post-media { padding-inline-start: var(--post-indent); min-width: 0; }
   .post-media:empty { display: none; }
@@ -1557,9 +1609,15 @@
   .post-actions :global(svg), .post-secondary-actions :global(svg) { flex-shrink: 0; }
   .post-action-count { min-width: 0; max-width: 4ch; overflow: hidden; text-overflow: ellipsis; font-size: 0.7rem; }
   .post-actions > :hover { background: var(--color-surface-hover); }
+  @media (hover: hover) and (pointer: fine) {
+    .post-footer { margin-top: 0.125rem; }
+    .post-actions > button, .post-actions > a { min-width: 36px; min-height: 32px; }
+    .preview-toggle { min-height: 32px; }
+  }
+  .post-action-dialog { position: fixed; inset: auto; margin: 0; width: min(24rem, calc(100vw - 1rem)); max-width: none; overflow: auto; padding: 0.4rem; color: var(--color-text); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 0.6rem; box-shadow: 0 0.6rem 2rem #0008; }
+  .post-action-dialog::backdrop { background: transparent; }
   .post-secondary-actions {
     display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.25rem;
-    margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--color-border);
   }
   .post-secondary-actions[hidden], .post-reading-lists[hidden] { display: none; }
   .post-secondary-actions button, .post-secondary-actions a {
@@ -1574,16 +1632,19 @@
   .post-reading-lists > button, .post-reading-lists > a { width: 100%; }
   @container post (max-width: 36rem) {
     .post-avatar { grid-row: 1; }
-    .post-heading { align-items: start; min-height: 2.5rem; }
-    .post-author { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 0.4rem; }
-    .post-author-name { grid-column: 1; grid-row: 1; }
-    .post-author-handle { grid-column: 1; grid-row: 2; }
-    .post-platform { grid-column: 2; grid-row: 1; align-self: center; }
+    .post-heading { align-items: center; min-height: 2.5rem; }
+    .post-author { gap: 0.35rem; flex: 0 1 55%; }
+    .post-repost { flex: 1 1 0; }
     .post-body { grid-column: 1 / -1; margin-top: 0.5rem; }
     .post-media { padding-inline-start: 0; }
     .post-footer, .post-extra-offset { margin-inline-start: 0; }
     .post-copy .reply-context { margin-inline-start: 0; }
     .post-actions { max-width: none; }
+    .post-footer:has(> .preview-toggle) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 2fr); align-items: start; }
+    .post-footer:has(> .preview-toggle) .preview-toggle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .preview-toggle-long { display: none; }
+    .post-footer .preview-toggle-short { display: inline; }
+    .post-footer:has(> .preview-toggle) .post-secondary-actions { grid-column: 1 / -1; }
   }
   .reply-context { display: block; margin: 0 0 0.45rem; margin-inline-start: var(--post-indent); padding: 0.25rem 0.55rem; border-left: 2px solid var(--color-border); color: var(--color-text-muted); }
   .reply-context:hover { color: var(--color-text); }
@@ -1595,6 +1656,7 @@
      whole post down to a single line. Expanded posts still have no cap. */
   .feed-preview { max-height: max(8rem, calc(50svh - 9rem)); overflow: clip; --preview-media-limit: max(4.5rem, calc(50svh - 10.5rem)); }
   .preview-toggle { display: block; min-height: 44px; padding-inline: 0.25rem; color: var(--color-primary-text); font-size: 0.75rem; text-align: start; }
+  .preview-toggle-short { display: none; }
   .post-layout-container { container-type: inline-size; }
   .feed-preview .media-preview-image, .feed-preview .link-preview-image { max-height: min(18rem, 22svh, var(--preview-media-limit)); }
   .feed-preview .media-tile { height: min(22svh, 13rem); }

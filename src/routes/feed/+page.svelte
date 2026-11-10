@@ -40,6 +40,7 @@
   import { performDeckAction } from '$lib/deck-actions';
   import { postContextParams } from '$lib/compose/context';
   import { readString } from '$lib/safe-storage';
+  import { needsAccountAttribution } from '$lib/feed-account-attribution';
 
   // 'custom' delegates to a Bluesky feed generator or list; which ones are on
   // offer comes from the account's own pinned feeds, see $lib/bluesky-feeds.
@@ -57,6 +58,9 @@
   let platformFilter: 'all' | Platform = $state('all');
   let showThreadsInfo = $state(false);
   let showFilters = $state(false);
+  let mobileFeedOptionsOpen = $state(false);
+  let compactFeedControls = $state(readString('crispdeck-compact-feed-controls') === 'true');
+  function updateCompactFeedControls() { compactFeedControls = readString('crispdeck-compact-feed-controls') === 'true'; }
   const connectedPlatforms = $derived(new Set(accounts.map(a => a.platform)));
   const multiPlatform = $derived(connectedPlatforms.size > 1);
 
@@ -158,7 +162,20 @@
   let isPulling = $state(false);
   let pullRefreshing = $state(false);
 
-  const multiAccount = $derived(accounts.length > 1);
+  function changeMobileFeed(event: Event) {
+    const value = (event.currentTarget as HTMLSelectElement).value;
+    if (value === 'discover') {
+      (event.currentTarget as HTMLSelectElement).value = feedMode === 'custom' && customFeed ? 'custom:' + customFeed.key : feedMode;
+      showFeedMenu = true;
+      return;
+    }
+    if (value.startsWith('custom:')) {
+      const choice = savedFeeds.find(feed => feed.key === value.slice(7));
+      if (choice) void selectFeed(choice);
+    } else if (value === 'timeline' || value === 'for-you' || value === 'my-posts') {
+      void switchMode(value);
+    }
+  }
 
   const currentFeedLabel = $derived.by(() =>
     feedMode === 'custom' && customFeed ? customFeed.title : null
@@ -341,6 +358,8 @@
     void initializeFeed();
     scrollContainer()?.addEventListener('scroll', onFeedScroll, { passive: true });
     window.addEventListener('crispdeck:accounts-changed', onAccountsChanged);
+    window.addEventListener('crispdeck:prefs-changed', updateCompactFeedControls);
+    window.addEventListener('storage', updateCompactFeedControls);
     // Register lifetime resources synchronously, so teardown also covers a
     // page left before its asynchronous account initialization finishes.
     pollInterval = setInterval(() => {
@@ -361,6 +380,10 @@
   });
 
   onDestroy(() => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('crispdeck:prefs-changed', updateCompactFeedControls);
+      window.removeEventListener('storage', updateCompactFeedControls);
+    }
     disposed = true; requestSequence++; accountSequence++; newerSequence++; restoreSequence++; affinitySequence++;
     clearTimeout(searchTimer);
     stopWatchingConnection?.();
@@ -924,11 +947,50 @@
 
 <svelte:head><title>CrispDeck — Feed</title><meta name="description" content="Your unified Mastodon + Bluesky timeline" /></svelte:head>
 
-<div class="p-3 md:p-4" role="feed" aria-label={i18n.t.feed.socialFeed} ontouchstart={onTouchStart} ontouchmove={onTouchMove} ontouchend={onTouchEnd}>
-  <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+<div class="feed-root p-3 md:p-4" class:compact-feed={compactFeedControls} role="feed" aria-label={i18n.t.feed.socialFeed} ontouchstart={onTouchStart} ontouchmove={onTouchMove} ontouchend={onTouchEnd}>
+  <h1 class="sr-only">{i18n.t.feed.title}</h1>
+  <div class="mobile-feed-controls">
+    <select aria-label={i18n.t.feed.switchFeed} value={feedMode === 'custom' && customFeed ? 'custom:' + customFeed.key : feedMode} onchange={changeMobileFeed}>
+      <optgroup label={i18n.t.feed.feedViews}>
+        <option value="timeline">{i18n.t.feed.timeline}</option>
+        <option value="for-you">{i18n.t.feed.forYou}</option>
+        <option value="my-posts">{i18n.t.feed.myPosts}</option>
+      </optgroup>
+      {#if pinnedFeeds.some(choice => choice.kind !== 'timeline')}
+        <optgroup label={i18n.t.feed.pinnedFeedGroup}>
+          {#each pinnedFeeds.filter(choice => choice.kind !== 'timeline') as choice (choice.key)}<option value={'custom:' + choice.key}>{choice.title}</option>{/each}
+        </optgroup>
+      {/if}
+      {#if unpinnedFeeds.some(choice => choice.kind !== 'timeline')}
+        <optgroup label={i18n.t.feed.savedNotPinned}>
+          {#each unpinnedFeeds.filter(choice => choice.kind !== 'timeline') as choice (choice.key)}<option value={'custom:' + choice.key}>{choice.title}</option>{/each}
+        </optgroup>
+      {/if}
+      {#if savedFeeds.length}<optgroup label={i18n.t.feed.discoverGroup}><option value="discover">{i18n.t.feed.discoverFeeds}</option></optgroup>{/if}
+    </select>
+    {#if multiPlatform}
+      <select aria-label={i18n.t.feed.filterPlatform} bind:value={platformFilter}>
+        <option value="all">{i18n.t.feed.all}</option>
+        {#if connectedPlatforms.has('bluesky')}<option value="bluesky">{i18n.t.feed.filterBsky}</option>{/if}
+        {#if connectedPlatforms.has('mastodon')}<option value="mastodon">{i18n.t.feed.filterMasto}</option>{/if}
+        {#if connectedPlatforms.has('threads')}<option value="threads">{i18n.t.common.threads}</option>{/if}
+      </select>
+    {/if}
+    {#if newPostsAvailable > 0}<button type="button" class="mobile-refresh" onclick={loadNewPosts} aria-label={i18n.t.feed.refreshNewPosts.replace('{count}', String(newPostsAvailable))}><RefreshCw size={16} /><span>{newPostsAvailable}</span></button>{/if}
+    <details class="mobile-feed-options" bind:open={mobileFeedOptionsOpen}>
+      <summary aria-label={i18n.t.settings.filterSortTitle}><SlidersHorizontal size={18} /></summary>
+      <div class="mobile-options-menu">
+        <button onclick={() => { showFilters = !showFilters; mobileFeedOptionsOpen = false; }} aria-expanded={showFilters} aria-controls="feed-filters">{i18n.t.settings.filterSortTitle}</button>
+        <button onclick={() => { hideMedia = !hideMedia; mobileFeedOptionsOpen = false; }} aria-pressed={hideMedia}>{i18n.t.feed.hideMediaLabel}</button>
+        {#if connectedPlatforms.has('threads')}<button onclick={() => showThreadsInfo = !showThreadsInfo} aria-expanded={showThreadsInfo}>{i18n.t.feed.threadsInfoLabel}</button>{/if}
+        {#if showThreadsInfo}<p role="note">{i18n.t.feed.threadsTimelineLimited} <a href="https://www.threads.net/" target="_blank" rel="noopener noreferrer">{i18n.t.feed.openThreads}</a></p>{/if}
+      </div>
+    </details>
+  </div>
+  <div class="desktop-feed-header flex flex-wrap items-center justify-between gap-2 mb-2">
     <div class="flex items-center gap-2">
       <Rss size={24} />
-      <h1 class="text-2xl font-bold">{i18n.t.feed.title}</h1>
+      <span aria-hidden="true" class="text-2xl font-bold">{i18n.t.feed.title}</span>
       {#if posts.length > 0}
         <span class="text-sm text-[var(--color-text-muted)] ml-2">({progress} posts)</span>
       {/if}
@@ -1206,7 +1268,7 @@
         {/if}
       </div>
     {:else}
-      <div class="space-y-3">
+      <div class="feed-items">
         {#each visibleFeed as item (isCrosspostGroup(item) ? item.id : item.uri)}
           <!-- data-feed-key is what the reading position anchors to; feed-item
                lets the browser skip layout and paint for offscreen posts. -->
@@ -1214,7 +1276,7 @@
           {#if isCrosspostGroup(item)}
             <CrosspostGroup group={item} {hideMedia} />
           {:else}
-            {#if multiAccount && item.sourceAccount}
+            {#if needsAccountAttribution(accounts, item.platform) && item.sourceAccount}
               <div class="relative">
                 <AccountAttribution platform={item.platform} account={item.sourceAccount} />
                 <Post post={item} feedPreview {hideMedia} onlike={handleLike} onboost={handleBoost} onreply={handleReply} onquote={handleQuote} />
@@ -1245,9 +1307,57 @@
 </div>
 
 <style>
+  .feed-items :global(.post-card) { border: 0; border-bottom: 1px solid var(--color-border); border-radius: 0; }
+  .feed-items :global(.crosspost-group) { border: 0; border-bottom: 1px solid var(--color-border); border-radius: 0; }
+  .mobile-feed-controls { display: none; }
+  .mobile-feed-controls select { flex: 1 1 0; width: 0; min-width: 0; height: 44px; padding: 0 1.2rem 0 0.4rem; color: var(--color-text); background-color: var(--color-surface); border: 1px solid var(--color-border); border-radius: 0.375rem; font-size: 0.75rem; }
+  .mobile-feed-controls select:first-child { flex-grow: 1.4; }
+  .mobile-refresh, .mobile-feed-options summary { display: flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; color: var(--color-text-muted); cursor: pointer; }
+  .mobile-refresh span { font-size: 0.65rem; }
+  .mobile-feed-options summary { list-style: none; }
+  .mobile-feed-options summary::-webkit-details-marker { display: none; }
+  .mobile-options-menu { position: absolute; right: 0; top: 100%; z-index: 51; width: min(19rem, 90vw); padding: 0.4rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 0.5rem; box-shadow: 0 8px 24px #0005; }
+  .mobile-options-menu button, .mobile-options-menu p { display: block; width: 100%; min-height: 44px; padding: 0.6rem; text-align: start; font-size: 0.8rem; }
+  @media (width >= 48rem) {
+    .feed-toolbar { flex-wrap: nowrap; overflow-x: auto; }
+    .feed-mode-tabs, .feed-platform-filter, .feed-picker { flex-shrink: 0; }
+    .compact-feed .mobile-feed-controls { position: relative; z-index: 20; display: flex; align-items: center; gap: 0.25rem; width: min(36rem, 100%); height: 44px; margin-bottom: 0.5rem; }
+    .compact-feed .desktop-feed-header, .compact-feed .feed-toolbar { display: contents; }
+    .compact-feed .desktop-feed-header > :not(.feed-toolbar), .compact-feed .feed-toolbar > :not(.feed-picker), .compact-feed .feed-picker > button { display: none; }
+    .compact-feed .feed-picker { position: static; }
+    .feed-picker-menu { position: fixed; top: 4rem; left: max(1rem, calc(50vw - 9rem)); right: auto; width: min(18rem, calc(100vw - 2rem)); max-height: min(26rem, 70vh); }
+  }
+  /* A medium desktop window has a sidebar but insufficient room for all
+     tabs. Use the same selectors before the toolbar can wrap or overflow. */
+  @media (48rem <= width < 80rem) {
+    .feed-root:not(.compact-feed) .mobile-feed-controls { position: relative; z-index: 20; display: flex; align-items: center; gap: 0.25rem; width: min(36rem, 100%); height: 44px; margin-bottom: 0.5rem; }
+    .feed-root:not(.compact-feed) .desktop-feed-header, .feed-root:not(.compact-feed) .feed-toolbar { display: contents; }
+    .feed-root:not(.compact-feed) .desktop-feed-header > :not(.feed-toolbar), .feed-root:not(.compact-feed) .feed-toolbar > :not(.feed-picker), .feed-root:not(.compact-feed) .feed-picker > button { display: none; }
+    .feed-root:not(.compact-feed) .feed-picker { position: static; }
+  }
   /* The picker becomes a bounded sheet on phones. Its contents can scroll
      without putting feed rows or search controls under either fixed bar. */
   @media (width < 48rem) {
+    .feed-root { padding-top: 0; }
+    .desktop-feed-header { display: contents; }
+    .desktop-feed-header > :not(.feed-toolbar) { display: none; }
+    .feed-toolbar { display: contents; }
+    .feed-toolbar > :not(.feed-picker) { display: none; }
+    .feed-picker { position: static; }
+    .feed-picker > button { display: none; }
+    .mobile-feed-controls { position: fixed; z-index: 51; top: var(--safe-area-top); left: calc(var(--safe-area-left) + 3.5rem); right: calc(var(--safe-area-right) + 3.5rem); height: var(--mobile-header-height); display: flex; align-items: center; gap: 0.25rem; min-width: 0; }
+    .mobile-feed-controls select { flex: 1 1 0; width: 0; min-width: 0; height: 44px; padding: 0 1.2rem 0 0.4rem; color: var(--color-text); background-color: var(--color-surface); border: 1px solid var(--color-border); border-radius: 0.375rem; font-size: 0.75rem; }
+    .mobile-feed-controls select:first-child { flex-grow: 1.4; }
+    .mobile-refresh, .mobile-feed-options summary { display: flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; color: var(--color-text-muted); cursor: pointer; }
+    .mobile-refresh span { font-size: 0.65rem; }
+    .mobile-feed-options summary { list-style: none; }
+    .mobile-feed-options summary::-webkit-details-marker { display: none; }
+    .mobile-options-menu { position: absolute; right: 0; top: 100%; width: min(19rem, 90vw); padding: 0.4rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 0.5rem; box-shadow: 0 8px 24px #0005; }
+    .mobile-options-menu button, .mobile-options-menu p { display: block; width: 100%; min-height: 44px; padding: 0.6rem; text-align: start; font-size: 0.8rem; }
+    .feed-items { margin-inline: -0.75rem; }
+    .feed-items > :global(.feed-item) { margin-top: 0; }
+    .feed-items :global(.post-card) { border: 0; border-bottom: 1px solid var(--color-border); border-radius: 0; padding: 0.4rem 0.75rem; }
+    .feed-items :global(.post-footer) { margin-top: 0; }
     .feed-picker-menu {
       position: fixed;
       top: auto;

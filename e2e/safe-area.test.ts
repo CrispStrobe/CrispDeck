@@ -30,7 +30,7 @@ async function applyInsets(page: Page, device: Insets) {
 async function expectSafeShell(page: Page, device: Insets) {
   expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
   const header = page.locator('.mobile-top-bar');
-  for (const control of await header.locator('button, a').all()) {
+  for (const control of await header.locator('button:visible, a:visible').all()) {
     const bounds = (await control.boundingBox())!;
     expect(bounds.y).toBeGreaterThanOrEqual(device.top);
     expect(bounds.x).toBeGreaterThanOrEqual(device.side);
@@ -46,7 +46,8 @@ async function expectSafeShell(page: Page, device: Insets) {
   const headingAndHeader = await page.evaluate(() => {
     const header = document.querySelector('.mobile-top-bar')!.getBoundingClientRect();
     const heading = document.querySelector('#main-content h1')!.getBoundingClientRect();
-    return { headingTop: heading.top, headerBottom: header.bottom };
+    const compactFeed = document.querySelector('.mobile-feed-controls');
+    return { headingTop: compactFeed ? header.bottom : heading.top, headerBottom: header.bottom };
   });
   expect(headingAndHeader.headingTop, 'the fixed header must not cover the page heading')
     .toBeGreaterThanOrEqual(headingAndHeader.headerBottom);
@@ -106,8 +107,9 @@ for (const device of [
 }
 
 test('safe-area geometry updates when a touch device rotates', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/feed');
-  await expect(page.locator('#main-content h1')).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Switch feed' })).toBeVisible();
   for (const device of [
     { width: 390, height: 844, top: 24, bottom: 48, side: 0 },
     { width: 720, height: 390, top: 0, bottom: 24, side: 44 },
@@ -116,4 +118,42 @@ test('safe-area geometry updates when a touch device rotates', async ({ page }) 
     await applyInsets(page, device);
     await expectSafeShell(page, device);
   }
+});
+
+test('bottom navigation icon-only setting persists and keeps accessible names', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/settings?tab=appearance');
+  const setting = page.getByLabel('Show only icons in bottom navigation');
+  await expect(setting).not.toBeChecked();
+  await setting.check();
+  const tabs = page.locator('.mobile-tab-bar');
+  await expect(tabs).toHaveCSS('height', '48px');
+  await expect(tabs.getByRole('link', { name: 'Feed', exact: true })).toBeVisible();
+  await expect(tabs.getByRole('link', { name: 'Feed', exact: true }).locator('span')).toHaveClass(/sr-only/);
+  await page.reload();
+  await expect(setting).toBeChecked();
+  await expect(tabs).toHaveCSS('height', '48px');
+  await setting.uncheck();
+  await expect(tabs).toHaveCSS('height', '56px');
+});
+
+test('compact feed controls can be set as the wide-screen default', async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 800 });
+  await page.goto('/settings?tab=appearance');
+  const setting = page.getByLabel('Use compact feed controls on wide screens');
+  await setting.check();
+  await page.goto('/feed');
+  const controls = page.locator('.mobile-feed-controls');
+  await expect(controls).toBeVisible();
+  const mode = controls.getByRole('combobox', { name: 'Switch feed' });
+  await expect(mode).toBeVisible();
+  const rect = (await controls.boundingBox())!;
+  expect(rect.x + rect.width).toBeLessThanOrEqual(1500);
+  await page.reload();
+  await expect(mode).toBeVisible();
+  await page.goto('/settings?tab=appearance');
+  await expect(setting).toBeChecked();
+  await setting.uncheck();
+  await page.goto('/feed');
+  await expect(controls).toBeHidden();
 });

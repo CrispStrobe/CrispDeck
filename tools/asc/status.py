@@ -78,10 +78,17 @@ def _all_versions(app: str) -> list:
     return paged(f"/v1/apps/{app}/appStoreVersions?limit=50")
 
 
-def _platform_of(build_id: str) -> str | None:
-    """Walk the relationship; Apple's platform filters on builds are unreliable."""
-    d = one(f"/v1/builds/{build_id}/preReleaseVersion")
-    return (d or {}).get("attributes", {}).get("platform")
+def newest_build_for_version(builds: list, platform: str, version: str) -> dict | None:
+    """Only compare valid builds for this exact platform and marketing version."""
+    candidates = [b for b in builds if b.get("attributes", {}).get("processingState") == "VALID"
+                  and not b.get("attributes", {}).get("expired")]
+    candidates.sort(key=lambda b: b["attributes"].get("uploadedDate") or "", reverse=True)
+    for build in candidates:
+        pre = one(f"/v1/builds/{build['id']}/preReleaseVersion") or {}
+        attrs = pre.get("attributes", {})
+        if attrs.get("platform") == platform and attrs.get("version") == version:
+            return build
+    return None
 
 
 def report_platform(app: str, name: str, platform: str) -> list[str]:
@@ -108,21 +115,15 @@ def report_platform(app: str, name: str, platform: str) -> list[str]:
     if build:
         ba = build["attributes"]
         print(f"   build attached: {ba.get('version')} ({ba.get('processingState')})")
-        newest = [b for b in paged(f"/v1/apps/{app}/builds?limit=50")
-                  if b["attributes"].get("processingState") == "VALID"
-                  and not b["attributes"].get("expired")]
-        newest = [b for b in newest if _platform_of(b["id"]) == platform]
-        # Sort, rather than trusting the order Apple returned. Taking [0] of an
-        # unsorted list reported 1.2.7 as "newer" than the attached 1.2.8 —
-        # a claim that is not merely wrong but backwards, and would have sent
-        # someone to re-attach an older build.
-        newest.sort(key=lambda b: b["attributes"].get("uploadedDate") or "", reverse=True)
-        if newest and newest[0]["id"] != build["id"]:
-            print(f"   NEWER build available: {newest[0]['attributes'].get('version')}"
+        newest = newest_build_for_version(
+            paged(f"/v1/apps/{app}/builds?limit=50"), platform, va.get("versionString", ""))
+        if (newest and newest["id"] != build["id"]
+                and (newest["attributes"].get("uploadedDate") or "") > (ba.get("uploadedDate") or "")):
+            print(f"   NEWER build for {va.get('versionString')}: {newest['attributes'].get('version')}"
                   f" — the version would ship {ba.get('version')}")
             blockers.append(
                 f"{name}: the version carries build {ba.get('version')} but "
-                f"{newest[0]['attributes'].get('version')} is uploaded and newer")
+                f"{newest['attributes'].get('version')} is uploaded and newer")
     else:
         print("   build attached: NONE")
         blockers.append(f"{name}: no build attached to the version")

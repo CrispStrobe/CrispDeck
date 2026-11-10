@@ -82,7 +82,7 @@ try {
     assert.ok(headerAndMedia.gap <= 20, `blank media gap remains at ${width}px: ${headerAndMedia.gap}`);
     if (!landscape) {
       assert.ok(headerAndMedia.imageWidth >= headerAndMedia.contentWidth - 1, 'media must use the phone card width');
-      assert.ok(headerAndMedia.handleTop >= headerAndMedia.nameBottom - 1, 'the handle must have its own line on phones');
+      assert.ok(headerAndMedia.handleTop < headerAndMedia.nameBottom, 'author and handle must share a row on phones');
     }
     assert.ok(headerAndMedia.visiblePhotoHeight >= 44, 'short viewports must retain a visible media preview');
     assert.ok(headerAndMedia.visiblePhotoHeight >= headerAndMedia.photoHeight - 1, 'the media-only preview must show the whole photo');

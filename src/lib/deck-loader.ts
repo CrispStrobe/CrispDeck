@@ -15,6 +15,7 @@ import { requiresQuery } from './deck-columns';
 import { fetchJson, fetchOk, safeUrl } from './http';
 import { isTauri } from './platform';
 import { parseKeywords, buildKeywordMatcher } from './keyword-monitor';
+import { swallow } from './debug-log';
 
 /** Missing means the first page; null means this source has been exhausted. */
 export type DeckCursors = Record<string, string | null>;
@@ -253,7 +254,9 @@ async function loadBlueskyPage(
       const notifications = arrayResponse<BskyNotification>(response.notifications, 'Bluesky');
       const next = nextCursor(response.cursor, cursor);
       if (column.type === 'notifications') {
-        return { posts: [], notifications: notifications.map(n => blueskyNotification(n, account)), cursor: next };
+        const normalized = notifications.map(n => blueskyNotification(n, account));
+        await hydrateNotificationSubjects(normalized, agent);
+        return { posts: [], notifications: normalized, cursor: next };
       }
       if (column.type === 'mentions') {
         const uris = [...new Set(notifications.filter(n => n.reason === 'mention' || n.reason === 'reply').map(n => n.uri))];
@@ -267,7 +270,9 @@ async function loadBlueskyPage(
         return { posts: postViews.map(post => withSource(normalizePost({ post }, 'bluesky'), account)), cursor: next };
       }
       const matches = notifications.filter(n => column.type === 'followers' ? n.reason === 'follow' : ACTIVITY_REASONS.has(n.reason));
-      return { posts: matches.map(n => blueskyActivityPost(n, account, column.type)), notifications: matches.map(n => blueskyNotification(n, account)), cursor: next };
+      const normalized = matches.map(n => blueskyNotification(n, account));
+      await hydrateNotificationSubjects(normalized, agent);
+      return { posts: matches.map(n => blueskyActivityPost(n, account, column.type)), notifications: normalized, cursor: next };
     }
     default: throw new Error(`Bluesky does not support this column: ${column.type}`);
   }
@@ -275,6 +280,17 @@ async function loadBlueskyPage(
     posts: arrayResponse<AppBskyFeedDefs.FeedViewPost>(data.feed, 'Bluesky').map(post => withSource(normalizePost(post, 'bluesky'), account)),
     cursor: nextCursor(data.cursor, cursor),
   };
+}
+
+async function hydrateNotificationSubjects(notifications: DeckNotification[], agent: Agent): Promise<void> {
+  const uris = [...new Set(notifications.filter(n => (n.type === 'like' || n.type === 'repost' || n.type === 'like-via-repost' || n.type === 'repost-via-repost') && n.postUri).map(n => n.postUri!))];
+  for (let start = 0; start < uris.length; start += 25) {
+    try {
+      const result = await agent.api.app.bsky.feed.getPosts({ uris: uris.slice(start, start + 25) });
+      const texts = new Map(result.data.posts.map(post => [post.uri, typeof (post.record as { text?: unknown })?.text === 'string' ? (post.record as { text: string }).text : '']));
+      for (const notification of notifications) if (notification.postUri && texts.has(notification.postUri)) notification.text = texts.get(notification.postUri) || notification.text;
+    } catch (error) { swallow('deck.notificationSubjects', error); }
+  }
 }
 
 function blueskyNotification(notification: BskyNotification, account: Account): DeckNotification {
@@ -449,6 +465,7 @@ function mastodonNotification(notification: mastodon.v1.Notification, account: A
     author: mastodonAuthor(notification.account, instance),
     text: notification.status ? mastodonPost(notification.status, account).text : undefined,
     postUri: notification.status?.uri,
+    postId: notification.status?.id,
     sourceAccount: account.handle, sourceAccountId: account.id,
   };
 }

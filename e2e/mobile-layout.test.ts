@@ -14,6 +14,7 @@ const IMAGE = 'data:image/svg+xml,' + encodeURIComponent(
 const feed = [
   {
     ...BSKY_FEED[0],
+    reason: { $type: 'app.bsky.feed.defs#reasonRepost', by: { did: 'did:plc:reposter', handle: 'reposter.bsky.social', displayName: 'Reposter' }, indexedAt: new Date().toISOString() },
     post: {
       ...BSKY_FEED[0].post,
       embed: {
@@ -120,7 +121,7 @@ async function seedFeed(page: Page, baseURL: string) {
     db.close();
   }, { accounts: ACCOUNTS, seed: SEED });
   await page.goto(new URL('/feed', origin).href);
-  await expect(page.getByRole('button', { name: 'Feeds', exact: true })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Switch feed' })).toBeVisible();
   await expect(page.locator('article').first()).toBeVisible();
 }
 
@@ -154,48 +155,75 @@ for (const width of [320, 360, 390, 430]) {
 
     const main = page.locator('#main-content');
     const header = (await page.locator('.mobile-top-bar').boundingBox())!;
-    const heading = (await main.locator('h1').boundingBox())!;
-    expect(heading.y).toBeGreaterThanOrEqual(header.y + header.height);
+    const controls = page.locator('.mobile-feed-controls');
+    const bounds = (await controls.boundingBox())!;
+    expect(bounds.y).toBeGreaterThanOrEqual(header.y);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(header.y + header.height + 1);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+    const theme = page.locator('.mobile-top-bar').getByRole('button', { name: 'Toggle theme' });
+    await expect(theme).toBeVisible();
+    const themeBounds = (await theme.boundingBox())!;
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(themeBounds.x + 1);
+    const menuBounds = (await page.locator('.mobile-top-bar').getByRole('button', { name: 'Main navigation' }).boundingBox())!;
+    expect(bounds.x).toBeGreaterThanOrEqual(menuBounds.x + menuBounds.width - 1);
     expect(await main.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 
-    for (const label of ['Timeline', 'For You', 'My Posts', 'Feeds', 'All', 'Bsky', 'Masto']) {
-      await expectUsableControl(main.getByRole('button', { name: label, exact: true }), width);
-    }
-    const filters = main.locator('.feed-toolbar').getByRole('button', { name: 'Filters & Sort', exact: true });
-    const media = main.getByRole('button', { name: 'Hide media', exact: true });
-    await expectUsableControl(filters, width);
-    await expectUsableControl(media, width);
-
-    await main.getByRole('button', { name: 'Feeds', exact: true }).tap();
+    const mode = page.getByRole('combobox', { name: 'Switch feed' });
+    const platform = page.getByRole('combobox', { name: 'Platform' });
+    await expect(mode).toBeVisible();
+    await expect(platform).toBeVisible();
+    await expect(mode.locator('optgroup[label="Views"]')).toHaveCount(1);
+    await expect(mode.locator('optgroup[label="Pinned feeds"]')).toHaveCount(1);
+    await expect(mode.locator('optgroup[label="Discover"]')).toHaveCount(1);
+    await mode.selectOption('discover');
     const menu = main.getByRole('menu');
     await expect(menu).toBeVisible();
-    const menuBounds = (await menu.boundingBox())!;
+    const feedMenuBounds = (await menu.boundingBox())!;
     const tabs = (await page.locator('.mobile-tab-bar').boundingBox())!;
-    expect(menuBounds.x).toBeGreaterThanOrEqual(0);
-    expect(menuBounds.x + menuBounds.width).toBeLessThanOrEqual(width);
-    expect(menuBounds.y).toBeGreaterThanOrEqual(header.y + header.height);
-    expect(menuBounds.y + menuBounds.height).toBeLessThanOrEqual(tabs.y);
+    expect(feedMenuBounds.x).toBeGreaterThanOrEqual(0);
+    expect(feedMenuBounds.x + feedMenuBounds.width).toBeLessThanOrEqual(width);
+    expect(feedMenuBounds.y).toBeGreaterThanOrEqual(header.y + header.height);
+    expect(feedMenuBounds.y + feedMenuBounds.height).toBeLessThanOrEqual(tabs.y);
     await menu.getByRole('menuitem', { name: /^Mobile test feed/ }).tap();
     await expect(menu).toHaveCount(0);
-
-    const timeline = main.getByRole('button', { name: 'Timeline', exact: true });
-    await timeline.tap();
-    await expect(timeline).toHaveAttribute('aria-pressed', 'true');
+    await mode.selectOption('timeline');
+    await mode.selectOption('discover');
+    await expect(menu).toBeVisible();
+    await menu.getByRole('menuitem', { name: /^Mobile test feed/ }).tap();
+    await mode.selectOption('timeline');
     await expect(main.getByAltText(IMAGE_ALT)).toBeVisible();
+    await page.getByLabel('Filters & Sort').first().click();
+    const options = page.locator('.mobile-options-menu');
+    const media = options.getByRole('button', { name: 'Hide media', exact: true });
     await media.tap();
-    await expect(media).toHaveAttribute('aria-pressed', 'true');
+    await expect(options).toBeHidden();
     await expect(main.getByAltText(IMAGE_ALT)).toHaveCount(0);
+    await page.locator('.mobile-feed-options summary').click();
     await media.tap();
     await expect(main.getByAltText(IMAGE_ALT)).toBeVisible();
-
+    await page.locator('.mobile-feed-options summary').click();
+    const filters = options.getByRole('button', { name: 'Filters & Sort', exact: true });
     await filters.tap();
-    await expect(filters).toHaveAttribute('aria-expanded', 'true');
+    await expect(options).toBeHidden();
     await expect(main.getByPlaceholder('Search in posts...')).toBeVisible();
-    expect(await main.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await page.locator('.mobile-feed-options summary').click();
     await filters.tap();
     await expect(main.getByPlaceholder('Search in posts...')).toHaveCount(0);
+    await expect(main.locator('.feed-item').first().locator('.post-card')).toHaveCSS('border-radius', '0px');
+    await expect(main.locator('.feed-item').first().locator('[class*="account-attribution"]')).toHaveCount(0);
+    const separation = await main.locator('.feed-item').evaluateAll(items => items[1].getBoundingClientRect().top - items[0].getBoundingClientRect().bottom);
+    expect(separation, 'compact posts have no empty gap between them').toBeLessThanOrEqual(1);
 
     const post = main.locator('article').first();
+    const headerRows = await post.evaluate(element => {
+      const author = element.querySelector('.post-author')!.getBoundingClientRect();
+      const repost = element.querySelector('.post-repost')!.getBoundingClientRect();
+      const time = element.querySelector('.post-time')!.getBoundingClientRect();
+      return { authorY: author.top + author.height / 2, repostY: repost.top + repost.height / 2, timeY: time.top + time.height / 2, repostWidth: repost.width };
+    });
+    expect(headerRows.repostWidth).toBeGreaterThan(12);
+    expect(Math.abs(headerRows.authorY - headerRows.repostY)).toBeLessThanOrEqual(2);
+    expect(Math.abs(headerRows.authorY - headerRows.timeY)).toBeLessThanOrEqual(2);
     const actionLayout = await post.evaluate(element => {
       const card = element.getBoundingClientRect();
       const actions = element.querySelector('.post-actions')!;
@@ -218,10 +246,24 @@ for (const width of [320, 360, 390, 430]) {
       expect(control.x).toBeGreaterThanOrEqual(actionLayout.left);
       expect(control.right).toBeLessThanOrEqual(actionLayout.right);
     }
+    const previewToggle = post.locator('.preview-toggle');
+    if (await previewToggle.count()) {
+      const toggleBounds = (await previewToggle.boundingBox())!;
+      expect(Math.abs(toggleBounds.y - actionLayout.controls[0].y)).toBeLessThan(1);
+      await expect(previewToggle.locator('.preview-toggle-short')).toHaveText('More');
+      await expect(previewToggle.locator('.preview-toggle-short')).toBeVisible();
+      await expect(previewToggle).toHaveAccessibleName('Show full post');
+    }
     const more = post.getByRole('button', { name: 'More post actions', exact: true });
     await more.tap();
     await expect(more).toHaveAttribute('aria-expanded', 'true');
     const actions = post.getByRole('group', { name: 'More post actions', exact: true });
+    const dialog = post.getByRole('dialog', { name: 'More post actions', exact: true });
+    const dialogBounds = (await dialog.boundingBox())!;
+    expect(dialogBounds.y).toBeGreaterThanOrEqual(0);
+    expect(dialogBounds.y + dialogBounds.height).toBeLessThanOrEqual(tabs.y + 1);
+    expect(dialogBounds.x).toBeGreaterThanOrEqual(0);
+    expect(dialogBounds.x + dialogBounds.width).toBeLessThanOrEqual(width);
     for (const name of ['Quote post', 'Copy link to post', 'Translate post', 'Report post']) {
       await expect(actions.getByRole('button', { name, exact: true })).toBeVisible();
     }
@@ -230,5 +272,30 @@ for (const width of [320, 360, 390, 430]) {
     await expect(actions).toBeHidden();
     await main.evaluate(element => { element.scrollTop = 0; });
     await page.screenshot({ path: testInfo.outputPath(`android-feed-${width}.png`) });
+    if (width === 390) {
+      await page.setViewportSize({ width: 1024, height: 844 });
+      await expect(main.locator('.feed-item').first().locator('.post-card')).toHaveCSS('border-radius', '0px');
+      const desktopGap = await main.locator('.feed-item').evaluateAll(items => items[1].getBoundingClientRect().top - items[0].getBoundingClientRect().bottom);
+      expect(desktopGap).toBeLessThanOrEqual(1);
+    }
   });
 }
+
+test('post actions open above a trigger near the viewport bottom', async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 390, height: 600 });
+  await seedFeed(page, baseURL!);
+  const main = page.locator('#main-content');
+  const more = main.locator('article').last().getByRole('button', { name: 'More post actions', exact: true });
+  await more.scrollIntoViewIfNeeded();
+  const trigger = (await more.boundingBox())!;
+  await more.tap();
+  const dialog = page.getByRole('dialog', { name: 'More post actions' });
+  await expect(dialog).toBeVisible();
+  const panel = (await dialog.boundingBox())!;
+  const tabs = (await page.locator('.mobile-tab-bar').boundingBox())!;
+  expect(panel.y).toBeGreaterThanOrEqual(0);
+  expect(panel.y + panel.height).toBeLessThanOrEqual(tabs.y + 1);
+  expect(panel.y).toBeLessThan(trigger.y);
+  await dialog.getByRole('button', { name: 'Close', exact: true }).tap();
+  await expect(dialog).not.toBeVisible();
+});

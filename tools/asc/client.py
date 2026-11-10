@@ -18,6 +18,7 @@ import base64
 import json
 import os
 import pathlib
+import ssl
 import sys
 import time
 import urllib.error
@@ -83,8 +84,14 @@ def call(method: str, path: str, body: dict | None = None) -> tuple[int, dict]:
     req.add_header("Authorization", "Bearer " + token())
     if data:
         req.add_header("Content-Type", "application/json")
+    # python.org's macOS builds can have no configured CA bundle until its
+    # separate certificate installer is run. Use the system bundle only in
+    # that case; never disable certificate verification.
+    context = None
+    if sys.platform == "darwin" and not ssl.get_default_verify_paths().cafile and pathlib.Path('/etc/ssl/cert.pem').is_file():
+        context = ssl.create_default_context(cafile='/etc/ssl/cert.pem')
     try:
-        with urllib.request.urlopen(req) as r:
+        with urllib.request.urlopen(req, timeout=30, context=context) as r:
             raw = r.read()
             return r.status, (json.loads(raw) if raw else {})
     except urllib.error.HTTPError as e:
