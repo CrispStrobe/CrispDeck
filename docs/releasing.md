@@ -19,9 +19,13 @@ to avoid two uploads choosing the same number. Build-only runs never upload buil
 to App Store Connect, replace release assets or notify TestFlight testers.
 Mac code notarization still sends the candidate DMG to Apple’s notary service.
 
-All builders check out the preparation job's full commit SHA. Full CI and
-platform builds run in parallel after preparation. Aggregation requires CI and
-every platform check to pass before either store upload or publication.
+All builders check out the preparation job's full commit SHA. Before any native
+build fanout, preparation reuses a successful CI run for that exact commit or
+an ancestor with an identical Git tree. Both the guard job and Required CI must
+have passed. Missing/failed CI, another workflow, a different tree or an unmerged
+commit cannot substitute. The coordinator retains this read-only CI receipt and
+does not dispatch a duplicate app matrix. Every platform check must still pass
+before store upload or final publication.
 Android emulator validation starts as soon as its signed APK is ready,
 independently of the iOS build. Both mobile packages remain required by the
 final verification gate.
@@ -67,11 +71,13 @@ Update package.json/package-lock.json, Tauri config, Cargo.toml/Cargo.lock,
 CHANGELOG and Apple beta notes. Merge after CI passes, then tag that commit:
 
 ```sh
-git tag -a v1.3.1 -m 'CrispDeck v1.3.1'
-git push origin v1.3.1
+git tag -a v1.3.4 -m 'CrispDeck v1.3.4'
+git push origin v1.3.4
 ```
 
-The tag automatically invokes the coordinator in publication mode. Each platform
+With Windows signing configured, the tag invokes the coordinator in publication
+mode. Without it, automatic preparation is skipped; use the explicit manual
+unsigned override below. Each platform
 is checked against its source receipt and staged in a public prerelease when its
 checks pass; Android also waits for its emulator check. The prerelease explicitly
 says that assembly is incomplete. Once every platform passes, the verified IPA
@@ -95,6 +101,24 @@ Google Play publication uses the separate internal-track workflow.
 
 Heavy compilation and emulators run in GitHub Actions. Local checks are Python
 release guards and workflow syntax; inspect load/memory before broader work.
+
+## CI queue policy
+
+Use one substantive PR for related release work. Do not add `ci:full` labels or
+dispatch extra full CI runs for documentation or release-tool changes. The PR
+and main-push workflow always runs release/security guards, then compares exact
+event base/head commits. A conservative allowlist permits documentation, Python
+release tools/metadata and the inventory helper to skip the app test/build matrix.
+Runtime, dependency, native, unknown or missing-history changes require the full
+matrix. Renames include deletions, so moving app code into docs cannot hide it.
+The stable Required CI check requires the guards and exactly the expected matrix
+results; missing scope, failures and unexpected skips fail it.
+
+Coordinated releases reuse validated source CI and retain every native package
+check. Mac signing, Windows installers and device simulators require their native
+hosted platforms. Use Kaggle for separate compute-heavy model qualification;
+do not introduce model work into this app release. Reuse existing applicable
+runs, cancel superseded runs, and batch pushes to avoid restarting checks.
 
 iOS builds use the committed opaque RGB icons in `src-tauri/icons/ios`.
 When changing `static/icon-1024.png`, install Pillow in a development Python
@@ -122,7 +146,9 @@ activity remains outside it.
 
 No Windows identity was configured when this workflow was introduced. An
 unsigned build-only candidate can finish so installer behavior can be checked;
-its evidence reports `publishable: false`. It cannot be promoted to a release.
+its evidence reports `publishable: false`. Publication requires either a
+production identity or the explicit unsigned override described above; that
+override still requires a complete verified package set.
 Do not use a self-signed development certificate as a production substitute.
 
 Choose one supported configuration:

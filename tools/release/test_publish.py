@@ -83,6 +83,7 @@ class PublishGuardsTests(unittest.TestCase):
         edits = [call.args for call in command.call_args_list if call.args[:2] == ('release', 'edit')]
         self.assertEqual(len(edits), 1)
         self.assertIn('--prerelease=false', edits[0])
+        self.assertEqual(edits[0][edits[0].index('--title') + 1], 'CrispDeck v1.3.0')
 
     def test_moved_tag_is_rejected_before_release_creation(self):
         responses = [{'nameWithOwner': 'CrispStrobe/CrispDeck'}, {'object': {'type': 'commit', 'sha': 'b' * 40}}]

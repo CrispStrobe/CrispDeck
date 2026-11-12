@@ -95,7 +95,7 @@ def publish(root, version, commit, allow_unsigned_windows=False):
     notes = f'CrispDeck {tag}\n\n{body}\n\nAll six platform packages were built from `{commit}` and verified before publication. Verify downloads against SHA256SUMS; release-evidence.json and platform receipts record the checks. {windows_note} macOS is universal, signed and notarized.\n\nThe iOS IPA is an App Store distribution archive. Apple processing, TestFlight review and App Store approval are separate. Google Play publication is separate from the signed APK/AAB downloads. Web ZIP hosting requires configuration for optional server endpoints. Scheduling remains on-device and requires the app to remain open.\n'
     with tempfile.TemporaryDirectory() as temp:
         path = Path(temp) / 'notes.txt'; path.write_text(notes)
-        gh('release', 'edit', tag, '--target', commit, '--notes-file', str(path), '--draft=false', '--prerelease=false', '--latest')
+        gh('release', 'edit', tag, '--target', commit, '--title', f'CrispDeck {tag}', '--notes-file', str(path), '--draft=false', '--prerelease=false', '--latest')
     print(gh('release', 'view', tag, '--json', 'url').strip())
 
 

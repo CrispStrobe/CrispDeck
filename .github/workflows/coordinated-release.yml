@@ -27,7 +27,13 @@ defaults:
 
 jobs:
   prepare:
+    # Without a publisher identity, only an explicit manual unsigned release
+    # may proceed. Avoid queuing a doomed automatic tag job on the free tier.
+    if: github.event_name != 'push' || vars.WINDOWS_SIGNING_MODE != ''
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
     timeout-minutes: 10
     outputs:
       version: ${{ steps.source.outputs.version }}
@@ -37,6 +43,8 @@ jobs:
       allow_unsigned_windows: ${{ steps.source.outputs.allow_unsigned_windows }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -60,10 +68,16 @@ jobs:
           AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
           AZURE_CERTIFICATE_PROFILE: ${{ vars.AZURE_CERTIFICATE_PROFILE }}
         run: python3 tools/release/prepare.py
-
-  ci:
-    needs: prepare
-    uses: ./.github/workflows/ci.yml
+      - name: Reuse successful source CI before building packages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: python3 tools/release/ci_receipt.py "$SOURCE_SHA"
+      - uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: ci-evidence
+          path: ci-receipt.json
 
   desktop:
     needs: prepare
@@ -196,7 +210,7 @@ jobs:
       source_sha: ${{ needs.prepare.outputs.commit }}
 
   verify:
-    needs: [prepare, ci, desktop, ios, android, macos, web, android_smoke, listing_assets]
+    needs: [prepare, desktop, ios, android, macos, web, android_smoke, listing_assets]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
