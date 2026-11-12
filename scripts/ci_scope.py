@@ -12,7 +12,8 @@ def requires_full(paths):
     for path in paths:
         allowed = (
             path.endswith('.md') and ('/' not in path or path.startswith('docs/'))
-            or path in {'.github/workflows/ci.yml', 'scripts/ci_scope.py', 'scripts/test_ci_scope.py',
+            or path in {'.github/workflows/ci.yml', '.github/workflows/coordinated-release.yml',
+                        'scripts/ci_scope.py', 'scripts/test_ci_scope.py',
                         'tools/asc/metadata.json'}
             or path.startswith(('tools/release/', 'tools/asc/')) and path.endswith('.py')
             or path.startswith('tools/security/') and path.endswith('.mjs')

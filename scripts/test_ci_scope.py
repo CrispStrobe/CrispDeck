@@ -44,7 +44,8 @@ class CiScopeTests(unittest.TestCase):
     def test_known_release_only_change_uses_guards(self):
         self.assertFalse(scope.requires_full(['PLAN.md', 'docs/releasing.md', 'tools/asc/metadata.json',
             'tools/release/publish.py', 'tools/security/legacy-storage.mjs',
-            '.github/workflows/ci.yml', 'scripts/ci_scope.py', 'scripts/test_ci_scope.py']))
+            '.github/workflows/ci.yml', '.github/workflows/coordinated-release.yml',
+            'scripts/ci_scope.py', 'scripts/test_ci_scope.py']))
 
     def test_runtime_dependency_native_and_unknown_changes_require_matrix(self):
         for path in ['src/lib/feed.ts', 'api/push/subscribe.ts', 'src-tauri/Cargo.lock',

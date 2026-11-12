@@ -7,8 +7,10 @@ moderation. Instagram and optional CrispASR upgrades are excluded.
 ## Evidence and boundaries
 
 - Baseline main `cfef599` passed required CI and the 12 November live API run.
-  The release commit must pass its own required CI and coordinated package
-  verification; earlier runs do not replace those gates.
+  The release source must have a successful required CI receipt and coordinated
+  package verification. CI can be reused only for the exact commit or a merged
+  ancestor with the identical Git tree; earlier different-source runs do not
+  replace those gates.
 - Native tests cover signed-package identity, startup, synthetic callback
   routing, installer behavior, and simulator/emulator layout. Browser tests
   use intercepted provider boundaries.
