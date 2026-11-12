@@ -60,6 +60,7 @@ jobs:
       - run: npm ci
       - name: Release submission guards
         run: |
+          node --test tools/security/test_legacy_storage.mjs
           python3 -m unittest discover -s tools/asc -p 'test_*.py'
           python3 -m unittest discover -s scripts -p 'test_*.py'
           python3 -m unittest discover -s tools/release -p 'test_*.py'

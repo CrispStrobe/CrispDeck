@@ -67,8 +67,8 @@ Update package.json/package-lock.json, Tauri config, Cargo.toml/Cargo.lock,
 CHANGELOG and Apple beta notes. Merge after CI passes, then tag that commit:
 
 ```sh
-git tag -a v1.3.1 -m 'CrispDeck v1.3.1'
-git push origin v1.3.1
+git tag -a v1.3.4 -m 'CrispDeck v1.3.4'
+git push origin v1.3.4
 ```
 
 The tag automatically invokes the coordinator in publication mode. Each platform
@@ -122,7 +122,9 @@ activity remains outside it.
 
 No Windows identity was configured when this workflow was introduced. An
 unsigned build-only candidate can finish so installer behavior can be checked;
-its evidence reports `publishable: false`. It cannot be promoted to a release.
+its evidence reports `publishable: false`. Publication requires either a
+production identity or the explicit unsigned override described above; that
+override still requires a complete verified package set.
 Do not use a self-signed development certificate as a production substitute.
 
 Choose one supported configuration:

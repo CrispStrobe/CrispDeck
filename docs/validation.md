@@ -1,5 +1,10 @@
 # Release validation
 
+For 1.3.4, use the [focused release session](release-1.3.4.md) alongside this
+matrix. As of 12 November 2026 no new physical-device/authenticated-account
+evidence was supplied in this release task; those rows remain pending. Current
+CI and public API checks are recorded separately in [PLAN.md](../PLAN.md).
+
 Automated CI and device/account validation are different evidence. Native
 installer, simulator and emulator checks run in the coordinated release;
 browser tests intercept provider boundaries. Neither is a live posting test.
