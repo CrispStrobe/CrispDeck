@@ -32,10 +32,15 @@ test('a repeated cursor fails instead of looping or claiming completeness', asyn
   await assert.rejects(inventoryLegacySubscriptions(async () => ({ blobs: [], hasMore: true, cursor: 'same' })), /cursor/);
 });
 
+test('a missing completion flag cannot masquerade as a complete empty inventory', async () => {
+  await assert.rejects(inventoryLegacySubscriptions(async () => ({ blobs: [] })), /page/);
+});
+
 test('unexpected prefixes and malformed metadata fail closed', async () => {
   for (const blob of [
     { pathname: 'other/private.json', size: 1, uploadedAt: '2026-11-01' },
     { pathname: 'push-subscriptions/private.json', size: -1, uploadedAt: '2026-11-01' },
     { pathname: 'push-subscriptions/private.json', size: 1, uploadedAt: 'bad-date' },
+    { pathname: 'push-subscriptions/private.json', size: 1, uploadedAt: null },
   ]) await assert.rejects(inventoryLegacySubscriptions(async () => ({ blobs: [blob], hasMore: false })));
 });

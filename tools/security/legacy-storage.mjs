@@ -7,10 +7,11 @@ export async function inventoryLegacySubscriptions(listPage) {
   let cursor;
   for (;;) {
     const page = await listPage({ prefix: report.prefix, limit: 1000, ...(cursor ? { cursor } : {}) });
-    if (!Array.isArray(page.blobs)) throw new Error('Invalid inventory page');
+    if (!page || !Array.isArray(page.blobs) || typeof page.hasMore !== 'boolean') throw new Error('Invalid inventory page');
     for (const blob of page.blobs) {
       if (typeof blob.pathname !== 'string' || !blob.pathname.startsWith(report.prefix) ||
           !Number.isSafeInteger(blob.size) || blob.size < 0) throw new Error('Invalid inventory metadata');
+      if (!(blob.uploadedAt instanceof Date) && typeof blob.uploadedAt !== 'string') throw new Error('Invalid inventory date');
       const date = new Date(blob.uploadedAt);
       if (!Number.isFinite(date.getTime())) throw new Error('Invalid inventory date');
       const upload = date.toISOString();
