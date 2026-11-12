@@ -534,4 +534,4 @@ only routes the scheme to a built `.app`, so test "System browser" with
 
 ## Trademarks and affiliation
 
-This project is independent and is not affiliated with, endorsed by or sponsored by Bluesky Social PBC, the Mastodon project, Meta/Threads, or X/Twitter. All platform names and trademarks are the property of their respective owners and are used only to identify compatible services.
+This project is independent and is not affiliated with, endorsed by or sponsored by Bluesky Social PBC, the Mastodon project, Meta/Threads, or X/Twitter. All platform names, logos and trademarks are the property of their respective owners and are used only to identify compatible services.
