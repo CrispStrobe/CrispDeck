@@ -96,6 +96,24 @@ Google Play publication uses the separate internal-track workflow.
 Heavy compilation and emulators run in GitHub Actions. Local checks are Python
 release guards and workflow syntax; inspect load/memory before broader work.
 
+## CI queue policy
+
+Use one substantive PR for related release work. Do not add `ci:full` labels or
+dispatch extra full CI runs for documentation or release-tool changes. The PR
+and main-push workflow always runs release/security guards, then compares exact
+event base/head commits. A conservative allowlist permits documentation, Python
+release tools/metadata and the inventory helper to skip the app test/build matrix.
+Runtime, dependency, native, unknown or missing-history changes require the full
+matrix. Renames include deletions, so moving app code into docs cannot hide it.
+The stable Required CI check requires the guards and exactly the expected matrix
+results; missing scope, failures and unexpected skips fail it.
+
+Coordinated releases retain full validation by default, plus every native package
+check. Mac signing, Windows installers and device simulators require their native
+hosted platforms. Use Kaggle for separate compute-heavy model qualification;
+do not introduce model work into this app release. Reuse existing applicable
+runs, cancel superseded runs, and batch pushes to avoid restarting checks.
+
 iOS builds use the committed opaque RGB icons in `src-tauri/icons/ios`.
 When changing `static/icon-1024.png`, install Pillow in a development Python
 environment and run `python3 scripts/generate-ios-icons.py`; commit the generated
