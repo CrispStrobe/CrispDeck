@@ -258,9 +258,22 @@ jobs:
   apple_upload:
     needs: [prepare, verify]
     if: needs.prepare.outputs.publish == 'true'
-    runs-on: macos-latest
+    # Upload with the same Xcode 27 toolchain that built the IPA (mobile.yml);
+    # see ITMS-90725 there.
+    runs-on: xcode-27
     timeout-minutes: 25
     steps:
+      - name: Select the newest Xcode 27 and require the iOS 27 SDK
+        run: |
+          set -euo pipefail
+          XC=$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XC/Contents/Developer"
+          xcodebuild -version
+          SDK=$(xcrun --sdk iphoneos --show-sdk-version)
+          echo "iphoneos SDK: $SDK"
+          if [ "${SDK%%.*}" -lt 27 ]; then
+            echo "::error::iOS SDK $SDK < 27 (ITMS-90725)"; exit 1
+          fi
       - uses: actions/download-artifact@v4
         with:
           name: verified-release
