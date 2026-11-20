@@ -36,12 +36,6 @@ jobs:
     # 26.x, so build on the xcode-27 image and fail early if the SDK is older.
     runs-on: xcode-27
     timeout-minutes: 60
-    # The xcode-27 image starts jobs without a UTF-8 locale; codesign then
-    # decodes the non-ASCII signing identity name wrongly and
-    # reports "no identity found" (dry run 44795486899).
-    env:
-      LANG: en_US.UTF-8
-      LC_ALL: en_US.UTF-8
     steps:
       - uses: actions/checkout@v4
 
@@ -114,6 +108,12 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign:,productsign: -s -k "$KEYCHAIN_PASS" "$KEYCHAIN"
           rm -f "$RUNNER_TEMP/cert.p12"
           security find-identity -v -p codesigning "$KEYCHAIN"
+          # Sign by SHA-1: on the xcode-27 image (macOS 27) codesign no longer
+          # matches the non-ASCII identity name in MACOS_SIGNING_IDENTITY
+          # ("no identity found", dry run 44795486899).
+          SHA1=$(security find-identity -v -p codesigning "$KEYCHAIN" | awk '/"Apple Distribution:/ {print $2; exit}')
+          [ -n "$SHA1" ] || { echo "::error::No Apple Distribution identity"; exit 1; }
+          echo "MACOS_SIGNING_SHA1=$SHA1" >> "$GITHUB_ENV"
 
       - name: Build the Tauri app
         uses: tauri-apps/tauri-action@v0
@@ -124,7 +124,7 @@ jobs:
           # persistent one above ("ambiguous identity"). The identity is already
           # on the search list, which is all the bundler needs. No notarization
           # vars either -- App Store builds go through App Review, not notarization.
-          APPLE_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          APPLE_SIGNING_IDENTITY: ${{ env.MACOS_SIGNING_SHA1 }}
           APPLE_TEAM_ID: ${{ secrets.MACOS_TEAM_ID }}
         with:
           args: --bundles app --target universal-apple-darwin
@@ -170,7 +170,7 @@ jobs:
 
           codesign --force --deep --strict --timestamp --options runtime \
             --entitlements /tmp/merged-entitlements.plist \
-            --sign "$MACOS_SIGNING_IDENTITY" "$APP"
+            --sign "$MACOS_SIGNING_SHA1" "$APP"
           codesign --verify --deep --strict --verbose=2 "$APP"
 
           # The sandbox entitlement is the whole reason this build can go to the
