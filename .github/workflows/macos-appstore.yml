@@ -36,6 +36,12 @@ jobs:
     # 26.x, so build on the xcode-27 image and fail early if the SDK is older.
     runs-on: xcode-27
     timeout-minutes: 60
+    # The xcode-27 image starts jobs without a UTF-8 locale; codesign then
+    # decodes the non-ASCII signing identity name wrongly and
+    # reports "no identity found" (dry run 44795486899).
+    env:
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
     steps:
       - uses: actions/checkout@v4
 
