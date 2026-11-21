@@ -31,10 +31,25 @@ env:
 
 jobs:
   build-upload:
-    runs-on: macos-latest
+    # ITMS-90725: from April 2027 App Store Connect only accepts builds made
+    # with the 27 SDKs (Xcode 27). The standard macOS images only ship Xcode
+    # 26.x, so build on the xcode-27 image and fail early if the SDK is older.
+    runs-on: xcode-27
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+
+      - name: Select the newest Xcode 27 and require the macOS 27 SDK
+        run: |
+          set -euo pipefail
+          XC=$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XC/Contents/Developer"
+          xcodebuild -version
+          SDK=$(xcrun --sdk macosx --show-sdk-version)
+          echo "macosx SDK: $SDK"
+          if [ "${SDK%%.*}" -lt 27 ]; then
+            echo "::error::macOS SDK $SDK < 27 (ITMS-90725)"; exit 1
+          fi
 
       - uses: actions/setup-node@v4
         with:
@@ -79,7 +94,10 @@ jobs:
           set -euo pipefail
           umask 077
           KEYCHAIN=$RUNNER_TEMP/crispdeck-ci.keychain-db
-          KEYCHAIN_PASS=$(openssl rand -base64 24)
+          # Empty password: on the xcode-27 image unlock-keychain rejects the
+          # password the keychain was just created with (runner-images#14837).
+          # The keychain lives in RUNNER_TEMP on a single-use VM.
+          KEYCHAIN_PASS=""
           security create-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN"
           security set-keychain-settings -lut 21600 "$KEYCHAIN"
           security unlock-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN"
@@ -90,6 +108,12 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign:,productsign: -s -k "$KEYCHAIN_PASS" "$KEYCHAIN"
           rm -f "$RUNNER_TEMP/cert.p12"
           security find-identity -v -p codesigning "$KEYCHAIN"
+          # Sign by SHA-1: on the xcode-27 image (macOS 27) codesign no longer
+          # matches the non-ASCII identity name in MACOS_SIGNING_IDENTITY
+          # ("no identity found", dry run 44795486899).
+          SHA1=$(security find-identity -v -p codesigning "$KEYCHAIN" | awk '/"Apple Distribution:/ {print $2; exit}')
+          [ -n "$SHA1" ] || { echo "::error::No Apple Distribution identity"; exit 1; }
+          echo "MACOS_SIGNING_SHA1=$SHA1" >> "$GITHUB_ENV"
 
       - name: Build the Tauri app
         uses: tauri-apps/tauri-action@v0
@@ -100,7 +124,7 @@ jobs:
           # persistent one above ("ambiguous identity"). The identity is already
           # on the search list, which is all the bundler needs. No notarization
           # vars either -- App Store builds go through App Review, not notarization.
-          APPLE_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          APPLE_SIGNING_IDENTITY: ${{ env.MACOS_SIGNING_SHA1 }}
           APPLE_TEAM_ID: ${{ secrets.MACOS_TEAM_ID }}
         with:
           args: --bundles app --target universal-apple-darwin
@@ -146,7 +170,7 @@ jobs:
 
           codesign --force --deep --strict --timestamp --options runtime \
             --entitlements /tmp/merged-entitlements.plist \
-            --sign "$MACOS_SIGNING_IDENTITY" "$APP"
+            --sign "$MACOS_SIGNING_SHA1" "$APP"
           codesign --verify --deep --strict --verbose=2 "$APP"
 
           # The sandbox entitlement is the whole reason this build can go to the
