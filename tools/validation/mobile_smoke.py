@@ -249,6 +249,29 @@ def android(root, output, diagnostic=False):
         subprocess.run(['adb', 'shell', 'am', 'force-stop', BUNDLE], check=False)
 
 
+def ios_alive(identifier, pid, output):
+    """Liveness via the host pid and the simulator's own launchd.
+
+    On the Xcode 27 / iOS 27 simulator the pid printed by `simctl launch` may
+    not be signalable from the host, so also accept the app's
+    UIKitApplication job holding a live pid inside the simulator.
+    """
+    try:
+        os.kill(pid, 0); host = True
+    except ProcessLookupError:
+        host = False
+    except PermissionError:
+        host = True
+    listing = subprocess.run(['xcrun', 'simctl', 'spawn', identifier, 'launchctl', 'list'],
+                             text=True, capture_output=True, check=False).stdout
+    jobs = [line for line in listing.splitlines() if BUNDLE in line]
+    sim = any(line.split()[0].isdigit() for line in jobs if line.split())
+    with (output / 'liveness.log').open('a') as log:
+        log.write(f'{time.strftime("%H:%M:%S")} pid={pid} host={host} sim={sim} jobs={jobs}\n')
+    if not (host or sim):
+        raise RuntimeError(f'iOS app process {pid} is not running (host and simulator launchd agree)')
+
+
 def ios(output):
     candidates = []
     for root in (Path('src-tauri/gen/apple'), Path('src-tauri/target')):
@@ -291,7 +314,7 @@ def ios(output):
                                          f'--stdout={stdout}', f'--stderr={stderr}', identifier, BUNDLE],
                                         text=True, env=env)
         pid = int(re.search(r':\s*(\d+)\s*$', result).group(1))
-        for _ in range(12): time.sleep(1); os.kill(pid, 0)
+        for _ in range(12): time.sleep(1); ios_alive(identifier, pid, output)
         for _ in range(20):
             if STARTUP_DELIVERED in ios_log_messages(native_log.read_text(), pid): break
             time.sleep(0.5)
@@ -300,7 +323,7 @@ def ios(output):
             raise RuntimeError('Simulator system log has no app startup receipt; callback logging is unavailable')
         subprocess.run(['xcrun', 'simctl', 'io', identifier, 'screenshot', str(output / 'native-startup.png')], check=True)
         ios_callback_tests(identifier, output)
-        os.kill(pid, 0)
+        ios_alive(identifier, pid, output)
         for _ in range(20):
             if ios_log_messages(native_log.read_text(), pid).count(CALLBACK_DELIVERED) >= len(CALLBACKS): break
             time.sleep(0.5)
@@ -325,6 +348,14 @@ def ios(output):
             try: collector.wait(timeout=10)
             except subprocess.TimeoutExpired: collector.kill(); collector.wait(timeout=10)
         if system_log is not None: system_log.close()
+        try:
+            shown = subprocess.run(['xcrun', 'simctl', 'spawn', identifier, 'log', 'show', '--last', '10m',
+                                    '--style', 'compact', '--predicate',
+                                    'process == "CrispDeck" OR eventMessage CONTAINS[c] "crispdeck"'],
+                                   text=True, capture_output=True, timeout=60, check=False)
+            (output / 'simulator-app.log').write_text(shown.stdout + shown.stderr)
+        except (OSError, subprocess.SubprocessError) as error:
+            (output / 'simulator-app-log-error.txt').write_text(str(error))
         subprocess.run(['xcrun', 'simctl', 'terminate', identifier, BUNDLE], check=False)
         if booted_here: subprocess.run(['xcrun', 'simctl', 'shutdown', identifier], check=False)
 
