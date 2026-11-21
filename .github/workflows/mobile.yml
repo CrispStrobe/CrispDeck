@@ -66,9 +66,14 @@ jobs:
   ios:
     name: iOS Build
     if: inputs.platform != 'android'
-    runs-on: macos-26
-    timeout-minutes: 60
+    # ITMS-90725: from April 2027 App Store Connect only accepts builds made
+    # with the 27 SDKs (Xcode 27). The standard macOS images only ship Xcode
+    # 26.x, so build on the xcode-27 image and fail early if the SDK is older.
+    runs-on: xcode-27
+    timeout-minutes: 120
     env:
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
       APPLE_TEAM_ID:       ${{ secrets.APPLE_TEAM_ID }}
       APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
       IOS_DIST_P12:        ${{ secrets.IOS_DIST_P12 }}
@@ -80,6 +85,18 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ inputs.source_sha || github.sha }}
+
+      - name: Select the newest Xcode 27 and require the iOS 27 SDK
+        run: |
+          set -euo pipefail
+          XC=$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XC/Contents/Developer"
+          xcodebuild -version
+          SDK=$(xcrun --sdk iphoneos --show-sdk-version)
+          echo "iphoneos SDK: $SDK"
+          if [ "${SDK%%.*}" -lt 27 ]; then
+            echo "::error::iOS SDK $SDK < 27 (ITMS-90725)"; exit 1
+          fi
 
       # Allow an existing immutable release to be tested with a corrected test
       # harness without changing any app source. Record the separate validator
@@ -152,8 +169,12 @@ jobs:
       - name: Import the retained Distribution identity
         run: |
           KEYCHAIN="build.keychain-db"
+          # Empty password: on the xcode-27 image unlock-keychain rejects the
+          # password the keychain was just created with (runner-images#14837).
+          # No -t: never auto-lock (the default 300 s lock outlasts the build
+          # and codesign then hangs on an invisible unlock prompt).
           security create-keychain -p "" "$KEYCHAIN"
-          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security set-keychain-settings "$KEYCHAIN"
           security unlock-keychain -p "" "$KEYCHAIN"
           echo "$IOS_DIST_P12" | base64 -d > "$RUNNER_TEMP/dist.p12"
           security import "$RUNNER_TEMP/dist.p12" -k "$KEYCHAIN" -P "$IOS_DIST_P12_PASSWORD" \
@@ -178,6 +199,24 @@ jobs:
           echo "CRISPDECK_XCODE_GUARD_LOG=$RUNNER_TEMP/ios-smoke/xcodebuild-guard.jsonl" >> "$GITHUB_ENV"
           cp "$RUNNER_TEMP/ios-signing/signing-metadata.json" "$RUNNER_TEMP/ios-smoke/"
 
+      # Xcode 27's SwiftPM defaults to the "swiftbuild" engine, which ignores the
+      # -Xswiftc/-Xcc iOS target overrides swift-rs passes and links Tauri's Swift
+      # package for macOS ("building for 'macOS', but linking ... built for 'iOS'").
+      # Patch the locked swift-rs (CI only) to request the native build system,
+      # the Xcode 26 default that honours those overrides.
+      - name: Pin swift-rs to SwiftPM's native build system (Xcode 27)
+        run: |
+          set -euo pipefail
+          V=$(awk '/^name = "swift-rs"$/{getline; gsub(/"/,"",$3); print $3}' src-tauri/Cargo.lock)
+          [ -n "$V" ] || { echo "::error::swift-rs not in Cargo.lock"; exit 1; }
+          curl -sSfL "https://static.crates.io/crates/swift-rs/swift-rs-$V.crate" | tar xz -C "$RUNNER_TEMP"
+          D="$RUNNER_TEMP/swift-rs-$V"
+          perl -0pi -e 's/\.arg\("build"\)/.arg("build").args(["--build-system", "native"])/' "$D/src-rs/build.rs"
+          grep -q -- '"--build-system", "native"' "$D/src-rs/build.rs"
+          mkdir -p "$HOME/.cargo"
+          printf '\n[patch.crates-io]\nswift-rs = { path = "%s" }\n' "$D" >> "$HOME/.cargo/config.toml"
+          cat "$HOME/.cargo/config.toml"
+
       # Tauri 2.11 adds automatic-provisioning flags even when signing is skipped.
       # The PATH wrapper removes those flags; the archive is signed only at export.
       - name: Build an unsigned iOS archive
@@ -189,6 +228,8 @@ jobs:
       - name: Export IPA from archive
         if: env.SIGNING_CONFIGURED == 'true'
         run: |
+          # Re-unlock: the archive build can take long enough for a lock.
+          security unlock-keychain -p "" build.keychain-db
           VERSION=$(node -p "require('./package.json').version")
           ARCHIVE=$(find src-tauri -name "*.xcarchive" -type d 2>/dev/null | head -1)
           echo "Archive: $ARCHIVE"
