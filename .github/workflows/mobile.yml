@@ -292,6 +292,15 @@ jobs:
           if [ "$(uname -m)" = arm64 ]; then TARGET=aarch64-sim; else TARGET=x86_64; fi
           npx tauri ios build --target "$TARGET" 2>&1 | tail -70
           python3 tools/validation/mobile_smoke.py ios --output "$RUNNER_TEMP/ios-smoke"
+      - name: Collect simulator crash reports
+        if: failure()
+        run: |
+          D="$RUNNER_TEMP/ios-smoke/diagnostics"; mkdir -p "$D"
+          find "$HOME/Library/Logs/DiagnosticReports" -iname '*crispdeck*' -exec cp {} "$D/" \; 2>/dev/null || true
+          xcrun simctl list devices booted > "$D/booted.txt" 2>&1 || true
+          ps -axo pid,user,command | grep -i crispdeck | grep -v grep > "$D/ps.txt" 2>&1 || true
+          cat "$D/booted.txt" "$D/ps.txt"; ls -la "$D"
+          for f in "$D"/*.ips "$D"/*.crash; do [ -f "$f" ] && head -c 6000 "$f"; done || true
       - name: Retain iPhone simulator evidence
         if: always()
         uses: actions/upload-artifact@v4
