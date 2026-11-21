@@ -40,7 +40,9 @@
     "Ceiling on the entry every visitor pays before anything renders.",
     "Measured at 90.6 KB with the verified Wallabag navigation and reader",
     "translations. The reader API, watcher, and sanitizer remain lazy; allow",
-    "one additional KB for the localized shell and route-manifest overhead."
+    "one additional KB for the localized shell and route-manifest overhead.",
+    "@tauri-apps/api 2.12 (Tauri 2.12 is required for iOS 27 to launch the",
+    "app) brought the entry to 91.1 KB; one more KB of headroom on top."
   ],
-  "maxEntryGzip": 93184
+  "maxEntryGzip": 94208
 }
