@@ -43,6 +43,7 @@ function deferred<T>() {
 }
 
 let instance: ReturnType<typeof createClassComponent> | undefined;
+let intersect: IntersectionObserverCallback | undefined;
 beforeEach(() => {
   vi.resetAllMocks(); localStorage.clear();
   mocks.sanitizerReady = undefined; mocks.localEnabled = false;
@@ -51,10 +52,19 @@ beforeEach(() => {
   mocks.refresh.mockResolvedValue(false);
   mocks.list.mockResolvedValue(page([entry(1), entry(2)]));
   mocks.get.mockImplementation(async (_server: string, id: number) => entry(id));
+  intersect = undefined;
+  vi.stubGlobal('IntersectionObserver', class {
+    constructor(callback: IntersectionObserverCallback) { intersect = callback; }
+    observe() {}
+    disconnect() {}
+    unobserve() {}
+    takeRecords() { return []; }
+  });
 });
 afterEach(() => {
   instance?.$destroy(); instance = undefined;
   flushSync(); document.body.innerHTML = '';
+  vi.unstubAllGlobals();
 });
 
 function render() {
@@ -72,6 +82,11 @@ function select(target: HTMLElement, id: number) {
   const found = target.querySelector<HTMLButtonElement>(`[data-wallabag-entry="${id}"]`);
   if (!found) throw new Error(`Missing article: ${id}`);
   found.click(); flushSync();
+}
+function scrollToEnd() {
+  flushSync();
+  intersect?.([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
+  flushSync();
 }
 async function expectArticle(target: HTMLElement, title: string) {
   await vi.waitFor(() => { flushSync(); expect(target.querySelector('article h2')?.textContent).toBe(title); });
@@ -197,7 +212,7 @@ describe('Wallabag reader requests and reading actions', () => {
     mocks.list.mockReturnValueOnce(unread.promise).mockReturnValueOnce(starred.promise);
     const target = render();
     button(target, 'Starred').click(); flushSync();
-    expect(mocks.list).toHaveBeenLastCalledWith(server, { filter: 'starred', page: 1, perPage: 20 });
+    expect(mocks.list).toHaveBeenLastCalledWith(server, { filter: 'starred', page: 1, perPage: 50 });
     starred.resolve(page([entry(2, { is_starred: true })]));
     await expectEntries(target, [2]);
     unread.resolve(page([entry(1)]));
@@ -222,26 +237,46 @@ describe('Wallabag reader requests and reading actions', () => {
     expect(mocks.update).not.toHaveBeenCalled();
   });
 
-  it('moves back before requesting a page emptied by an explicit archive action', async () => {
-    mocks.list.mockResolvedValueOnce(page([entry(1)], 1, 2, 21));
+  it('appends the next page at the end of the list instead of showing page controls', async () => {
+    mocks.list.mockResolvedValueOnce(page([entry(1)], 1, 2, 51));
     const target = render(); await expectEntries(target, [1]);
-    mocks.list.mockResolvedValueOnce(page([entry(21)], 2, 2, 21));
-    button(target, 'Next page').click(); flushSync();
-    await expectEntries(target, [21]);
-    select(target, 21); await expectArticle(target, 'Article 21');
-    mocks.update.mockResolvedValueOnce(entry(21, { is_archived: true }));
-    // An implementation that requests page 2 again meets Wallabag's actual
-    // out-of-range rejection here, instead of a friendly empty-page fixture.
-    mocks.list.mockImplementation(async (_server: string, options: { page: number }) => {
-      if (options.page !== 1) throw new Error('Pagerfanta out of range');
-      return page([entry(1)], 1, 1, 20);
-    });
+    expect(target.textContent).not.toContain('Next page');
+    mocks.list.mockResolvedValueOnce(page([entry(51)], 2, 2, 51));
+    scrollToEnd();
+    await expectEntries(target, [1, 51]);
+    expect(mocks.list).toHaveBeenLastCalledWith(server, { filter: 'unread', page: 2, perPage: 50 });
+  });
+
+  it('removes an archived article locally without reloading an out-of-range page', async () => {
+    mocks.list.mockResolvedValueOnce(page([entry(1), entry(2)], 1, 2, 51));
+    const target = render(); await expectEntries(target, [1, 2]);
+    mocks.list.mockResolvedValueOnce(page([entry(51)], 2, 2, 51));
+    scrollToEnd();
+    await expectEntries(target, [1, 2, 51]);
+    select(target, 51); await expectArticle(target, 'Article 51');
+    mocks.update.mockResolvedValueOnce(entry(51, { is_archived: true }));
     button(target, 'Mark as read').click(); flushSync();
-    await expectEntries(target, [1]);
-    expect(mocks.update).toHaveBeenCalledWith(server, 21, { archive: true });
-    expect(mocks.list).toHaveBeenLastCalledWith(server, { filter: 'unread', page: 1, perPage: 20 });
-    await expectArticle(target, 'Article 21');
+    await expectEntries(target, [1, 2]);
+    expect(mocks.update).toHaveBeenCalledWith(server, 51, { archive: true });
+    await expectArticle(target, 'Article 51');
     expect(button(target, 'Mark as unread')).toBeDefined();
     expect(target.textContent).not.toContain('Could not load your Wallabag articles');
+  });
+
+  it('sorts search hits by title and source relevance and can hide body-only mentions', async () => {
+    const target = render(); await expectEntries(target, [1, 2]);
+    mocks.list.mockResolvedValueOnce(page([
+      entry(1, { title: 'A passing mention', url: 'https://news.example/story' }),
+      entry(2, { title: 'Harold Laski', url: 'https://en.wikipedia.org/wiki/Harold_Laski' }),
+    ], 1, 1, 2));
+    const search = target.querySelector<HTMLInputElement>('input[type=search]')!;
+    search.value = 'wikipedia'; search.dispatchEvent(new Event('input', { bubbles: true }));
+    search.form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await expectEntries(target, [2, 1]);
+    expect(mocks.list).toHaveBeenLastCalledWith(server, { filter: 'all', page: 1, perPage: 20, search: 'wikipedia' });
+    target.querySelector<HTMLButtonElement>('[aria-controls="wallabag-filter-panel"]')!.click(); flushSync();
+    const only = [...target.querySelectorAll<HTMLInputElement>('input[type=checkbox]')].find(input => input.closest('label')?.textContent?.includes('Only title or source matches'))!;
+    only.click(); flushSync();
+    await expectEntries(target, [2]);
   });
 });

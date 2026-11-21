@@ -103,11 +103,35 @@ export const BLUESKY_CHAT_HEADERS = { 'atproto-proxy': 'did:web:api.bsky.chat#bs
 
 async function chatAgent(account: Account, entry: ClientEntry): Promise<{ agent: Agent; did: string }> {
   let agent = entry.oauthAgent;
+  // A startup restore can fail transiently (network flake, locked keychain,
+  // DPoP nonce). The client factory keeps the account read-only until the next
+  // navigation; messaging must give that session another chance before asking
+  // someone to reconnect an account that is still saved. This also repairs the
+  // degraded entry for the rest of the page.
+  let restoreFailure: 'expired' | 'unavailable' | undefined;
+  if (!agent && entry.degraded && account.did) {
+    const { restoreBlueskyOAuthSession } = await import('./api/bluesky-oauth');
+    const restored = await restoreBlueskyOAuthSession(account.did);
+    if (restored.status === 'ok') {
+      agent = restored.agent;
+      entry.oauthAgent = restored.agent;
+      entry.degraded = false;
+    } else {
+      restoreFailure = restored.status;
+    }
+  }
   if (!agent) {
-    const client = entry.client as BlueskyClient;
-    await client.login();
-    if (!client.isAuthenticated()) throw new Error('Reconnect this Bluesky account with OAuth or an app password with chat access.');
-    agent = client.getAgent();
+    if (!entry.degraded) {
+      const client = entry.client as BlueskyClient;
+      await client.login();
+      if (client.isAuthenticated()) agent = client.getAgent();
+    }
+    if (!agent) {
+      if (restoreFailure === 'unavailable') {
+        throw new Error('Could not reach Bluesky to restore this account’s session. Check your connection and try again.');
+      }
+      throw new Error('Reconnect this Bluesky account with OAuth or an app password with chat access.');
+    }
   }
   const did = agent.did;
   // A global "last OAuth session" can belong to another account. The caller

@@ -350,7 +350,37 @@ describe('Wallabag browser persistence', () => {
 });
 
 const articlePage = (items: unknown[], pages = 1) => new Response(JSON.stringify({ _embedded: { items }, pages }), { status: 200 });
-const article = { id: 1, title: 'A saved article', url: 'https://example.org/article', content: '<p>First paragraph</p><p>Later</p>', created_at: '2026-11-01T12:00:00Z', password: 'never project', annotations: ['omit'] };
+const entriesPage = (items: unknown[], pages = 1, total = items.length) => new Response(JSON.stringify({ _embedded: { items }, page: 1, pages, total }), { status: 200 });
+const article = { id: 1, title: 'A saved article', url: 'https://example.org/article', content: '<p>First paragraph</p><p>Later</p>', created_at: '2026-11-01T12:00:00Z', is_archived: false, is_starred: false, password: 'never project', annotations: ['omit'] };
+
+describe('Wallabag reader listings', () => {
+  it('filters an exact source without asking the search endpoint for every article body', async () => {
+    mocks.fetch.mockResolvedValueOnce(token('access')).mockResolvedValueOnce(entriesPage([{
+      ...article, url: 'https://en.wikipedia.org/wiki/Harold_Laski', domain_name: 'en.wikipedia.org',
+      updated_at: '2026-11-02T12:00:00Z', archived_at: '2026-11-03T12:00:00Z',
+    }]));
+    await api.connectWallabag(credentials);
+    const result = await api.listWallabagEntries(credentials.server, { filter: 'all', page: 1, perPage: 10, domain: 'en.wikipedia.org' });
+    expect(mocks.fetch.mock.calls[1][0]).toBe('https://wallabag.example/api/entries.json?page=1&perPage=10&sort=created&order=desc&detail=metadata&domain_name=en.wikipedia.org');
+    expect(result.items[0]).toMatchObject({ domain_name: 'en.wikipedia.org', updated_at: '2026-11-02T12:00:00Z', archived_at: '2026-11-03T12:00:00Z' });
+    expect(result.items[0].content_bytes).toBeGreaterThan(0);
+  });
+
+  it('rejects a source value that is not a plain domain', async () => {
+    await expect(api.listWallabagEntries(credentials.server, { domain: 'https://en.wikipedia.org/wiki' })).rejects.toThrow('Invalid Wallabag article list options');
+  });
+
+  it('uses the search endpoint only for full-text queries and records article size', async () => {
+    mocks.fetch.mockResolvedValueOnce(token('access')).mockResolvedValueOnce(entriesPage([{
+      ...article, title: 'Harold Laski', url: 'https://en.wikipedia.org/wiki/Harold_Laski',
+    }], 2, 3255));
+    await api.connectWallabag(credentials);
+    const result = await api.listWallabagEntries(credentials.server, { page: 2, perPage: 20, search: 'wikipedia' });
+    expect(mocks.fetch.mock.calls[1][0]).toBe('https://wallabag.example/api/search.json?term=wikipedia&page=2&perPage=20');
+    expect(result.items[0].content_bytes).toBe(new TextEncoder().encode(article.content).length);
+    expect(result.total).toBe(3255);
+  });
+});
 
 describe('Wallabag search-index reads', () => {
   it('requests updated entries after a checkpoint without putting credentials in the URL', async () => {

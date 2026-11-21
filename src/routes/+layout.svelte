@@ -66,6 +66,22 @@
     }
     return () => { active = false; };
   });
+  onMount(() => {
+    if (!isTauri()) return;
+    let active = true;
+    let unlisten: (() => void) | undefined;
+    // The native app menu's About item opens the same page as the in-app
+    // Tools & settings → About entry.
+    void import('@tauri-apps/api/event').then(({ listen }) =>
+      listen<string>('crispdeck:menu', event => {
+        if (event.payload === 'about') void goto(`${base}/about`);
+      })
+    ).then(stop => {
+      if (active) unlisten = stop;
+      else stop();
+    }).catch(error => swallow('layout.nativeMenu', error));
+    return () => { active = false; unlisten?.(); };
+  });
   import { onNavigate } from '$app/navigation';
   import { getBookmarkCount } from '$lib/bookmarks';
 

@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Account } from './types';
 import type { ClientEntry } from './api/client-factory';
+
+const oauth = vi.hoisted(() => ({ restore: vi.fn() }));
+vi.mock('./api/bluesky-oauth', () => ({ restoreBlueskyOAuthSession: oauth.restore }));
+
 import {
   BLUESKY_CHAT_HEADERS, conversationKey, findLinkedConversation, loadConversationInbox,
   loadConversationMessages, sendConversationMessage, createConversation, type Conversation,
@@ -39,7 +43,11 @@ function response(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 }
 const fetchMock = vi.fn<typeof fetch>();
-beforeEach(() => { fetchMock.mockReset(); fetchMock.mockRejectedValue(new Error('Unexpected network request')); vi.stubGlobal('fetch', fetchMock); });
+beforeEach(() => {
+  fetchMock.mockReset(); fetchMock.mockRejectedValue(new Error('Unexpected network request'));
+  vi.stubGlobal('fetch', fetchMock);
+  oauth.restore.mockReset();
+});
 afterEach(() => vi.unstubAllGlobals());
 
 describe('private conversation ownership', () => {
@@ -107,6 +115,39 @@ describe('private conversation ownership', () => {
     expect(fixture.client.login).toHaveBeenCalledOnce();
     expect(fixture.client.getAgent).toHaveBeenCalledOnce();
     expect(sent.id).toBe('sent-2');
+  });
+
+  it('retries a transiently degraded OAuth session before asking someone to reconnect', async () => {
+    const account = bskyAccount(2), fixture = bskyEntry(account);
+    delete (fixture.entry as { oauthAgent?: unknown }).oauthAgent;
+    fixture.entry.degraded = true;
+    oauth.restore.mockResolvedValue({ status: 'ok', did: account.did, agent: fixture.agent });
+    const sent = await sendConversationMessage(conversation(account), 'Hello', [account], new Map([[2, fixture.entry]]));
+    expect(oauth.restore).toHaveBeenCalledWith(account.did);
+    expect(fixture.entry.oauthAgent).toBe(fixture.agent);
+    expect(fixture.entry.degraded).toBe(false);
+    expect(fixture.client.login).not.toHaveBeenCalled();
+    expect(sent.id).toBe('sent-2');
+  });
+
+  it('asks for reconnection only when the saved OAuth session is actually expired', async () => {
+    const account = bskyAccount(2), fixture = bskyEntry(account);
+    delete (fixture.entry as { oauthAgent?: unknown }).oauthAgent;
+    fixture.entry.degraded = true;
+    oauth.restore.mockResolvedValue({ status: 'expired' });
+    await expect(sendConversationMessage(conversation(account), 'Hello', [account], new Map([[2, fixture.entry]])))
+      .rejects.toThrow('Reconnect this Bluesky account');
+    expect(fixture.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('does not demand a reconnect when the session could not be reached', async () => {
+    const account = bskyAccount(2), fixture = bskyEntry(account);
+    delete (fixture.entry as { oauthAgent?: unknown }).oauthAgent;
+    fixture.entry.degraded = true;
+    oauth.restore.mockResolvedValue({ status: 'unavailable' });
+    await expect(sendConversationMessage(conversation(account), 'Hello', [account], new Map([[2, fixture.entry]])))
+      .rejects.toThrow('Could not reach Bluesky');
+    expect(fixture.sendMessage).not.toHaveBeenCalled();
   });
 
   it('does not hide another account’s inbox when one chat permission is unavailable', async () => {

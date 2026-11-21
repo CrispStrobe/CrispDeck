@@ -65,6 +65,24 @@ describe('Wallabag article content', () => {
     expect(doc.querySelector('p')?.textContent).toBe('<img src=x onerror=alert(1)>');
   });
 
+  it('removes leaked Wikimedia template JSON instead of rendering it as prose', () => {
+    const malformed = '<p>Harold Laski was an English political theorist.</p>' +
+      '<div data-mw=\'{"parts":[{"template":{"target":{"wt":"Infobox officeholder"},"params":{"name":{"wt":"Harold Laski"}}}}]}\'>' +
+      '"},"caption":{"wt":""},"office":{"wt":"[[Chairman of the Labour Party]]"},"term_start":{"wt":"1945"}' +
+      '</div><p>He taught at the London School of Economics.</p>';
+    const doc = documentFor(malformed);
+    expect(doc.body.textContent).toContain('English political theorist');
+    expect(doc.body.textContent).toContain('London School of Economics');
+    expect(doc.body.textContent).not.toContain('"wt"');
+    expect(doc.body.textContent).not.toContain('[[Chairman');
+    expect(doc.body.textContent).not.toContain('Infobox officeholder');
+  });
+
+  it('keeps JSON examples inside a code block', () => {
+    const doc = documentFor('<p>Example:</p><pre><code>{"name":"Harold","office":"chair"}</code></pre>');
+    expect(doc.querySelector('code')?.textContent).toBe('{"name":"Harold","office":"chair"}');
+  });
+
   it('drops relative resources when the source URL is missing or unsafe', () => {
     for (const origin of ['', 'javascript:alert(1)', 'https://user:secret@news.example/']) {
       const doc = documentFor('<a href="/signin">Link</a><img src="/image.png" alt="Photo">', origin);

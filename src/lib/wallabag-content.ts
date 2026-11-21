@@ -24,6 +24,46 @@ export function wallabagArticleUrl(input: unknown, articleUrl?: string): string 
 }
 
 /**
+ * Parsoid and other extractors embed machine data in `data-mw` attributes.
+ * A malformed attribute can leave the JSON behind as ordinary text, which a
+ * sanitizer must keep (it is text, not markup). Drop these attributes before
+ * parsing and remove the leaked fragments afterwards.
+ */
+function withoutEmbeddedMetadata(content: string): string {
+  return content
+    .replace(/<script\b[\s\S]*?<\/script>/gi, '')
+    .replace(/<style\b[\s\S]*?<\/style>/gi, '')
+    .replace(/\sdata-mw(?:-[\w-]+)?\s*=\s*(?:"[^"]*"|'[^']*')/gi, '');
+}
+
+/** True for a text node that is serialized template / JSON data, not prose. */
+function looksLikeEmbeddedData(text: string): boolean {
+  const value = text.trim();
+  if (!value) return false;
+  const jsonKeys = value.match(/"[A-Za-z_][\w-]*"\s*:/g)?.length ?? 0;
+  const wikitext = /\[\[[^\]]+\]\]/.test(value);
+  if (jsonKeys >= 2) return true;
+  if (wikitext && /[{}]|"wt"|href/.test(value)) return true;
+  if (value.length > 80) {
+    const syntax = value.match(/[{}[\]"]/g)?.length ?? 0;
+    if (syntax / value.length > 0.08) return true;
+  }
+  return false;
+}
+
+function removeEmbeddedData(fragment: DocumentFragment): void {
+  const walker = document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT);
+  const remove: Text[] = [];
+  while (walker.nextNode()) {
+    const node = walker.currentNode as Text;
+    // A JSON sample inside a code block is the article, not leaked metadata.
+    if (node.parentElement?.closest('pre, code, kbd, samp')) continue;
+    if (looksLikeEmbeddedData(node.data)) remove.push(node);
+  }
+  for (const node of remove) node.remove();
+}
+
+/**
  * Wallabag content is captured from arbitrary websites, not trusted app HTML.
  * The reader must await loadWallabagSanitizer before setting an article. There
  * is no temporary regex fallback or unsanitized first frame: callers that miss
@@ -31,7 +71,7 @@ export function wallabagArticleUrl(input: unknown, articleUrl?: string): string 
  */
 export function sanitizeWallabagHtml(content: string, sourceUrl: string): string {
   if (!DOMPurify) throw new Error('The article sanitizer is not ready');
-  const fragment = DOMPurify.sanitize(content, {
+  const fragment = DOMPurify.sanitize(withoutEmbeddedMetadata(content), {
     ALLOWED_TAGS: [
       'a', 'p', 'br', 'span', 'em', 'strong', 'b', 'i', 'del', 's', 'small', 'sub', 'sup',
       'pre', 'code', 'kbd', 'samp', 'blockquote', 'ul', 'ol', 'li', 'dl', 'dt', 'dd',
@@ -43,6 +83,7 @@ export function sanitizeWallabagHtml(content: string, sourceUrl: string): string
     ALLOW_ARIA_ATTR: false,
     RETURN_DOM_FRAGMENT: true,
   });
+  removeEmbeddedData(fragment);
   const base = wallabagArticleUrl(sourceUrl) ?? undefined;
   for (const anchor of fragment.querySelectorAll('a')) {
     const href = wallabagArticleUrl(anchor.getAttribute('href'), base);

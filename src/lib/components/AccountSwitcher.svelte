@@ -2,6 +2,7 @@
   import { i18n } from '$lib/i18n.svelte';
   import { base } from '$app/paths';
   import { ChevronUp } from '@lucide/svelte';
+  import AccountAvatar from './AccountAvatar.svelte';
   import type { Account } from '$lib/types';
 
   let {
@@ -34,20 +35,9 @@
     >
       <div class="flex -space-x-1.5">
         {#each accounts.slice(0, 4) as acct}
-          {#if acct.avatar_url}
-            <img
-              src={acct.avatar_url}
-              alt={acct.handle}
-              class="w-5 h-5 rounded-full border border-[var(--color-bg)] flex-shrink-0"
-            />
-          {:else}
-            <div
-              class="w-5 h-5 rounded-full border border-[var(--color-bg)] flex-shrink-0 flex items-center justify-center text-[8px] font-bold text-white"
-              style="background: {platformColor(acct.platform)}"
-            >
-              {acct.handle[0]?.toUpperCase() ?? '?'}
-            </div>
-          {/if}
+          <span class="inline-flex rounded-full border border-[var(--color-bg)] flex-shrink-0">
+            <AccountAvatar src={acct.avatar_url} label={acct.handle} platform={acct.platform} size="xs" />
+          </span>
         {/each}
         {#if accounts.length > 4}
           <div class="w-5 h-5 rounded-full bg-[var(--color-surface)] border border-[var(--color-bg)] flex items-center justify-center text-[7px] font-bold text-[var(--color-text-muted)]">
@@ -75,16 +65,7 @@
             onclick={() => showPopover = false}
             class="flex items-center gap-2 px-3 py-2 hover:bg-[var(--color-surface-hover)] transition-colors"
           >
-            {#if acct.avatar_url}
-              <img src={acct.avatar_url} alt={acct.handle} class="w-7 h-7 rounded-full flex-shrink-0" />
-            {:else}
-              <div
-                class="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold text-white"
-                style="background: {platformColor(acct.platform)}"
-              >
-                {acct.handle[0]?.toUpperCase() ?? '?'}
-              </div>
-            {/if}
+            <AccountAvatar src={acct.avatar_url} label={acct.handle} platform={acct.platform} size="sm" />
             <div class="flex-1 min-w-0">
               <p class="text-xs font-medium truncate">{acct.display_name ?? acct.handle}</p>
               <p class="text-[10px] text-[var(--color-text-muted)] truncate">{acct.handle}</p>

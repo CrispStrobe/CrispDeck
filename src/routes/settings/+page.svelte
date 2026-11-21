@@ -3,6 +3,7 @@
   const localSearch = useLocalSearchTranslations();
   import ThreadsFeedSources from '$lib/components/ThreadsFeedSources.svelte';
   import LocalSearchSettings from '$lib/components/LocalSearchSettings.svelte';
+  import AccountAvatar from '$lib/components/AccountAvatar.svelte';
   import { clearSearchCache } from '$lib/search-cache';
   import { getTtsEngine, setTtsEngine, getSttEngine, setSttEngine, getHomeMode, setHomeMode, type SpeechEngine, type HomeMode } from '$lib/settings';
   import { toast } from '$lib/toast.svelte';
@@ -21,7 +22,7 @@
     updateAccount as dbUpdateAccount, startMastodonOAuth as dbStartOAuth, runMastodonAuthorization,
     completeMastodonOAuth as dbCompleteOAuth, getDecryptedCredentials
   } from '$lib/db';
-  import { Settings, Plus, Trash2, Star, ExternalLink, Loader2, Shield, Download, Upload, EyeOff } from '@lucide/svelte';
+  import { Settings, Plus, Trash2, Star, ExternalLink, Loader2, Shield, Download, Upload, EyeOff, RefreshCw } from '@lucide/svelte';
   import { startBlueskyOAuth, OAUTH_UNAVAILABLE_IN_APP } from '$lib/api/bluesky-oauth';
   import { goto } from '$app/navigation';
   import { revokeMastodonToken } from '$lib/mastodon-app';
@@ -574,6 +575,18 @@
     }
   }
 
+  async function reconnectBluesky(account: Account) {
+    if (bskyLoading) return;
+    bskyLoading = true;
+    error = '';
+    try {
+      await startBlueskyOAuth(account.handle);
+    } catch (e) {
+      error = String(e);
+      bskyLoading = false;
+    }
+  }
+
   async function addBlueskyAccount() {
     if (!bskyHandle.trim() || !bskyAppPassword.trim()) return;
     bskyLoading = true;
@@ -921,7 +934,7 @@
                 class="w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--color-bluesky)]"
               />
               <p class="mt-1 text-xs text-[var(--color-text-muted)]">
-                App passwords don't support DMs. Generate at Settings → App Passwords on bsky.app
+                {i18n.t.settings.appPasswordHint}
               </p>
             </div>
             {#if bskyNeeds2fa}
@@ -966,11 +979,7 @@
         {#each bskyAccounts as account}
           <div class="flex items-center justify-between p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
             <div class="flex items-center gap-3">
-              {#if account.avatar_url}
-                <img loading="lazy" src={account.avatar_url} alt="" class="w-8 h-8 rounded-full" />
-              {:else}
-                <div class="w-8 h-8 rounded-full bg-[var(--color-bluesky)]/20 flex items-center justify-center text-xs">BS</div>
-              {/if}
+              <AccountAvatar src={account.avatar_url} label={account.handle} platform="bluesky" />
               <div>
                 <span class="text-sm font-medium">{account.handle}</span>
                 {#if account.is_primary}
@@ -984,6 +993,9 @@
                   <Star size={14} />
                 </button>
               {/if}
+              <button onclick={() => reconnectBluesky(account)} disabled={bskyLoading} title={i18n.t.settings.reconnectOAuth} aria-label={i18n.t.settings.reconnectOAuth} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-bluesky)] transition-colors disabled:opacity-50">
+                <RefreshCw size={14} />
+              </button>
               <button onclick={() => removeAccount(account.id)} title={i18n.t.settings.removeAccount} class="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors">
                 <Trash2 size={14} />
               </button>
@@ -1061,11 +1073,7 @@
         {#each mastoAccounts as account}
           <div class="flex items-center justify-between p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
             <div class="flex items-center gap-3">
-              {#if account.avatar_url}
-                <img loading="lazy" src={account.avatar_url} alt="" class="w-8 h-8 rounded-full" />
-              {:else}
-                <div class="w-8 h-8 rounded-full bg-[var(--color-mastodon)]/20 flex items-center justify-center text-xs">M</div>
-              {/if}
+              <AccountAvatar src={account.avatar_url} label={account.handle} platform="mastodon" />
               <div>
                 <span class="text-sm font-medium">{account.display_name || account.handle}</span>
                 {#if account.handle.startsWith('@user@') || account.handle === '@user'}
@@ -1236,11 +1244,7 @@
         {#each threadsAccounts as account}
           <div class="flex items-center justify-between p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
             <div class="flex items-center gap-3">
-              {#if account.avatar_url}
-                <img loading="lazy" src={account.avatar_url} alt="" class="w-8 h-8 rounded-full" />
-              {:else}
-                <div class="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-xs">T</div>
-              {/if}
+              <AccountAvatar src={account.avatar_url} label={account.handle} platform="threads" />
               <div>
                 <span class="text-sm font-medium">{account.display_name || account.handle}</span>
                 <span class="text-xs text-[var(--color-text-muted)] ml-1">{account.handle}</span>

@@ -34,9 +34,13 @@ export interface WallabagEntry {
   url: string;
   /** Empty for list metadata; fetch the entry before displaying its article. */
   content: string;
+  /** Size of the saved article HTML when the response included its content. */
+  content_bytes?: number;
   is_archived: boolean;
   is_starred: boolean;
   created_at: string;
+  updated_at?: string;
+  archived_at?: string;
   reading_time?: number;
   domain_name?: string;
   preview_picture?: string;
@@ -44,7 +48,14 @@ export interface WallabagEntry {
 }
 export interface WallabagEntriesPage { items: WallabagEntry[]; page: number; pages: number; total: number }
 export type WallabagEntryFilter = 'unread' | 'archived' | 'starred' | 'all';
-export interface WallabagEntriesOptions { filter?: WallabagEntryFilter; page?: number; perPage?: number; search?: string }
+export interface WallabagEntriesOptions {
+  filter?: WallabagEntryFilter;
+  page?: number;
+  perPage?: number;
+  search?: string;
+  /** Exact Wallabag domain, e.g. en.wikipedia.org. */
+  domain?: string;
+}
 
 type Store = { kind: 'browser' } | { kind: 'native'; args: { backend: string; keychain: string } };
 interface SavedSession { store: Store; session: Session; generation: number }
@@ -459,14 +470,21 @@ function parseEntry(value: unknown): WallabagEntry {
       });
     }
   }
+  const content = typeof value.content === 'string' ? value.content : '';
   return {
     id: value.id,
     title: typeof value.title === 'string' ? value.title : '',
     url: typeof value.url === 'string' ? value.url : '',
-    content: typeof value.content === 'string' ? value.content : '',
+    content,
+    // Search responses include the article body even though list responses do
+    // not. Record its real UTF-8 size while it is here instead of estimating
+    // it from reading time.
+    ...(content ? { content_bytes: new TextEncoder().encode(content).length } : {}),
     is_archived: entryFlag(value.is_archived),
     is_starred: entryFlag(value.is_starred),
     created_at: typeof value.created_at === 'string' ? value.created_at : '',
+    ...(typeof value.updated_at === 'string' ? { updated_at: value.updated_at } : {}),
+    ...(typeof value.archived_at === 'string' ? { archived_at: value.archived_at } : {}),
     ...(typeof value.reading_time === 'number' && Number.isSafeInteger(value.reading_time) && value.reading_time >= 0 ? { reading_time: value.reading_time } : {}),
     ...(typeof value.domain_name === 'string' ? { domain_name: value.domain_name } : {}),
     ...(typeof value.preview_picture === 'string' ? { preview_picture: value.preview_picture } : {}),
@@ -486,15 +504,21 @@ function parseEntriesPage(value: unknown): WallabagEntriesPage {
 
 /** Fetch metadata only; individual article content is loaded when opened. */
 export async function listWallabagEntries(server: string, options: WallabagEntriesOptions = {}): Promise<WallabagEntriesPage> {
-  const { filter = 'unread', page = 1, perPage = 30, search = '' } = options;
-  if (!positiveInteger(page) || !positiveInteger(perPage) || perPage > 100 || !['unread', 'archived', 'starred', 'all'].includes(filter)) {
+  const { filter = 'unread', page = 1, perPage = 30, search = '', domain = '' } = options;
+  const domainName = domain.trim().toLocaleLowerCase();
+  if (!positiveInteger(page) || !positiveInteger(perPage) || perPage > 100 || !['unread', 'archived', 'starred', 'all'].includes(filter) ||
+      (domainName && (domainName.length > 253 || !/^[a-z0-9.-]+$/.test(domainName)))) {
     throw new WallabagError('Invalid Wallabag article list options');
   }
   const query = new URLSearchParams({ page: String(page), perPage: String(perPage), sort: 'created', order: 'desc', detail: 'metadata' });
   if (filter === 'unread') query.set('archive', '0');
   if (filter === 'archived') query.set('archive', '1');
   if (filter === 'starred') query.set('starred', '1');
-  if (search.trim()) {
+  if (domainName) query.set('domain_name', domainName);
+  // The search endpoint has no metadata mode: it returns every article body.
+  // Use it only when no exact source is requested; a source listing is far
+  // cheaper and lets the reader search titles and sources locally.
+  if (search.trim() && !domainName) {
     const searchQuery = new URLSearchParams({ term: search.trim(), page: String(page), perPage: String(perPage) });
     return authenticatedRequest(server, `/api/search.json?${searchQuery}`, { method: 'GET' }, async (response, signal) =>
       parseEntriesPage(await boundedJson(response, maxArticleBytes, 'Wallabag returned an invalid article list', signal)), 'Wallabag could not search articles');

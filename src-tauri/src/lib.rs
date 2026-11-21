@@ -14,6 +14,99 @@ pub struct AppState {
     pub db: Mutex<Connection>,
 }
 
+/// A custom About item instead of the native predefined panel, so the desktop
+/// menu opens the same page as Tools & settings → About.
+#[cfg(desktop)]
+fn build_app_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
+    use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+
+    let about = MenuItem::with_id(app, "about", "About CrispDeck", true, None::<&str>)?;
+
+    #[cfg(target_os = "macos")]
+    let app_menu = Submenu::with_items(
+        app,
+        "CrispDeck",
+        true,
+        &[
+            &about,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::services(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::hide(app, None)?,
+            &PredefinedMenuItem::hide_others(app, None)?,
+            &PredefinedMenuItem::show_all(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::quit(app, None)?,
+        ],
+    )?;
+
+    let file_menu = Submenu::with_items(
+        app,
+        "File",
+        true,
+        &[
+            &PredefinedMenuItem::close_window(app, None)?,
+            #[cfg(not(target_os = "macos"))]
+            &PredefinedMenuItem::quit(app, None)?,
+        ],
+    )?;
+
+    let edit_menu = Submenu::with_items(
+        app,
+        "Edit",
+        true,
+        &[
+            &PredefinedMenuItem::undo(app, None)?,
+            &PredefinedMenuItem::redo(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::cut(app, None)?,
+            &PredefinedMenuItem::copy(app, None)?,
+            &PredefinedMenuItem::paste(app, None)?,
+            &PredefinedMenuItem::select_all(app, None)?,
+        ],
+    )?;
+
+    #[cfg(target_os = "macos")]
+    let view_menu = Submenu::with_items(
+        app,
+        "View",
+        true,
+        &[&PredefinedMenuItem::fullscreen(app, None)?],
+    )?;
+
+    let window_menu = Submenu::with_items(
+        app,
+        "Window",
+        true,
+        &[
+            &PredefinedMenuItem::minimize(app, None)?,
+            &PredefinedMenuItem::maximize(app, None)?,
+            #[cfg(target_os = "macos")]
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::close_window(app, None)?,
+        ],
+    )?;
+
+    #[cfg(target_os = "macos")]
+    let help_menu = Submenu::with_id(app, "help", "Help", true)?;
+    #[cfg(not(target_os = "macos"))]
+    let help_menu = Submenu::with_items(app, "Help", true, &[&about])?;
+
+    Menu::with_items(
+        app,
+        &[
+            #[cfg(target_os = "macos")]
+            &app_menu,
+            &file_menu,
+            &edit_menu,
+            #[cfg(target_os = "macos")]
+            &view_menu,
+            &window_menu,
+            &help_menu,
+        ],
+    )
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env_logger::init();
@@ -44,6 +137,16 @@ pub fn run() {
     let builder = builder
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init());
+
+    #[cfg(desktop)]
+    let builder = builder
+        .menu(build_app_menu)
+        .on_menu_event(|app, event| {
+            if event.id().as_ref() == "about" {
+                use tauri::Emitter;
+                let _ = app.emit("crispdeck:menu", "about");
+            }
+        });
 
     builder
         .setup(|app| {
