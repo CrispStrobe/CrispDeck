@@ -292,6 +292,25 @@ jobs:
           if [ "$(uname -m)" = arm64 ]; then TARGET=aarch64-sim; else TARGET=x86_64; fi
           npx tauri ios build --target "$TARGET" 2>&1 | tail -70
           python3 tools/validation/mobile_smoke.py ios --output "$RUNNER_TEMP/ios-smoke"
+      # Diagnostics only: the xcode-27 simulator smoke saw the app exit within
+      # 12 s with no stdout/stderr/startup receipt. Keep crash reports and the
+      # simulator's recent CrispDeck log so a launch crash can be diagnosed.
+      - name: Collect iPhone simulator crash diagnostics
+        if: failure()
+        run: |
+          D="$RUNNER_TEMP/ios-smoke/diag"; mkdir -p "$D"
+          xcrun simctl list devices booted > "$D/booted.txt" 2>&1 || true
+          find "$HOME/Library/Logs/DiagnosticReports" -mmin -60 \( -iname '*CrispDeck*' -o -iname '*crispdeck*' \) \
+            -exec cp {} "$D/" \; 2>/dev/null || true
+          ls -la "$HOME/Library/Logs/DiagnosticReports" > "$D/diagnostic-reports.txt" 2>&1 || true
+          for U in $(xcrun simctl list devices booted | grep -oE '[0-9A-F-]{36}'); do
+            xcrun simctl spawn "$U" log show --last 15m --style compact \
+              --predicate 'process == "CrispDeck" OR eventMessage CONTAINS[c] "crispdeck"' \
+              > "$D/sim-$U.log" 2>&1 || true
+            tail -c 4000 "$D/sim-$U.log" || true
+          done
+          for f in "$D"/*.ips; do [ -f "$f" ] && head -c 6000 "$f"; done || true
+
       - name: Retain iPhone simulator evidence
         if: always()
         uses: actions/upload-artifact@v4
