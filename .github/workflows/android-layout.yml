@@ -25,9 +25,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: android-layout-${{ github.ref }}
-  cancel-in-progress: true
-
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' && (github.event_name == 'push' || github.event_name == 'pull_request') }}
 jobs:
   android-layout:
     name: Android debug build and native layout

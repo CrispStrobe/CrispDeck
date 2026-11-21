@@ -1,10 +1,13 @@
 # Changelog
 
-## v1.3.4 — 2026-11-09
+## v1.3.4 — 2026-11-12
 
 - Preserve Deck reading positions and cached columns when switching views.
 - Compact Deck and feed layouts, localize column labels, and improve navigation.
 - Fix profile crashes, Wallabag feedback, and Mastodon moderation account handling.
+- Find Bluesky accounts by full name and return from profiles to cached search results.
+- Improve condensed mobile posts and validate iPhone layouts in WebKit CI.
+- Replace the temporary release title when verified packages become a final release.
 
 ## v1.3.3 — 2026-11-08
 
