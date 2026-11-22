@@ -24,10 +24,15 @@ on:
         description: 'Build & sign only, do NOT upload'
         type: boolean
         default: true
+      build_number:
+        description: 'macOS build number (blank = the workflow run number)'
+        type: string
+        default: ''
 
 env:
   BUNDLE_ID: com.christianstrobele.crispdeck
   PRODUCT_NAME: CrispDeck
+  MACOS_BUILD_NUMBER: ${{ inputs.build_number || github.run_number }}
 
 jobs:
   build-upload:
@@ -68,6 +73,13 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Validate the macOS build number
+        run: |
+          set -euo pipefail
+          [[ "$MACOS_BUILD_NUMBER" =~ ^[1-9][0-9]{0,3}$ ]] \
+            || { echo "::error::Invalid macOS build number: $MACOS_BUILD_NUMBER"; exit 1; }
+          echo "macOS build number: $MACOS_BUILD_NUMBER"
 
       # The Mac App Store provisioning profile is not part of tauri-action's own
       # keychain setup, so install it where Xcode looks before building.
@@ -156,7 +168,7 @@ jobs:
           # refused — the same trap mobile.yml had. Set here, before the
           # re-sign below, because editing Info.plist after signing invalidates
           # the signature. The run number is monotonic and needs no state.
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" \
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ env.MACOS_BUILD_NUMBER }}" \
             "$APP/Contents/Info.plist"
           echo "build number: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Contents/Info.plist")"
 
@@ -250,7 +262,7 @@ jobs:
             --type macos \
             --apple-id "$APPSTORE_APP_ID" \
             --bundle-id ${{ env.BUNDLE_ID }} \
-            --bundle-version "${{ github.run_number }}" \
+            --bundle-version "$MACOS_BUILD_NUMBER" \
             --bundle-short-version-string "$VERSION" \
             --api-key "$ASC_KEY_ID" \
             --api-issuer "$ASC_ISSUER_ID"
@@ -259,7 +271,7 @@ jobs:
             --type macos \
             --apple-id "$APPSTORE_APP_ID" \
             --bundle-id ${{ env.BUNDLE_ID }} \
-            --bundle-version "${{ github.run_number }}" \
+            --bundle-version "$MACOS_BUILD_NUMBER" \
             --bundle-short-version-string "$VERSION" \
             --api-key "$ASC_KEY_ID" \
             --api-issuer "$ASC_ISSUER_ID"
