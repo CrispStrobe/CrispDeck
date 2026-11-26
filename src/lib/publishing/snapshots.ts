@@ -1,4 +1,5 @@
 import type { ComposeOptions } from '$lib/compose/adapter';
+import type { AIContribution } from '$lib/compose/ai-provenance';
 import { read, write, remove } from './storage';
 
 export type StoredOptions = Omit<ComposeOptions, 'text' | 'mediaFiles' | 'onVideoProgress'>;
@@ -11,6 +12,7 @@ export interface ComposerSnapshot {
   media: Array<{ blob: Blob; name: string; lastModified: number }>;
   savedAt: string;
   jobId?: string;
+  aiContributions?: AIContribution[];
   context?: { quoteAuthor: string; quoteText: string; replyAuthor: string };
 }
 

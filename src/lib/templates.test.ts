@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { listTemplates, saveTemplate, deleteTemplate, type PostTemplate } from './templates';
+import { recordAIContribution, textContributions } from './compose/ai-provenance';
 
 describe('post templates', () => {
   beforeEach(() => {
@@ -25,6 +26,14 @@ describe('post templates', () => {
   });
 
   describe('saveTemplate', () => {
+    it('keeps body provenance in reusable templates without attaching unrelated image records', () => {
+      const config = { provider: 'openai' as const, baseUrl: 'https://api.openai.com/v1', apiKey: 'secret', model: 'gpt-4o-mini' };
+      const body = recordAIContribution('hashtags', config, false);
+      const image = { ...recordAIContribution('alt-text', config, true), media_index: 0 };
+      saveTemplate({ name: 'With tags', text: 'Original text #tag', aiContributions: textContributions([body, image]) });
+      expect(listTemplates()[0].aiContributions).toEqual([body]);
+      expect(localStorage.getItem('crispdeck-templates')).not.toContain('secret');
+    });
     it('generates an id and createdAt', () => {
       const tpl = saveTemplate({ name: 'Greeting', text: 'Hi there!' });
       expect(tpl.id).toMatch(/^tpl-\d+$/);

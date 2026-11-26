@@ -10,6 +10,8 @@
  */
 
 import { writeJson } from '$lib/safe-storage';
+import { normalizeProviderBase } from '$lib/byok-providers';
+import { recordAIContribution, type AIContribution } from './ai-provenance';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -35,6 +37,7 @@ export interface AIResult {
   text: string;
   action: AIAction;
   provider: AIProvider;
+  provenance: AIContribution;
 }
 
 // ── Config persistence ────────────────────────────────────────────────────
@@ -51,7 +54,8 @@ const DEFAULT_CONFIG: AIComposeConfig = {
 export function getAIComposeConfig(): AIComposeConfig {
   try {
     const raw = localStorage.getItem(CONFIG_KEY);
-    return raw ? { ...DEFAULT_CONFIG, ...JSON.parse(raw) } : DEFAULT_CONFIG;
+    const config = raw ? { ...DEFAULT_CONFIG, ...JSON.parse(raw) } : { ...DEFAULT_CONFIG };
+    return { ...config, baseUrl: normalizeProviderBase(config.baseUrl) };
   } catch {
     return DEFAULT_CONFIG;
   }
@@ -59,7 +63,8 @@ export function getAIComposeConfig(): AIComposeConfig {
 
 export function setAIComposeConfig(config: Partial<AIComposeConfig>): void {
   const current = getAIComposeConfig();
-  writeJson(CONFIG_KEY, { ...current, ...config });
+  const next = { ...current, ...config };
+  writeJson(CONFIG_KEY, { ...next, baseUrl: normalizeProviderBase(next.baseUrl) });
 }
 
 export function isAIConfigured(): boolean {
@@ -100,7 +105,7 @@ async function runWithOpenAI(
     throw new Error('AI API key not configured. Set it in Settings → AI Compose.');
   }
 
-  const baseUrl = cfg.baseUrl.replace(/\/$/, '');
+  const baseUrl = normalizeProviderBase(cfg.baseUrl);
   const systemPrompt = PROMPTS[action];
 
   // Build messages — use vision format if we have an image
@@ -260,5 +265,5 @@ export async function runAIAction(
     throw new Error('AI returned empty response');
   }
 
-  return { text, action, provider: cfg.provider };
+  return { text, action, provider: cfg.provider, provenance: recordAIContribution(action, cfg, !!imageDataUrl) };
 }

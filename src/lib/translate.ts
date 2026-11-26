@@ -14,6 +14,7 @@
  */
 
 import { writeJson } from './safe-storage';
+import { normalizeProviderBase } from './byok-providers';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -63,7 +64,8 @@ const DEFAULT_CONFIG: TranslateConfig = {
 export function getTranslateConfig(): TranslateConfig {
   try {
     const raw = localStorage.getItem(CONFIG_KEY);
-    return raw ? { ...DEFAULT_CONFIG, ...JSON.parse(raw) } : DEFAULT_CONFIG;
+    const config = raw ? { ...DEFAULT_CONFIG, ...JSON.parse(raw) } : { ...DEFAULT_CONFIG };
+    return { ...config, ...(config.openaiBaseUrl ? { openaiBaseUrl: normalizeProviderBase(config.openaiBaseUrl) } : {}) };
   } catch {
     return DEFAULT_CONFIG;
   }
@@ -71,7 +73,8 @@ export function getTranslateConfig(): TranslateConfig {
 
 export function setTranslateConfig(config: Partial<TranslateConfig>): void {
   const current = getTranslateConfig();
-  writeJson(CONFIG_KEY, { ...current, ...config });
+  const next = { ...current, ...config };
+  writeJson(CONFIG_KEY, { ...next, ...(next.openaiBaseUrl ? { openaiBaseUrl: normalizeProviderBase(next.openaiBaseUrl) } : {}) });
 }
 
 /** Convenience — kept for backward compat with settings page */
@@ -208,7 +211,7 @@ async function translateWithOpenAI(
   tgtLang: string,
   config: TranslateConfig,
 ): Promise<TranslationResult> {
-  const baseUrl = (config.openaiBaseUrl ?? 'https://api.openai.com/v1').replace(/\/$/, '');
+  const baseUrl = normalizeProviderBase(config.openaiBaseUrl ?? 'https://api.openai.com/v1');
   const apiKey = config.openaiApiKey;
   const model = config.openaiModel ?? 'gpt-4o-mini';
 

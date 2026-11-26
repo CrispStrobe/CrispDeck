@@ -21,7 +21,11 @@
   import { mediaAttachmentLimit, parseMediaUrls, validateMediaForPlatform } from '$lib/compose/media-policy';
   import { composeContextFromParams, hasDraftContent } from '$lib/compose/context';
   import { tryVoiceCommand, looksLikeCommand } from '$lib/voice-commands';
-  import { runAIAction, isAIConfigured, type AIAction } from '$lib/compose/ai';
+  import { isAIConfigured, type AIAction } from '$lib/compose/ai';
+  import { runDraftAIAction } from '$lib/compose/ai-draft';
+  import { editContributions, exportComposeRecord, publicDisclosure, removeMediaContributions, textContributions, type AIContribution } from '$lib/compose/ai-provenance';
+  import { aiProvenanceCopy } from '$lib/compose/ai-provenance-copy';
+  import { triggerDownload } from '$lib/utils/export';
   import { computeBestHour, formatHour, type PostingTimeInsight } from '$lib/posting-times';
   import { toast } from '$lib/toast.svelte';
   import { searchArchive } from '$lib/archive';
@@ -52,16 +56,21 @@
         uri: replyTo, platform: replyPlatform ? replyPlatform as Platform : undefined,
       } : undefined,
       poll: showPoll ? { options: pollOptions.filter(o => o.trim()), expiresIn: pollExpiry, multiple: pollMultiple } : undefined,
-    }, pendingJob && !isComplete(pendingJob) ? pendingJob.id : undefined), context: { quoteAuthor, quoteText, replyAuthor } };
+    }, pendingJob && !isComplete(pendingJob) ? pendingJob.id : undefined), context: { quoteAuthor, quoteText, replyAuthor },
+      aiContributions: aiContributions.map(record => ({ ...record })) };
   }
 
   function applySnapshot(saved: ComposerSnapshot) {
+    draftGeneration++;
     quoteAuthor = saved.context?.quoteAuthor ?? ''; quoteText = saved.context?.quoteText ?? ''; replyAuthor = saved.context?.replyAuthor ?? '';
     text = saved.text; selectedAccountIds = saved.accountIds; overrides = saved.overrides;
+    aiContributions = (saved.aiContributions ?? []).map(record => ({ ...record }));
+    observedText = text;
     visibility = saved.options.visibility ?? 'public';
     contentWarning = saved.options.contentWarning ?? ''; showCW = !!contentWarning;
     mediaFiles = restoreFiles(saved); mediaPreviews = mediaFiles.map(createPreviewUrl);
     altTexts = saved.options.altTexts ?? mediaFiles.map(() => '');
+    observedAltTexts = [...altTexts];
     threadsMediaUrl = saved.options.mediaUrls?.join('\n') ?? '';
     threadGate = saved.options.threadGate ?? 'everyone';
     selfLabel = (saved.options.selfLabel ?? 'none') as typeof selfLabel;
@@ -156,28 +165,68 @@
   let showAIMenu = $state(false);
   let aiLoading = $state(false);
   let aiError = $state('');
+  let aiContributions: AIContribution[] = $state([]);
+  let draftGeneration = 0;
+  const aiCopy = $derived(aiProvenanceCopy(i18n.lang));
+  const disclosure = $derived(publicDisclosure(aiContributions, aiCopy.assistedText, aiCopy.generatedHashtags));
+  let observedText = '';
+  let observedAltTexts: string[] = [];
+  let replacingText = false;
+  const replacingAlt = new Set<number>();
+
+  // Retain lineage after ordinary edits (including mentions, emoji and dictation).
+  // Clearing or replacing the entire field removes that field's old attribution.
+  $effect(() => {
+    if (text !== observedText) {
+      aiContributions = editContributions(aiContributions, 'text', text, replacingText);
+      observedText = text; replacingText = false;
+    }
+    altTexts.forEach((value, index) => {
+      if (value !== observedAltTexts[index]) {
+        aiContributions = editContributions(aiContributions, 'alt-text', value, replacingAlt.has(index), index);
+      }
+    });
+    observedAltTexts = [...altTexts]; replacingAlt.clear();
+  });
+
+  function replacesEntireField(event: InputEvent): boolean {
+    const field = event.currentTarget as HTMLInputElement | HTMLTextAreaElement;
+    return field.value.length > 0 && field.selectionStart === 0 && field.selectionEnd === field.value.length
+      && /^(insert|delete)/.test(event.inputType);
+  }
+
+  async function copyWithDisclosure() {
+    try { await navigator.clipboard.writeText(text + (disclosure && !text.endsWith(disclosure) ? '\n\n' + disclosure : '')); }
+    catch { aiError = aiCopy.copyFailed; }
+  }
 
   async function handleAIAction(action: AIAction) {
     showAIMenu = false;
     aiError = '';
     if (action !== 'alt-text' && !text.trim()) return;
+    if (aiLoading) return;
     aiLoading = true;
     try {
-      const input = action === 'alt-text'
-        ? 'Please describe the attached image for accessibility purposes.'
-        : text;
-      const result = await runAIAction(action, input);
+      const outcome = await runDraftAIAction(action, () => ({ generation: draftGeneration, text, mediaFiles, altTexts }));
+      if (outcome.status !== 'ready') {
+        aiError = outcome.status === 'stale' ? aiCopy.changed : outcome.status === 'no-image' ? aiCopy.noImage : '';
+        return;
+      }
+      const { result, mediaIndex } = outcome;
       if (action === 'hashtags') {
         // Append hashtags to existing text
         text = text.trimEnd() + '\n\n' + result.text;
       } else if (action === 'alt-text') {
-        // Apply to first media without alt text
-        const idx = altTexts.findIndex(t => !t.trim());
-        if (idx >= 0) altTexts[idx] = result.text;
+        altTexts[mediaIndex] = result.text;
       } else {
         // Replace text (correct/shorten)
         text = result.text;
       }
+      aiContributions = [
+        ...editContributions(aiContributions, result.provenance.target, action === 'alt-text' ? result.text : text, false, mediaIndex),
+        { ...result.provenance, ...(action === 'alt-text' ? { media_index: mediaIndex } : {}) },
+      ];
+      observedText = text; observedAltTexts = [...altTexts];
     } catch (e) {
       aiError = String(e instanceof Error ? e.message : e);
     } finally {
@@ -205,8 +254,10 @@
     autoSaveRestoredFrom = null;
   }
   function resetComposer() {
+    draftGeneration++;
     selectedAccountIds = selectedAccountIds.filter(id => accounts.some(account => account.id === id));
     text = ''; contentWarning = ''; showCW = false;
+    aiContributions = []; observedText = ''; observedAltTexts = []; replacingText = false; replacingAlt.clear();
     mediaPreviews.forEach(revokePreviewUrl); mediaFiles = []; mediaPreviews = []; altTexts = [];
     overrides = {}; editingDraftId = null; threadsMediaUrl = '';
     quoteUri = ''; quoteCid = ''; quoteUrl = ''; quoteAuthor = ''; quoteText = ''; replyTo = ''; replyDetails = undefined; replyAuthor = ''; replyPlatform = '';
@@ -353,6 +404,8 @@
     mediaFiles = mediaFiles.filter((_, i) => i !== index);
     mediaPreviews = mediaPreviews.filter((_, i) => i !== index);
     altTexts = altTexts.filter((_, i) => i !== index);
+    aiContributions = removeMediaContributions(aiContributions, index);
+    observedAltTexts = [...altTexts];
   }
 
   function checkAltText(): boolean {
@@ -707,6 +760,7 @@
             bind:value={text}
             placeholder={i18n.t.compose.placeholder}
             rows="8"
+            onbeforeinput={(event) => { replacingText = replacesEntireField(event); }}
             oninput={() => { mentionAutocomplete?.handleInput(); scheduleAutoSave(); }}
             onkeydown={(e) => {
               mentionAutocomplete?.handleKeydown(e);
@@ -786,6 +840,7 @@
                   <input
                     type="text"
                     bind:value={altTexts[i]}
+                    onbeforeinput={(event) => { if (replacesEntireField(event)) replacingAlt.add(i); else replacingAlt.delete(i); }}
                     placeholder={i18n.t.compose.altTextPlaceholder}
                     class="w-full px-2 py-1.5 pr-16 bg-transparent border-t text-xs text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none {altTextEnforced && !altTexts[i]?.trim() ? 'border-yellow-500 bg-yellow-950/20' : 'border-[var(--color-border)]'}"
                   />
@@ -796,6 +851,32 @@
               </div>
             {/each}
           </div>
+        {/if}
+
+        {#if aiContributions.length > 0}
+          <section class="p-3 rounded-lg border border-purple-800/50 bg-purple-950/10 space-y-2 text-xs" aria-label={aiCopy.title}>
+            <h2 class="font-semibold">{aiCopy.title}</h2>
+            <p>{aiCopy.hint}</p>
+            <ul class="space-y-1">
+              {#each aiContributions as contribution}
+                <li>
+                  {contribution.origin === 'ai-generated' ? aiCopy.generated : aiCopy.assisted} ·
+                  {contribution.operation === 'correct' ? i18n.t.compose.aiCorrect : contribution.operation === 'shorten' ? i18n.t.compose.aiShorten : contribution.operation === 'hashtags' ? i18n.t.compose.aiHashtags : i18n.t.compose.aiAltText}
+                  {contribution.media_index !== undefined ? ` #${contribution.media_index + 1}` : ''} · {contribution.provider}
+                  {contribution.modified_after_generation ? ` · ${aiCopy.modified}` : ''}{contribution.reviewed ? ` · ${aiCopy.reviewed}` : ''}
+                </li>
+              {/each}
+            </ul>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" class="underline" onclick={() => { aiContributions = aiContributions.map(record => ({ ...record, reviewed: true })); }}>{aiCopy.review}</button>
+              <button type="button" class="underline" onclick={() => triggerDownload(exportComposeRecord(text, altTexts, aiContributions), 'application/json', 'crispdeck-ai-record.json')}>{aiCopy.export}</button>
+              {#if disclosure}
+                <button type="button" class="underline" onclick={copyWithDisclosure}>{aiCopy.copy}</button>
+                <button type="button" class="underline" disabled={text.endsWith(disclosure)} onclick={() => { text += '\n\n' + disclosure; }}>{aiCopy.add}</button>
+              {/if}
+            </div>
+            <p class="text-[var(--color-text-muted)]">{aiCopy.limits}</p>
+          </section>
         {/if}
 
         <!-- Toolbar -->
@@ -882,7 +963,7 @@
               {#if showTemplates}
                 <div class="absolute bottom-full left-0 mb-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl z-50 w-56 max-h-48 overflow-y-auto py-1">
                   <button
-                    onclick={() => { saveTemplate({ name: text.trim().substring(0, 30) || 'Untitled', text: text.trim(), visibility, contentWarning: showCW ? contentWarning : undefined }); templates = listTemplates(); showTemplates = false; }}
+                    onclick={() => { saveTemplate({ name: text.trim().substring(0, 30) || 'Untitled', text: text.trim(), visibility, contentWarning: showCW ? contentWarning : undefined, aiContributions: textContributions(aiContributions) }); templates = listTemplates(); showTemplates = false; }}
                     disabled={!text.trim()}
                     class="w-full text-left px-3 py-1.5 text-xs text-[var(--color-primary-text)] hover:bg-[var(--color-surface-hover)] disabled:opacity-30"
                   >
@@ -893,7 +974,7 @@
                     {#each templates as tpl}
                       <div class="flex items-center justify-between px-3 py-1.5 hover:bg-[var(--color-surface-hover)]">
                         <button
-                          onclick={() => { text = tpl.text; if (tpl.visibility) visibility = tpl.visibility as any; if (tpl.contentWarning) { contentWarning = tpl.contentWarning; showCW = true; } showTemplates = false; }}
+                          onclick={() => { draftGeneration++; text = tpl.text; aiContributions = [...aiContributions.filter(record => record.target !== 'text'), ...textContributions(tpl.aiContributions ?? [])]; observedText = text; if (tpl.visibility) visibility = tpl.visibility as any; if (tpl.contentWarning) { contentWarning = tpl.contentWarning; showCW = true; } showTemplates = false; }}
                           class="flex-1 text-left text-xs truncate"
                         >
                           {tpl.name}

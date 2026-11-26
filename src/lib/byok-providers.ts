@@ -58,7 +58,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
   {
     id: 'nebius',
     name: 'Nebius AI',
-    baseUrl: 'https://api.studio.nebius.ai/v1',
+    baseUrl: 'https://api.tokenfactory.nebius.com/v1',
     modelsEndpoint: '/models',
     modelsPath: 'data',
     modelIdField: 'id',
@@ -67,7 +67,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     authHeader: 'Authorization',
     authPrefix: 'Bearer ',
     requiresApiKey: true,
-    docsUrl: 'https://studio.nebius.ai/',
+    docsUrl: 'https://docs.tokenfactory.nebius.com/quickstart',
   },
   {
     id: 'mistral',
@@ -187,7 +187,7 @@ export async function fetchAvailableModels(
   apiKey: string,
   preset?: ProviderPreset,
 ): Promise<DiscoveredModel[]> {
-  const url = baseUrl.replace(/\/$/, '');
+  const url = normalizeProviderBase(baseUrl);
   const endpoint = preset?.modelsEndpoint ?? '/models';
   const authHeader = preset?.authHeader ?? 'Authorization';
   const authPrefix = preset?.authPrefix ?? 'Bearer ';
@@ -231,6 +231,13 @@ export async function fetchAvailableModels(
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Migrate only known retired Nebius bases; leave custom endpoints untouched. */
+export function normalizeProviderBase(baseUrl: string): string {
+  const base = baseUrl.replace(/\/$/, '');
+  return /^https:\/\/api\.studio\.nebius\.(?:ai|com)\/v1$/.test(base)
+    ? 'https://api.tokenfactory.nebius.com/v1' : base;
+}
 
 /** Look up a preset by ID */
 export function getPreset(id: string): ProviderPreset | undefined {
