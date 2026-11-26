@@ -5,6 +5,7 @@ import { persistDraft, draftSnapshot, publishDraft, publishScheduledDraft } from
 import { snapshot } from './snapshots';
 import { all, exclusive, remove, write } from './storage';
 import { getJob } from './outbox';
+import { recordAIContribution, editContributions } from '$lib/compose/ai-provenance';
 import { initAllClients } from '$lib/api/client-factory';
 import type { Account } from '$lib/types';
 
@@ -29,6 +30,24 @@ beforeEach(async () => {
 });
 
 describe('complete draft persistence', () => {
+  it('preserves edited AI lineage through resaving, scheduled delivery, and outbox history without publishing private metadata', async () => {
+    const contribution = recordAIContribution('shorten', { provider: 'openai', baseUrl: 'https://api.tokenfactory.nebius.com/v1', apiKey: 'secret', model: 'vendor/model' }, false);
+    const saved = {
+      ...snapshot('test', 'Reviewed summary', [1], {}, {}),
+      aiContributions: editContributions([{ ...contribution, reviewed: true }], 'text', 'Reviewed summary'),
+    };
+    const id = await persistDraft(saved);
+    await persistDraft(saved, new Date(Date.now() - 60_000).toISOString(), id);
+    const row = (await listDrafts())[0];
+    const restored = await draftSnapshot(row);
+    expect(restored.aiContributions).toEqual(saved.aiContributions);
+    const result = await publishScheduledDraft(row);
+    expect(result?.status).toBe('posted');
+    expect((await getJob(`draft-${id}`))?.snapshot.aiContributions).toEqual(saved.aiContributions);
+    expect(post.mock.calls[0][1].text).toBe('Reviewed summary');
+    expect(post.mock.calls[0][1]).not.toHaveProperty('aiContributions');
+    expect(JSON.stringify(restored.aiContributions)).not.toContain('secret');
+  });
   it('rescheduling updates the same draft and preserves destination settings', async () => {
     const saved = snapshot('test', 'Draft', [1, 2], { '2': 'Custom' }, {
       visibility: 'private', altTexts: ['Description'], threadGate: 'mentioned', disableQuotes: true,

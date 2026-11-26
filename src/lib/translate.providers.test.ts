@@ -32,6 +32,14 @@ describe('translate provider config', () => {
     expect(getTranslateConfig().provider).toBe('libretranslate');
   });
 
+  it('migrates saved legacy Nebius translation bases and preserves custom routes', async () => {
+    const { getTranslateConfig, setTranslateConfig } = await import('./translate');
+    localStorage.setItem('crispdeck-translate-config', JSON.stringify({ provider: 'openai', openaiBaseUrl: 'https://api.studio.nebius.com/v1/', openaiApiKey: 'kept' }));
+    expect(getTranslateConfig()).toMatchObject({ openaiBaseUrl: 'https://api.tokenfactory.nebius.com/v1', openaiApiKey: 'kept' });
+    setTranslateConfig({ openaiBaseUrl: 'https://proxy.example/nebius/v1' });
+    expect(getTranslateConfig().openaiBaseUrl).toBe('https://proxy.example/nebius/v1');
+  });
+
   it('OpenAI config preserves all fields', async () => {
     const { setTranslateConfig, getTranslateConfig } = await import('./translate');
     setTranslateConfig({

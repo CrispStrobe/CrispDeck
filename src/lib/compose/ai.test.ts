@@ -15,6 +15,12 @@ beforeEach(() => {
 });
 
 describe('AI compose config', () => {
+  it('loads saved Nebius presets at the canonical endpoint without changing custom URLs', () => {
+    store['crispdeck-ai-compose-config'] = JSON.stringify({ baseUrl: 'https://api.studio.nebius.ai/v1/', apiKey: 'kept' });
+    expect(getAIComposeConfig()).toMatchObject({ baseUrl: 'https://api.tokenfactory.nebius.com/v1', apiKey: 'kept' });
+    setAIComposeConfig({ baseUrl: 'https://proxy.example/nebius/v1' });
+    expect(getAIComposeConfig().baseUrl).toBe('https://proxy.example/nebius/v1');
+  });
   it('returns defaults when no config saved', () => {
     const config = getAIComposeConfig();
     expect(config.provider).toBe('openai');

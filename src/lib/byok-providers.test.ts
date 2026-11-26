@@ -7,6 +7,7 @@ import {
   getCachedModels,
   setCachedModels,
   fetchModelsWithCache,
+  normalizeProviderBase,
   type DiscoveredModel,
 } from './byok-providers';
 
@@ -26,6 +27,20 @@ beforeEach(() => {
 });
 
 describe('provider presets', () => {
+  it('migrates only the two known legacy Nebius bases', async () => {
+    for (const domain of ['ai', 'com']) {
+      expect(normalizeProviderBase(`https://api.studio.nebius.${domain}/v1/`)).toBe('https://api.tokenfactory.nebius.com/v1');
+    }
+    for (const custom of ['https://proxy.example/nebius/v1', 'https://api.studio.nebius.com/custom/v1', 'https://api.studio.nebius.com/v1?route=custom']) {
+      expect(normalizeProviderBase(custom)).toBe(custom);
+    }
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [] }) });
+    vi.stubGlobal('fetch', fetch);
+    try {
+      await fetchAvailableModels('https://api.studio.nebius.ai/v1', 'key');
+      expect(fetch.mock.calls[0][0]).toBe('https://api.tokenfactory.nebius.com/v1/models');
+    } finally { vi.unstubAllGlobals(); }
+  });
   it('has all required providers', () => {
     const ids = listPresetIds();
     expect(ids).toContain('openrouter');
@@ -104,7 +119,7 @@ describe('provider presets', () => {
 
   it('Nebius preset has correct base URL', () => {
     const p = getPreset('nebius')!;
-    expect(p.baseUrl).toBe('https://api.studio.nebius.ai/v1');
+    expect(p.baseUrl).toBe('https://api.tokenfactory.nebius.com/v1');
   });
 
   it('Mistral preset has correct base URL', () => {

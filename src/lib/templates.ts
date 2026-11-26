@@ -4,6 +4,7 @@
  */
 
 import { readJson, writeJson } from './safe-storage';
+import type { AIContribution } from './compose/ai-provenance';
 
 export interface PostTemplate {
   id: string;
@@ -12,6 +13,7 @@ export interface PostTemplate {
   visibility?: string;
   contentWarning?: string;
   createdAt: string;
+  aiContributions?: AIContribution[];
 }
 
 const STORAGE_KEY = 'crispdeck-templates';
